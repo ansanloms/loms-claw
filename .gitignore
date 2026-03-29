@@ -1,0 +1,5 @@
+.env
+coverage/
+docker/claude-home/*
+docker/claude-workspace/*
+!**/.gitkeep

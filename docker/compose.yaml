@@ -1,0 +1,17 @@
+name: loms-claw
+
+services:
+  bot:
+    build: ..
+    env_file:
+      - ../.env
+    working_dir: /workspace
+    command: ["deno", "run", "-A", "/app/main.ts"]
+    volumes:
+      - type: bind
+        source: ${CLAUDE_HOME:-./claude-home}
+        target: /root/.claude
+      - type: bind
+        source: ${CLAUDE_WORKSPACE:-./claude-workspace}
+        target: /workspace
+    restart: unless-stopped
