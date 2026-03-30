@@ -238,6 +238,12 @@ export class VoicePlayer {
         }
       }
     }
+
+    // 全チャンクが空 Buffer だった場合（TTS 完全ダウン時）、
+    // キューに何も積まれず playNext() が呼ばれないため手動で解除する。
+    if (!this.isPlaying && this.queue.length === 0) {
+      this.isSpeaking = false;
+    }
   }
 
   private playNext(): void {
