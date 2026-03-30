@@ -7,7 +7,6 @@
  */
 
 import {
-  ChannelType,
   Client,
   Events,
   GatewayIntentBits,
@@ -28,6 +27,7 @@ import { command } from "./commands.ts";
 import { isAuthorized, shouldRespond } from "./guard.ts";
 import { createProgressReporter, keepTyping, splitMessage } from "./message.ts";
 import { createLogger } from "../logger.ts";
+import { handleClear, handleVcJoin, handleVcLeave } from "./handlers.ts";
 import { VoiceManager } from "../voice/mod.ts";
 import { WhisperStt } from "../voice/stt.ts";
 import { OpenAiTts } from "../voice/tts.ts";
@@ -175,78 +175,25 @@ export class DiscordBot {
 
     // /claw vc <sub>
     if (group === "vc") {
-      await this.handleVcCommand(interaction, sub);
+      if (!this.voiceManager) {
+        await interaction.reply({
+          content: "Voice feature is not enabled.",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+      if (sub === "join") {
+        return handleVcJoin(interaction, this.voiceManager);
+      }
+      if (sub === "leave") {
+        return handleVcLeave(interaction, this.voiceManager);
+      }
       return;
     }
 
     // /claw clear
     if (sub === "clear") {
-      this.sessions.delete(interaction.channelId);
-      await interaction.reply({
-        content: "Session cleared.",
-        ephemeral: true,
-      });
-      log.info("session cleared for channel:", interaction.channelId);
-    }
-  }
-
-  /**
-   * /claw vc サブコマンドのハンドラ。
-   */
-  private async handleVcCommand(
-    interaction: Interaction,
-    sub: string,
-  ): Promise<void> {
-    if (!interaction.isChatInputCommand()) {
-      return;
-    }
-
-    if (!this.voiceManager) {
-      await interaction.reply({
-        content: "Voice feature is not enabled.",
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    const isVoiceChannel = interaction.channel?.type === ChannelType.GuildVoice;
-
-    switch (sub) {
-      case "join": {
-        if (!isVoiceChannel) {
-          await interaction.reply({
-            content: "Please run this from a VC text chat.",
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
-        await interaction.deferReply();
-        try {
-          await this.voiceManager.join(interaction.channelId);
-          await interaction.editReply("Joined VC.");
-        } catch (e: unknown) {
-          const msg = e instanceof Error ? e.message : String(e);
-          log.error("failed to join VC:", msg);
-          await interaction.editReply(`Failed to join VC: ${msg}`);
-        }
-        return;
-      }
-
-      case "leave": {
-        if (
-          !isVoiceChannel ||
-          interaction.channelId !== this.voiceManager.getCurrentChannelId()
-        ) {
-          await interaction.reply({
-            content: "Please run this from the text chat of the VC I'm in.",
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
-        this.voiceManager.leave();
-        await interaction.reply("Left VC.");
-        return;
-      }
+      return handleClear(interaction, this.sessions);
     }
   }
 
