@@ -2,27 +2,15 @@
  * Claude Code CLI (`claude -p`) の呼び出しモジュール。
  *
  * `Deno.Command` でサブプロセスとして `claude` を起動し、
- * `--output-format json` の出力をパースして結果を返す。
+ * `--output-format stream-json` の NDJSON 出力を逐次パースして結果を返す。
  */
 
-import type {
-  SDKMessage,
-  SDKResultMessage,
-} from "@anthropic-ai/claude-agent-sdk";
+import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+import { TextLineStream } from "@std/streams";
 import type { ClaudeConfig } from "../config.ts";
 import { createLogger } from "../logger.ts";
 
 const log = createLogger("claude");
-
-/**
- * Claude Code CLI の応答。
- */
-export interface ClaudeResponse {
-  /** アシスタントの応答テキスト。 */
-  result: string;
-  /** セッション ID。`--resume` で会話を継続する際に使う。 */
-  sessionId: string;
-}
 
 /**
  * PreToolUse HTTP フックの設定 JSON を生成する。
@@ -48,6 +36,8 @@ export function buildHookSettings(approvalPort: number): string {
 
 /**
  * `claude -p` の引数を構築する。
+ *
+ * tool_progress 等のイベントを受け取るため `--verbose` を強制する。
  */
 export function buildArgs(
   prompt: string,
@@ -58,14 +48,11 @@ export function buildArgs(
     "-p",
     prompt,
     "--output-format",
-    "json",
+    "stream-json",
+    "--verbose",
     "--max-turns",
     String(config.maxTurns),
   ];
-
-  if (config.verbose) {
-    args.push("--verbose");
-  }
 
   if (sessionId) {
     args.push("--resume", sessionId);
@@ -77,81 +64,30 @@ export function buildArgs(
 }
 
 /**
- * Claude Code CLI の stdout をパースして結果を取得する。
- *
- * --verbose 付きだと JSON 配列、なしだと単一オブジェクトが返る。
- * 両方のフォーマットに対応する。
+ * コマンド実行の結果。
  */
-export function parseClaudeOutput(stdout: string): ClaudeResponse {
-  if (!stdout.trim()) {
-    throw new Error("claude returned empty output");
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(stdout);
-  } catch {
-    throw new Error(
-      `claude returned invalid JSON: ${stdout.slice(0, 200)}`,
-    );
-  }
-
-  // --verbose 付きだと SDKMessage[] 配列、なしだと SDKResultMessage 単体が返る
-  const output = (
-    Array.isArray(parsed)
-      ? parsed.findLast((e: SDKMessage) => e.type === "result")
-      : parsed
-  ) as SDKResultMessage | undefined;
-
-  if (!output) {
-    throw new Error(
-      `claude returned no result event: ${stdout.slice(0, 200)}`,
-    );
-  }
-
-  if (output.is_error) {
-    throw new Error(
-      `claude returned error: ${
-        "result" in output ? output.result : output.subtype
-      }`,
-    );
-  }
-
-  if (!("result" in output) || !output.result) {
-    throw new Error(
-      `claude returned empty result: ${JSON.stringify(output).slice(0, 200)}`,
-    );
-  }
-
-  return {
-    result: output.result,
-    sessionId: output.session_id,
-  };
+export interface SpawnResult {
+  /** stdout の ReadableStream。NDJSON 行が流れる。 */
+  stdout: ReadableStream<Uint8Array>;
+  /** stderr の全内容（プロセス終了後に resolve される）。 */
+  stderr: Promise<string>;
+  /** プロセスの終了ステータス。 */
+  status: Promise<Deno.CommandStatus>;
 }
 
 /**
- * コマンド実行結果。テスト時のモック用。
- */
-export interface CommandResult {
-  stdout: string;
-  stderr: string;
-  success: boolean;
-  code: number;
-}
-
-/**
- * コマンド実行関数の型。デフォルトは Deno.Command を使う。
+ * コマンド実行関数の型。テスト時のモック注入用。
  */
 export type CommandSpawner = (
   args: string[],
   cwd: string,
   signal?: AbortSignal,
-) => Promise<CommandResult>;
+) => SpawnResult;
 
 /**
  * デフォルトのコマンド実行関数。Deno.Command を使う。
  */
-export const defaultSpawner: CommandSpawner = async (args, cwd, signal) => {
+export const defaultSpawner: CommandSpawner = (args, cwd, signal) => {
   const command = new Deno.Command("claude", {
     args,
     stdin: "null",
@@ -171,22 +107,54 @@ export const defaultSpawner: CommandSpawner = async (args, cwd, signal) => {
   };
   signal?.addEventListener("abort", onAbort, { once: true });
 
-  try {
-    const [stdout, stderr, status] = await Promise.all([
-      new Response(child.stdout).text(),
-      new Response(child.stderr).text(),
-      child.status,
-    ]);
-    return { stdout, stderr, success: status.success, code: status.code };
-  } finally {
-    signal?.removeEventListener("abort", onAbort);
-  }
+  return {
+    stdout: child.stdout,
+    stderr: new Response(child.stderr).text(),
+    status: child.status.finally(() => {
+      signal?.removeEventListener("abort", onAbort);
+    }),
+  };
 };
 
 /**
- * Claude Code CLI を呼び出して応答を取得する。
+ * ReadableStream<Uint8Array> を NDJSON として行ごとにパースし、
+ * SDKMessage を yield する AsyncGenerator。
+ *
+ * 不正な JSON 行はログ出力してスキップする。
  */
-export async function askClaude(
+export async function* parseNdjsonStream(
+  stream: ReadableStream<Uint8Array>,
+): AsyncGenerator<SDKMessage> {
+  const lines = stream
+    .pipeThrough(new TextDecoderStream())
+    .pipeThrough(new TextLineStream());
+
+  for await (const line of lines) {
+    if (!line.trim()) {
+      continue;
+    }
+
+    let parsed: SDKMessage;
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      log.warn("skipping invalid NDJSON line:", line.slice(0, 200));
+      continue;
+    }
+
+    yield parsed;
+  }
+}
+
+/**
+ * Claude Code CLI をストリーミングモードで呼び出し、
+ * SDKMessage を逐次 yield する。
+ *
+ * 呼び出し側で `type === "result"` のイベントを拾い、
+ * `type === "result"` のイベントから結果を取得すること。
+ * 成功時は `"result" in event` で応答テキスト、エラー時は `event.errors` を参照。
+ */
+export async function* askClaude(
   prompt: string,
   options: {
     sessionId?: string;
@@ -194,28 +162,27 @@ export async function askClaude(
     signal?: AbortSignal;
     spawner?: CommandSpawner;
   },
-): Promise<ClaudeResponse> {
+): AsyncGenerator<SDKMessage> {
   const { config, sessionId, signal, spawner = defaultSpawner } = options;
   const args = buildArgs(prompt, config, sessionId);
 
   log.debug("spawning claude:", args.join(" "));
 
-  const result = await spawner(args, config.cwd, signal);
+  const { stdout, stderr, status } = spawner(args, config.cwd, signal);
 
-  log.debug("claude stdout:", result.stdout.slice(0, 500));
-  if (result.stderr.trim()) {
-    log.debug("claude stderr:", result.stderr.trim());
+  yield* parseNdjsonStream(stdout);
+
+  const [stderrText, exitStatus] = await Promise.all([stderr, status]);
+
+  if (stderrText.trim()) {
+    log.debug("claude stderr:", stderrText.trim());
   }
 
-  if (!result.success) {
+  if (!exitStatus.success) {
     throw new Error(
-      `claude exited with code ${result.code}: ${result.stderr.trim()}`,
+      `claude exited with code ${exitStatus.code}: ${stderrText.trim()}`,
     );
   }
 
-  const response = parseClaudeOutput(result.stdout);
-
-  log.info("claude responded, session:", response.sessionId);
-
-  return response;
+  log.info("claude stream completed");
 }

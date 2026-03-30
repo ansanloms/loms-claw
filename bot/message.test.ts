@@ -1,5 +1,6 @@
 import { assertEquals } from "@std/assert";
-import { keepTyping, splitMessage } from "./message.ts";
+import type { GuildTextBasedChannel } from "discord.js";
+import { createProgressReporter, keepTyping, splitMessage } from "./message.ts";
 
 Deno.test("splitMessage", async (t) => {
   await t.step("短いテキストは 1 チャンクで返すこと", () => {
@@ -34,8 +35,8 @@ Deno.test("splitMessage", async (t) => {
     assertEquals(chunks, ["abc", "def"]);
   });
 
-  await t.step("空文字列はそのまま返すこと", () => {
-    assertEquals(splitMessage(""), [""]);
+  await t.step("空文字列は空配列を返すこと", () => {
+    assertEquals(splitMessage(""), []);
   });
 
   await t.step("非常に長いテキストは複数チャンクに分割すること", () => {
@@ -100,4 +101,101 @@ Deno.test("keepTyping", async (t) => {
 
     assertEquals(typingCount, 0);
   });
+});
+
+/** send/edit/delete を記録するフェイクチャンネルを生成する。 */
+function fakeProgressChannel() {
+  const calls: { method: string; text: string }[] = [];
+  const fakeMessage = {
+    edit: (text: string) => {
+      calls.push({ method: "edit", text });
+      return Promise.resolve(fakeMessage);
+    },
+    delete: () => {
+      calls.push({ method: "delete", text: "" });
+      return Promise.resolve(fakeMessage);
+    },
+  };
+  const channel = {
+    send: (text: string) => {
+      calls.push({ method: "send", text });
+      return Promise.resolve(fakeMessage);
+    },
+  } as unknown as GuildTextBasedChannel;
+
+  return { channel, calls };
+}
+
+Deno.test("createProgressReporter", async (t) => {
+  await t.step("初回の report で send が呼ばれること", async () => {
+    const { channel, calls } = fakeProgressChannel();
+    const { report, cleanup } = createProgressReporter(channel);
+
+    await report("Bash", 5);
+
+    assertEquals(calls.length, 1);
+    assertEquals(calls[0].method, "send");
+    assertEquals(calls[0].text, "`Bash` 実行中... (5s)");
+
+    await cleanup();
+  });
+
+  await t.step("2回目の report で edit が呼ばれること", async () => {
+    const { channel, calls } = fakeProgressChannel();
+    const { report, cleanup } = createProgressReporter(channel);
+
+    await report("Bash", 1);
+    // スロットルを回避するために時間を進める
+    // PROGRESS_THROTTLE_MS は 3000ms だが内部状態を直接操作できないので、
+    // Date.now をスタブする
+    const original = Date.now;
+    try {
+      Date.now = () => original() + 4000;
+      await report("Bash", 5);
+    } finally {
+      Date.now = original;
+    }
+
+    assertEquals(calls.length, 2);
+    assertEquals(calls[0].method, "send");
+    assertEquals(calls[1].method, "edit");
+    assertEquals(calls[1].text, "`Bash` 実行中... (5s)");
+
+    await cleanup();
+  });
+
+  await t.step("スロットル間隔内の report は無視されること", async () => {
+    const { channel, calls } = fakeProgressChannel();
+    const { report, cleanup } = createProgressReporter(channel);
+
+    await report("Bash", 1);
+    await report("Bash", 2);
+    await report("Bash", 3);
+
+    assertEquals(calls.length, 1);
+
+    await cleanup();
+  });
+
+  await t.step("cleanup で delete が呼ばれること", async () => {
+    const { channel, calls } = fakeProgressChannel();
+    const { report, cleanup } = createProgressReporter(channel);
+
+    await report("Read", 3);
+    await cleanup();
+
+    assertEquals(calls[calls.length - 1].method, "delete");
+  });
+
+  await t.step(
+    "report 未呼び出しで cleanup しても delete されないこと",
+    async () => {
+      const { channel, calls } = fakeProgressChannel();
+      const { cleanup } = createProgressReporter(channel);
+
+      await cleanup();
+
+      assertEquals(calls.length, 0);
+    },
+  );
 });

@@ -16,13 +16,14 @@ import {
   Routes,
 } from "discord.js";
 import type { Config } from "../config.ts";
+import type { SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
 import { askClaude } from "../claude/mod.ts";
 import { SessionStore } from "../session/mod.ts";
 import { ApprovalManager } from "../approval/manager.ts";
 import { startApprovalServer } from "../approval/server.ts";
 import { command } from "./commands.ts";
 import { isAuthorized, shouldRespond } from "./guard.ts";
-import { keepTyping, splitMessage } from "./message.ts";
+import { createProgressReporter, keepTyping, splitMessage } from "./message.ts";
 import { createLogger } from "../logger.ts";
 
 const log = createLogger("bot");
@@ -178,8 +179,8 @@ export class DiscordBot {
 
     let prompt = message.cleanContent;
     if (this.client.user) {
-      prompt = prompt.replace(
-        new RegExp(`@${this.client.user.displayName}`, "g"),
+      prompt = prompt.replaceAll(
+        `@${this.client.user.displayName}`,
         "",
       );
     }
@@ -195,31 +196,54 @@ export class DiscordBot {
     const typingController = new AbortController();
     keepTyping(channel, typingController.signal);
 
+    const progress = createProgressReporter(channel);
+
     try {
       const sessionId = this.sessions.get(channelId);
 
       // 承認ボタンの送信先チャンネルを設定
       this.approvalManager.setChannel(channelId);
 
-      const response = await askClaude(prompt, {
+      const stream = askClaude(prompt, {
         sessionId,
         config: this.config.claude,
         signal: AbortSignal.timeout(this.config.claude.timeout),
       });
 
-      // セッション保存
-      this.sessions.set(channelId, response.sessionId);
+      let resultEvent: SDKResultMessage | undefined;
+
+      for await (const event of stream) {
+        if (event.type === "result") {
+          resultEvent = event;
+          // 非ゼロ終了でジェネレータがスローしてもセッションが残るよう即座に保存
+          this.sessions.set(channelId, event.session_id);
+        } else if (event.type === "tool_progress") {
+          await progress.report(event.tool_name, event.elapsed_time_seconds);
+        }
+      }
+
+      if (!resultEvent) {
+        throw new Error("claude stream ended without result event");
+      }
 
       // 応答送信
-      const chunks = splitMessage(response.result);
-      for (const chunk of chunks) {
-        await channel.send(chunk);
+      if ("result" in resultEvent && typeof resultEvent.result === "string") {
+        const chunks = splitMessage(resultEvent.result);
+        for (const chunk of chunks) {
+          await channel.send(chunk);
+        }
+      } else {
+        const errors = "errors" in resultEvent
+          ? String(resultEvent.errors)
+          : resultEvent.subtype;
+        throw new Error(`claude returned error: ${errors}`);
       }
     } catch (error: unknown) {
       const errMsg = error instanceof Error ? error.message : String(error);
       log.error("failed to process message:", errMsg);
       await channel.send(`Error: ${errMsg}`).catch(() => {});
     } finally {
+      await progress.cleanup();
       typingController.abort();
     }
   }
