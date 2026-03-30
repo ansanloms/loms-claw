@@ -55,6 +55,12 @@ export class VoicePlayer {
   public isSpeaking = false;
 
   /**
+   * speak() の世代番号。interrupt() で進めることで、
+   * 進行中の speak() を無効化し再生再開を防ぐ。
+   */
+  private speakGeneration = 0;
+
+  /**
    * 処理中トーンのループ中に true。
    */
   public isThinking = false;
@@ -118,6 +124,7 @@ export class VoicePlayer {
    * 再生を即座に停止し、キュー内の全エントリをクリアする。
    */
   interrupt(): void {
+    this.speakGeneration++;
     this.stopThinking();
     this.player.stop();
     this.queue.length = 0;
@@ -207,7 +214,8 @@ export class VoicePlayer {
       return;
     }
 
-    log.info(`synthesizing ${chunks.length} chunk(s)`);
+    const generation = ++this.speakGeneration;
+    log.info(`synthesizing ${chunks.length} chunk(s) (gen=${generation})`);
     this.isSpeaking = true;
 
     // 全合成リクエストを並列で発行し、順序通りにキューに追加する。
@@ -218,8 +226,10 @@ export class VoicePlayer {
 
     for (const p of pending) {
       const buf = await p;
-      // TTS 合成の await 中にキューが消化されて playNext() が
-      // isSpeaking = false にする可能性があるため、再セットする。
+      // interrupt() で世代が進んでいたら打ち切る。
+      if (this.speakGeneration !== generation) {
+        return;
+      }
       this.isSpeaking = true;
       if (buf.length > 0) {
         this.queue.push(buf);
