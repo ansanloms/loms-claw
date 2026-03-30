@@ -2,4 +2,5 @@
 coverage/
 docker/claude-home/*
 docker/claude-workspace/*
+!docker/claude-workspace/.claude
 !**/.gitkeep
