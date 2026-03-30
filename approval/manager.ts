@@ -59,8 +59,14 @@ export class ApprovalManager {
 
   /**
    * ツール使用の承認をリクエストする。
+   *
+   * @param input - PreToolUse フックからのツール情報。
+   * @param channelId - 承認ボタンの送信先チャンネル ID。省略時は setChannel() で設定された値を使う。
    */
-  async requestApproval(input: PreToolUseHookInput): Promise<ApprovalResult> {
+  async requestApproval(
+    input: PreToolUseHookInput,
+    channelId?: string,
+  ): Promise<ApprovalResult> {
     const toolName = input.tool_name;
 
     // Always Allow 済みのツールは自動承認
@@ -69,7 +75,7 @@ export class ApprovalManager {
       return { decision: "allow", reason: "Always allowed" };
     }
 
-    const channelId = this.channelId;
+    channelId = channelId ?? this.channelId ?? undefined;
     if (!channelId) {
       log.warn("no channel set for approval, auto-denying");
       return { decision: "deny", reason: "No approval channel" };

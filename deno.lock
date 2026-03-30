@@ -2,18 +2,29 @@
   "version": "5",
   "specifiers": {
     "jsr:@aireone/deno-lint-curly@*": "0.2.0",
+    "jsr:@openai/openai@^6.33.0": "6.33.0",
     "jsr:@std/assert@^1.0.19": "1.0.19",
     "jsr:@std/bytes@^1.0.6": "1.0.6",
     "jsr:@std/dotenv@~0.225.6": "0.225.6",
     "jsr:@std/internal@^1.0.12": "1.0.12",
     "jsr:@std/streams@*": "1.0.17",
     "jsr:@std/streams@^1.0.17": "1.0.17",
-    "npm:@anthropic-ai/claude-agent-sdk@~0.2.87": "0.2.87_zod@4.3.6",
-    "npm:discord.js@^14.25.1": "14.25.1"
+    "npm:@anthropic-ai/claude-agent-sdk@~0.2.87": "0.2.87_zod@3.25.76",
+    "npm:@discordjs/voice@0.19.2": "0.19.2_opusscript@0.1.1",
+    "npm:@snazzah/davey@~0.1.11": "0.1.11",
+    "npm:discord.js@^14.25.1": "14.25.1",
+    "npm:opusscript@0.1.1": "0.1.1",
+    "npm:zod@3": "3.25.76"
   },
   "jsr": {
     "@aireone/deno-lint-curly@0.2.0": {
       "integrity": "c182ea5d2ed999c06ffa88a21aac2aed3cf0d14a1128d7fad3034337f7822b48"
+    },
+    "@openai/openai@6.33.0": {
+      "integrity": "292fec0ff0fd8b04f25e0ccbee8a06895b423abfb5113b9076e4ae39b4a18721",
+      "dependencies": [
+        "npm:zod"
+      ]
     },
     "@std/assert@1.0.19": {
       "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
@@ -38,7 +49,7 @@
     }
   },
   "npm": {
-    "@anthropic-ai/claude-agent-sdk@0.2.87_zod@4.3.6": {
+    "@anthropic-ai/claude-agent-sdk@0.2.87_zod@3.25.76": {
       "integrity": "sha512-WWmgBPxPhBOvNT0ujI8vPTI2lK+w5YEkEZ/y1mH0EDkK/0kBnxVJNhCtG5vnueiAViwLoUOFn66pbkDiivijdA==",
       "dependencies": [
         "@anthropic-ai/sdk",
@@ -57,7 +68,7 @@
         "@img/sharp-win32-x64"
       ]
     },
-    "@anthropic-ai/sdk@0.74.0_zod@4.3.6": {
+    "@anthropic-ai/sdk@0.74.0_zod@3.25.76": {
       "integrity": "sha512-srbJV7JKsc5cQ6eVuFzjZO7UR3xEPJqPamHFIe29bs38Ij2IripoAhC0S5NslNbaFUYqBKypmmpzMTpqfHEUDw==",
       "dependencies": [
         "json-schema-to-ts",
@@ -115,6 +126,17 @@
         "discord-api-types"
       ]
     },
+    "@discordjs/voice@0.19.2_opusscript@0.1.1": {
+      "integrity": "sha512-3yJ255e4ag3wfZu/DSxeOZK1UtnqNxnspmLaQetGT0pDkThNZoHs+Zg6dgZZ19JEVomXygvfHn9lNpICZuYtEA==",
+      "dependencies": [
+        "@snazzah/davey",
+        "@types/ws",
+        "discord-api-types",
+        "prism-media",
+        "tslib",
+        "ws"
+      ]
+    },
     "@discordjs/ws@1.2.3": {
       "integrity": "sha512-wPlQDxEmlDg5IxhJPuxXr3Vy9AjYq5xCvFWGJyD7w7Np8ZGu+Mc+97LCoEc/+AYCo2IDpKioiH0/c/mj5ZR9Uw==",
       "dependencies": [
@@ -127,6 +149,25 @@
         "discord-api-types",
         "tslib",
         "ws"
+      ]
+    },
+    "@emnapi/core@1.9.1": {
+      "integrity": "sha512-mukuNALVsoix/w1BJwFzwXBN/dHeejQtuVzcDsfOEsdpCumXb/E9j8w11h5S54tT1xhifGfbbSm/ICrObRb3KA==",
+      "dependencies": [
+        "@emnapi/wasi-threads",
+        "tslib"
+      ]
+    },
+    "@emnapi/runtime@1.9.1": {
+      "integrity": "sha512-VYi5+ZVLhpgK4hQ0TAjiQiZ6ol0oe4mBx7mVv7IflsiEp0OWoVsp/+f9Vc1hOhE0TtkORVrI1GvzyreqpgWtkA==",
+      "dependencies": [
+        "tslib"
+      ]
+    },
+    "@emnapi/wasi-threads@1.2.0": {
+      "integrity": "sha512-N10dEJNSsUx41Z6pZsXU8FjPjpBEplgH24sfkmITrBED1/U2Esum9F3lfLrMjKHHjmi557zQn7kR9R+XWXu5Rg==",
+      "dependencies": [
+        "tslib"
       ]
     },
     "@hono/node-server@1.19.11_hono@4.12.9": {
@@ -236,7 +277,7 @@
       "os": ["win32"],
       "cpu": ["x64"]
     },
-    "@modelcontextprotocol/sdk@1.28.0_zod@4.3.6_hono@4.12.9_ajv@8.18.0_express@5.2.1": {
+    "@modelcontextprotocol/sdk@1.28.0_zod@3.25.76_hono@4.12.9_ajv@8.18.0_express@5.2.1": {
       "integrity": "sha512-gmloF+i+flI8ouQK7MWW4mOwuMh4RePBuPFAEPC6+pdqyWOUMDOixb6qZ69owLJpz6XmyllCouc4t8YWO+E2Nw==",
       "dependencies": [
         "@hono/node-server",
@@ -258,6 +299,14 @@
         "zod-to-json-schema"
       ]
     },
+    "@napi-rs/wasm-runtime@1.1.2_@emnapi+core@1.9.1_@emnapi+runtime@1.9.1": {
+      "integrity": "sha512-sNXv5oLJ7ob93xkZ1XnxisYhGYXfaG9f65/ZgYuAu3qt7b3NadcOEhLvx28hv31PgX8SZJRYrAIPQilQmFpLVw==",
+      "dependencies": [
+        "@emnapi/core",
+        "@emnapi/runtime",
+        "@tybys/wasm-util"
+      ]
+    },
     "@sapphire/async-queue@1.5.5": {
       "integrity": "sha512-cvGzxbba6sav2zZkH8GPf2oGk9yYoD5qrNWdu9fRehifgnFZJMV+nuy2nON2roRO4yQQ+v7MK/Pktl/HgfsUXg=="
     },
@@ -273,6 +322,103 @@
     },
     "@sapphire/snowflake@3.5.5": {
       "integrity": "sha512-xzvBr1Q1c4lCe7i6sRnrofxeO1QTP/LKQ6A6qy0iB4x5yfiSfARMEQEghojzTNALDTcv8En04qYNIco9/K9eZQ=="
+    },
+    "@snazzah/davey-android-arm-eabi@0.1.11": {
+      "integrity": "sha512-T1RYbNYKN6tLOcGIDKJd8OI6FBSEemwL7DOYdTMmhqfhhMr3YVN8WOhfoxGg63OcnpTN2e2c5tdY2bAx25RmQQ==",
+      "os": ["android"],
+      "cpu": ["arm"]
+    },
+    "@snazzah/davey-android-arm64@0.1.11": {
+      "integrity": "sha512-ksJn/x2VU8h6w9eku1HT96ugSRZ7lKVkKNKbFleaFN+U99DJaPM+gMu2YvnFU4V54HR06ZBnRihnVG6VLXQpDw==",
+      "os": ["android"],
+      "cpu": ["arm64"]
+    },
+    "@snazzah/davey-darwin-arm64@0.1.11": {
+      "integrity": "sha512-E1d7PbaaVMO3Lj9EiAPqOVbuV0xg5+PsHzHH097DDXiD1+zUDXvJaTnUWsnm5z50pJniHpi4GtaYmk+ieB/guA==",
+      "os": ["darwin"],
+      "cpu": ["arm64"]
+    },
+    "@snazzah/davey-darwin-x64@0.1.11": {
+      "integrity": "sha512-Tl4TI/LTmgJZepgbgVMYDi8RqlAkPtPg1OEBPl7a9Tn3AwR36Vs6lyIT1cs/lGy/ds/+B+mKI4rPObN1cyILTw==",
+      "os": ["darwin"],
+      "cpu": ["x64"]
+    },
+    "@snazzah/davey-freebsd-x64@0.1.11": {
+      "integrity": "sha512-T8Iw9FXkuI1T+YBAFzh9v/TXf9IOTOSqnd/BFpTRTrlW72PR2lhIidzSmg027VxO7r5pX47iFwiOkb9I/NU/EA==",
+      "os": ["freebsd"],
+      "cpu": ["x64"]
+    },
+    "@snazzah/davey-linux-arm-gnueabihf@0.1.11": {
+      "integrity": "sha512-1Txj+8pqA8uq/OGtaUaBFWAPnNMQzFgIywj0iA7EI4xZl+mab48/pv+YZ1pNb/suC6ynsW44oB9efiXSdcUAgA==",
+      "os": ["linux"],
+      "cpu": ["arm"]
+    },
+    "@snazzah/davey-linux-arm64-gnu@0.1.11": {
+      "integrity": "sha512-ERzF5nM/IYW1BcN3wLXpEwBCGLFf0kGJUVhaV6yfiInz0tkU8UmvrrgpaMaACfMjIhfWdq5CcX+aTkXo/saNcg==",
+      "os": ["linux"],
+      "cpu": ["arm64"]
+    },
+    "@snazzah/davey-linux-arm64-musl@0.1.11": {
+      "integrity": "sha512-e6pX6Hiabtz99q+H/YHNkm9JVlpqN8HGh0qPib8G2+UY4/SSH8WvqWipk3v581dMy2oyCHt7MOoY1aU1P1N/xA==",
+      "os": ["linux"],
+      "cpu": ["arm64"]
+    },
+    "@snazzah/davey-linux-x64-gnu@0.1.11": {
+      "integrity": "sha512-TW5bSoqChOJMbvsDb4wAATYrxmAXuNnse7wFNVSAJUaZKSeRfZbu3UAiPWSNn7GwLwSfU6hg322KZUn8IWCuvg==",
+      "os": ["linux"],
+      "cpu": ["x64"]
+    },
+    "@snazzah/davey-linux-x64-musl@0.1.11": {
+      "integrity": "sha512-5j6Pmc+Wzv5lSxVP6quA7teYRJXibkZqQyYGfTDnTsUOO5dPpcojpqlXlkhyvsA1OAQTj4uxbOCciN3cVWwzug==",
+      "os": ["linux"],
+      "cpu": ["x64"]
+    },
+    "@snazzah/davey-wasm32-wasi@0.1.11": {
+      "integrity": "sha512-rKOwZ/0J8lp+4VEyOdMDBRP9KR+PksZpa9V1Qn0veMzy4FqTVKthkxwGqewheFe0SFg9fdvt798l/PBFrfDeZw==",
+      "dependencies": [
+        "@napi-rs/wasm-runtime"
+      ],
+      "cpu": ["wasm32"]
+    },
+    "@snazzah/davey-win32-arm64-msvc@0.1.11": {
+      "integrity": "sha512-5fptJU4tX901m3mj0SHiBljMrPT4ZEsynbBhR7bK1yn9TY1jjyhN8EFi7QF5IWtUEni+0mia2BCMHZ5ZkmFZqQ==",
+      "os": ["win32"],
+      "cpu": ["arm64"]
+    },
+    "@snazzah/davey-win32-ia32-msvc@0.1.11": {
+      "integrity": "sha512-ualexn8SeLsiMHhWfzVrzRcjHgcBapg++FPaVgJJxoh2S/jCRiklXOu3luqIZdJdNKvhe2V9SwO/cImPeIIBKw==",
+      "os": ["win32"],
+      "cpu": ["ia32"]
+    },
+    "@snazzah/davey-win32-x64-msvc@0.1.11": {
+      "integrity": "sha512-muNhc8UKXtknzsH/w4AIkbPR2I8BuvApn0pDXar0IEvY8PCjqU/M8MPbOOEYwQVvQRMwVTgExtxzrkBPSXB4nA==",
+      "os": ["win32"],
+      "cpu": ["x64"]
+    },
+    "@snazzah/davey@0.1.11": {
+      "integrity": "sha512-oBN+msHzPnm1M5DDx3wVD7iBwpNXFUtkh2MrAbUJu0OhKjliLChi28hq++mu1+qdMpAVQO5JKAvQQxYVbyneiw==",
+      "optionalDependencies": [
+        "@snazzah/davey-android-arm-eabi",
+        "@snazzah/davey-android-arm64",
+        "@snazzah/davey-darwin-arm64",
+        "@snazzah/davey-darwin-x64",
+        "@snazzah/davey-freebsd-x64",
+        "@snazzah/davey-linux-arm-gnueabihf",
+        "@snazzah/davey-linux-arm64-gnu",
+        "@snazzah/davey-linux-arm64-musl",
+        "@snazzah/davey-linux-x64-gnu",
+        "@snazzah/davey-linux-x64-musl",
+        "@snazzah/davey-wasm32-wasi",
+        "@snazzah/davey-win32-arm64-msvc",
+        "@snazzah/davey-win32-ia32-msvc",
+        "@snazzah/davey-win32-x64-msvc"
+      ]
+    },
+    "@tybys/wasm-util@0.10.1": {
+      "integrity": "sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg==",
+      "dependencies": [
+        "tslib"
+      ]
     },
     "@types/node@25.5.0": {
       "integrity": "sha512-jp2P3tQMSxWugkCUKLRPVUpGaL5MVFwF8RDuSRztfwgN1wmqJeMSbKlnEtQqU8UrhTmzEmZdu2I6v2dpp7XIxw==",
@@ -644,6 +790,9 @@
         "wrappy"
       ]
     },
+    "opusscript@0.1.1": {
+      "integrity": "sha512-mL0fZZOUnXdZ78woRXp18lApwpp0lF5tozJOD1Wut0dgrA9WuQTgSels/CSmFleaAZrJi/nci5KOVtbuxeWoQA=="
+    },
     "parseurl@1.3.3": {
       "integrity": "sha512-CiyeOxFT/JZyN5m0z9PfXw4SCBJ6Sygz1Dpl0wqjlhDEGGBP1GnsUVEL0p63hoG1fcj3fHynXi9NYO4nWOL+qQ=="
     },
@@ -655,6 +804,15 @@
     },
     "pkce-challenge@5.0.1": {
       "integrity": "sha512-wQ0b/W4Fr01qtpHlqSqspcj3EhBvimsdh0KlHhH8HRZnMsEa0ea2fTULOXOS9ccQr3om+GcGRk4e+isrZWV8qQ=="
+    },
+    "prism-media@1.3.5_opusscript@0.1.1": {
+      "integrity": "sha512-IQdl0Q01m4LrkN1EGIE9lphov5Hy7WWlH6ulf5QdGePLlPas9p2mhgddTEHrlaXYjjFToM1/rWuwF37VF4taaA==",
+      "dependencies": [
+        "opusscript"
+      ],
+      "optionalPeers": [
+        "opusscript"
+      ]
     },
     "proxy-addr@2.0.7": {
       "integrity": "sha512-llQsMLSUDUPT44jdrU/O37qlnifitDP+ZwrmmZcoSKyLKvtZxpyV0n2/bD/N4tBAAZ/gJEdZU7KMraoK1+XYAg==",
@@ -821,23 +979,27 @@
     "ws@8.20.0": {
       "integrity": "sha512-sAt8BhgNbzCtgGbt2OxmpuryO63ZoDk/sqaB/znQm94T4fCEsy/yV+7CdC1kJhOU9lboAEU7R3kquuycDoibVA=="
     },
-    "zod-to-json-schema@3.25.2_zod@4.3.6": {
+    "zod-to-json-schema@3.25.2_zod@3.25.76": {
       "integrity": "sha512-O/PgfnpT1xKSDeQYSCfRI5Gy3hPf91mKVDuYLUHZJMiDFptvP41MSnWofm8dnCm0256ZNfZIM7DSzuSMAFnjHA==",
       "dependencies": [
         "zod"
       ]
     },
-    "zod@4.3.6": {
-      "integrity": "sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg=="
+    "zod@3.25.76": {
+      "integrity": "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="
     }
   },
   "workspace": {
     "dependencies": [
+      "jsr:@openai/openai@^6.33.0",
       "jsr:@std/assert@^1.0.19",
       "jsr:@std/dotenv@~0.225.6",
       "jsr:@std/streams@^1.0.17",
       "npm:@anthropic-ai/claude-agent-sdk@~0.2.87",
-      "npm:discord.js@^14.25.1"
+      "npm:@discordjs/voice@0.19.2",
+      "npm:@snazzah/davey@~0.1.11",
+      "npm:discord.js@^14.25.1",
+      "npm:opusscript@0.1.1"
     ]
   }
 }

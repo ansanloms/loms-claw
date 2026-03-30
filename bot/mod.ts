@@ -3,6 +3,7 @@
  *
  * messageCreate イベントを受け取り、認可チェックと反応判定を行い、
  * Claude Code CLI を呼び出して応答を返す。
+ * ボイスチャンネル機能が有効な場合は VoiceManager を統合する。
  */
 
 import {
@@ -12,6 +13,7 @@ import {
   type GuildTextBasedChannel,
   type Interaction,
   type Message,
+  MessageFlags,
   REST,
   Routes,
 } from "discord.js";
@@ -25,6 +27,11 @@ import { command } from "./commands.ts";
 import { isAuthorized, shouldRespond } from "./guard.ts";
 import { createProgressReporter, keepTyping, splitMessage } from "./message.ts";
 import { createLogger } from "../logger.ts";
+import { handleClear, handleVcJoin, handleVcLeave } from "./commands.ts";
+import { VoiceManager } from "../voice/mod.ts";
+import { WhisperStt } from "../voice/stt.ts";
+import { OpenAiTts } from "../voice/tts.ts";
+import { VoicePlayer } from "../voice/player.ts";
 
 const log = createLogger("bot");
 
@@ -37,6 +44,7 @@ export class DiscordBot {
   private sessions = new SessionStore();
   private approvalManager: ApprovalManager;
   private approvalServer: Deno.HttpServer | null = null;
+  private voiceManager: VoiceManager | null = null;
 
   constructor(config: Config) {
     this.config = config;
@@ -45,9 +53,41 @@ export class DiscordBot {
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
+        ...(config.voice.enabled ? [GatewayIntentBits.GuildVoiceStates] : []),
       ],
     });
     this.approvalManager = new ApprovalManager(this.client);
+
+    // ボイス機能の初期化。
+    if (config.voice.enabled) {
+      const stt = new WhisperStt({ baseUrl: config.voice.whisperUrl });
+      const tts = new OpenAiTts({
+        baseUrl: config.voice.ttsUrl,
+        apiKey: config.voice.ttsApiKey,
+        model: config.voice.ttsModel,
+        voice: config.voice.ttsSpeaker,
+        speed: config.voice.ttsSpeed,
+      });
+      const voicePlayer = new VoicePlayer(tts, config.voice.notificationTone);
+
+      this.voiceManager = new VoiceManager(
+        config.voice,
+        config.claude,
+        config.guildId,
+        config.authorizedUserId,
+        this.client,
+        stt,
+        voicePlayer,
+        this.sessions,
+        this.approvalManager,
+      );
+
+      this.client.on(
+        Events.VoiceStateUpdate,
+        (oldState, newState) =>
+          this.voiceManager?.onVoiceStateUpdate(oldState, newState),
+      );
+    }
 
     this.client.on(Events.MessageCreate, (msg) => this.onMessage(msg));
     this.client.on(Events.InteractionCreate, (i) => this.onInteraction(i));
@@ -68,6 +108,8 @@ export class DiscordBot {
       this.client.once(Events.ClientReady, async (c) => {
         log.info(`logged in as ${c.user.tag}`);
         await this.registerCommands();
+        // 起動時に auto-join 条件を満たす VC があれば参加する。
+        this.voiceManager?.scanAndAutoJoin();
         resolve();
       });
     });
@@ -78,6 +120,7 @@ export class DiscordBot {
    */
   shutdown(): void {
     log.info("shutting down");
+    this.voiceManager?.shutdown();
     this.approvalServer?.shutdown();
     this.client.destroy();
   }
@@ -128,15 +171,30 @@ export class DiscordBot {
       return;
     }
 
+    const group = interaction.options.getSubcommandGroup();
     const sub = interaction.options.getSubcommand();
 
+    // /claw vc <sub>
+    if (group === "vc") {
+      if (!this.voiceManager) {
+        await interaction.reply({
+          content: "Voice feature is not enabled.",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+      if (sub === "join") {
+        return handleVcJoin(interaction, this.voiceManager);
+      }
+      if (sub === "leave") {
+        return handleVcLeave(interaction, this.voiceManager);
+      }
+      return;
+    }
+
+    // /claw clear
     if (sub === "clear") {
-      this.sessions.delete(interaction.channelId);
-      await interaction.reply({
-        content: "Session cleared.",
-        ephemeral: true,
-      });
-      log.info("session cleared for channel:", interaction.channelId);
+      return handleClear(interaction, this.sessions);
     }
   }
 

@@ -10,7 +10,11 @@
   },
   "imports": {
     "@anthropic-ai/claude-agent-sdk": "npm:@anthropic-ai/claude-agent-sdk@^0.2.87",
+    "@discordjs/voice": "npm:@discordjs/voice@0.19.2",
+    "@openai/openai": "jsr:@openai/openai@^6.33.0",
+    "@snazzah/davey": "npm:@snazzah/davey@^0.1.11",
     "discord.js": "npm:discord.js@^14.25.1",
+    "opusscript": "npm:opusscript@0.1.1",
     "@std/assert": "jsr:@std/assert@^1.0.19",
     "@std/dotenv": "jsr:@std/dotenv@^0.225.6",
     "@std/streams": "jsr:@std/streams@^1.0.17"

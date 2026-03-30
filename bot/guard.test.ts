@@ -14,6 +14,21 @@ const baseConfig: Config = {
     cwd: "/tmp",
     approvalPort: 3000,
   },
+  voice: {
+    enabled: false,
+    whisperUrl: "http://localhost:8178",
+    ttsUrl: "http://localhost:8000",
+    ttsModel: "voicevox",
+    ttsSpeaker: "1",
+    ttsSpeed: 1,
+    minSpeechMs: 500,
+    speechRms: 200,
+    interruptRms: 500,
+    autoLeaveMs: 600000,
+    speechDebounceMs: 500,
+    notificationTone: true,
+    autoJoinVc: false,
+  },
 };
 
 Deno.test("isAuthorized", async (t) => {
