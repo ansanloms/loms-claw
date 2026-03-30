@@ -179,8 +179,8 @@ export class DiscordBot {
 
     let prompt = message.cleanContent;
     if (this.client.user) {
-      prompt = prompt.replace(
-        new RegExp(`@${this.client.user.displayName}`, "g"),
+      prompt = prompt.replaceAll(
+        `@${this.client.user.displayName}`,
         "",
       );
     }
@@ -227,7 +227,7 @@ export class DiscordBot {
       }
 
       // 応答送信
-      if ("result" in resultEvent && resultEvent.result) {
+      if ("result" in resultEvent && typeof resultEvent.result === "string") {
         const chunks = splitMessage(resultEvent.result);
         for (const chunk of chunks) {
           await channel.send(chunk);

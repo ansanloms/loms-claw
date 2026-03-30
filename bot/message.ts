@@ -22,6 +22,10 @@ export function splitMessage(
   text: string,
   limit: number = DISCORD_MESSAGE_LIMIT,
 ): string[] {
+  if (!text) {
+    return [];
+  }
+
   if (text.length <= limit) {
     return [text];
   }

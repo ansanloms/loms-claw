@@ -35,8 +35,8 @@ Deno.test("splitMessage", async (t) => {
     assertEquals(chunks, ["abc", "def"]);
   });
 
-  await t.step("空文字列はそのまま返すこと", () => {
-    assertEquals(splitMessage(""), [""]);
+  await t.step("空文字列は空配列を返すこと", () => {
+    assertEquals(splitMessage(""), []);
   });
 
   await t.step("非常に長いテキストは複数チャンクに分割すること", () => {
