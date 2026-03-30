@@ -5,6 +5,8 @@ services:
     build: ..
     env_file:
       - ../.env
+    environment:
+      - TZ=${TZ:-UTC}
     working_dir: /workspace
     command: ["deno", "run", "-A", "/app/main.ts"]
     volumes:
