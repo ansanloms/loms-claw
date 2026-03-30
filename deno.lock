@@ -3,8 +3,11 @@
   "specifiers": {
     "jsr:@aireone/deno-lint-curly@*": "0.2.0",
     "jsr:@std/assert@^1.0.19": "1.0.19",
+    "jsr:@std/bytes@^1.0.6": "1.0.6",
     "jsr:@std/dotenv@~0.225.6": "0.225.6",
     "jsr:@std/internal@^1.0.12": "1.0.12",
+    "jsr:@std/streams@*": "1.0.17",
+    "jsr:@std/streams@^1.0.17": "1.0.17",
     "npm:@anthropic-ai/claude-agent-sdk@~0.2.87": "0.2.87_zod@4.3.6",
     "npm:discord.js@^14.25.1": "14.25.1"
   },
@@ -18,11 +21,20 @@
         "jsr:@std/internal"
       ]
     },
+    "@std/bytes@1.0.6": {
+      "integrity": "f6ac6adbd8ccd99314045f5703e23af0a68d7f7e58364b47d2c7f408aeb5820a"
+    },
     "@std/dotenv@0.225.6": {
       "integrity": "1d6f9db72f565bd26790fa034c26e45ecb260b5245417be76c2279e5734c421b"
     },
     "@std/internal@1.0.12": {
       "integrity": "972a634fd5bc34b242024402972cd5143eac68d8dffaca5eaa4dba30ce17b027"
+    },
+    "@std/streams@1.0.17": {
+      "integrity": "7859f3d9deed83cf4b41f19223d4a67661b3d3819e9fc117698f493bf5992140",
+      "dependencies": [
+        "jsr:@std/bytes"
+      ]
     }
   },
   "npm": {
@@ -823,6 +835,7 @@
     "dependencies": [
       "jsr:@std/assert@^1.0.19",
       "jsr:@std/dotenv@~0.225.6",
+      "jsr:@std/streams@^1.0.17",
       "npm:@anthropic-ai/claude-agent-sdk@~0.2.87",
       "npm:discord.js@^14.25.1"
     ]

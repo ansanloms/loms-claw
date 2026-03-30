@@ -1,11 +1,12 @@
-import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
+import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { ClaudeConfig } from "../config.ts";
 import {
   askClaude,
   buildArgs,
   buildHookSettings,
-  type CommandResult,
-  parseClaudeOutput,
+  type CommandSpawner,
+  parseNdjsonStream,
 } from "./mod.ts";
 
 const baseConfig: ClaudeConfig = {
@@ -17,24 +18,22 @@ const baseConfig: ClaudeConfig = {
 };
 
 Deno.test("buildArgs", async (t) => {
-  await t.step("最小限の引数を構築すること", () => {
+  await t.step("stream-json を出力フォーマットに指定すること", () => {
     const args = buildArgs("hello", baseConfig);
-    assertEquals(args.includes("-p"), true);
-    assertEquals(args.includes("hello"), true);
-    assertEquals(args.includes("--output-format"), true);
-    assertEquals(args.includes("json"), true);
-    assertEquals(args.includes("--max-turns"), true);
-    assertEquals(args.includes("10"), true);
+    const idx = args.indexOf("--output-format");
+    assertEquals(idx >= 0, true);
+    assertEquals(args[idx + 1], "stream-json");
   });
 
-  await t.step("verbose 有効時に --verbose を含むこと", () => {
-    const args = buildArgs("hello", { ...baseConfig, verbose: true });
+  await t.step("--verbose を常に含むこと", () => {
+    const args = buildArgs("hello", { ...baseConfig, verbose: false });
     assertEquals(args.includes("--verbose"), true);
   });
 
-  await t.step("verbose 無効時に --verbose を含まないこと", () => {
+  await t.step("--max-turns を含むこと", () => {
     const args = buildArgs("hello", baseConfig);
-    assertEquals(args.includes("--verbose"), false);
+    assertEquals(args.includes("--max-turns"), true);
+    assertEquals(args.includes("10"), true);
   });
 
   await t.step("セッション ID 指定時に --resume を含むこと", () => {
@@ -63,132 +62,160 @@ Deno.test("buildHookSettings", async (t) => {
   });
 });
 
-Deno.test("parseClaudeOutput", async (t) => {
-  await t.step("単一オブジェクト（非 verbose）をパースできること", () => {
-    const json = JSON.stringify({
-      type: "result",
-      result: "hello world",
-      session_id: "sess-1",
-      is_error: false,
-    });
-    const response = parseClaudeOutput(json);
-    assertEquals(response.result, "hello world");
-    assertEquals(response.sessionId, "sess-1");
-  });
-
-  await t.step("配列（verbose モード）をパースできること", () => {
-    const json = JSON.stringify([
+Deno.test("parseNdjsonStream", async (t) => {
+  await t.step("NDJSON 行を SDKMessage に変換すること", async () => {
+    const messages = [
       { type: "system", subtype: "init", session_id: "sess-1" },
       {
         type: "result",
-        result: "hello verbose",
+        subtype: "success",
+        result: "done",
         session_id: "sess-1",
         is_error: false,
       },
-    ]);
-    const response = parseClaudeOutput(json);
-    assertEquals(response.result, "hello verbose");
-    assertEquals(response.sessionId, "sess-1");
-  });
+    ];
 
-  await t.step("空の出力でエラーになること", () => {
-    try {
-      parseClaudeOutput("");
-      throw new Error("should have thrown");
-    } catch (e) {
-      assertStringIncludes((e as Error).message, "empty output");
-    }
-  });
-
-  await t.step("不正な JSON でエラーになること", () => {
-    try {
-      parseClaudeOutput("not json");
-      throw new Error("should have thrown");
-    } catch (e) {
-      assertStringIncludes((e as Error).message, "invalid JSON");
-    }
-  });
-
-  await t.step("result イベントがない配列でエラーになること", () => {
-    const json = JSON.stringify([
-      { type: "system", subtype: "init" },
-    ]);
-    try {
-      parseClaudeOutput(json);
-      throw new Error("should have thrown");
-    } catch (e) {
-      assertStringIncludes((e as Error).message, "no result event");
-    }
-  });
-
-  await t.step("is_error が true の場合にエラーになること", () => {
-    const json = JSON.stringify({
-      type: "result",
-      result: "something went wrong",
-      session_id: "sess-1",
-      is_error: true,
+    const ndjson = messages.map((m) => JSON.stringify(m)).join("\n") + "\n";
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(ndjson));
+        controller.close();
+      },
     });
-    try {
-      parseClaudeOutput(json);
-      throw new Error("should have thrown");
-    } catch (e) {
-      assertStringIncludes((e as Error).message, "claude returned error");
+
+    const collected: SDKMessage[] = [];
+    for await (const event of parseNdjsonStream(stream)) {
+      collected.push(event);
     }
+
+    assertEquals(collected.length, 2);
+    assertEquals(collected[0].type, "system");
+    assertEquals(collected[1].type, "result");
   });
 
-  await t.step("result テキストが空の場合にエラーになること", () => {
-    const json = JSON.stringify({
+  await t.step("空行をスキップすること", async () => {
+    const line = JSON.stringify({
       type: "result",
-      result: "",
-      session_id: "sess-1",
+      result: "ok",
+      session_id: "s",
+      is_error: false,
     });
-    try {
-      parseClaudeOutput(json);
-      throw new Error("should have thrown");
-    } catch (e) {
-      assertStringIncludes((e as Error).message, "empty result");
+    const ndjson = "\n" + line + "\n\n";
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(ndjson));
+        controller.close();
+      },
+    });
+
+    const collected: SDKMessage[] = [];
+    for await (const event of parseNdjsonStream(stream)) {
+      collected.push(event);
     }
+
+    assertEquals(collected.length, 1);
+  });
+
+  await t.step("不正な JSON 行をスキップすること", async () => {
+    const valid = JSON.stringify({
+      type: "result",
+      result: "ok",
+      session_id: "s",
+      is_error: false,
+    });
+    const ndjson = "not json\n" + valid + "\n";
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(ndjson));
+        controller.close();
+      },
+    });
+
+    const collected: SDKMessage[] = [];
+    for await (const event of parseNdjsonStream(stream)) {
+      collected.push(event);
+    }
+
+    assertEquals(collected.length, 1);
+    assertEquals(collected[0].type, "result");
   });
 });
 
+/**
+ * モック CommandSpawner を生成する。
+ */
+function mockSpawner(
+  lines: Record<string, unknown>[],
+  exitCode = 0,
+): CommandSpawner {
+  return () => ({
+    stdout: new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        for (const line of lines) {
+          controller.enqueue(encoder.encode(JSON.stringify(line) + "\n"));
+        }
+        controller.close();
+      },
+    }),
+    stderr: Promise.resolve(""),
+    status: Promise.resolve({
+      success: exitCode === 0,
+      code: exitCode,
+      signal: null,
+    }),
+  });
+}
+
 Deno.test("askClaude", async (t) => {
-  await t.step("モックスポーナーで結果をパースできること", async () => {
-    const mockSpawner = (
-      _args: string[],
-      _cwd: string,
-    ): Promise<CommandResult> =>
-      Promise.resolve({
-        stdout: JSON.stringify({
-          type: "result",
-          result: "mocked response",
-          session_id: "mock-session",
-          is_error: false,
-        }),
-        stderr: "",
-        success: true,
-        code: 0,
-      });
+  await t.step("全イベントを yield すること", async () => {
+    const messages = [
+      { type: "system", subtype: "init", session_id: "sess-1" },
+      {
+        type: "tool_progress",
+        tool_use_id: "tu-1",
+        tool_name: "Bash",
+        parent_tool_use_id: null,
+        elapsed_time_seconds: 5,
+        session_id: "sess-1",
+      },
+      {
+        type: "result",
+        subtype: "success",
+        result: "done",
+        session_id: "sess-1",
+        is_error: false,
+      },
+    ];
 
-    const response = await askClaude("hello", {
-      config: baseConfig,
-      spawner: mockSpawner,
-    });
+    const collected: SDKMessage[] = [];
+    for await (
+      const event of askClaude("hello", {
+        config: baseConfig,
+        spawner: mockSpawner(messages),
+      })
+    ) {
+      collected.push(event);
+    }
 
-    assertEquals(response.result, "mocked response");
-    assertEquals(response.sessionId, "mock-session");
+    assertEquals(collected.length, 3);
+    assertEquals(collected[0].type, "system");
+    assertEquals(collected[1].type, "tool_progress");
+    assertEquals(collected[2].type, "result");
   });
 
   await t.step("非ゼロ終了コードでエラーになること", async () => {
-    const mockSpawner = (): Promise<CommandResult> =>
-      Promise.resolve({
-        stdout: "",
-        stderr: "error message",
-        success: false,
-        code: 1,
-      });
-
     await assertRejects(
-      () => askClaude("hello", { config: baseConfig, spawner: mockSpawner }),
+      async () => {
+        for await (
+          const _ of askClaude("hello", {
+            config: baseConfig,
+            spawner: mockSpawner([], 1),
+          })
+        ) {
+          void _;
+        }
+      },
       Error,
       "exited with code 1",
     );
@@ -196,26 +223,29 @@ Deno.test("askClaude", async (t) => {
 
   await t.step("セッション ID が引数に渡されること", async () => {
     let capturedArgs: string[] = [];
-    const mockSpawner = (args: string[]): Promise<CommandResult> => {
+    const inner = mockSpawner([
+      {
+        type: "result",
+        subtype: "success",
+        result: "ok",
+        session_id: "s",
+        is_error: false,
+      },
+    ]);
+    const spawner: CommandSpawner = (args, cwd, signal) => {
       capturedArgs = args;
-      return Promise.resolve({
-        stdout: JSON.stringify({
-          type: "result",
-          result: "ok",
-          session_id: "s",
-          is_error: false,
-        }),
-        stderr: "",
-        success: true,
-        code: 0,
-      });
+      return inner(args, cwd, signal);
     };
 
-    await askClaude("hello", {
-      config: baseConfig,
-      sessionId: "prev-session",
-      spawner: mockSpawner,
-    });
+    for await (
+      const _ of askClaude("hello", {
+        config: baseConfig,
+        sessionId: "prev-session",
+        spawner,
+      })
+    ) {
+      void _;
+    }
 
     assertEquals(capturedArgs.includes("--resume"), true);
     assertEquals(

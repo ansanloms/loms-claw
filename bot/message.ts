@@ -76,3 +76,46 @@ export function keepTyping(
 
   signal.addEventListener("abort", () => clearInterval(id), { once: true });
 }
+
+/** スロットル間隔（ミリ秒）。Discord の message.edit() レート制限（5回/5秒）を考慮。 */
+const PROGRESS_THROTTLE_MS = 3000;
+
+/**
+ * ツール実行の進捗を Discord メッセージで表示する。
+ *
+ * Discord の message.edit() レート制限を考慮し、最短 3 秒間隔でスロットルする。
+ * 返り値の `report` で進捗を更新し、`cleanup` で進捗メッセージを削除する。
+ */
+export function createProgressReporter(channel: GuildTextBasedChannel): {
+  report: (toolName: string, elapsedSeconds: number) => Promise<void>;
+  cleanup: () => Promise<void>;
+} {
+  let message: Awaited<ReturnType<GuildTextBasedChannel["send"]>> | null = null;
+  let lastUpdate = 0;
+
+  return {
+    async report(toolName, elapsedSeconds) {
+      const now = Date.now();
+      if (now - lastUpdate < PROGRESS_THROTTLE_MS) {
+        return;
+      }
+
+      const text = `\`${toolName}\` 実行中... (${Math.round(elapsedSeconds)}s)`;
+
+      if (!message) {
+        message = await channel.send(text);
+      } else {
+        await message.edit(text).catch(() => {});
+      }
+
+      lastUpdate = now;
+    },
+
+    async cleanup() {
+      if (message) {
+        await message.delete().catch(() => {});
+        message = null;
+      }
+    },
+  };
+}
