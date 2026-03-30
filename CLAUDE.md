@@ -110,11 +110,11 @@ main.ts                エントリポイント。dotenv → loadConfig → Disc
 config.ts              環境変数 → Config 型。必須項目のバリデーション。
 logger.ts              名前空間付き軽量ロガー。LOG_LEVEL 環境変数で制御。
 bot/mod.ts             DiscordBot クラス。messageCreate ハンドラ、start/shutdown。
-bot/commands.ts        スラッシュコマンド定義（/claw clear, /claw vc join|leave）。
+bot/commands.ts        スラッシュコマンド定義とハンドラ（/claw clear, /claw vc join|leave）。
 bot/guard.ts           isAuthorized(): ギルド ID + ユーザー ID + bot 除外の認可チェック。
 bot/message.ts         splitMessage(): 2000 文字分割。keepTyping(): typing インジケーター維持。ProgressReporter: ツール進捗表示。
 claude/mod.ts          askClaude(): Deno.Command で claude -p を spawn し stream-json 出力を逐次パース。
-session/mod.ts         SessionStore: チャンネル/スレッド ID → session_id のインメモリマッピング。
+session/mod.ts         SessionStore: チャンネル/スレッド ID → session_id のマッピング。JSON ファイルへの永続化対応。
 approval/manager.ts    ApprovalManager: Discord ボタンによるツール承認/拒否。
 approval/server.ts     承認 HTTP サーバー。PreToolUse フックのエンドポイント。
 approval/types.ts      HookInput, ApprovalResult の型定義。

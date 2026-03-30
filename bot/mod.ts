@@ -27,7 +27,7 @@ import { command } from "./commands.ts";
 import { isAuthorized, shouldRespond } from "./guard.ts";
 import { createProgressReporter, keepTyping, splitMessage } from "./message.ts";
 import { createLogger } from "../logger.ts";
-import { handleClear, handleVcJoin, handleVcLeave } from "./handlers.ts";
+import { handleClear, handleVcJoin, handleVcLeave } from "./commands.ts";
 import { VoiceManager } from "../voice/mod.ts";
 import { WhisperStt } from "../voice/stt.ts";
 import { OpenAiTts } from "../voice/tts.ts";
