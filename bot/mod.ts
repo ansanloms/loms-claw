@@ -26,8 +26,9 @@ import { startApprovalServer } from "../approval/server.ts";
 import { command } from "./commands.ts";
 import { isAuthorized, shouldRespond } from "./guard.ts";
 import { createProgressReporter, keepTyping, splitMessage } from "./message.ts";
+import { join } from "jsr:@std/path@^1/join";
 import { createLogger } from "../logger.ts";
-import { resolveSystemPrompt } from "../claude/system-prompt.ts";
+import { SystemPromptStore } from "../claude/system-prompt.ts";
 import { handleClear, handleVcJoin, handleVcLeave } from "./commands.ts";
 import { VoiceManager } from "../voice/mod.ts";
 import { WhisperStt } from "../voice/stt.ts";
@@ -46,9 +47,13 @@ export class DiscordBot {
   private approvalManager: ApprovalManager;
   private approvalServer: Deno.HttpServer | null = null;
   private voiceManager: VoiceManager | null = null;
+  private systemPrompts: SystemPromptStore;
 
   constructor(config: Config) {
     this.config = config;
+    this.systemPrompts = new SystemPromptStore(
+      join(config.claude.cwd, ".claude", "system-prompt"),
+    );
     this.client = new Client({
       intents: [
         GatewayIntentBits.Guilds,
@@ -81,6 +86,7 @@ export class DiscordBot {
         voicePlayer,
         this.sessions,
         this.approvalManager,
+        this.systemPrompts,
       );
 
       this.client.on(
@@ -98,6 +104,8 @@ export class DiscordBot {
    * bot を起動する。Discord gateway に接続し、スラッシュコマンドを登録する。
    */
   async start(): Promise<void> {
+    await this.systemPrompts.load();
+
     this.approvalServer = startApprovalServer(
       this.approvalManager,
       this.config.claude.approvalPort,
@@ -263,8 +271,7 @@ export class DiscordBot {
       // 承認ボタンの送信先チャンネルを設定
       this.approvalManager.setChannel(channelId);
 
-      const appendSystemPrompt = await resolveSystemPrompt(
-        this.config.claude.cwd,
+      const appendSystemPrompt = this.systemPrompts.resolve(
         "chat",
         channelId,
       );

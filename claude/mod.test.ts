@@ -271,4 +271,38 @@ Deno.test("askClaude", async (t) => {
       "prev-session",
     );
   });
+
+  await t.step(
+    "appendSystemPrompt が --append-system-prompt として渡されること",
+    async () => {
+      let capturedArgs: string[] = [];
+      const inner = mockSpawner([
+        {
+          type: "result",
+          subtype: "success",
+          result: "ok",
+          session_id: "s",
+          is_error: false,
+        },
+      ]);
+      const spawner: CommandSpawner = (args, cwd, signal) => {
+        capturedArgs = args;
+        return inner(args, cwd, signal);
+      };
+
+      for await (
+        const _ of askClaude("hello", {
+          config: baseConfig,
+          appendSystemPrompt: "extra prompt",
+          spawner,
+        })
+      ) {
+        void _;
+      }
+
+      const idx = capturedArgs.indexOf("--append-system-prompt");
+      assertEquals(idx >= 0, true);
+      assertEquals(capturedArgs[idx + 1], "extra prompt");
+    },
+  );
 });

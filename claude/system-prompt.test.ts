@@ -1,6 +1,6 @@
 import { assertEquals } from "@std/assert";
 import { join } from "jsr:@std/path@^1/join";
-import { resolveSystemPrompt } from "./system-prompt.ts";
+import { SystemPromptStore } from "./system-prompt.ts";
 
 /**
  * テスト用の一時ディレクトリを作成し、コールバック実行後に削除する。
@@ -17,31 +17,32 @@ async function withTempDir(
 }
 
 /**
- * .claude/system-prompt/ 配下にファイルを作成する。
+ * ディレクトリ内にファイルを作成する。
  */
-async function writePromptFile(
-  cwd: string,
+async function writeFile(
+  dir: string,
   name: string,
   content: string,
 ): Promise<void> {
-  const dir = join(cwd, ".claude", "system-prompt");
   await Deno.mkdir(dir, { recursive: true });
   await Deno.writeTextFile(join(dir, name), content);
 }
 
-Deno.test("resolveSystemPrompt", async (t) => {
-  await t.step("全ファイル不在で undefined を返すこと", async () => {
+Deno.test("SystemPromptStore", async (t) => {
+  await t.step("ディレクトリ不在で undefined を返すこと", async () => {
     await withTempDir(async (dir) => {
-      const result = await resolveSystemPrompt(dir, "chat", "ch-1");
-      assertEquals(result, undefined);
+      const store = new SystemPromptStore(join(dir, "nonexistent"));
+      await store.load();
+      assertEquals(store.resolve("chat", "ch-1"), undefined);
     });
   });
 
   await t.step("DEFAULT.md のみ存在時にその内容を返すこと", async () => {
     await withTempDir(async (dir) => {
-      await writePromptFile(dir, "DEFAULT.md", "default prompt");
-      const result = await resolveSystemPrompt(dir, "chat", "ch-1");
-      assertEquals(result, "default prompt");
+      await writeFile(dir, "DEFAULT.md", "default prompt");
+      const store = new SystemPromptStore(dir);
+      await store.load();
+      assertEquals(store.resolve("chat", "ch-1"), "default prompt");
     });
   });
 
@@ -49,10 +50,11 @@ Deno.test("resolveSystemPrompt", async (t) => {
     "chat コンテキストで DEFAULT.md + CHAT.md が結合されること",
     async () => {
       await withTempDir(async (dir) => {
-        await writePromptFile(dir, "DEFAULT.md", "default");
-        await writePromptFile(dir, "CHAT.md", "chat specific");
-        const result = await resolveSystemPrompt(dir, "chat", "ch-1");
-        assertEquals(result, "default\n\nchat specific");
+        await writeFile(dir, "DEFAULT.md", "default");
+        await writeFile(dir, "CHAT.md", "chat specific");
+        const store = new SystemPromptStore(dir);
+        await store.load();
+        assertEquals(store.resolve("chat", "ch-1"), "default\n\nchat specific");
       });
     },
   );
@@ -61,67 +63,76 @@ Deno.test("resolveSystemPrompt", async (t) => {
     "vc コンテキストで DEFAULT.md + VC.md が結合されること",
     async () => {
       await withTempDir(async (dir) => {
-        await writePromptFile(dir, "DEFAULT.md", "default");
-        await writePromptFile(dir, "VC.md", "vc specific");
-        const result = await resolveSystemPrompt(dir, "vc", "ch-1");
-        assertEquals(result, "default\n\nvc specific");
+        await writeFile(dir, "DEFAULT.md", "default");
+        await writeFile(dir, "VC.md", "vc specific");
+        const store = new SystemPromptStore(dir);
+        await store.load();
+        assertEquals(store.resolve("vc", "ch-1"), "default\n\nvc specific");
       });
     },
   );
 
-  await t.step(
-    "chat コンテキストで VC.md は読まれないこと",
-    async () => {
-      await withTempDir(async (dir) => {
-        await writePromptFile(dir, "VC.md", "vc only");
-        const result = await resolveSystemPrompt(dir, "chat", "ch-1");
-        assertEquals(result, undefined);
-      });
-    },
-  );
+  await t.step("chat コンテキストで VC.md は読まれないこと", async () => {
+    await withTempDir(async (dir) => {
+      await writeFile(dir, "VC.md", "vc only");
+      const store = new SystemPromptStore(dir);
+      await store.load();
+      assertEquals(store.resolve("chat", "ch-1"), undefined);
+    });
+  });
 
-  await t.step(
-    "vc コンテキストで CHAT.md は読まれないこと",
-    async () => {
-      await withTempDir(async (dir) => {
-        await writePromptFile(dir, "CHAT.md", "chat only");
-        const result = await resolveSystemPrompt(dir, "vc", "ch-1");
-        assertEquals(result, undefined);
-      });
-    },
-  );
+  await t.step("vc コンテキストで CHAT.md は読まれないこと", async () => {
+    await withTempDir(async (dir) => {
+      await writeFile(dir, "CHAT.md", "chat only");
+      const store = new SystemPromptStore(dir);
+      await store.load();
+      assertEquals(store.resolve("vc", "ch-1"), undefined);
+    });
+  });
 
-  await t.step(
-    "チャンネル ID ファイルが結合されること",
-    async () => {
-      await withTempDir(async (dir) => {
-        await writePromptFile(dir, "DEFAULT.md", "default");
-        await writePromptFile(dir, "ch-123.md", "channel specific");
-        const result = await resolveSystemPrompt(dir, "chat", "ch-123");
-        assertEquals(result, "default\n\nchannel specific");
-      });
-    },
-  );
+  await t.step("チャンネル ID ファイルが結合されること", async () => {
+    await withTempDir(async (dir) => {
+      await writeFile(dir, "DEFAULT.md", "default");
+      await writeFile(dir, "ch-123.md", "channel specific");
+      const store = new SystemPromptStore(dir);
+      await store.load();
+      assertEquals(
+        store.resolve("chat", "ch-123"),
+        "default\n\nchannel specific",
+      );
+    });
+  });
 
-  await t.step(
-    "全 3 種のファイルが順序通りに結合されること",
-    async () => {
-      await withTempDir(async (dir) => {
-        await writePromptFile(dir, "DEFAULT.md", "default");
-        await writePromptFile(dir, "VC.md", "vc");
-        await writePromptFile(dir, "ch-456.md", "channel");
-        const result = await resolveSystemPrompt(dir, "vc", "ch-456");
-        assertEquals(result, "default\n\nvc\n\nchannel");
-      });
-    },
-  );
+  await t.step("全 3 種のファイルが順序通りに結合されること", async () => {
+    await withTempDir(async (dir) => {
+      await writeFile(dir, "DEFAULT.md", "default");
+      await writeFile(dir, "VC.md", "vc");
+      await writeFile(dir, "ch-456.md", "channel");
+      const store = new SystemPromptStore(dir);
+      await store.load();
+      assertEquals(store.resolve("vc", "ch-456"), "default\n\nvc\n\nchannel");
+    });
+  });
 
   await t.step("空白のみのファイルはスキップされること", async () => {
     await withTempDir(async (dir) => {
-      await writePromptFile(dir, "DEFAULT.md", "  \n  ");
-      await writePromptFile(dir, "CHAT.md", "chat");
-      const result = await resolveSystemPrompt(dir, "chat", "ch-1");
-      assertEquals(result, "chat");
+      await writeFile(dir, "DEFAULT.md", "  \n  ");
+      await writeFile(dir, "CHAT.md", "chat");
+      const store = new SystemPromptStore(dir);
+      await store.load();
+      assertEquals(store.resolve("chat", "ch-1"), "chat");
+    });
+  });
+
+  await t.step("resolve() は load() 後に同期で呼べること", async () => {
+    await withTempDir(async (dir) => {
+      await writeFile(dir, "DEFAULT.md", "sync test");
+      const store = new SystemPromptStore(dir);
+      await store.load();
+      // 同期呼び出し（Promise ではない）
+      const result = store.resolve("chat", "ch-1");
+      assertEquals(typeof result, "string");
+      assertEquals(result, "sync test");
     });
   });
 });

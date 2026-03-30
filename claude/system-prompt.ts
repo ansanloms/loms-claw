@@ -1,7 +1,7 @@
 /**
  * コンテキスト別システムプロンプトの解決。
  *
- * ワークスペースの .claude/system-prompt/ 配下のファイルを読み込み、
+ * ワークスペースの .claude/system-prompt/ 配下のファイルを起動時に読み込み、
  * コンテキスト（chat/vc）とチャンネル ID に応じて結合して返す。
  *
  * ファイル構成:
@@ -11,7 +11,7 @@
  *   {{CHANNEL_ID}}.md       — 特定チャンネルで応答する際に読み込む
  */
 
-import { join } from "jsr:@std/path@^1/join";
+import { basename, join } from "jsr:@std/path@^1";
 import { createLogger } from "../logger.ts";
 
 const log = createLogger("system-prompt");
@@ -36,47 +36,98 @@ async function readFileOrUndefined(path: string): Promise<string | undefined> {
 }
 
 /**
- * コンテキストに応じたシステムプロンプトを組み立てる。
+ * システムプロンプトの起動時キャッシュ。
  *
- * .claude/system-prompt/ 配下のファイルを以下の順序で読み込み、
- * 改行 2 つで結合して返す。ファイルが存在しない場合はスキップする。
- *
- * 1. DEFAULT.md — 常に読み込む
- * 2. CHAT.md or VC.md — コンテキストに応じて読み込む
- * 3. {channelId}.md — チャンネル固有の指示
- *
- * @param cwd - ワークスペースのルートディレクトリ。
- * @param context - "chat" または "vc"。
- * @param channelId - Discord チャンネル ID。
- * @returns 結合されたシステムプロンプト。全ファイル不在なら undefined。
+ * コンストラクタでディレクトリを指定し、loadSync() で全ファイルを読み込む。
+ * resolve() はキャッシュから同期的に結合結果を返すため、メッセージ/発話ごとの I/O が発生しない。
+ * ファイル変更の反映にはボット再起動が必要。
  */
-export async function resolveSystemPrompt(
-  cwd: string,
-  context: PromptContext,
-  channelId: string,
-): Promise<string | undefined> {
-  const dir = join(cwd, ".claude", "system-prompt");
-  const contextFile = context === "chat" ? "CHAT.md" : "VC.md";
+export class SystemPromptStore {
+  private defaultPrompt: string | undefined;
+  private chatPrompt: string | undefined;
+  private vcPrompt: string | undefined;
+  private channelPrompts = new Map<string, string>();
 
-  const parts: string[] = [];
+  constructor(private readonly dir: string) {}
 
-  const files = [
-    join(dir, "DEFAULT.md"),
-    join(dir, contextFile),
-    join(dir, `${channelId}.md`),
-  ];
+  /**
+   * .claude/system-prompt/ 配下のファイルを全て読み込んでキャッシュする。
+   * ディレクトリが存在しない場合は何もしない。
+   */
+  async load(): Promise<void> {
+    this.defaultPrompt = (await readFileOrUndefined(
+      join(this.dir, "DEFAULT.md"),
+    ))?.trim() || undefined;
+    this.chatPrompt = (await readFileOrUndefined(
+      join(this.dir, "CHAT.md"),
+    ))?.trim() || undefined;
+    this.vcPrompt = (await readFileOrUndefined(
+      join(this.dir, "VC.md"),
+    ))?.trim() || undefined;
 
-  for (const file of files) {
-    const content = await readFileOrUndefined(file);
-    if (content?.trim()) {
-      parts.push(content.trim());
-      log.debug(`loaded system prompt: ${file}`);
+    // チャンネル ID ファイル（数値のみの .md ファイル）をスキャンする。
+    try {
+      for await (const entry of Deno.readDir(this.dir)) {
+        if (!entry.isFile || !entry.name.endsWith(".md")) {
+          continue;
+        }
+        const name = basename(entry.name, ".md");
+        // DEFAULT, CHAT, VC は既に読み込み済み。
+        if (name === "DEFAULT" || name === "CHAT" || name === "VC") {
+          continue;
+        }
+        const content = (await readFileOrUndefined(
+          join(this.dir, entry.name),
+        ))?.trim();
+        if (content) {
+          this.channelPrompts.set(name, content);
+          log.info(`loaded channel prompt: ${entry.name}`);
+        }
+      }
+    } catch (e) {
+      if (e instanceof Deno.errors.NotFound) {
+        log.info("system-prompt directory not found, skipping");
+        return;
+      }
+      throw e;
     }
+
+    const count = (this.defaultPrompt ? 1 : 0) +
+      (this.chatPrompt ? 1 : 0) +
+      (this.vcPrompt ? 1 : 0) +
+      this.channelPrompts.size;
+    log.info(`loaded ${count} system prompt file(s) from ${this.dir}`);
   }
 
-  if (parts.length === 0) {
-    return undefined;
-  }
+  /**
+   * コンテキストに応じたシステムプロンプトをキャッシュから組み立てる。
+   *
+   * 読み込み順:
+   * 1. DEFAULT.md — 常に含める
+   * 2. CHAT.md or VC.md — コンテキストに応じて含める
+   * 3. {channelId}.md — チャンネル固有の指示
+   *
+   * @param context - "chat" または "vc"。
+   * @param channelId - Discord チャンネル ID。
+   * @returns 結合されたシステムプロンプト。全不在なら undefined。
+   */
+  resolve(context: PromptContext, channelId: string): string | undefined {
+    const parts: string[] = [];
 
-  return parts.join("\n\n");
+    if (this.defaultPrompt) {
+      parts.push(this.defaultPrompt);
+    }
+
+    const contextPrompt = context === "chat" ? this.chatPrompt : this.vcPrompt;
+    if (contextPrompt) {
+      parts.push(contextPrompt);
+    }
+
+    const channelPrompt = this.channelPrompts.get(channelId);
+    if (channelPrompt) {
+      parts.push(channelPrompt);
+    }
+
+    return parts.length > 0 ? parts.join("\n\n") : undefined;
+  }
 }

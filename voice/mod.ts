@@ -20,7 +20,7 @@ import type { ClaudeConfig, VoiceConfig } from "../config.ts";
 import type { SessionStore } from "../session/mod.ts";
 import type { ApprovalManager } from "../approval/manager.ts";
 import { createLogger } from "../logger.ts";
-import { resolveSystemPrompt } from "../claude/system-prompt.ts";
+import type { SystemPromptStore } from "../claude/system-prompt.ts";
 import { calcRms, createOpusDecoder } from "./codec.ts";
 import type { SpeechToText } from "./stt.ts";
 import type { VoicePlayer } from "./player.ts";
@@ -61,6 +61,7 @@ export class VoiceManager {
     private readonly voicePlayer: VoicePlayer,
     private readonly sessions: SessionStore,
     private readonly approvalManager: ApprovalManager,
+    private readonly systemPrompts: SystemPromptStore,
   ) {
     this.minPcmBytes = msToBytes(voiceConfig.minSpeechMs);
   }
@@ -446,11 +447,7 @@ export class VoiceManager {
       this.voicePlayer.startThinking();
 
       const sessionId = this.sessions.get(channelId);
-      const appendSystemPrompt = await resolveSystemPrompt(
-        this.claudeConfig.cwd,
-        "vc",
-        channelId,
-      );
+      const appendSystemPrompt = this.systemPrompts.resolve("vc", channelId);
       const result = await askClaudeForVoice(mergedText, {
         sessionId,
         config: this.claudeConfig,
