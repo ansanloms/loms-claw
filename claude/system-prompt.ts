@@ -65,14 +65,17 @@ export class SystemPromptStore {
       join(this.dir, "VC.md"),
     ))?.trim() || undefined;
 
-    // チャンネル ID ファイル（数値のみの .md ファイル）をスキャンする。
+    // チャンネル固有ファイルをスキャンする。
+    // DEFAULT.md, CHAT.md, VC.md 以外の .md ファイルは
+    // ファイル名（拡張子除く）をチャンネル ID として扱う。
+    // Discord のチャンネル ID は数値文字列（Snowflake）。
+    this.channelPrompts.clear();
     try {
       for await (const entry of Deno.readDir(this.dir)) {
         if (!entry.isFile || !entry.name.endsWith(".md")) {
           continue;
         }
         const name = basename(entry.name, ".md");
-        // DEFAULT, CHAT, VC は既に読み込み済み。
         if (name === "DEFAULT" || name === "CHAT" || name === "VC") {
           continue;
         }
