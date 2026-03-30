@@ -100,6 +100,9 @@ export function createProgressReporter(channel: GuildTextBasedChannel): {
         return;
       }
 
+      // 並行呼び出し時の二重 send を防ぐため、await 前に更新
+      lastUpdate = now;
+
       const text = `\`${toolName}\` 実行中... (${Math.round(elapsedSeconds)}s)`;
 
       if (!message) {
@@ -107,8 +110,6 @@ export function createProgressReporter(channel: GuildTextBasedChannel): {
       } else {
         await message.edit(text).catch(() => {});
       }
-
-      lastUpdate = now;
     },
 
     async cleanup() {

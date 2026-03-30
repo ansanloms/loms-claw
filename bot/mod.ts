@@ -215,6 +215,8 @@ export class DiscordBot {
       for await (const event of stream) {
         if (event.type === "result") {
           resultEvent = event;
+          // 非ゼロ終了でジェネレータがスローしてもセッションが残るよう即座に保存
+          this.sessions.set(channelId, event.session_id);
         } else if (event.type === "tool_progress") {
           await progress.report(event.tool_name, event.elapsed_time_seconds);
         }
@@ -224,9 +226,6 @@ export class DiscordBot {
         throw new Error("claude stream ended without result event");
       }
 
-      // セッション保存（エラー時も継続できるよう常に保存）
-      this.sessions.set(channelId, resultEvent.session_id);
-
       // 応答送信
       if ("result" in resultEvent && resultEvent.result) {
         const chunks = splitMessage(resultEvent.result);
@@ -235,7 +234,7 @@ export class DiscordBot {
         }
       } else {
         const errors = "errors" in resultEvent
-          ? (resultEvent.errors as string[]).join("\n")
+          ? String(resultEvent.errors)
           : resultEvent.subtype;
         throw new Error(`claude returned error: ${errors}`);
       }
