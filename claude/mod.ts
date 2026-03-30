@@ -43,6 +43,7 @@ export function buildArgs(
   prompt: string,
   config: ClaudeConfig,
   sessionId?: string,
+  appendSystemPrompt?: string,
 ): string[] {
   const args = [
     "-p",
@@ -56,6 +57,10 @@ export function buildArgs(
 
   if (sessionId) {
     args.push("--resume", sessionId);
+  }
+
+  if (appendSystemPrompt) {
+    args.push("--append-system-prompt", appendSystemPrompt);
   }
 
   args.push("--settings", buildHookSettings(config.approvalPort));
@@ -161,10 +166,17 @@ export async function* askClaude(
     config: ClaudeConfig;
     signal?: AbortSignal;
     spawner?: CommandSpawner;
+    appendSystemPrompt?: string;
   },
 ): AsyncGenerator<SDKMessage> {
-  const { config, sessionId, signal, spawner = defaultSpawner } = options;
-  const args = buildArgs(prompt, config, sessionId);
+  const {
+    config,
+    sessionId,
+    signal,
+    spawner = defaultSpawner,
+    appendSystemPrompt,
+  } = options;
+  const args = buildArgs(prompt, config, sessionId, appendSystemPrompt);
 
   log.debug("spawning claude:", args.join(" "));
 

@@ -47,6 +47,24 @@ Deno.test("buildArgs", async (t) => {
     const args = buildArgs("hello", baseConfig);
     assertEquals(args.includes("--settings"), true);
   });
+
+  await t.step(
+    "appendSystemPrompt 指定時に --append-system-prompt を含むこと",
+    () => {
+      const args = buildArgs("hello", baseConfig, undefined, "extra prompt");
+      const idx = args.indexOf("--append-system-prompt");
+      assertEquals(idx >= 0, true);
+      assertEquals(args[idx + 1], "extra prompt");
+    },
+  );
+
+  await t.step(
+    "appendSystemPrompt 未指定時は --append-system-prompt を含まないこと",
+    () => {
+      const args = buildArgs("hello", baseConfig);
+      assertEquals(args.includes("--append-system-prompt"), false);
+    },
+  );
 });
 
 Deno.test("buildHookSettings", async (t) => {

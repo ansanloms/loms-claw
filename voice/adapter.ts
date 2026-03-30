@@ -41,6 +41,7 @@ export async function askClaudeForVoice(
     config: ClaudeConfig;
     signal?: AbortSignal;
     spawner?: CommandSpawner;
+    appendSystemPrompt?: string;
   },
 ): Promise<VoiceResult> {
   const stream = askClaude(prompt, options);

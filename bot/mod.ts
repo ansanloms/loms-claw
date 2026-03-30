@@ -27,6 +27,7 @@ import { command } from "./commands.ts";
 import { isAuthorized, shouldRespond } from "./guard.ts";
 import { createProgressReporter, keepTyping, splitMessage } from "./message.ts";
 import { createLogger } from "../logger.ts";
+import { resolveSystemPrompt } from "../claude/system-prompt.ts";
 import { handleClear, handleVcJoin, handleVcLeave } from "./commands.ts";
 import { VoiceManager } from "../voice/mod.ts";
 import { WhisperStt } from "../voice/stt.ts";
@@ -262,10 +263,17 @@ export class DiscordBot {
       // 承認ボタンの送信先チャンネルを設定
       this.approvalManager.setChannel(channelId);
 
+      const appendSystemPrompt = await resolveSystemPrompt(
+        this.config.claude.cwd,
+        "chat",
+        channelId,
+      );
+
       const stream = askClaude(prompt, {
         sessionId,
         config: this.config.claude,
         signal: AbortSignal.timeout(this.config.claude.timeout),
+        appendSystemPrompt,
       });
 
       let resultEvent: SDKResultMessage | undefined;
