@@ -2,7 +2,7 @@ FROM docker.io/denoland/deno:debian-2.7.8
 
 RUN <<EOF
 apt-get update
-apt-get install -y --no-install-recommends ca-certificates curl git bubblewrap socat
+apt-get install -y --no-install-recommends ca-certificates curl git bubblewrap socat ffmpeg
 rm -rf /var/lib/apt/lists/*
 EOF
 
