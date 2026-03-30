@@ -82,6 +82,7 @@ export class WhisperStt implements SpeechToText {
     const res = await fetch(`${this.baseUrl}/inference`, {
       method: "POST",
       body: form,
+      signal: AbortSignal.timeout(30_000),
     });
 
     if (!res.ok) {

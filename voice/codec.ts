@@ -68,6 +68,9 @@ export function calcRms(pcm: Buffer): number {
     pcm.byteOffset,
     pcm.byteLength / 2,
   );
+  if (samples.length === 0) {
+    return 0;
+  }
   let sumSq = 0;
   for (let i = 0; i < samples.length; i++) {
     sumSq += samples[i] * samples[i];

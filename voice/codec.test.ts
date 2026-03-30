@@ -71,4 +71,9 @@ Deno.test("calcRms", async (t) => {
     }
     assertEquals(calcRms(quiet) < calcRms(loud), true);
   });
+
+  await t.step("空バッファは NaN ではなく 0 を返すこと", () => {
+    const pcm = Buffer.alloc(0);
+    assertEquals(calcRms(pcm), 0);
+  });
 });

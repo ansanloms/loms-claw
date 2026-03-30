@@ -74,6 +74,7 @@ export class DiscordBot {
         config.voice,
         config.claude,
         config.guildId,
+        config.authorizedUserId,
         this.client,
         stt,
         voicePlayer,

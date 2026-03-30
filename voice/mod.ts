@@ -43,7 +43,6 @@ export class VoiceManager {
   private currentChannelId: string | null = null;
   private autoLeaveTimer: ReturnType<typeof setTimeout> | null = null;
   private isAutoJoining = false;
-  private readonly opusDecoder = createOpusDecoder();
   private readonly minPcmBytes: number;
   private readonly speechDebounce = new Map<string, {
     texts: string[];
@@ -55,6 +54,7 @@ export class VoiceManager {
     private readonly voiceConfig: VoiceConfig,
     private readonly claudeConfig: ClaudeConfig,
     private readonly guildId: string,
+    private readonly authorizedUserId: string,
     private readonly client: Client,
     private readonly stt: SpeechToText,
     private readonly voicePlayer: VoicePlayer,
@@ -86,14 +86,25 @@ export class VoiceManager {
       adapterCreator: guild.voiceAdapterCreator,
       selfDeaf: false,
     });
-    this.currentConnection = connection;
-    this.currentChannelId = channelId;
 
     connection.on("stateChange", (_old, newState) => {
       log.debug(`voice state: ${newState.status}`);
     });
 
-    await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
+    try {
+      await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
+    } catch (e) {
+      // Ready にならなかった場合はコネクションを破棄する。
+      try {
+        connection.destroy();
+      } catch {
+        // 既に destroyed の場合は無視する。
+      }
+      throw e;
+    }
+
+    this.currentConnection = connection;
+    this.currentChannelId = channelId;
     log.info(`voice connection ready (channel: ${channelId})`);
     connection.subscribe(this.voicePlayer.discordPlayer);
     this.setupVoiceReceiver(connection);
@@ -204,10 +215,11 @@ export class VoiceManager {
         continue;
       }
 
-      const memberCount = channel.members.filter((m) => !m.user.bot).size;
-      if (memberCount > 0) {
+      // 指定ユーザーがいる VC のみ参加する。
+      const hasAuthorizedUser = channel.members.has(this.authorizedUserId);
+      if (hasAuthorizedUser) {
         log.info(
-          `auto-joining VC ${channel.id} (${memberCount} members found by scan)`,
+          `auto-joining VC ${channel.id} (authorized user found by scan)`,
         );
         this.isAutoJoining = true;
         this.join(channel.id)
@@ -252,11 +264,19 @@ export class VoiceManager {
     const activeUsers = new Set<string>();
 
     receiver.speaking.on("start", (userId) => {
+      // 指定ユーザー以外の発話は無視する。
+      if (userId !== this.authorizedUserId) {
+        return;
+      }
       if (activeUsers.has(userId)) {
         return;
       }
       activeUsers.add(userId);
       log.info(`recording user ${userId}`);
+
+      // ユーザーごとにデコーダを生成する。
+      // opusscript はストリームごとに状態を持つため、共有するとアーティファクトが生じる。
+      const decoder = createOpusDecoder();
 
       const opusStream = receiver.subscribe(userId, {
         end: {
@@ -269,7 +289,7 @@ export class VoiceManager {
 
       opusStream.on("data", (chunk: Buffer) => {
         try {
-          const pcm = this.opusDecoder.decode(chunk);
+          const pcm = decoder.decode(chunk);
           pcmChunks.push(pcm);
 
           // AI 再生中ならフレーム単位で RMS を判定し、即中断する。
@@ -459,7 +479,8 @@ export class VoiceManager {
       return;
     }
 
-    if (newState.member?.user.bot) {
+    // 指定ユーザー以外の入室は無視する。
+    if (newState.member?.user.id !== this.authorizedUserId) {
       return;
     }
 
@@ -495,9 +516,10 @@ export class VoiceManager {
       return;
     }
 
-    const memberCount = channel.members.filter((m) => !m.user.bot).size;
+    // 指定ユーザーがいるかで判定する。
+    const hasAuthorizedUser = channel.members.has(this.authorizedUserId);
 
-    if (memberCount === 0) {
+    if (!hasAuthorizedUser) {
       if (this.autoLeaveTimer) {
         return;
       }
@@ -512,7 +534,7 @@ export class VoiceManager {
         const ch = this.client.channels.cache.get(this.currentChannelId!);
         if (
           ch && ch.type === ChannelType.GuildVoice &&
-          ch.members.filter((m) => !m.user.bot).size === 0
+          !ch.members.has(this.authorizedUserId)
         ) {
           log.info("auto-leaving VC (no members)");
           this.leave();
