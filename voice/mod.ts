@@ -308,10 +308,12 @@ export class VoiceManager {
       });
 
       opusStream.on("end", () => {
+        decoder.delete();
         this.onSpeechEnd(userId, pcmChunks, activeUsers);
       });
 
       opusStream.on("error", (err: Error) => {
+        decoder.delete();
         activeUsers.delete(userId);
         log.error(`stream error for user ${userId}:`, err.message);
       });
@@ -426,7 +428,7 @@ export class VoiceManager {
       return;
     }
 
-    const mergedText = entry.texts.join("");
+    const mergedText = entry.texts.join(" ");
     const channelId = this.currentChannelId;
     if (!channelId) {
       return;

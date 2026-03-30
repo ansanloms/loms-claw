@@ -218,6 +218,9 @@ export class VoicePlayer {
 
     for (const p of pending) {
       const buf = await p;
+      // TTS 合成の await 中にキューが消化されて playNext() が
+      // isSpeaking = false にする可能性があるため、再セットする。
+      this.isSpeaking = true;
       if (buf.length > 0) {
         this.queue.push(buf);
         if (!this.isPlaying) {

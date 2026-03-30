@@ -11,7 +11,11 @@ import OpusScript from "opusscript";
 /**
  * テスト時のモック用に最小限のインターフェースとして定義。
  */
-export type OpusDecoder = { decode(chunk: Buffer): Buffer };
+export type OpusDecoder = {
+  decode(chunk: Buffer): Buffer;
+  /** WASM ヒープを解放する。ストリーム終了後に呼ぶこと。 */
+  delete(): void;
+};
 
 /**
  * Discord の音声フォーマットに対応した Opus デコーダを生成する。

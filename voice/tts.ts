@@ -72,6 +72,7 @@ export class OpenAiTts implements TextToSpeech {
     this.client = new OpenAI({
       baseURL: `${config.baseUrl}/v1`,
       apiKey: config.apiKey ?? "dummy",
+      timeout: 30_000,
     });
     this.model = config.model;
     this.voice = config.voice;
