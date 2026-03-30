@@ -1,5 +1,6 @@
 .env
 coverage/
+data/
 docker/claude-home/*
 docker/claude-workspace/*
 !**/.gitkeep

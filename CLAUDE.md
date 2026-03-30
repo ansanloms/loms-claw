@@ -111,7 +111,7 @@ bot/commands.ts        スラッシュコマンド定義（/claw clear）。
 bot/guard.ts           isAuthorized(): ギルド ID + ユーザー ID + bot 除外の認可チェック。
 bot/message.ts         splitMessage(): 2000 文字分割。keepTyping(): typing インジケーター維持。ProgressReporter: ツール進捗表示。
 claude/mod.ts          askClaude(): Deno.Command で claude -p を spawn し stream-json 出力を逐次パース。
-session/mod.ts         SessionStore: チャンネル/スレッド ID → session_id の Map。
+session/mod.ts         SessionStore: チャンネル/スレッド ID → session_id のマッピング。JSON ファイルへの永続化対応。
 approval/manager.ts    ApprovalManager: Discord ボタンによるツール承認/拒否。
 approval/server.ts     承認 HTTP サーバー。PreToolUse フックのエンドポイント。
 approval/types.ts      HookInput, ApprovalResult の型定義。
@@ -165,9 +165,7 @@ Deno.test("isAuthorized", async (t) => {
 
 ### 機能
 
-- [x] `--output-format stream-json` 対応: リアルタイム進捗表示（typing 中に「ツール実行中...」等を表示）
 - [ ] VC（ボイスチャンネル）対応: discord-vc の STT/TTS パイプラインを統合
-- [ ] セッション永続化: プロセス再起動時のセッション復元（現在はインメモリ Map で再起動で消える）
 - [ ] `--model` 指定: Discord コマンドでモデル切り替え（opus/sonnet/haiku）
 - [ ] スレッド自動作成: active channel でのメッセージをスレッドに分離
 
