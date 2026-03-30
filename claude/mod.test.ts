@@ -47,6 +47,24 @@ Deno.test("buildArgs", async (t) => {
     const args = buildArgs("hello", baseConfig);
     assertEquals(args.includes("--settings"), true);
   });
+
+  await t.step(
+    "appendSystemPrompt 指定時に --append-system-prompt を含むこと",
+    () => {
+      const args = buildArgs("hello", baseConfig, undefined, "extra prompt");
+      const idx = args.indexOf("--append-system-prompt");
+      assertEquals(idx >= 0, true);
+      assertEquals(args[idx + 1], "extra prompt");
+    },
+  );
+
+  await t.step(
+    "appendSystemPrompt 未指定時は --append-system-prompt を含まないこと",
+    () => {
+      const args = buildArgs("hello", baseConfig);
+      assertEquals(args.includes("--append-system-prompt"), false);
+    },
+  );
 });
 
 Deno.test("buildHookSettings", async (t) => {
@@ -253,4 +271,38 @@ Deno.test("askClaude", async (t) => {
       "prev-session",
     );
   });
+
+  await t.step(
+    "appendSystemPrompt が --append-system-prompt として渡されること",
+    async () => {
+      let capturedArgs: string[] = [];
+      const inner = mockSpawner([
+        {
+          type: "result",
+          subtype: "success",
+          result: "ok",
+          session_id: "s",
+          is_error: false,
+        },
+      ]);
+      const spawner: CommandSpawner = (args, cwd, signal) => {
+        capturedArgs = args;
+        return inner(args, cwd, signal);
+      };
+
+      for await (
+        const _ of askClaude("hello", {
+          config: baseConfig,
+          appendSystemPrompt: "extra prompt",
+          spawner,
+        })
+      ) {
+        void _;
+      }
+
+      const idx = capturedArgs.indexOf("--append-system-prompt");
+      assertEquals(idx >= 0, true);
+      assertEquals(capturedArgs[idx + 1], "extra prompt");
+    },
+  );
 });
