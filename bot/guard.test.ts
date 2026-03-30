@@ -14,6 +14,7 @@ const baseConfig: Config = {
     cwd: "/tmp",
     approvalPort: 3000,
   },
+  sessionFile: "./data/sessions.json",
 };
 
 Deno.test("isAuthorized", async (t) => {

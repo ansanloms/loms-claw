@@ -88,6 +88,21 @@ Deno.test("loadConfig", async (t) => {
     });
   });
 
+  await t.step("sessionFile のデフォルト値が適用されること", () => {
+    withEnv(requiredEnv, () => {
+      Deno.env.delete("SESSION_FILE");
+      const config = loadConfig();
+      assertEquals(config.sessionFile, "./data/sessions.json");
+    });
+  });
+
+  await t.step("SESSION_FILE を環境変数で上書きできること", () => {
+    withEnv({ ...requiredEnv, SESSION_FILE: "/tmp/sessions.json" }, () => {
+      const config = loadConfig();
+      assertEquals(config.sessionFile, "/tmp/sessions.json");
+    });
+  });
+
   await t.step("claude 設定を環境変数で上書きできること", () => {
     withEnv(
       {

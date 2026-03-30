@@ -35,6 +35,8 @@ export interface Config {
   activeChannelIds: string[];
   /** Claude Code CLI 設定。 */
   claude: ClaudeConfig;
+  /** セッション永続化ファイルのパス。 */
+  sessionFile: string;
 }
 
 /**
@@ -75,5 +77,6 @@ export function loadConfig(): Config {
       cwd: Deno.cwd(),
       approvalPort: Number(Deno.env.get("APPROVAL_PORT") ?? "3000"),
     },
+    sessionFile: Deno.env.get("SESSION_FILE") ?? "./data/sessions.json",
   };
 }

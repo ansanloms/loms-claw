@@ -34,12 +34,13 @@ const log = createLogger("bot");
 export class DiscordBot {
   private client: Client;
   private config: Config;
-  private sessions = new SessionStore();
+  private sessions: SessionStore;
   private approvalManager: ApprovalManager;
   private approvalServer: Deno.HttpServer | null = null;
 
   constructor(config: Config) {
     this.config = config;
+    this.sessions = new SessionStore(config.sessionFile);
     this.client = new Client({
       intents: [
         GatewayIntentBits.Guilds,
