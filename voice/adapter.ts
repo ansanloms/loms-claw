@@ -6,7 +6,7 @@
  */
 
 import type { SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
-import { askClaude } from "../claude/mod.ts";
+import { askClaude, type CommandSpawner } from "../claude/mod.ts";
 import type { ClaudeConfig } from "../config.ts";
 import { createLogger } from "../logger.ts";
 
@@ -40,6 +40,7 @@ export async function askClaudeForVoice(
     sessionId?: string;
     config: ClaudeConfig;
     signal?: AbortSignal;
+    spawner?: CommandSpawner;
   },
 ): Promise<VoiceResult> {
   const stream = askClaude(prompt, options);
