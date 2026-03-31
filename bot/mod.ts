@@ -142,7 +142,7 @@ export class DiscordBot {
         const cronJobs = await loadCronJobsFromDir(this.config.claude.cwd);
         this.cronExecutor.start(cronJobs);
 
-        const cronDir = join(this.config.claude.cwd, ".claude", "cron");
+        const cronDir = join(this.config.claude.cwd, "cron");
 
         const reloadJobs = async () => {
           const jobs = await loadCronJobsFromDir(this.config.claude.cwd);
@@ -279,7 +279,7 @@ export class DiscordBot {
   }
 
   /**
-   * .claude/cron/ ディレクトリの変更を監視し、変更時にリロードする。
+   * cron/ ディレクトリの変更を監視し、変更時にリロードする。
    */
   private async watchCronDir(
     dir: string,
