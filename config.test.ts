@@ -84,9 +84,7 @@ Deno.test("loadConfig", async (t) => {
       assertEquals(config.claude.maxTurns, 10);
       assertEquals(config.claude.verbose, true);
       assertEquals(config.claude.timeout, 300000);
-      assertEquals(config.claude.approvalPort, 3000);
-      assertEquals(config.claude.discordMcpEnabled, true);
-      assertEquals(config.claude.discordMcpPort, 3001);
+      assertEquals(config.claude.apiPort, 3000);
     });
   });
 
@@ -97,18 +95,14 @@ Deno.test("loadConfig", async (t) => {
         CLAUDE_MAX_TURNS: "5",
         CLAUDE_VERBOSE: "false",
         CLAUDE_TIMEOUT: "60000",
-        APPROVAL_PORT: "4000",
-        ENABLE_DISCORD_MCP: "false",
-        DISCORD_MCP_PORT: "4001",
+        API_PORT: "4000",
       },
       () => {
         const config = loadConfig();
         assertEquals(config.claude.maxTurns, 5);
         assertEquals(config.claude.verbose, false);
         assertEquals(config.claude.timeout, 60000);
-        assertEquals(config.claude.approvalPort, 4000);
-        assertEquals(config.claude.discordMcpEnabled, false);
-        assertEquals(config.claude.discordMcpPort, 4001);
+        assertEquals(config.claude.apiPort, 4000);
       },
     );
   });

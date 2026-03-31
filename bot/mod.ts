@@ -22,7 +22,6 @@ import type { SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
 import { askClaude } from "../claude/mod.ts";
 import { SessionStore } from "../session/mod.ts";
 import { ApprovalManager } from "../approval/manager.ts";
-import { startApprovalServer } from "../approval/server.ts";
 import { command } from "./commands.ts";
 import { isAuthorized, shouldRespond } from "./guard.ts";
 import { createProgressReporter, keepTyping, splitMessage } from "./message.ts";
@@ -34,7 +33,7 @@ import { VoiceManager } from "../voice/mod.ts";
 import { WhisperStt } from "../voice/stt.ts";
 import { OpenAiTts } from "../voice/tts.ts";
 import { VoicePlayer } from "../voice/player.ts";
-import { startMcpServer } from "../mcp/server.ts";
+import { startApiServer } from "../api/server.ts";
 
 const log = createLogger("bot");
 
@@ -46,8 +45,7 @@ export class DiscordBot {
   private config: Config;
   private sessions = new SessionStore();
   private approvalManager: ApprovalManager;
-  private approvalServer: Deno.HttpServer | null = null;
-  private mcpServer: Deno.HttpServer | null = null;
+  private apiServer: Deno.HttpServer | null = null;
   private voiceManager: VoiceManager | null = null;
   private systemPrompts: SystemPromptStore;
 
@@ -112,11 +110,6 @@ export class DiscordBot {
   async start(): Promise<void> {
     await this.systemPrompts.load();
 
-    this.approvalServer = startApprovalServer(
-      this.approvalManager,
-      this.config.claude.approvalPort,
-    );
-
     await this.client.login(this.config.discordToken);
 
     await new Promise<void>((resolve) => {
@@ -124,13 +117,16 @@ export class DiscordBot {
         log.info(`logged in as ${c.user.tag}`);
         await this.registerCommands();
 
-        // Discord MCP サーバーを起動する。
-        if (this.config.claude.discordMcpEnabled) {
-          this.mcpServer = startMcpServer(
-            { client: this.client, guildId: this.config.guildId },
-            this.config.claude.discordMcpPort,
-          );
-        }
+        // 統合 API サーバーを起動する（承認フック + Discord REST API）。
+        const discordCtx = {
+          client: this.client,
+          guildId: this.config.guildId,
+        };
+        this.apiServer = startApiServer(
+          this.approvalManager,
+          discordCtx,
+          this.config.claude.apiPort,
+        );
 
         // 起動時に auto-join 条件を満たす VC があれば参加する。
         this.voiceManager?.scanAndAutoJoin();
@@ -150,10 +146,7 @@ export class DiscordBot {
     log.info("shutting down");
     this.voiceManager?.shutdown();
     // HTTP サーバーのグレースフルシャットダウン（ベストエフォート）
-    Promise.allSettled([
-      this.mcpServer?.shutdown(),
-      this.approvalServer?.shutdown(),
-    ]).catch(() => {});
+    this.apiServer?.shutdown().catch(() => {});
     this.client.destroy();
   }
 

@@ -15,7 +15,7 @@ const log = createLogger("claude");
 /**
  * PreToolUse HTTP フックの設定 JSON を生成する。
  */
-export function buildHookSettings(approvalPort: number): string {
+export function buildHookSettings(apiPort: number): string {
   return JSON.stringify({
     hooks: {
       PreToolUse: [
@@ -24,7 +24,7 @@ export function buildHookSettings(approvalPort: number): string {
           hooks: [
             {
               type: "http",
-              url: `http://127.0.0.1:${approvalPort}/approval`,
+              url: `http://127.0.0.1:${apiPort}/approval`,
               timeout: 300,
             },
           ],
@@ -63,7 +63,7 @@ export function buildArgs(
     args.push("--append-system-prompt", appendSystemPrompt);
   }
 
-  args.push("--settings", buildHookSettings(config.approvalPort));
+  args.push("--settings", buildHookSettings(config.apiPort));
 
   return args;
 }
