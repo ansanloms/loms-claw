@@ -12,11 +12,13 @@ import {
   ButtonStyle,
   type Client,
   type GuildTextBasedChannel,
+  MessageFlags,
 } from "discord.js";
 import type {
   PermissionBehavior,
   PreToolUseHookInput,
 } from "@anthropic-ai/claude-agent-sdk";
+import { addToSettingsAllowList } from "./settings.ts";
 import { createLogger } from "../logger.ts";
 
 const log = createLogger("approval");
@@ -45,10 +47,9 @@ export class ApprovalManager {
       timeout: ReturnType<typeof setTimeout>;
     }
   >();
-  private alwaysAllowed = new Set<string>();
   private channelId: string | null = null;
 
-  constructor(private client: Client) {}
+  constructor(private client: Client, private settingsPath: string) {}
 
   /**
    * 承認リクエストの送信先チャンネルを設定する。
@@ -68,12 +69,6 @@ export class ApprovalManager {
     channelId?: string,
   ): Promise<ApprovalResult> {
     const toolName = input.tool_name;
-
-    // Always Allow 済みのツールは自動承認
-    if (this.alwaysAllowed.has(toolName)) {
-      log.info("auto-approved (always allow):", toolName);
-      return { decision: "allow", reason: "Always allowed" };
-    }
 
     channelId = channelId ?? this.channelId ?? undefined;
     if (!channelId) {
@@ -152,6 +147,10 @@ export class ApprovalManager {
 
     const pending = this.pending.get(requestId);
     if (!pending) {
+      await interaction.reply({
+        content: "この承認リクエストは期限切れか、既に処理済みです。",
+        flags: MessageFlags.Ephemeral,
+      });
       return false;
     }
 
@@ -161,8 +160,12 @@ export class ApprovalManager {
     if (action === "always") {
       const alwaysToolName = parts[2];
       if (alwaysToolName) {
-        this.alwaysAllowed.add(alwaysToolName);
-        log.info("added to always-allow:", alwaysToolName);
+        try {
+          await addToSettingsAllowList(this.settingsPath, alwaysToolName);
+        } catch (error: unknown) {
+          const msg = error instanceof Error ? error.message : String(error);
+          log.warn("failed to persist allow list:", msg);
+        }
       }
     }
 

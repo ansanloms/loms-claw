@@ -65,7 +65,10 @@ export class DiscordBot {
         ...(config.voice.enabled ? [GatewayIntentBits.GuildVoiceStates] : []),
       ],
     });
-    this.approvalManager = new ApprovalManager(this.client);
+    this.approvalManager = new ApprovalManager(
+      this.client,
+      join(config.claude.cwd, ".claude", "settings.json"),
+    );
 
     // ボイス機能の初期化。
     if (config.voice.enabled) {
@@ -177,7 +180,18 @@ export class DiscordBot {
   private async onInteraction(interaction: Interaction): Promise<void> {
     // ボタンインタラクション（承認/拒否）
     if (interaction.isButton()) {
-      await this.approvalManager.handleButton(interaction);
+      try {
+        await this.approvalManager.handleButton(interaction);
+      } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error);
+        log.error("button interaction error:", msg);
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: "承認処理中にエラーが発生しました。",
+            flags: MessageFlags.Ephemeral,
+          }).catch(() => {});
+        }
+      }
       return;
     }
 
