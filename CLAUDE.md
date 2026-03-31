@@ -210,7 +210,7 @@ timeout: 120000
 `Deno.watchFs` で `cron/` を監視し、ファイルの追加・変更・削除時に自動リロードする。
 AI がファイルを編集するだけでジョブが更新される。再起動不要。
 
-書き方の詳細は `.claude/rules/cron.md` を参照。
+書き方の詳細は `.claude/skills/cron/SKILL.md` を参照。
 
 ### システムプロンプト
 
