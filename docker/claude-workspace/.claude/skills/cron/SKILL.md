@@ -44,7 +44,7 @@ timeout: 120000
 | フィールド      | 必須 | 型      | デフォルト | 説明                                              |
 | --------------- | ---- | ------- | ---------- | ------------------------------------------------- |
 | `schedule`      | yes  | string  | —          | cron 式（5フィールド、TZ 環境変数依存）           |
-| `channelId`     | no   | string  | —          | 承認ボタン送信先の Discord チャンネル ID          |
+| `channelId`     | no   | string  | —          | 結果の自動投稿先と承認ボタン送信先のチャンネル ID |
 | `resumeSession` | no   | boolean | `false`    | 前回のセッションを引き継ぐか                     |
 | `maxTurns`      | no   | number  | 10         | Claude の最大ターン数                             |
 | `timeout`       | no   | number  | 300000     | タイムアウト（ミリ秒）                            |
