@@ -8,14 +8,17 @@
     "jsr:@std/dotenv@~0.225.6": "0.225.6",
     "jsr:@std/internal@^1.0.12": "1.0.12",
     "jsr:@std/path@1": "1.1.4",
+    "jsr:@std/path@^1.1.4": "1.1.4",
     "jsr:@std/streams@*": "1.0.17",
     "jsr:@std/streams@^1.0.17": "1.0.17",
     "npm:@anthropic-ai/claude-agent-sdk@~0.2.87": "0.2.87_zod@3.25.76",
     "npm:@discordjs/voice@0.19.2": "0.19.2_opusscript@0.1.1",
+    "npm:@modelcontextprotocol/sdk@^1.29.0": "1.29.0_zod@3.25.76_hono@4.12.9_ajv@8.18.0_express@5.2.1",
     "npm:@snazzah/davey@~0.1.11": "0.1.11",
     "npm:discord.js@^14.25.1": "14.25.1",
     "npm:opusscript@0.1.1": "0.1.1",
-    "npm:zod@3": "3.25.76"
+    "npm:zod@3": "3.25.76",
+    "npm:zod@^4.3.6": "4.3.6"
   },
   "jsr": {
     "@aireone/deno-lint-curly@0.2.0": {
@@ -24,7 +27,7 @@
     "@openai/openai@6.33.0": {
       "integrity": "292fec0ff0fd8b04f25e0ccbee8a06895b423abfb5113b9076e4ae39b4a18721",
       "dependencies": [
-        "npm:zod"
+        "npm:zod@3"
       ]
     },
     "@std/assert@1.0.19": {
@@ -61,7 +64,7 @@
       "dependencies": [
         "@anthropic-ai/sdk",
         "@modelcontextprotocol/sdk",
-        "zod"
+        "zod@3.25.76"
       ],
       "optionalDependencies": [
         "@img/sharp-darwin-arm64",
@@ -79,10 +82,10 @@
       "integrity": "sha512-srbJV7JKsc5cQ6eVuFzjZO7UR3xEPJqPamHFIe29bs38Ij2IripoAhC0S5NslNbaFUYqBKypmmpzMTpqfHEUDw==",
       "dependencies": [
         "json-schema-to-ts",
-        "zod"
+        "zod@3.25.76"
       ],
       "optionalPeers": [
-        "zod"
+        "zod@3.25.76"
       ],
       "bin": true
     },
@@ -284,8 +287,8 @@
       "os": ["win32"],
       "cpu": ["x64"]
     },
-    "@modelcontextprotocol/sdk@1.28.0_zod@3.25.76_hono@4.12.9_ajv@8.18.0_express@5.2.1": {
-      "integrity": "sha512-gmloF+i+flI8ouQK7MWW4mOwuMh4RePBuPFAEPC6+pdqyWOUMDOixb6qZ69owLJpz6XmyllCouc4t8YWO+E2Nw==",
+    "@modelcontextprotocol/sdk@1.29.0_zod@3.25.76_hono@4.12.9_ajv@8.18.0_express@5.2.1": {
+      "integrity": "sha512-zo37mZA9hJWpULgkRpowewez1y6ML5GsXJPY8FI0tBBCd77HEvza4jDqRKOXgHNn867PVGCyTdzqpz0izu5ZjQ==",
       "dependencies": [
         "@hono/node-server",
         "ajv",
@@ -302,7 +305,7 @@
         "json-schema-typed",
         "pkce-challenge",
         "raw-body",
-        "zod",
+        "zod@3.25.76",
         "zod-to-json-schema"
       ]
     },
@@ -989,11 +992,14 @@
     "zod-to-json-schema@3.25.2_zod@3.25.76": {
       "integrity": "sha512-O/PgfnpT1xKSDeQYSCfRI5Gy3hPf91mKVDuYLUHZJMiDFptvP41MSnWofm8dnCm0256ZNfZIM7DSzuSMAFnjHA==",
       "dependencies": [
-        "zod"
+        "zod@3.25.76"
       ]
     },
     "zod@3.25.76": {
       "integrity": "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="
+    },
+    "zod@4.3.6": {
+      "integrity": "sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg=="
     }
   },
   "workspace": {
@@ -1001,12 +1007,15 @@
       "jsr:@openai/openai@^6.33.0",
       "jsr:@std/assert@^1.0.19",
       "jsr:@std/dotenv@~0.225.6",
+      "jsr:@std/path@^1.1.4",
       "jsr:@std/streams@^1.0.17",
       "npm:@anthropic-ai/claude-agent-sdk@~0.2.87",
       "npm:@discordjs/voice@0.19.2",
+      "npm:@modelcontextprotocol/sdk@^1.29.0",
       "npm:@snazzah/davey@~0.1.11",
       "npm:discord.js@^14.25.1",
-      "npm:opusscript@0.1.1"
+      "npm:opusscript@0.1.1",
+      "npm:zod@^4.3.6"
     ]
   }
 }

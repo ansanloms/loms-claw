@@ -85,6 +85,7 @@ Deno.test("loadConfig", async (t) => {
       assertEquals(config.claude.verbose, true);
       assertEquals(config.claude.timeout, 300000);
       assertEquals(config.claude.approvalPort, 3000);
+      assertEquals(config.claude.mcpPort, 3001);
     });
   });
 
@@ -96,6 +97,7 @@ Deno.test("loadConfig", async (t) => {
         CLAUDE_VERBOSE: "false",
         CLAUDE_TIMEOUT: "60000",
         APPROVAL_PORT: "4000",
+        MCP_PORT: "4001",
       },
       () => {
         const config = loadConfig();
@@ -103,6 +105,7 @@ Deno.test("loadConfig", async (t) => {
         assertEquals(config.claude.verbose, false);
         assertEquals(config.claude.timeout, 60000);
         assertEquals(config.claude.approvalPort, 4000);
+        assertEquals(config.claude.mcpPort, 4001);
       },
     );
   });

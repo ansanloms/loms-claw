@@ -19,6 +19,8 @@ export interface ClaudeConfig {
   cwd: string;
   /** 承認 HTTP サーバーのポート。 */
   approvalPort: number;
+  /** MCP サーバーのポート。 */
+  mcpPort: number;
 }
 
 /**
@@ -126,6 +128,7 @@ export function loadConfig(): Config {
       timeout: Number(Deno.env.get("CLAUDE_TIMEOUT") ?? "300000"),
       cwd: Deno.cwd(),
       approvalPort: Number(Deno.env.get("APPROVAL_PORT") ?? "3000"),
+      mcpPort: Number(Deno.env.get("MCP_PORT") ?? "3001"),
     },
     voice: {
       enabled: voiceEnabled,

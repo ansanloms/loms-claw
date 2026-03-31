@@ -34,6 +34,7 @@ import { VoiceManager } from "../voice/mod.ts";
 import { WhisperStt } from "../voice/stt.ts";
 import { OpenAiTts } from "../voice/tts.ts";
 import { VoicePlayer } from "../voice/player.ts";
+import { startMcpServer } from "../mcp/server.ts";
 
 const log = createLogger("bot");
 
@@ -46,6 +47,7 @@ export class DiscordBot {
   private sessions = new SessionStore();
   private approvalManager: ApprovalManager;
   private approvalServer: Deno.HttpServer | null = null;
+  private mcpServer: Deno.HttpServer | null = null;
   private voiceManager: VoiceManager | null = null;
   private systemPrompts: SystemPromptStore;
 
@@ -59,6 +61,7 @@ export class DiscordBot {
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMembers,
         ...(config.voice.enabled ? [GatewayIntentBits.GuildVoiceStates] : []),
       ],
     });
@@ -117,6 +120,14 @@ export class DiscordBot {
       this.client.once(Events.ClientReady, async (c) => {
         log.info(`logged in as ${c.user.tag}`);
         await this.registerCommands();
+
+        // MCP サーバーを起動し .mcp.json を生成する。
+        this.mcpServer = startMcpServer(
+          { client: this.client, guildId: this.config.guildId },
+          this.config.claude.mcpPort,
+        );
+        this.writeMcpConfig();
+
         // 起動時に auto-join 条件を満たす VC があれば参加する。
         this.voiceManager?.scanAndAutoJoin();
         resolve();
@@ -130,8 +141,27 @@ export class DiscordBot {
   shutdown(): void {
     log.info("shutting down");
     this.voiceManager?.shutdown();
+    this.mcpServer?.shutdown();
     this.approvalServer?.shutdown();
     this.client.destroy();
+  }
+
+  /**
+   * .mcp.json をワークスペースに書き出す。
+   * claude -p が自動的に読み込み、MCP サーバーに接続する。
+   */
+  private writeMcpConfig(): void {
+    const mcpConfigPath = join(this.config.claude.cwd, ".mcp.json");
+    const config = {
+      mcpServers: {
+        discord: {
+          type: "http",
+          url: `http://127.0.0.1:${this.config.claude.mcpPort}/mcp`,
+        },
+      },
+    };
+    Deno.writeTextFileSync(mcpConfigPath, JSON.stringify(config, null, 2));
+    log.info("wrote MCP config to", mcpConfigPath);
   }
 
   /**
