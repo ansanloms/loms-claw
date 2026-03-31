@@ -138,12 +138,19 @@ export class DiscordBot {
 
   /**
    * bot をシャットダウンする。
+   *
+   * HTTP サーバーの shutdown() は Promise を返すが、
+   * シグナルハンドラから呼ばれた後 Deno.exit() で即終了するため
+   * await はベストエフォート。
    */
   shutdown(): void {
     log.info("shutting down");
     this.voiceManager?.shutdown();
-    this.mcpServer?.shutdown();
-    this.approvalServer?.shutdown();
+    // HTTP サーバーのグレースフルシャットダウン（ベストエフォート）
+    Promise.allSettled([
+      this.mcpServer?.shutdown(),
+      this.approvalServer?.shutdown(),
+    ]).catch(() => {});
     this.client.destroy();
   }
 

@@ -36,7 +36,9 @@ Deno.test("createMcpServer", async (t) => {
   await t.step("7 つのツールが登録されること", () => {
     const server = createMcpServer(mockCtx);
 
-    // _registeredTools は内部プロパティ（plain object）。
+    // _registeredTools は SDK の内部プロパティ（plain object）。
+    // 公開 API でツール一覧を取得する手段がないため直接参照している。
+    // SDK バージョンアップで壊れるリスクあり。
     // deno-lint-ignore no-explicit-any
     const registeredTools = (server as any)._registeredTools;
     const toolNames = Object.keys(registeredTools);

@@ -31,13 +31,12 @@ export function startMcpServer(
 
       // MCP エンドポイント: POST /mcp
       if (req.method === "POST" && url.pathname === "/mcp") {
+        const transport = new WebStandardStreamableHTTPServerTransport({
+          sessionIdGenerator: undefined,
+        });
+        const mcpServer = createMcpServer(ctx);
         try {
-          const transport = new WebStandardStreamableHTTPServerTransport({
-            sessionIdGenerator: undefined,
-          });
-          const mcpServer = createMcpServer(ctx);
           await mcpServer.connect(transport);
-
           const response = await transport.handleRequest(req);
           return response;
         } catch (error: unknown) {
@@ -54,6 +53,9 @@ export function startMcpServer(
               headers: { "Content-Type": "application/json" },
             },
           );
+        } finally {
+          // stateless モードでもリスナーが残るため明示的にクリーンアップする。
+          await mcpServer.close().catch(() => {});
         }
       }
 
