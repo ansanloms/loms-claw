@@ -1,6 +1,6 @@
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path/join";
-import { addToSettingsAllowList } from "./settings.ts";
+import { addToSettingsAllowList, isInAllowList } from "./settings.ts";
 
 Deno.test("addToSettingsAllowList", async (t) => {
   await t.step("ファイルが存在しない場合は新規作成すること", async () => {
@@ -62,7 +62,7 @@ Deno.test("addToSettingsAllowList", async (t) => {
     },
   );
 
-  await t.step("重複するツール名を追加しないこと", async () => {
+  await t.step("重複するツール名は追加しないこと", async () => {
     const dir = await Deno.makeTempDir();
     const settingsPath = join(dir, "settings.json");
 
@@ -72,4 +72,57 @@ Deno.test("addToSettingsAllowList", async (t) => {
     const result = JSON.parse(await Deno.readTextFile(settingsPath));
     assertEquals(result.permissions.allow, ["Read"]);
   });
+});
+
+Deno.test("isInAllowList", async (t) => {
+  await t.step("allow list に含まれるツールで true を返すこと", async () => {
+    const dir = await Deno.makeTempDir();
+    const settingsPath = join(dir, "settings.json");
+    await Deno.writeTextFile(
+      settingsPath,
+      JSON.stringify({ permissions: { allow: ["Read", "Bash"] } }),
+    );
+
+    assertEquals(await isInAllowList(settingsPath, "Bash"), true);
+  });
+
+  await t.step(
+    "allow list に含まれないツールで false を返すこと",
+    async () => {
+      const dir = await Deno.makeTempDir();
+      const settingsPath = join(dir, "settings.json");
+      await Deno.writeTextFile(
+        settingsPath,
+        JSON.stringify({ permissions: { allow: ["Read"] } }),
+      );
+
+      assertEquals(await isInAllowList(settingsPath, "Bash"), false);
+    },
+  );
+
+  await t.step("ファイルが存在しない場合に false を返すこと", async () => {
+    const dir = await Deno.makeTempDir();
+    const settingsPath = join(dir, "nonexistent.json");
+
+    assertEquals(await isInAllowList(settingsPath, "Read"), false);
+  });
+
+  await t.step("JSON が不正な場合に false を返すこと", async () => {
+    const dir = await Deno.makeTempDir();
+    const settingsPath = join(dir, "settings.json");
+    await Deno.writeTextFile(settingsPath, "not json");
+
+    assertEquals(await isInAllowList(settingsPath, "Read"), false);
+  });
+
+  await t.step(
+    "permissions.allow が存在しない場合に false を返すこと",
+    async () => {
+      const dir = await Deno.makeTempDir();
+      const settingsPath = join(dir, "settings.json");
+      await Deno.writeTextFile(settingsPath, JSON.stringify({ env: {} }));
+
+      assertEquals(await isInAllowList(settingsPath, "Read"), false);
+    },
+  );
 });
