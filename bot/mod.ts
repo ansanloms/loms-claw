@@ -121,11 +121,13 @@ export class DiscordBot {
         log.info(`logged in as ${c.user.tag}`);
         await this.registerCommands();
 
-        // MCP サーバーを起動する。
-        this.mcpServer = startMcpServer(
-          { client: this.client, guildId: this.config.guildId },
-          this.config.claude.mcpPort,
-        );
+        // Discord MCP サーバーを起動する。
+        if (this.config.claude.discordMcpEnabled) {
+          this.mcpServer = startMcpServer(
+            { client: this.client, guildId: this.config.guildId },
+            this.config.claude.discordMcpPort,
+          );
+        }
 
         // 起動時に auto-join 条件を満たす VC があれば参加する。
         this.voiceManager?.scanAndAutoJoin();

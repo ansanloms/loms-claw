@@ -9,7 +9,8 @@ const baseConfig: ClaudeConfig = {
   timeout: 300000,
   cwd: "/workspace",
   approvalPort: 3000,
-  mcpPort: 3001,
+  discordMcpEnabled: true,
+  discordMcpPort: 3001,
 };
 
 /**
