@@ -30,14 +30,18 @@ const config = loadConfig();
  */
 let bot: DiscordBot | null = null;
 
-Deno.addSignalListener("SIGINT", () => {
+// bot が null（起動リトライ中）の場合、shutdown() は no-op となりリトライが継続する。
+// 2 回目のシグナルで強制終了する。
+let shuttingDown = false;
+const onSignal = () => {
+  if (shuttingDown) {
+    Deno.exit(1);
+  }
+  shuttingDown = true;
   bot?.shutdown();
-  Deno.exit(0);
-});
-Deno.addSignalListener("SIGTERM", () => {
-  bot?.shutdown();
-  Deno.exit(0);
-});
+};
+Deno.addSignalListener("SIGINT", onSignal);
+Deno.addSignalListener("SIGTERM", onSignal);
 
 /**
  * 起動リトライの最大回数。
