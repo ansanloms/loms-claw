@@ -19,6 +19,10 @@ export interface ClaudeConfig {
   cwd: string;
   /** 承認 HTTP サーバーのポート。 */
   approvalPort: number;
+  /** Discord MCP サーバーの有効/無効。 */
+  discordMcpEnabled: boolean;
+  /** Discord MCP サーバーのポート。 */
+  discordMcpPort: number;
 }
 
 /**
@@ -126,6 +130,9 @@ export function loadConfig(): Config {
       timeout: Number(Deno.env.get("CLAUDE_TIMEOUT") ?? "300000"),
       cwd: Deno.cwd(),
       approvalPort: Number(Deno.env.get("APPROVAL_PORT") ?? "3000"),
+      discordMcpEnabled:
+        (Deno.env.get("ENABLE_DISCORD_MCP") ?? "true") === "true",
+      discordMcpPort: Number(Deno.env.get("DISCORD_MCP_PORT") ?? "3001"),
     },
     voice: {
       enabled: voiceEnabled,

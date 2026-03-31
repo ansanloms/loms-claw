@@ -34,6 +34,7 @@ import { VoiceManager } from "../voice/mod.ts";
 import { WhisperStt } from "../voice/stt.ts";
 import { OpenAiTts } from "../voice/tts.ts";
 import { VoicePlayer } from "../voice/player.ts";
+import { startMcpServer } from "../mcp/server.ts";
 
 const log = createLogger("bot");
 
@@ -46,6 +47,7 @@ export class DiscordBot {
   private sessions = new SessionStore();
   private approvalManager: ApprovalManager;
   private approvalServer: Deno.HttpServer | null = null;
+  private mcpServer: Deno.HttpServer | null = null;
   private voiceManager: VoiceManager | null = null;
   private systemPrompts: SystemPromptStore;
 
@@ -59,6 +61,7 @@ export class DiscordBot {
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMembers,
         ...(config.voice.enabled ? [GatewayIntentBits.GuildVoiceStates] : []),
       ],
     });
@@ -117,6 +120,15 @@ export class DiscordBot {
       this.client.once(Events.ClientReady, async (c) => {
         log.info(`logged in as ${c.user.tag}`);
         await this.registerCommands();
+
+        // Discord MCP サーバーを起動する。
+        if (this.config.claude.discordMcpEnabled) {
+          this.mcpServer = startMcpServer(
+            { client: this.client, guildId: this.config.guildId },
+            this.config.claude.discordMcpPort,
+          );
+        }
+
         // 起動時に auto-join 条件を満たす VC があれば参加する。
         this.voiceManager?.scanAndAutoJoin();
         resolve();
@@ -126,11 +138,19 @@ export class DiscordBot {
 
   /**
    * bot をシャットダウンする。
+   *
+   * HTTP サーバーの shutdown() は Promise を返すが、
+   * シグナルハンドラから呼ばれた後 Deno.exit() で即終了するため
+   * await はベストエフォート。
    */
   shutdown(): void {
     log.info("shutting down");
     this.voiceManager?.shutdown();
-    this.approvalServer?.shutdown();
+    // HTTP サーバーのグレースフルシャットダウン（ベストエフォート）
+    Promise.allSettled([
+      this.mcpServer?.shutdown(),
+      this.approvalServer?.shutdown(),
+    ]).catch(() => {});
     this.client.destroy();
   }
 
