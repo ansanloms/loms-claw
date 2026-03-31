@@ -35,11 +35,7 @@ function errorResponse(message: string, status: number): Response {
  * ApiContext からギルドを取得する。見つからなければエラー。
  */
 async function fetchGuild(ctx: ApiContext): Promise<Guild> {
-  const guild = await ctx.client.guilds.fetch(ctx.guildId);
-  if (!guild) {
-    throw new Error(`Guild not found: ${ctx.guildId}`);
-  }
-  return guild;
+  return await ctx.client.guilds.fetch(ctx.guildId);
 }
 
 /**

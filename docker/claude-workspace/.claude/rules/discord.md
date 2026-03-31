@@ -64,7 +64,7 @@ GET /discord/members?query=検索語&limit=25
 
 ```bash
 # チャンネル一覧（テキストのみ）
-curl -s http://127.0.0.1:3000/discord/channels?type=text
+curl -s 'http://127.0.0.1:3000/discord/channels?type=text'
 
 # メッセージ送信
 curl -s -X POST http://127.0.0.1:3000/discord/channels/{channel_id}/messages \
@@ -88,3 +88,5 @@ curl -s 'http://127.0.0.1:3000/discord/members?query=loms'
 - レスポンスは全て JSON。
 - 現在のチャンネル ID はシステムプロンプトのテンプレート変数で得られる。
 - エラー時は `{"error": "メッセージ"}` 形式で返る。
+- メッセージ検索は直近 limit 件を取得後にクライアント側でフィルタする。マッチが少ない場合、チャンネルにメッセージが存在しても結果が 0 件になることがある。
+- メッセージ取得のリアクション情報は Bot 起動後にキャッシュされた分のみ。起動前のリアクションは含まれない場合がある。

@@ -130,29 +130,37 @@ export function startApiServer(
 
       // Discord API エンドポイント
       if (url.pathname.startsWith("/discord/")) {
+        let pathMatched = false;
         for (const route of routes) {
-          if (req.method !== route.method) {
-            continue;
-          }
           const match = route.pattern.exec(url);
           if (match) {
-            const params = match.pathname.groups as Record<string, string>;
-            try {
-              return await route.handler(req, discordCtx, params);
-            } catch (error: unknown) {
-              const msg = error instanceof Error
-                ? error.message
-                : String(error);
-              log.error("discord api error:", msg);
-              return new Response(
-                JSON.stringify({ error: msg }),
-                {
-                  status: 500,
-                  headers: { "Content-Type": "application/json" },
-                },
-              );
+            pathMatched = true;
+            if (req.method === route.method) {
+              const params = match.pathname.groups as Record<string, string>;
+              try {
+                return await route.handler(req, discordCtx, params);
+              } catch (error: unknown) {
+                const msg = error instanceof Error
+                  ? error.message
+                  : String(error);
+                log.error("discord api error:", msg);
+                return new Response(
+                  JSON.stringify({ error: msg }),
+                  {
+                    status: 500,
+                    headers: { "Content-Type": "application/json" },
+                  },
+                );
+              }
             }
           }
+        }
+
+        if (pathMatched) {
+          return new Response(
+            JSON.stringify({ error: "Method Not Allowed" }),
+            { status: 405, headers: { "Content-Type": "application/json" } },
+          );
         }
 
         return new Response(
@@ -161,7 +169,10 @@ export function startApiServer(
         );
       }
 
-      return new Response("Not Found", { status: 404 });
+      return new Response(
+        JSON.stringify({ error: "Not Found" }),
+        { status: 404, headers: { "Content-Type": "application/json" } },
+      );
     },
   );
 
