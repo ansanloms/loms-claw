@@ -42,6 +42,8 @@ import { WhisperStt } from "../voice/stt.ts";
 import { OpenAiTts } from "../voice/tts.ts";
 import { VoicePlayer } from "../voice/player.ts";
 import { startApiServer } from "../api/server.ts";
+import { CronExecutor } from "../cron/executor.ts";
+import { loadCronJobs } from "../cron/types.ts";
 
 const log = createLogger("bot");
 
@@ -55,6 +57,7 @@ export class DiscordBot {
   private approvalManager: ApprovalManager;
   private apiServer: Deno.HttpServer | null = null;
   private voiceManager: VoiceManager | null = null;
+  private cronExecutor: CronExecutor | null = null;
   private systemPrompts: SystemPromptStore;
 
   constructor(config: Config) {
@@ -138,6 +141,22 @@ export class DiscordBot {
 
         // 起動時に auto-join 条件を満たす VC があれば参加する。
         this.voiceManager?.scanAndAutoJoin();
+
+        // cron ジョブを登録する。
+        const cronJobs = await loadCronJobs(this.config.claude.cwd);
+        if (cronJobs.length > 0) {
+          this.cronExecutor = new CronExecutor(
+            this.client,
+            this.config.claude,
+            this.config.guildId,
+            this.sessions,
+            this.approvalManager,
+            this.systemPrompts,
+          );
+          this.cronExecutor.registerAll(cronJobs);
+          log.info(`registered ${cronJobs.length} cron job(s)`);
+        }
+
         resolve();
       });
     });

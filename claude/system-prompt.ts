@@ -20,7 +20,7 @@ const log = createLogger("system-prompt");
 /**
  * システムプロンプトのコンテキスト種別。
  */
-export type PromptContext = "chat" | "vc";
+export type PromptContext = "chat" | "vc" | "cron";
 
 /**
  * ファイルを読み込む。存在しなければ undefined を返す。
@@ -47,6 +47,7 @@ export class SystemPromptStore {
   private defaultPrompt: string | undefined;
   private chatPrompt: string | undefined;
   private vcPrompt: string | undefined;
+  private cronPrompt: string | undefined;
   private channelPrompts = new Map<string, string>();
 
   constructor(private readonly dir: string) {}
@@ -65,6 +66,9 @@ export class SystemPromptStore {
     this.vcPrompt = (await readFileOrUndefined(
       join(this.dir, "VC.md"),
     ))?.trim() || undefined;
+    this.cronPrompt = (await readFileOrUndefined(
+      join(this.dir, "CRON.md"),
+    ))?.trim() || undefined;
 
     // チャンネル固有ファイルをスキャンする。
     // DEFAULT.md, CHAT.md, VC.md 以外の .md ファイルは
@@ -77,7 +81,10 @@ export class SystemPromptStore {
           continue;
         }
         const name = basename(entry.name, ".md");
-        if (name === "DEFAULT" || name === "CHAT" || name === "VC") {
+        if (
+          name === "DEFAULT" || name === "CHAT" || name === "VC" ||
+          name === "CRON"
+        ) {
           continue;
         }
         const content = (await readFileOrUndefined(
@@ -127,7 +134,11 @@ export class SystemPromptStore {
       parts.push(this.defaultPrompt);
     }
 
-    const contextPrompt = context === "chat" ? this.chatPrompt : this.vcPrompt;
+    const contextPrompt = context === "chat"
+      ? this.chatPrompt
+      : context === "vc"
+      ? this.vcPrompt
+      : this.cronPrompt;
     if (contextPrompt) {
       parts.push(contextPrompt);
     }
