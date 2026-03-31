@@ -4,20 +4,6 @@ import type { CronJobDef } from "./types.ts";
 import { SessionStore } from "../session/mod.ts";
 import type { SystemPromptStore } from "../claude/system-prompt.ts";
 
-/** 送信されたメッセージを記録するモックチャンネル。 */
-function createMockChannel() {
-  const sent: string[] = [];
-  return {
-    channel: {
-      send(content: string) {
-        sent.push(content);
-        return Promise.resolve();
-      },
-    },
-    sent,
-  };
-}
-
 /** 最小限のモック Client。 */
 function createMockClient(
   channel: { send(content: string): Promise<void> } | null = null,
@@ -38,6 +24,20 @@ function createMockClient(
         },
       },
     },
+  };
+}
+
+/** 送信されたメッセージを記録するモックチャンネル。 */
+function createMockChannel() {
+  const sent: string[] = [];
+  return {
+    channel: {
+      send(content: string) {
+        sent.push(content);
+        return Promise.resolve();
+      },
+    },
+    sent,
   };
 }
 
@@ -62,26 +62,25 @@ function createMockSystemPromptStore(): SystemPromptStore {
   } as unknown as SystemPromptStore;
 }
 
+const TEST_CONFIG = {
+  maxTurns: 10,
+  verbose: true,
+  timeout: 30000,
+  cwd: "/tmp",
+  apiPort: 3000,
+};
+
 Deno.test("CronExecutor", async (t) => {
-  await t.step("runJob が結果をチャンネルに送信すること", async () => {
+  await t.step("重複実行がスキップされること", async () => {
     const { channel, sent } = createMockChannel();
     const client = createMockClient(channel);
     const sessions = new SessionStore();
     const { manager } = createMockApprovalManager();
     const systemPrompts = createMockSystemPromptStore();
 
-    // askClaude に spawner を注入するため、executor 内部でテスト用の config を使う
-    const config = {
-      maxTurns: 10,
-      verbose: true,
-      timeout: 30000,
-      cwd: "/tmp",
-      apiPort: 3000,
-    };
-
     const executor = new CronExecutor(
       client as never,
-      config,
+      TEST_CONFIG,
       "guild-1",
       sessions,
       manager as never,
@@ -95,40 +94,27 @@ Deno.test("CronExecutor", async (t) => {
       channelId: "ch-123",
     };
 
-    // spawner をモンキーパッチで注入するのは難しいため、
-    // ここでは runJob の重複実行防止ロジックのみテストする
-    // （askClaude の spawner DI は claude/mod.test.ts で検証済み）
-
-    // 重複実行防止テスト: running Set に追加して呼び出す
+    // running Set に追加して重複実行をシミュレート
     // @ts-ignore: private フィールドへのアクセス
     executor.running.add("test-job");
     await executor.runJob(job);
-    // チャンネルには何も送信されない（スキップされる）
-    assertEquals(sent.length, 0);
+    assertEquals(sent.length, 0); // スキップされる
 
     // @ts-ignore: private フィールドへのアクセス
     executor.running.delete("test-job");
   });
 
   await t.step(
-    "チャンネルが見つからない場合にエラーログが出ること",
+    "チャンネルが見つからない場合にエラー処理されること",
     async () => {
-      const client = createMockClient(null); // null を返す
+      const client = createMockClient(null);
       const sessions = new SessionStore();
       const { manager } = createMockApprovalManager();
       const systemPrompts = createMockSystemPromptStore();
 
-      const config = {
-        maxTurns: 10,
-        verbose: true,
-        timeout: 30000,
-        cwd: "/tmp",
-        apiPort: 3000,
-      };
-
       const executor = new CronExecutor(
         client as never,
-        config,
+        TEST_CONFIG,
         "guild-1",
         sessions,
         manager as never,
@@ -142,9 +128,9 @@ Deno.test("CronExecutor", async (t) => {
         channelId: "nonexistent",
       };
 
-      // エラーが throw されず、finally で running から除去されることを確認
       await executor.runJob(job);
 
+      // running Set から除去されていること
       // @ts-ignore: private フィールドへのアクセス
       assertEquals(executor.running.has("bad-channel-job"), false);
     },
@@ -157,17 +143,9 @@ Deno.test("CronExecutor", async (t) => {
     const { manager, getChannelId } = createMockApprovalManager();
     const systemPrompts = createMockSystemPromptStore();
 
-    const config = {
-      maxTurns: 10,
-      verbose: true,
-      timeout: 30000,
-      cwd: "/tmp",
-      apiPort: 3000,
-    };
-
     const executor = new CronExecutor(
       client as never,
-      config,
+      TEST_CONFIG,
       "guild-1",
       sessions,
       manager as never,
@@ -185,6 +163,57 @@ Deno.test("CronExecutor", async (t) => {
     // setChannel は先に呼ばれる
     await executor.runJob(job);
     assertEquals(getChannelId(), "ch-approval");
+  });
+
+  await t.step("start/stop でスケジューラが制御されること", () => {
+    const { channel } = createMockChannel();
+    const client = createMockClient(channel);
+    const sessions = new SessionStore();
+    const { manager } = createMockApprovalManager();
+    const systemPrompts = createMockSystemPromptStore();
+
+    const executor = new CronExecutor(
+      client as never,
+      TEST_CONFIG,
+      "guild-1",
+      sessions,
+      manager as never,
+      systemPrompts,
+    );
+
+    const jobs: CronJobDef[] = [
+      { name: "j1", schedule: "0 9 * * *", prompt: "test", channelId: "1" },
+    ];
+
+    executor.start(jobs);
+    executor.stop(); // エラーなく停止すること
+  });
+
+  await t.step("reload でジョブが差し替えられること", () => {
+    const { channel } = createMockChannel();
+    const client = createMockClient(channel);
+    const sessions = new SessionStore();
+    const { manager } = createMockApprovalManager();
+    const systemPrompts = createMockSystemPromptStore();
+
+    const executor = new CronExecutor(
+      client as never,
+      TEST_CONFIG,
+      "guild-1",
+      sessions,
+      manager as never,
+      systemPrompts,
+    );
+
+    executor.start([
+      { name: "old", schedule: "0 9 * * *", prompt: "test", channelId: "1" },
+    ]);
+
+    executor.reload([
+      { name: "new", schedule: "0 18 * * *", prompt: "test2", channelId: "2" },
+    ]);
+
+    executor.stop();
   });
 
   await t.step("セッションキーが cron:{name} 形式であること", () => {

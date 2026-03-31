@@ -42,8 +42,9 @@ import { WhisperStt } from "../voice/stt.ts";
 import { OpenAiTts } from "../voice/tts.ts";
 import { VoicePlayer } from "../voice/player.ts";
 import { startApiServer } from "../api/server.ts";
+import type { CronApiContext } from "../api/cron.ts";
 import { CronExecutor } from "../cron/executor.ts";
-import { loadCronJobs } from "../cron/types.ts";
+import { loadCronJobsFromDir } from "../cron/loader.ts";
 
 const log = createLogger("bot");
 
@@ -58,6 +59,7 @@ export class DiscordBot {
   private apiServer: Deno.HttpServer | null = null;
   private voiceManager: VoiceManager | null = null;
   private cronExecutor: CronExecutor | null = null;
+  private cronWatcher: Deno.FsWatcher | null = null;
   private systemPrompts: SystemPromptStore;
 
   constructor(config: Config) {
@@ -128,34 +130,48 @@ export class DiscordBot {
         log.info(`logged in as ${c.user.tag}`);
         await this.registerCommands();
 
-        // 統合 API サーバーを起動する（承認フック + Discord REST API）。
+        // cron 初期化。
+        this.cronExecutor = new CronExecutor(
+          this.client,
+          this.config.claude,
+          this.config.guildId,
+          this.sessions,
+          this.approvalManager,
+          this.systemPrompts,
+        );
+
+        const cronJobs = await loadCronJobsFromDir(this.config.claude.cwd);
+        this.cronExecutor.start(cronJobs);
+
+        const cronDir = join(this.config.claude.cwd, ".claude", "cron");
+
+        const reloadJobs = async () => {
+          const jobs = await loadCronJobsFromDir(this.config.claude.cwd);
+          this.cronExecutor!.reload(jobs);
+        };
+
+        // cron ファイル監視を開始。
+        this.watchCronDir(cronDir, reloadJobs);
+
+        // 統合 API サーバーを起動する（承認フック + Discord REST API + Cron API）。
         const discordCtx = {
           client: this.client,
           guildId: this.config.guildId,
         };
+        const cronCtx: CronApiContext = {
+          cronDir,
+          workspaceDir: this.config.claude.cwd,
+          reloadJobs,
+        };
         this.apiServer = startApiServer(
           this.approvalManager,
           discordCtx,
+          cronCtx,
           this.config.claude.apiPort,
         );
 
         // 起動時に auto-join 条件を満たす VC があれば参加する。
         this.voiceManager?.scanAndAutoJoin();
-
-        // cron ジョブを登録する。
-        const cronJobs = await loadCronJobs(this.config.claude.cwd);
-        if (cronJobs.length > 0) {
-          this.cronExecutor = new CronExecutor(
-            this.client,
-            this.config.claude,
-            this.config.guildId,
-            this.sessions,
-            this.approvalManager,
-            this.systemPrompts,
-          );
-          this.cronExecutor.registerAll(cronJobs);
-          log.info(`registered ${cronJobs.length} cron job(s)`);
-        }
 
         resolve();
       });
@@ -171,6 +187,12 @@ export class DiscordBot {
   shutdown(): void {
     log.info("shutting down");
     this.voiceManager?.shutdown();
+    this.cronExecutor?.stop();
+    try {
+      this.cronWatcher?.close();
+    } catch {
+      // 既に閉じている場合は無視
+    }
     // TODO: WebSocket/SSE 追加時は shutdown() を async にして await すること
     this.apiServer?.shutdown().catch((e) =>
       log.warn("api server shutdown error:", e)
@@ -260,6 +282,40 @@ export class DiscordBot {
     // /claw clear
     if (sub === "clear") {
       return handleClear(interaction, this.sessions);
+    }
+  }
+
+  /**
+   * .claude/cron/ ディレクトリの変更を監視し、変更時にリロードする。
+   */
+  private async watchCronDir(
+    dir: string,
+    reload: () => Promise<void>,
+  ): Promise<void> {
+    try {
+      await Deno.mkdir(dir, { recursive: true });
+    } catch {
+      // ディレクトリ作成に失敗しても続行
+    }
+
+    try {
+      const watcher = Deno.watchFs(dir);
+      this.cronWatcher = watcher;
+
+      let debounceTimer: number | null = null;
+
+      for await (const event of watcher) {
+        if (event.paths.some((p) => p.endsWith(".md"))) {
+          if (debounceTimer) {
+            clearTimeout(debounceTimer);
+          }
+          debounceTimer = setTimeout(() => {
+            reload().catch((e) => log.error("cron reload failed:", e));
+          }, 500);
+        }
+      }
+    } catch (e) {
+      log.warn("cron file watcher failed:", e);
     }
   }
 

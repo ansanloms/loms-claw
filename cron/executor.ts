@@ -1,7 +1,7 @@
 /**
  * cron ジョブの実行エンジン。
  *
- * Deno.cron でジョブを登録し、各ティックで askClaude() を呼び出して
+ * CronScheduler からのコールバックで askClaude() を呼び出し、
  * 結果を指定の Discord チャンネルに送信する。
  *
  * @module
@@ -16,16 +16,20 @@ import type { ApprovalManager } from "../approval/manager.ts";
 import type { SystemPromptStore } from "../claude/system-prompt.ts";
 import { splitMessage } from "../bot/message.ts";
 import { createLogger } from "../logger.ts";
+import { CronScheduler } from "./scheduler.ts";
 import type { CronJobDef } from "./types.ts";
 
 const log = createLogger("cron");
 
 /**
- * cron ジョブの登録・実行を管理するクラス。
+ * cron ジョブの実行を管理するクラス。
+ *
+ * CronScheduler と連携し、ジョブのライフサイクル（起動・リロード・停止）を制御する。
  */
 export class CronExecutor {
   /** 実行中のジョブ名を追跡し、同一ジョブの並行実行を防止する。 */
   private running = new Set<string>();
+  private scheduler: CronScheduler;
 
   constructor(
     private readonly client: Client,
@@ -34,16 +38,35 @@ export class CronExecutor {
     private readonly sessions: SessionStore,
     private readonly approvalManager: ApprovalManager,
     private readonly systemPrompts: SystemPromptStore,
-  ) {}
+  ) {
+    this.scheduler = new CronScheduler((job) => this.runJob(job));
+  }
 
   /**
-   * 全ジョブを Deno.cron に登録する。
+   * ジョブを登録してスケジューラを開始する。
    */
-  registerAll(jobs: CronJobDef[]): void {
-    for (const job of jobs) {
-      Deno.cron(job.name, job.schedule, () => this.runJob(job));
-      log.info(`registered cron job: ${job.name} (${job.schedule})`);
-    }
+  start(jobs: CronJobDef[]): void {
+    this.scheduler.replaceAll(jobs);
+    this.scheduler.start();
+    log.info(`cron executor started with ${jobs.length} job(s)`);
+  }
+
+  /**
+   * ジョブ定義をホットリロードする。
+   *
+   * 実行中のジョブは自然に完了する。次回の tick から新しい定義が適用される。
+   */
+  reload(jobs: CronJobDef[]): void {
+    this.scheduler.replaceAll(jobs);
+    log.info(`cron executor reloaded with ${jobs.length} job(s)`);
+  }
+
+  /**
+   * スケジューラを停止する。
+   */
+  stop(): void {
+    this.scheduler.stop();
+    log.info("cron executor stopped");
   }
 
   /**

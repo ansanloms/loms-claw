@@ -10,6 +10,7 @@
     "jsr:@std/path@1": "1.1.4",
     "jsr:@std/path@^1.1.4": "1.1.4",
     "jsr:@std/streams@^1.0.17": "1.0.17",
+    "jsr:@std/yaml@^1.0.12": "1.0.12",
     "npm:@anthropic-ai/claude-agent-sdk@~0.2.88": "0.2.88_zod@3.25.76",
     "npm:@discordjs/voice@0.19.2": "0.19.2_opusscript@0.1.1",
     "npm:@snazzah/davey@~0.1.11": "0.1.11",
@@ -54,6 +55,9 @@
       "dependencies": [
         "jsr:@std/bytes"
       ]
+    },
+    "@std/yaml@1.0.12": {
+      "integrity": "7deabca4545bcedd07c5f69ea53acea71b8b4c67562f224e17b90d75944cb20c"
     }
   },
   "npm": {
@@ -1444,6 +1448,7 @@
       "jsr:@std/dotenv@~0.225.6",
       "jsr:@std/path@^1.1.4",
       "jsr:@std/streams@^1.0.17",
+      "jsr:@std/yaml@^1.0.12",
       "npm:@anthropic-ai/claude-agent-sdk@~0.2.88",
       "npm:@discordjs/voice@0.19.2",
       "npm:@snazzah/davey@~0.1.11",
