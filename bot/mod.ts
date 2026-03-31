@@ -180,7 +180,18 @@ export class DiscordBot {
   private async onInteraction(interaction: Interaction): Promise<void> {
     // ボタンインタラクション（承認/拒否）
     if (interaction.isButton()) {
-      await this.approvalManager.handleButton(interaction);
+      try {
+        await this.approvalManager.handleButton(interaction);
+      } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error);
+        log.error("button interaction error:", msg);
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: "承認処理中にエラーが発生しました。",
+            flags: MessageFlags.Ephemeral,
+          }).catch(() => {});
+        }
+      }
       return;
     }
 

@@ -12,6 +12,7 @@ import {
   ButtonStyle,
   type Client,
   type GuildTextBasedChannel,
+  MessageFlags,
 } from "discord.js";
 import type {
   PermissionBehavior,
@@ -146,6 +147,10 @@ export class ApprovalManager {
 
     const pending = this.pending.get(requestId);
     if (!pending) {
+      await interaction.reply({
+        content: "この承認リクエストは期限切れか、既に処理済みです。",
+        flags: MessageFlags.Ephemeral,
+      });
       return false;
     }
 
