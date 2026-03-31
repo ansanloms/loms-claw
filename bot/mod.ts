@@ -65,7 +65,10 @@ export class DiscordBot {
         ...(config.voice.enabled ? [GatewayIntentBits.GuildVoiceStates] : []),
       ],
     });
-    this.approvalManager = new ApprovalManager(this.client);
+    this.approvalManager = new ApprovalManager(
+      this.client,
+      join(config.claude.cwd, ".claude", "settings.json"),
+    );
 
     // ボイス機能の初期化。
     if (config.voice.enabled) {
