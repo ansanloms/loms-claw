@@ -300,8 +300,13 @@ export class DiscordBot {
 
       let debounceTimer: number | null = null;
 
+      const relevantKinds = new Set(["create", "modify", "remove"]);
+
       for await (const event of watcher) {
-        if (event.paths.some((p) => p.endsWith(".md"))) {
+        if (
+          relevantKinds.has(event.kind) &&
+          event.paths.some((p) => p.endsWith(".md"))
+        ) {
           if (debounceTimer) {
             clearTimeout(debounceTimer);
           }

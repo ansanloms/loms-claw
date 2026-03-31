@@ -161,6 +161,14 @@ Deno.test("parseCronExpression", async (t) => {
     );
   });
 
+  await t.step("逆順レンジでエラーになること", () => {
+    assertThrows(
+      () => parseCronExpression("5-1 * * * *"),
+      Error,
+      "start must be <= end",
+    );
+  });
+
   await t.step("パース結果がキャッシュされること", () => {
     clearCache();
     const a = parseCronExpression("0 9 * * *");

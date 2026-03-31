@@ -75,6 +75,9 @@ function parseSubExpr(sub: string, min: number, max: number): number[] {
     if (!Number.isInteger(start) || !Number.isInteger(end)) {
       throw new Error(`invalid range: ${sub}`);
     }
+    if (start > end) {
+      throw new Error(`invalid range: ${sub} (start must be <= end)`);
+    }
   } else {
     const n = Number(range);
     if (!Number.isInteger(n)) {
