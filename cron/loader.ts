@@ -20,7 +20,7 @@ const log = createLogger("cron-loader");
  *
  * @param meta - YAML フロントマターのオブジェクト。
  * @param body - Markdown 本文（プロンプト）。
- * @param filename - エラーメッセージ用のファイル名。
+ * @param filename - ジョブ名の決定とエラーメッセージに使うファイル名。
  * @throws バリデーションエラー時。
  */
 export function validateCronJob(
@@ -104,7 +104,6 @@ export async function loadCronJobsFromDir(
   const cronDir = join(workspaceDir, "cron");
 
   const jobs: CronJobDef[] = [];
-  const names = new Set<string>();
 
   try {
     for await (const entry of Deno.readDir(cronDir)) {
@@ -118,13 +117,6 @@ export async function loadCronJobsFromDir(
         const raw = await Deno.readTextFile(filePath);
         const { attrs, body } = extract<Record<string, unknown>>(raw);
         const job = validateCronJob(attrs, body.trim(), entry.name);
-
-        if (names.has(job.name)) {
-          log.warn(`duplicate cron job name "${job.name}" in ${entry.name}`);
-          continue;
-        }
-
-        names.add(job.name);
         jobs.push(job);
       } catch (e) {
         log.error(
