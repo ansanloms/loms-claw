@@ -21,7 +21,7 @@ import type { SessionStore } from "../session/mod.ts";
 import type { ApprovalManager } from "../approval/manager.ts";
 import { createLogger } from "../logger.ts";
 import type { SystemPromptStore } from "../claude/system-prompt.ts";
-import { calcRms, createOpusDecoder } from "./codec.ts";
+import { calcRms, concatBytes, createOpusDecoder } from "./codec.ts";
 import type { SpeechToText } from "./stt.ts";
 import type { VoicePlayer } from "./player.ts";
 import { askClaudeForVoice } from "./adapter.ts";
@@ -337,7 +337,7 @@ export class VoiceManager {
         return;
       }
 
-      const pcm = Buffer.concat(pcmChunks);
+      const pcm = concatBytes(...pcmChunks);
 
       if (pcm.length < this.minPcmBytes) {
         log.debug("audio too short, skipping");
