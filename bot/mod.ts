@@ -42,7 +42,6 @@ import { WhisperStt } from "../voice/stt.ts";
 import { OpenAiTts } from "../voice/tts.ts";
 import { VoicePlayer } from "../voice/player.ts";
 import { startApiServer } from "../api/server.ts";
-import type { CronApiContext } from "../api/cron.ts";
 import { CronExecutor } from "../cron/executor.ts";
 import { loadCronJobsFromDir } from "../cron/loader.ts";
 
@@ -153,20 +152,14 @@ export class DiscordBot {
         // cron ファイル監視を開始。
         this.watchCronDir(cronDir, reloadJobs);
 
-        // 統合 API サーバーを起動する（承認フック + Discord REST API + Cron API）。
+        // 統合 API サーバーを起動する（承認フック + Discord REST API）。
         const discordCtx = {
           client: this.client,
           guildId: this.config.guildId,
         };
-        const cronCtx: CronApiContext = {
-          cronDir,
-          workspaceDir: this.config.claude.cwd,
-          reloadJobs,
-        };
         this.apiServer = startApiServer(
           this.approvalManager,
           discordCtx,
-          cronCtx,
           this.config.claude.apiPort,
         );
 

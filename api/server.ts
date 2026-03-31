@@ -17,7 +17,6 @@ import {
   searchMessages,
   sendMessage,
 } from "./discord.ts";
-import { type CronApiContext, cronRoutes } from "./cron.ts";
 import { createLogger } from "../logger.ts";
 
 const log = createLogger("api-server");
@@ -97,7 +96,6 @@ const routes: {
 export function startApiServer(
   manager: ApprovalManager,
   discordCtx: ApiContext,
-  cronCtx: CronApiContext | null,
   port: number,
 ): Deno.HttpServer {
   const server = Deno.serve(
@@ -146,47 +144,6 @@ export function startApiServer(
                   ? error.message
                   : String(error);
                 log.error("discord api error:", msg);
-                return new Response(
-                  JSON.stringify({ error: msg }),
-                  {
-                    status: 500,
-                    headers: { "Content-Type": "application/json" },
-                  },
-                );
-              }
-            }
-          }
-        }
-
-        if (pathMatched) {
-          return new Response(
-            JSON.stringify({ error: "Method Not Allowed" }),
-            { status: 405, headers: { "Content-Type": "application/json" } },
-          );
-        }
-
-        return new Response(
-          JSON.stringify({ error: "Not Found" }),
-          { status: 404, headers: { "Content-Type": "application/json" } },
-        );
-      }
-
-      // Cron API エンドポイント
-      if (cronCtx && url.pathname.startsWith("/cron/")) {
-        let pathMatched = false;
-        for (const route of cronRoutes) {
-          const match = route.pattern.exec(url);
-          if (match) {
-            pathMatched = true;
-            if (req.method === route.method) {
-              const params = match.pathname.groups as Record<string, string>;
-              try {
-                return await route.handler(req, cronCtx, params);
-              } catch (error: unknown) {
-                const msg = error instanceof Error
-                  ? error.message
-                  : String(error);
-                log.error("cron api error:", msg);
                 return new Response(
                   JSON.stringify({ error: msg }),
                   {

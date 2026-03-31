@@ -134,7 +134,6 @@ cron/match.ts          cron 式パーサー + マッチャー。Temporal API で
 cron/loader.ts         frontmatter パーサー + .claude/cron/ ディレクトリスキャン。
 cron/scheduler.ts      CronScheduler: setInterval ベースのカスタムスケジューラ。ホットリロード対応。
 cron/executor.ts       CronExecutor: スケジューラ連携 + askClaude() → Discord 送信。
-api/cron.ts            cron ジョブ CRUD API ハンドラ（list, get, put, delete, reload）。
 Dockerfile             Deno + Claude Code CLI のコンテナイメージ。
 docker/compose.yaml    本番サービス定義。
 docker/compose.dev.yaml  開発用オーバーライド（ソース bind mount + watch モード）。
@@ -208,18 +207,8 @@ timeout: 120000
 
 ### ホットリロード
 
-- `Deno.watchFs` でファイル変更を監視し、自動リロード
-- `POST /cron/reload` で手動リロードも可能
-
-### CRUD API
-
-| メソッド | パス               | 説明             |
-| -------- | ------------------ | ---------------- |
-| `GET`    | `/cron/jobs`       | ジョブ一覧       |
-| `GET`    | `/cron/jobs/:name` | ジョブ詳細       |
-| `PUT`    | `/cron/jobs/:name` | ジョブ作成/更新  |
-| `DELETE` | `/cron/jobs/:name` | ジョブ削除       |
-| `POST`   | `/cron/reload`     | 全ジョブリロード |
+`Deno.watchFs` で `.claude/cron/` を監視し、ファイルの追加・変更・削除時に自動リロードする。
+AI がファイルを編集するだけでジョブが更新される。再起動不要。
 
 書き方の詳細は `.claude/rules/cron.md` を参照。
 
