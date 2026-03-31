@@ -72,7 +72,7 @@ export class ApprovalManager {
 
     // allow list に含まれるツールは即座に許可する。
     if (await isInAllowList(this.settingsPath, toolName)) {
-      log.info("approval resolved:", "auto", "Already Allowed");
+      log.info("approval resolved:", toolName, "Already Allowed");
       return { decision: "allow", reason: "Already Allowed" };
     }
 
