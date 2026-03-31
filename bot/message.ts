@@ -6,6 +6,7 @@
  */
 
 import type { Attachment, GuildTextBasedChannel } from "discord.js";
+import { dirname } from "@std/path/dirname";
 import { join } from "@std/path/join";
 import { Jimp } from "jimp";
 import { createLogger } from "../logger.ts";
@@ -43,7 +44,7 @@ export async function resizeImageIfNeeded(
   buffer: Uint8Array,
   maxDimension: number = MAX_IMAGE_DIMENSION,
 ): Promise<[Uint8Array, string]> {
-  const img = await Jimp.fromBuffer(buffer.buffer as ArrayBuffer);
+  const img = await Jimp.fromBuffer(new Uint8Array(buffer).buffer);
   const { width, height } = img;
   const longer = Math.max(width, height);
 
@@ -87,12 +88,14 @@ export async function downloadImageAttachments(
     return [];
   }
 
-  const dir = await Deno.makeTempDir({ prefix: "loms-claw-img-" });
+  let dir: string | null = null;
   const results: DownloadedImage[] = [];
 
   for (const att of images) {
     try {
-      const response = await fetch(att.url);
+      const response = await fetch(att.url, {
+        signal: AbortSignal.timeout(30_000),
+      });
       if (!response.ok) {
         log.warn(
           `failed to download attachment: ${att.name} (${response.status})`,
@@ -102,6 +105,11 @@ export async function downloadImageAttachments(
 
       const original = new Uint8Array(await response.arrayBuffer());
       const [data, resizedExt] = await resizeImageIfNeeded(original);
+
+      // 最初の成功時にディレクトリを作成。
+      if (!dir) {
+        dir = await Deno.makeTempDir({ prefix: "loms-claw-img-" });
+      }
 
       // リサイズされた場合は .jpg、されなかった場合は元の拡張子を維持。
       const ext = resizedExt ||
@@ -133,8 +141,7 @@ export async function cleanupImageFiles(
 ): Promise<void> {
   const dirs = new Set<string>();
   for (const img of images) {
-    const dir = img.path.substring(0, img.path.lastIndexOf("/"));
-    dirs.add(dir);
+    dirs.add(dirname(img.path));
   }
   for (const dir of dirs) {
     await Deno.remove(dir, { recursive: true }).catch(() => {});

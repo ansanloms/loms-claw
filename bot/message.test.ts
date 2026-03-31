@@ -232,7 +232,7 @@ Deno.test("resizeImageIfNeeded", async (t) => {
     const [result, ext] = await resizeImageIfNeeded(buf, 1568);
     assertEquals(ext, ".jpg");
 
-    const resized = await Jimp.fromBuffer(result.buffer as ArrayBuffer);
+    const resized = await Jimp.fromBuffer(new Uint8Array(result).buffer);
     assertEquals(resized.width, 1568);
     assertEquals(resized.height <= 1568, true);
   });
@@ -242,7 +242,7 @@ Deno.test("resizeImageIfNeeded", async (t) => {
     const [result, ext] = await resizeImageIfNeeded(buf, 1568);
     assertEquals(ext, ".jpg");
 
-    const resized = await Jimp.fromBuffer(result.buffer as ArrayBuffer);
+    const resized = await Jimp.fromBuffer(new Uint8Array(result).buffer);
     assertEquals(resized.height, 1568);
     assertEquals(resized.width <= 1568, true);
   });
@@ -259,7 +259,7 @@ Deno.test("resizeImageIfNeeded", async (t) => {
     const [result, ext] = await resizeImageIfNeeded(buf, 50);
     assertEquals(ext, ".jpg");
 
-    const resized = await Jimp.fromBuffer(result.buffer as ArrayBuffer);
+    const resized = await Jimp.fromBuffer(new Uint8Array(result).buffer);
     assertEquals(resized.width, 50);
   });
 });

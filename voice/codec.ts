@@ -26,7 +26,7 @@ export function createOpusDecoder(): OpusDecoder {
 }
 
 /**
- * 複数の Buffer を結合して単一の Buffer を返す。
+ * 複数の Uint8Array / Buffer を結合して単一の Buffer を返す。
  *
  * `@types/node` のバージョン間で `Buffer` が `Uint8Array` の
  * サブタイプとして認識されない場合があるため、

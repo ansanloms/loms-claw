@@ -290,13 +290,10 @@ export class DiscordBot {
     }
     prompt = prompt.trim();
 
-    // 画像添付ファイルの有無を確認
-    const hasImages = message.attachments.some((att) =>
-      att.contentType?.startsWith("image/")
-    );
+    const hasAttachments = message.attachments.size > 0;
 
-    // テキストも画像もなければ無視
-    if (!prompt && !hasImages) {
+    // テキストも添付もなければ無視
+    if (!prompt && !hasAttachments) {
       return;
     }
 
@@ -311,15 +308,22 @@ export class DiscordBot {
     let downloadedImages: DownloadedImage[] = [];
 
     try {
-      // 画像添付をダウンロード
-      if (hasImages) {
+      // 画像添付をダウンロード（画像フィルタは downloadImageAttachments 内で行う）
+      if (hasAttachments) {
         downloadedImages = await downloadImageAttachments(
           message.attachments.values(),
         );
-        prompt = appendImageReferences(
-          prompt || "この画像について説明して",
-          downloadedImages,
-        );
+        if (downloadedImages.length > 0) {
+          prompt = appendImageReferences(
+            prompt || "この画像について説明して",
+            downloadedImages,
+          );
+        }
+      }
+
+      // 画像ダウンロード後もプロンプトが空なら終了
+      if (!prompt) {
+        return;
       }
 
       const sessionId = this.sessions.get(channelId);
