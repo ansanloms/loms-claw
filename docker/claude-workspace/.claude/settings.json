@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "language": "japanese",
+  "enableAllProjectMcpServers": true,
+  "plansDirectory": ".claude/plans",
+  "permissions": {
+    "allow": [
+      "mcp__claude_ai_Google_Calendar__gcal_list_events",
+      "mcp__claude_ai_Google_Calendar__gcal_create_event",
+      "mcp__claude_ai_Google_Calendar__gcal_delete_event",
+      "mcp__claude_ai_Gmail__gmail_search_messages",
+      "ToolSearch",
+      "Glob",
+      "Bash",
+      "Read"
+    ]
+  }
+}
