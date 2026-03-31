@@ -2,11 +2,11 @@ name: loms-claw
 
 services:
   bot:
-    build: ..
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
     env_file:
       - ../.env
-    environment:
-      - TZ=${TZ:-UTC}
     working_dir: /workspace
     command: ["deno", "run", "-A", "/app/main.ts"]
     volumes:
@@ -16,4 +16,6 @@ services:
       - type: bind
         source: ${CLAUDE_WORKSPACE:-./claude-workspace}
         target: /workspace
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
