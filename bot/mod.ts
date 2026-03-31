@@ -24,7 +24,15 @@ import { SessionStore } from "../session/mod.ts";
 import { ApprovalManager } from "../approval/manager.ts";
 import { command } from "./commands.ts";
 import { isAuthorized, shouldRespond } from "./guard.ts";
-import { createProgressReporter, keepTyping, splitMessage } from "./message.ts";
+import {
+  appendImageReferences,
+  cleanupImageFiles,
+  createProgressReporter,
+  type DownloadedImage,
+  downloadImageAttachments,
+  keepTyping,
+  splitMessage,
+} from "./message.ts";
 import { join } from "jsr:@std/path@^1/join";
 import { createLogger } from "../logger.ts";
 import { SystemPromptStore } from "../claude/system-prompt.ts";
@@ -281,7 +289,11 @@ export class DiscordBot {
       );
     }
     prompt = prompt.trim();
-    if (!prompt) {
+
+    const hasAttachments = message.attachments.size > 0;
+
+    // テキストも添付もなければ無視
+    if (!prompt && !hasAttachments) {
       return;
     }
 
@@ -293,8 +305,27 @@ export class DiscordBot {
     keepTyping(channel, typingController.signal);
 
     const progress = createProgressReporter(channel);
+    let downloadedImages: DownloadedImage[] = [];
 
     try {
+      // 画像添付をダウンロード（画像フィルタは downloadImageAttachments 内で行う）
+      if (hasAttachments) {
+        downloadedImages = await downloadImageAttachments(
+          message.attachments.values(),
+        );
+        if (downloadedImages.length > 0) {
+          prompt = appendImageReferences(
+            prompt || "この画像について説明して",
+            downloadedImages,
+          );
+        }
+      }
+
+      // 画像ダウンロード後もプロンプトが空なら終了
+      if (!prompt) {
+        return;
+      }
+
       const sessionId = this.sessions.get(channelId);
 
       // 承認ボタンの送信先チャンネルを設定
@@ -356,6 +387,9 @@ export class DiscordBot {
       log.error("failed to process message:", errMsg);
       await channel.send(`Error: ${errMsg}`).catch(() => {});
     } finally {
+      if (downloadedImages.length > 0) {
+        await cleanupImageFiles(downloadedImages);
+      }
       await progress.cleanup();
       typingController.abort();
     }

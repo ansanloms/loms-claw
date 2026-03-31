@@ -26,6 +26,27 @@ export function createOpusDecoder(): OpusDecoder {
 }
 
 /**
+ * 複数の Uint8Array / Buffer を結合して単一の Buffer を返す。
+ *
+ * `@types/node` のバージョン間で `Buffer` が `Uint8Array` の
+ * サブタイプとして認識されない場合があるため、
+ * `Buffer.concat` の代わりにこの関数を使用する。
+ */
+export function concatBytes(...arrays: Buffer[]): Buffer {
+  const totalLength = arrays.reduce((sum, a) => sum + a.length, 0);
+  const result = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const arr of arrays) {
+    result.set(
+      new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength),
+      offset,
+    );
+    offset += arr.length;
+  }
+  return Buffer.from(result.buffer);
+}
+
+/**
  * 生 PCM データに WAV コンテナの 44 バイトヘッダを付与する。
  *
  * 48 kHz、モノラル、16 ビット リトルエンディアン PCM を前提とする。
@@ -55,7 +76,7 @@ export function pcmToWav(pcm: Buffer): Buffer {
   header.write("data", 36);
   header.writeUInt32LE(dataSize, 40);
 
-  return Buffer.concat([header, pcm]);
+  return concatBytes(header, pcm);
 }
 
 /**

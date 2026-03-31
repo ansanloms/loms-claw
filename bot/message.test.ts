@@ -1,6 +1,15 @@
 import { assertEquals } from "@std/assert";
 import type { GuildTextBasedChannel } from "discord.js";
-import { createProgressReporter, keepTyping, splitMessage } from "./message.ts";
+import { Jimp } from "jimp";
+import {
+  appendImageReferences,
+  cleanupImageFiles,
+  createProgressReporter,
+  type DownloadedImage,
+  keepTyping,
+  resizeImageIfNeeded,
+  splitMessage,
+} from "./message.ts";
 
 Deno.test("splitMessage", async (t) => {
   await t.step("短いテキストは 1 チャンクで返すこと", () => {
@@ -198,4 +207,113 @@ Deno.test("createProgressReporter", async (t) => {
       assertEquals(calls.length, 0);
     },
   );
+});
+
+/** テスト用の PNG バッファを生成する。 */
+async function createTestPng(
+  width: number,
+  height: number,
+): Promise<Uint8Array> {
+  const img = new Jimp({ width, height, color: 0xff0000ff });
+  const buf = await img.getBuffer("image/png");
+  return new Uint8Array(buf);
+}
+
+Deno.test("resizeImageIfNeeded", async (t) => {
+  await t.step("小さい画像はリサイズされないこと", async () => {
+    const buf = await createTestPng(800, 600);
+    const [result, ext] = await resizeImageIfNeeded(buf, 1568);
+    assertEquals(ext, "");
+    assertEquals(result, buf);
+  });
+
+  await t.step("幅が長辺の場合にリサイズされること", async () => {
+    const buf = await createTestPng(3000, 2000);
+    const [result, ext] = await resizeImageIfNeeded(buf, 1568);
+    assertEquals(ext, ".jpg");
+
+    const resized = await Jimp.fromBuffer(new Uint8Array(result).buffer);
+    assertEquals(resized.width, 1568);
+    assertEquals(resized.height <= 1568, true);
+  });
+
+  await t.step("高さが長辺の場合にリサイズされること", async () => {
+    const buf = await createTestPng(1000, 3000);
+    const [result, ext] = await resizeImageIfNeeded(buf, 1568);
+    assertEquals(ext, ".jpg");
+
+    const resized = await Jimp.fromBuffer(new Uint8Array(result).buffer);
+    assertEquals(resized.height, 1568);
+    assertEquals(resized.width <= 1568, true);
+  });
+
+  await t.step("ちょうど最大サイズの場合はリサイズされないこと", async () => {
+    const buf = await createTestPng(1568, 1000);
+    const [result, ext] = await resizeImageIfNeeded(buf, 1568);
+    assertEquals(ext, "");
+    assertEquals(result, buf);
+  });
+
+  await t.step("カスタム最大サイズで動作すること", async () => {
+    const buf = await createTestPng(200, 100);
+    const [result, ext] = await resizeImageIfNeeded(buf, 50);
+    assertEquals(ext, ".jpg");
+
+    const resized = await Jimp.fromBuffer(new Uint8Array(result).buffer);
+    assertEquals(resized.width, 50);
+  });
+});
+
+Deno.test("appendImageReferences", async (t) => {
+  await t.step("画像がない場合はプロンプトがそのまま返ること", () => {
+    assertEquals(appendImageReferences("hello", []), "hello");
+  });
+
+  await t.step("単一画像の参照が付加されること", () => {
+    const images: DownloadedImage[] = [
+      { path: "/tmp/test/a.jpg", originalName: "photo.jpg" },
+    ];
+    const result = appendImageReferences("describe this", images);
+    assertEquals(result, "describe this\n\n@/tmp/test/a.jpg");
+  });
+
+  await t.step("複数画像の参照がスペース区切りで付加されること", () => {
+    const images: DownloadedImage[] = [
+      { path: "/tmp/test/a.jpg", originalName: "a.jpg" },
+      { path: "/tmp/test/b.png", originalName: "b.png" },
+    ];
+    const result = appendImageReferences("what are these", images);
+    assertEquals(
+      result,
+      "what are these\n\n@/tmp/test/a.jpg @/tmp/test/b.png",
+    );
+  });
+});
+
+Deno.test("cleanupImageFiles", async (t) => {
+  await t.step("一時ディレクトリが削除されること", async () => {
+    const dir = await Deno.makeTempDir({ prefix: "loms-claw-test-" });
+    const filepath = `${dir}/test.jpg`;
+    await Deno.writeTextFile(filepath, "dummy");
+
+    const images: DownloadedImage[] = [
+      { path: filepath, originalName: "test.jpg" },
+    ];
+    await cleanupImageFiles(images);
+
+    let exists = true;
+    try {
+      await Deno.stat(dir);
+    } catch {
+      exists = false;
+    }
+    assertEquals(exists, false);
+  });
+
+  await t.step("既に削除済みでもエラーにならないこと", async () => {
+    const images: DownloadedImage[] = [
+      { path: "/tmp/nonexistent-dir-12345/test.jpg", originalName: "test.jpg" },
+    ];
+    await cleanupImageFiles(images);
+  });
 });

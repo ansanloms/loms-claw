@@ -9,7 +9,7 @@
  */
 
 import { Buffer } from "node:buffer";
-import { pcmToWav } from "./codec.ts";
+import { concatBytes, pcmToWav } from "./codec.ts";
 
 /** サンプリングレート（Hz）。Discord の音声フォーマットに合わせる。 */
 const SAMPLE_RATE = 48000;
@@ -107,7 +107,7 @@ function generateSilence(durationMs: number): Buffer {
 export function generateThinkingTone(): Buffer {
   const note = generateMarimbaTone(262, 200, 0.15); // C4
   const silence = generateSilence(550);
-  return pcmToWav(Buffer.concat([note, silence]));
+  return pcmToWav(concatBytes(note, silence));
 }
 
 /**
@@ -122,5 +122,5 @@ export function generateErrorTone(): Buffer {
   const high = generateMarimbaTone(165, 200, 0.2); // E3
   const gap = generateSilence(80);
   const low = generateMarimbaTone(131, 300, 0.2); // C3
-  return pcmToWav(Buffer.concat([high, gap, low]));
+  return pcmToWav(concatBytes(high, gap, low));
 }

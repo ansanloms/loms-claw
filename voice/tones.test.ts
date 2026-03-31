@@ -16,7 +16,7 @@ Deno.test("generateThinkingTone", async (t) => {
   await t.step("呼び出しごとに同じ結果を返すこと", () => {
     const a = generateThinkingTone();
     const b = generateThinkingTone();
-    assertEquals(a.equals(b), true);
+    assertEquals(a.every((v, i) => v === b[i]) && a.length === b.length, true);
   });
 });
 
@@ -30,6 +30,10 @@ Deno.test("generateErrorTone", async (t) => {
   await t.step("thinking tone とは異なるバイト列であること", () => {
     const thinking = generateThinkingTone();
     const error = generateErrorTone();
-    assertEquals(thinking.equals(error), false);
+    assertEquals(
+      thinking.length !== error.length ||
+        thinking.some((v, i) => v !== error[i]),
+      true,
+    );
   });
 });
