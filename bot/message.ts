@@ -248,7 +248,10 @@ const PROGRESS_THROTTLE_MS = 3000;
  * Discord の message.edit() レート制限を考慮し、最短 3 秒間隔でスロットルする。
  * 返り値の `report` で進捗を更新し、`cleanup` で進捗メッセージを削除する。
  */
-export function createProgressReporter(channel: GuildTextBasedChannel): {
+export function createProgressReporter(
+  channel: GuildTextBasedChannel,
+  nowMs: () => number = () => Temporal.Now.instant().epochMilliseconds,
+): {
   report: (toolName: string, elapsedSeconds: number) => Promise<void>;
   cleanup: () => Promise<void>;
 } {
@@ -257,7 +260,7 @@ export function createProgressReporter(channel: GuildTextBasedChannel): {
 
   return {
     async report(toolName, elapsedSeconds) {
-      const now = Date.now();
+      const now = nowMs();
       if (now - lastUpdate < PROGRESS_THROTTLE_MS) {
         return;
       }

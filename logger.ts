@@ -64,7 +64,7 @@ export function createLogger(namespace: string): Logger {
     if (LEVEL_ORDER[level] < LEVEL_ORDER[minLevel]) {
       return;
     }
-    const ts = new Date().toISOString();
+    const ts = Temporal.Now.instant().toString();
     const prefix = `${ts} [${level.padEnd(5)}] [${namespace}]`;
     if (level === "ERROR") {
       console.error(prefix, msg, ...args);

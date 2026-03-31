@@ -60,7 +60,7 @@ export class CronScheduler {
     }
 
     // 次の分境界までの待機時間を計算
-    const now = Date.now();
+    const now = Temporal.Now.instant().epochMilliseconds;
     const msUntilNextMinute = TICK_INTERVAL_MS - (now % TICK_INTERVAL_MS);
 
     log.info(`scheduler starting (first tick in ${msUntilNextMinute}ms)`);
