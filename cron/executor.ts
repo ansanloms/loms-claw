@@ -157,8 +157,8 @@ export class CronExecutor {
         }
       } else {
         const errors = "errors" in resultEvent
-          ? String(resultEvent.errors)
-          : resultEvent.subtype;
+          ? JSON.stringify(resultEvent.errors)
+          : resultEvent.subtype ?? "unknown error";
         throw new Error(`claude returned error: ${errors}`);
       }
 

@@ -97,6 +97,7 @@ export function startApiServer(
   manager: ApprovalManager,
   discordCtx: ApiContext,
   port: number,
+  reloadCronJobs?: () => Promise<void>,
 ): Deno.HttpServer {
   const server = Deno.serve(
     { port, hostname: "127.0.0.1" },
@@ -121,6 +122,30 @@ export function startApiServer(
         } catch (error: unknown) {
           const msg = error instanceof Error ? error.message : String(error);
           log.error("approval request error:", msg);
+          return new Response(
+            JSON.stringify({ error: msg }),
+            { status: 500, headers: { "Content-Type": "application/json" } },
+          );
+        }
+      }
+
+      // cron リロードエンドポイント
+      if (req.method === "POST" && url.pathname === "/cron/reload") {
+        if (!reloadCronJobs) {
+          return new Response(
+            JSON.stringify({ error: "cron reload not available" }),
+            { status: 503, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        try {
+          await reloadCronJobs();
+          return new Response(
+            JSON.stringify({ ok: true }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        } catch (error: unknown) {
+          const msg = error instanceof Error ? error.message : String(error);
+          log.error("cron reload error:", msg);
           return new Response(
             JSON.stringify({ error: msg }),
             { status: 500, headers: { "Content-Type": "application/json" } },

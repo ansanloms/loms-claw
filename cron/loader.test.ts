@@ -18,16 +18,14 @@ async function writeCronFile(
   filename: string,
   content: string,
 ): Promise<void> {
-  const cronDir = join(workspaceDir, ".claude", "cron");
+  const cronDir = join(workspaceDir, "cron");
   await Deno.mkdir(cronDir, { recursive: true });
   await Deno.writeTextFile(join(cronDir, filename), content);
 }
 
 const VALID_MD = `---
-name: test-job
 schedule: "0 9 * * *"
 channelId: "123456"
-description: テストジョブ
 ---
 
 テストプロンプト。
@@ -37,10 +35,8 @@ Deno.test("validateCronJob", async (t) => {
   await t.step("有効なメタデータと本文でジョブが作成されること", () => {
     const job = validateCronJob(
       {
-        name: "test",
         schedule: "0 9 * * *",
         channelId: "123",
-        description: "desc",
         maxTurns: 5,
         timeout: 60000,
       },
@@ -50,15 +46,23 @@ Deno.test("validateCronJob", async (t) => {
     assertEquals(job.name, "test");
     assertEquals(job.schedule, "0 9 * * *");
     assertEquals(job.channelId, "123");
-    assertEquals(job.description, "desc");
     assertEquals(job.prompt, "prompt text");
     assertEquals(job.maxTurns, 5);
     assertEquals(job.timeout, 60000);
   });
 
+  await t.step("name がファイル名から .md を除いた値になること", () => {
+    const job = validateCronJob(
+      { schedule: "0 9 * * *" },
+      "prompt",
+      "daily-summary.md",
+    );
+    assertEquals(job.name, "daily-summary");
+  });
+
   await t.step("channelId が数値の場合に文字列に変換されること", () => {
     const job = validateCronJob(
-      { name: "test", schedule: "0 9 * * *", channelId: 123456 },
+      { schedule: "0 9 * * *", channelId: 123456 },
       "prompt",
       "test.md",
     );
@@ -67,24 +71,24 @@ Deno.test("validateCronJob", async (t) => {
 
   await t.step("channelId なしでもジョブが作成されること", () => {
     const job = validateCronJob(
-      { name: "no-channel", schedule: "0 9 * * *" },
+      { schedule: "0 9 * * *" },
       "prompt text",
-      "test.md",
+      "no-channel.md",
     );
     assertEquals(job.name, "no-channel");
     assertEquals(job.channelId, undefined);
   });
 
-  await t.step("必須フィールドが欠けている場合はエラーになること", () => {
+  await t.step("schedule が欠けている場合はエラーになること", () => {
     assertThrows(
       () =>
         validateCronJob(
-          { schedule: "0 9 * * *" },
+          {},
           "prompt",
           "test.md",
         ),
       Error,
-      '"name" is required',
+      '"schedule" is required',
     );
   });
 
@@ -92,7 +96,7 @@ Deno.test("validateCronJob", async (t) => {
     assertThrows(
       () =>
         validateCronJob(
-          { name: "test", schedule: "0 9 * * *", channelId: "123" },
+          { schedule: "0 9 * * *" },
           "",
           "test.md",
         ),
@@ -105,7 +109,7 @@ Deno.test("validateCronJob", async (t) => {
     assertThrows(
       () =>
         validateCronJob(
-          { name: "test", schedule: "bad", channelId: "123" },
+          { schedule: "bad" },
           "prompt",
           "test.md",
         ),
@@ -119,9 +123,7 @@ Deno.test("validateCronJob", async (t) => {
       () =>
         validateCronJob(
           {
-            name: "test",
             schedule: "0 9 * * *",
-            channelId: "123",
             maxTurns: "bad",
           },
           "prompt",
@@ -158,7 +160,6 @@ Deno.test("loadCronJobsFromDir", async (t) => {
         dir,
         "job-2.md",
         `---
-name: job-2
 schedule: "0 18 * * *"
 channelId: "789"
 ---
@@ -186,23 +187,7 @@ channelId: "789"
       await writeCronFile(dir, "bad.md", "no frontmatter here");
       const jobs = await loadCronJobsFromDir(dir);
       assertEquals(jobs.length, 1);
-      assertEquals(jobs[0].name, "test-job");
+      assertEquals(jobs[0].name, "good");
     });
   });
-
-  await t.step(
-    "名前が重複するファイルは後のものがスキップされること",
-    async () => {
-      await withTempDir(async (dir) => {
-        await writeCronFile(dir, "a.md", VALID_MD);
-        await writeCronFile(
-          dir,
-          "b.md",
-          VALID_MD, // 同じ name: test-job
-        );
-        const jobs = await loadCronJobsFromDir(dir);
-        assertEquals(jobs.length, 1);
-      });
-    },
-  );
 });

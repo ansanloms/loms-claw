@@ -1,7 +1,7 @@
 /**
  * cron ジョブファイルの読み込みとバリデーション。
  *
- * `.claude/cron/` 配下の Markdown ファイルを走査し、
+ * `cron/` 配下の Markdown ファイルを走査し、
  * YAML フロントマターからメタデータ、本文からプロンプトを抽出する。
  *
  * @module
@@ -20,7 +20,7 @@ const log = createLogger("cron-loader");
  *
  * @param meta - YAML フロントマターのオブジェクト。
  * @param body - Markdown 本文（プロンプト）。
- * @param filename - エラーメッセージ用のファイル名。
+ * @param filename - ジョブ名の決定とエラーメッセージに使うファイル名。
  * @throws バリデーションエラー時。
  */
 export function validateCronJob(
@@ -28,13 +28,12 @@ export function validateCronJob(
   body: string,
   filename: string,
 ): CronJobDef {
+  const name = filename.replace(/\.md$/, "");
   const errors: string[] = [];
 
   // 必須 string フィールド
-  for (const field of ["name", "schedule"] as const) {
-    if (typeof meta[field] !== "string" || (meta[field] as string) === "") {
-      errors.push(`"${field}" is required and must be a non-empty string`);
-    }
+  if (typeof meta.schedule !== "string" || (meta.schedule as string) === "") {
+    errors.push('"schedule" is required and must be a non-empty string');
   }
 
   // channelId はオプション。指定時は数値でも文字列でも許容
@@ -43,13 +42,6 @@ export function validateCronJob(
     typeof meta.channelId !== "string" && typeof meta.channelId !== "number"
   ) {
     errors.push('"channelId" must be a string or number');
-  }
-
-  // オプション string
-  if (
-    meta.description !== undefined && typeof meta.description !== "string"
-  ) {
-    errors.push('"description" must be a string');
   }
 
   // オプション number
@@ -88,8 +80,7 @@ export function validateCronJob(
   }
 
   return {
-    name: meta.name as string,
-    description: meta.description as string | undefined,
+    name,
     schedule: meta.schedule as string,
     prompt: body,
     channelId: meta.channelId != null ? String(meta.channelId) : undefined,
@@ -100,7 +91,7 @@ export function validateCronJob(
 }
 
 /**
- * `.claude/cron/` ディレクトリから全ジョブ定義を読み込む。
+ * `cron/` ディレクトリから全ジョブ定義を読み込む。
  *
  * ディレクトリが存在しない場合は空配列を返す。
  *
@@ -110,10 +101,9 @@ export function validateCronJob(
 export async function loadCronJobsFromDir(
   workspaceDir: string,
 ): Promise<CronJobDef[]> {
-  const cronDir = join(workspaceDir, ".claude", "cron");
+  const cronDir = join(workspaceDir, "cron");
 
   const jobs: CronJobDef[] = [];
-  const names = new Set<string>();
 
   try {
     for await (const entry of Deno.readDir(cronDir)) {
@@ -127,13 +117,6 @@ export async function loadCronJobsFromDir(
         const raw = await Deno.readTextFile(filePath);
         const { attrs, body } = extract<Record<string, unknown>>(raw);
         const job = validateCronJob(attrs, body.trim(), entry.name);
-
-        if (names.has(job.name)) {
-          log.warn(`duplicate cron job name "${job.name}" in ${entry.name}`);
-          continue;
-        }
-
-        names.add(job.name);
         jobs.push(job);
       } catch (e) {
         log.error(
