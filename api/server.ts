@@ -43,6 +43,9 @@ export function startApiServer(
   app.route("/cron", createCronRoutes(reloadCronJobs));
   app.route("/discord", createDiscordRoutes(discordCtx));
 
+  // 未定義パスへのアクセス
+  app.notFound((c) => c.json({ error: "Not Found" }, 404));
+
   // 共通エラーハンドラ
   app.onError((err, c) => {
     const msg = err instanceof Error ? err.message : String(err);
