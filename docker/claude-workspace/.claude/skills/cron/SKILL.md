@@ -13,10 +13,16 @@ user-invocable: false
 
 cron ジョブの管理はファイル操作で行う。`RemoteTrigger`、`CronCreate`、`CronDelete`、`CronList` などのツールは **このプロジェクトの cron とは無関係** なので使うな。
 
-- ジョブ追加: `cron/{name}.md` ファイルを作成する
-- ジョブ編集: 該当ファイルを編集する
-- ジョブ削除: 該当ファイルを削除する
+- ジョブ追加: `cron/{name}.md` ファイルを作成し、reload API を叩く
+- ジョブ編集: 該当ファイルを編集し、reload API を叩く
+- ジョブ削除: 該当ファイルを削除し、reload API を叩く
 - ジョブ一覧: `cron/` ディレクトリを `ls` する
+
+**ファイルを変更したら必ず reload API を叩くこと。** reload しないと変更が反映されない。
+
+```bash
+curl -s -X POST http://127.0.0.1:3000/cron/reload
+```
 
 ## フォーマット
 

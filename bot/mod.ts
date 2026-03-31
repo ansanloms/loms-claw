@@ -161,6 +161,7 @@ export class DiscordBot {
           this.approvalManager,
           discordCtx,
           this.config.claude.apiPort,
+          reloadJobs,
         );
 
         // 起動時に auto-join 条件を満たす VC があれば参加する。
