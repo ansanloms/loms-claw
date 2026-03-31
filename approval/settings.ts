@@ -27,9 +27,15 @@ export async function addToSettingsAllowList(
   let settings: Record<string, unknown> = {};
   try {
     const raw = await Deno.readTextFile(settingsPath);
-    settings = JSON.parse(raw);
-  } catch {
-    // ファイルが存在しないか不正な JSON — 空オブジェクトで開始
+    try {
+      settings = JSON.parse(raw);
+    } catch {
+      log.warn("settings.json is invalid JSON, overwriting:", settingsPath);
+    }
+  } catch (error: unknown) {
+    if (!(error instanceof Deno.errors.NotFound)) {
+      throw error;
+    }
   }
 
   if (!settings.permissions || typeof settings.permissions !== "object") {

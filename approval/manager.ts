@@ -160,7 +160,12 @@ export class ApprovalManager {
     if (action === "always") {
       const alwaysToolName = parts[2];
       if (alwaysToolName) {
-        await addToSettingsAllowList(this.settingsPath, alwaysToolName);
+        try {
+          await addToSettingsAllowList(this.settingsPath, alwaysToolName);
+        } catch (error: unknown) {
+          const msg = error instanceof Error ? error.message : String(error);
+          log.warn("failed to persist allow list:", msg);
+        }
       }
     }
 
