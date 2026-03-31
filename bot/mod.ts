@@ -295,7 +295,7 @@ export class DiscordBot {
         "discord.guild.id": this.config.guildId,
         "discord.guild.name": message.guild?.name ?? "",
         "discord.channel.id": channelId,
-        "discord.channel.name": ("name" in channel ? channel.name : "") ?? "",
+        "discord.channel.name": "name" in channel ? channel.name ?? "" : "",
         "discord.channel.type": "text",
         "discord.user.id": message.author.id,
         "discord.user.name": message.author.displayName,
