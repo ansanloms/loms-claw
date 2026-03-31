@@ -1,3 +1,9 @@
+---
+name: discord
+description: Discord REST API のリファレンス。メッセージ送信、チャンネル操作、メンバー検索など Discord を操作するときに参照する。
+user-invocable: false
+---
+
 # Discord REST API
 
 Bot プロセス内で動作する内部 REST API。Discord の情報取得・操作に使う。

@@ -26,4 +26,4 @@ cron ジョブはワークスペース直下の `cron/` ディレクトリ内の
 Bot プロセス内で `http://127.0.0.1:3000` に HTTP サーバーが動いている。
 Discord の情報取得・操作はこの API を Bash + curl で呼び出す。
 
-詳細は `.claude/rules/discord.md` を参照。
+詳細は `.claude/skills/discord/SKILL.md` を参照。

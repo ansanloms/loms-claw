@@ -245,7 +245,7 @@ cron ジョブ用のシステムプロンプトは `.claude/system-prompt/CRON.m
 ## Discord REST API
 
 Bot プロセス内で HTTP サーバーを起動し、Discord 操作用の REST API を提供する。
-`claude -p` からは Bash + curl で呼び出す。API 仕様は `.claude/rules/DISCORD_API.md` に記載。
+`claude -p` からは Bash + curl で呼び出す。API 仕様は `.claude/skills/discord/SKILL.md` に記載。
 
 ### エンドポイント
 
