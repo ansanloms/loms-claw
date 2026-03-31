@@ -121,12 +121,11 @@ export class DiscordBot {
         log.info(`logged in as ${c.user.tag}`);
         await this.registerCommands();
 
-        // MCP サーバーを起動し .mcp.json を生成する。
+        // MCP サーバーを起動する。
         this.mcpServer = startMcpServer(
           { client: this.client, guildId: this.config.guildId },
           this.config.claude.mcpPort,
         );
-        this.writeMcpConfig();
 
         // 起動時に auto-join 条件を満たす VC があれば参加する。
         this.voiceManager?.scanAndAutoJoin();
@@ -144,24 +143,6 @@ export class DiscordBot {
     this.mcpServer?.shutdown();
     this.approvalServer?.shutdown();
     this.client.destroy();
-  }
-
-  /**
-   * .mcp.json をワークスペースに書き出す。
-   * claude -p が自動的に読み込み、MCP サーバーに接続する。
-   */
-  private writeMcpConfig(): void {
-    const mcpConfigPath = join(this.config.claude.cwd, ".mcp.json");
-    const config = {
-      mcpServers: {
-        discord: {
-          type: "http",
-          url: `http://127.0.0.1:${this.config.claude.mcpPort}/mcp`,
-        },
-      },
-    };
-    Deno.writeTextFileSync(mcpConfigPath, JSON.stringify(config, null, 2));
-    log.info("wrote MCP config to", mcpConfigPath);
   }
 
   /**
