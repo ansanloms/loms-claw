@@ -154,6 +154,48 @@ Deno.test("SystemPromptStore", async (t) => {
   });
 
   await t.step(
+    "cron コンテキストで DEFAULT.md + CRON.md が結合されること",
+    async () => {
+      await withTempDir(async (dir) => {
+        await writeFile(dir, "DEFAULT.md", "default");
+        await writeFile(dir, "CRON.md", "cron specific");
+        const store = new SystemPromptStore(dir);
+        await store.load();
+        assertEquals(
+          store.resolve("cron", "ch-1"),
+          "default\n\ncron specific",
+        );
+      });
+    },
+  );
+
+  await t.step(
+    "cron コンテキストで CHAT.md や VC.md は読まれないこと",
+    async () => {
+      await withTempDir(async (dir) => {
+        await writeFile(dir, "CHAT.md", "chat only");
+        await writeFile(dir, "VC.md", "vc only");
+        const store = new SystemPromptStore(dir);
+        await store.load();
+        assertEquals(store.resolve("cron", "ch-1"), undefined);
+      });
+    },
+  );
+
+  await t.step(
+    "CRON.md がチャンネル ID ファイルとしてスキャンされないこと",
+    async () => {
+      await withTempDir(async (dir) => {
+        await writeFile(dir, "CRON.md", "cron prompt");
+        const store = new SystemPromptStore(dir);
+        await store.load();
+        // "CRON" はチャンネル ID として扱われない
+        assertEquals(store.resolve("chat", "CRON"), undefined);
+      });
+    },
+  );
+
+  await t.step(
     "vars 未指定時はテンプレート変数がそのまま残ること",
     async () => {
       await withTempDir(async (dir) => {

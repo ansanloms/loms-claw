@@ -151,19 +151,16 @@ Deno.test("createProgressReporter", async (t) => {
 
   await t.step("2回目の report で edit が呼ばれること", async () => {
     const { channel, calls } = fakeProgressChannel();
-    const { report, cleanup } = createProgressReporter(channel);
+    let fakeNow = 10000;
+    const { report, cleanup } = createProgressReporter(
+      channel,
+      () => fakeNow,
+    );
 
     await report("Bash", 1);
-    // スロットルを回避するために時間を進める
-    // PROGRESS_THROTTLE_MS は 3000ms だが内部状態を直接操作できないので、
-    // Date.now をスタブする
-    const original = Date.now;
-    try {
-      Date.now = () => original() + 4000;
-      await report("Bash", 5);
-    } finally {
-      Date.now = original;
-    }
+    // スロットルを回避するために時間を進める（PROGRESS_THROTTLE_MS = 3000ms）
+    fakeNow += 4000;
+    await report("Bash", 5);
 
     assertEquals(calls.length, 2);
     assertEquals(calls[0].method, "send");

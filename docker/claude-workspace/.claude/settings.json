@@ -12,7 +12,9 @@
       "ToolSearch",
       "Glob",
       "Bash",
-      "Read"
+      "Read",
+      "Write",
+      "Edit"
     ]
   }
 }
