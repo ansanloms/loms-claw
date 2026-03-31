@@ -447,7 +447,23 @@ export class VoiceManager {
       this.voicePlayer.startThinking();
 
       const sessionId = this.sessions.get(channelId);
-      const appendSystemPrompt = this.systemPrompts.resolve("vc", channelId);
+      const vcChannel = this.client.channels.cache.get(channelId);
+      const templateVars: Record<string, string> = {
+        "discord.guild.id": this.guildId,
+        "discord.guild.name":
+          this.client.guilds.cache.get(this.guildId)?.name ?? "",
+        "discord.channel.id": channelId,
+        "discord.channel.name":
+          (vcChannel && "name" in vcChannel ? vcChannel.name : "") ?? "",
+        "discord.channel.type": "voice",
+        "discord.user.id": userId,
+        "discord.user.name": entry.displayName,
+      };
+      const appendSystemPrompt = this.systemPrompts.resolve(
+        "vc",
+        channelId,
+        templateVars,
+      );
       const result = await askClaudeForVoice(mergedText, {
         sessionId,
         config: this.claudeConfig,
