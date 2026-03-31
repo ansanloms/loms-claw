@@ -107,6 +107,11 @@ function parseField(field: string, min: number, max: number): Set<number> {
   for (const part of parts) {
     const values = parseSubExpr(part.trim(), min, max);
     for (const v of values) {
+      if (v < min || v > max) {
+        throw new Error(
+          `value ${v} out of range [${min}-${max}] in field: ${field}`,
+        );
+      }
       // 曜日の 7 を 0 に正規化（両方とも日曜日）
       result.add(max === 7 && v === 7 ? 0 : v);
     }

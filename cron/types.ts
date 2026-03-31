@@ -15,7 +15,7 @@ export interface CronJobDef {
   name: string;
   /** 人間向けのジョブ説明。 */
   description?: string;
-  /** cron 式（5フィールド、UTC）。 */
+  /** cron 式（5フィールド、TZ 環境変数依存）。 */
   schedule: string;
   /** Claude に送るプロンプト（Markdown 本文）。 */
   prompt: string;

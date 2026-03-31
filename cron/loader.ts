@@ -44,10 +44,13 @@ export function parseFrontmatter(raw: string): FrontmatterResult {
     throw new Error("frontmatter opening delimiter '---' not found");
   }
 
-  const endIdx = trimmed.indexOf("\n---", 3);
-  if (endIdx === -1) {
+  // 閉じ区切り: "\n---\n" または "\n---" + EOF
+  const closingPattern = /\n---(?:\n|$)/;
+  const match = closingPattern.exec(trimmed.slice(3));
+  if (!match) {
     throw new Error("frontmatter closing delimiter '---' not found");
   }
+  const endIdx = 3 + match.index;
 
   const yamlStr = trimmed.slice(3, endIdx).trim();
   const meta = parseYaml(yamlStr);
@@ -56,8 +59,7 @@ export function parseFrontmatter(raw: string): FrontmatterResult {
     throw new Error("frontmatter must be a YAML mapping");
   }
 
-  // 閉じ区切りの後（"---\n" の分）
-  const bodyStart = endIdx + 4;
+  const bodyStart = endIdx + match[0].length;
   const body = trimmed.slice(bodyStart).trim();
 
   return { meta: meta as Record<string, unknown>, body };

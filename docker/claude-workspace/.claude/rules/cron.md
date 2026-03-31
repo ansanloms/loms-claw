@@ -27,14 +27,14 @@ timeout: 120000
 | ------------- | ---- | ------ | ---------------------------------------- |
 | `name`        | yes  | string | ジョブ名（一意、ファイル名と一致させる） |
 | `description` | no   | string | 人間向け説明                             |
-| `schedule`    | yes  | string | cron 式（5フィールド、UTC）              |
+| `schedule`    | yes  | string | cron 式（5フィールド、TZ 環境変数依存）              |
 | `channelId`   | yes  | string | 結果送信先の Discord チャンネル ID       |
 | `maxTurns`    | no   | number | Claude の最大ターン数                    |
 | `timeout`     | no   | number | タイムアウト（ミリ秒）                   |
 
 ## cron 式の書き方
 
-5フィールド: `分 時 日 月 曜日`（UTC）
+5フィールド: `分 時 日 月 曜日`（TZ 環境変数依存）
 
 - `*` 任意の値
 - `*/N` N ごと（例: `*/15` → 0,15,30,45）
