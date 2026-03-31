@@ -138,16 +138,15 @@ export class DiscordBot {
   /**
    * bot をシャットダウンする。
    *
-   * HTTP サーバーの shutdown() は Promise を返すが、
-   * シグナルハンドラから呼ばれた後 Deno.exit() で即終了するため
-   * await はベストエフォート。
+   * VC 切断 → HTTP サーバー停止 → Discord クライアント破棄の順で処理し、
+   * クライアント破棄によりイベントループが自然終了する。
    */
   shutdown(): void {
     log.info("shutting down");
     this.voiceManager?.shutdown();
-    // HTTP サーバーのグレースフルシャットダウン（ベストエフォート）
     this.apiServer?.shutdown().catch(() => {});
     this.client.destroy();
+    log.info("client destroyed");
   }
 
   /**

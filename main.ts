@@ -30,14 +30,8 @@ const config = loadConfig();
  */
 let bot: DiscordBot | null = null;
 
-Deno.addSignalListener("SIGINT", () => {
-  bot?.shutdown();
-  Deno.exit(0);
-});
-Deno.addSignalListener("SIGTERM", () => {
-  bot?.shutdown();
-  Deno.exit(0);
-});
+Deno.addSignalListener("SIGINT", () => bot?.shutdown());
+Deno.addSignalListener("SIGTERM", () => bot?.shutdown());
 
 /**
  * 起動リトライの最大回数。
