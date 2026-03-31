@@ -144,9 +144,10 @@ export class DiscordBot {
   shutdown(): void {
     log.info("shutting down");
     this.voiceManager?.shutdown();
+    // TODO: WebSocket/SSE 追加時は shutdown() を async にして await すること
     this.apiServer?.shutdown().catch(() => {});
     this.client.destroy();
-    log.info("client destroyed");
+    log.info("client.destroy() called");
   }
 
   /**
