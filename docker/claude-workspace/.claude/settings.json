@@ -12,7 +12,8 @@
       "ToolSearch",
       "Glob",
       "Bash",
-      "Read"
+      "Read",
+      "Write"
     ]
   }
 }
