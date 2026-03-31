@@ -11,6 +11,28 @@ import { createLogger } from "../logger.ts";
 const log = createLogger("approval-settings");
 
 /**
+ * 指定ツールが .claude/settings.json の permissions.allow に含まれるか確認する。
+ *
+ * ファイルが存在しない場合や JSON が不正な場合は false を返す。
+ *
+ * @param settingsPath - .claude/settings.json の絶対パス
+ * @param toolName - 確認するツール名
+ */
+export async function isInAllowList(
+  settingsPath: string,
+  toolName: string,
+): Promise<boolean> {
+  try {
+    const raw = await Deno.readTextFile(settingsPath);
+    const settings = JSON.parse(raw);
+    const allow = settings?.permissions?.allow;
+    return Array.isArray(allow) && allow.includes(toolName);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * 指定ツールを .claude/settings.json の permissions.allow に追加する。
  *
  * - ファイルが存在しない場合は新規作成する。

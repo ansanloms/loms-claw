@@ -18,7 +18,7 @@ import type {
   PermissionBehavior,
   PreToolUseHookInput,
 } from "@anthropic-ai/claude-agent-sdk";
-import { addToSettingsAllowList } from "./settings.ts";
+import { addToSettingsAllowList, isInAllowList } from "./settings.ts";
 import { createLogger } from "../logger.ts";
 
 const log = createLogger("approval");
@@ -69,6 +69,12 @@ export class ApprovalManager {
     channelId?: string,
   ): Promise<ApprovalResult> {
     const toolName = input.tool_name;
+
+    // allow list に含まれるツールは即座に許可する。
+    if (await isInAllowList(this.settingsPath, toolName)) {
+      log.info("approval resolved:", "auto", "Already Allowed");
+      return { decision: "allow", reason: "Already Allowed" };
+    }
 
     channelId = channelId ?? this.channelId ?? undefined;
     if (!channelId) {
