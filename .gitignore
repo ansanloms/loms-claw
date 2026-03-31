@@ -5,5 +5,8 @@ docker/claude-home/*
 docker/claude-workspace/*
 !docker/claude-workspace/.claude
 !docker/claude-workspace/CLAUDE.md
+!docker/claude-workspace/MEMORY.md
+!docker/claude-workspace/TODO.md
+!docker/claude-workspace/memory
 !docker/claude-workspace/cron
 !**/.gitkeep
