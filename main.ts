@@ -30,6 +30,8 @@ const config = loadConfig();
  */
 let bot: DiscordBot | null = null;
 
+// bot が null（起動リトライ中）の場合、shutdown() は no-op となりリトライが継続する。
+// 2 回目のシグナルで強制終了する。
 let shuttingDown = false;
 const onSignal = () => {
   if (shuttingDown) {
