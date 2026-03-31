@@ -132,7 +132,7 @@ voice/tts.ts           TextToSpeech IF + OpenAiTts 実装（OpenAI 互換 TTS AP
 cron/types.ts          CronJobDef 型定義。
 cron/match.ts          cron 式パーサー + マッチャー。Temporal API でローカルタイム評価。
 cron/loader.ts         frontmatter パーサー + cron/ ディレクトリスキャン。
-cron/scheduler.ts      CronScheduler: setInterval ベースのカスタムスケジューラ。ホットリロード対応。
+cron/scheduler.ts      CronScheduler: setInterval ベースのカスタムスケジューラ。
 cron/executor.ts       CronExecutor: スケジューラ連携 + askClaude() → Discord 送信。
 Dockerfile             Deno + Claude Code CLI のコンテナイメージ。
 docker/compose.yaml    本番サービス定義。
@@ -205,10 +205,10 @@ timeout: 120000
 5. セッション ID を `cron:{name}` キーで保存（実行間のコンテキスト維持）
 6. 同一ジョブの並行実行は防止される（前回実行中ならスキップ）
 
-### ホットリロード
+### リロード
 
-`Deno.watchFs` で `cron/` を監視し、ファイルの追加・変更・削除時に自動リロードする。
-AI がファイルを編集するだけでジョブが更新される。再起動不要。
+ジョブ定義の変更は `POST /cron/reload` API で反映する。
+AI がファイルを編集した後に `curl -s -X POST http://127.0.0.1:3000/cron/reload` を実行する。
 
 書き方の詳細は `.claude/skills/cron/SKILL.md` を参照。
 
