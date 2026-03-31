@@ -1,8 +1,9 @@
 /**
  * cron ジョブの実行エンジン。
  *
- * CronScheduler からのコールバックで askClaude() を呼び出し、
- * 結果を指定の Discord チャンネルに送信する。
+ * CronScheduler からのコールバックで askClaude() を呼び出す。
+ * channelId 指定時は結果テキストを executor が Discord に送信する。
+ * channelId 省略時は投稿しない。
  *
  * @module
  */
@@ -73,7 +74,8 @@ export class CronExecutor {
    * 単一の cron ジョブを実行する。
    *
    * 重複実行防止のため、同名ジョブが既に実行中の場合はスキップする。
-   * askClaude() の結果を指定チャンネルに送信し、セッション ID を保存する。
+   * channelId 指定時: 結果テキストを executor がチャンネルに送信する。
+   * channelId 省略時: 投稿しない。
    */
   async runJob(job: CronJobDef): Promise<void> {
     if (this.running.has(job.name)) {
@@ -85,13 +87,18 @@ export class CronExecutor {
     log.info(`cron job "${job.name}" started`);
 
     try {
-      const channel = await this.client.channels.fetch(job.channelId);
-      if (!channel || !("send" in channel)) {
-        throw new Error(
-          `channel ${job.channelId} not found or not a text channel`,
-        );
+      // channelId 指定時はチャンネルを事前取得
+      let textChannel: GuildTextBasedChannel | undefined;
+      if (job.channelId) {
+        const channel = await this.client.channels.fetch(job.channelId);
+        if (!channel || !("send" in channel)) {
+          throw new Error(
+            `channel ${job.channelId} not found or not a text channel`,
+          );
+        }
+        textChannel = channel as GuildTextBasedChannel;
+        this.approvalManager.setChannel(job.channelId);
       }
-      const textChannel = channel as GuildTextBasedChannel;
 
       const sessionKey = `cron:${job.name}`;
       const sessionId = job.resumeSession
@@ -107,12 +114,9 @@ export class CronExecutor {
 
       const appendSystemPrompt = this.systemPrompts.resolve(
         "cron",
-        job.channelId,
+        job.channelId ?? "",
         templateVars,
       );
-
-      // 承認ボタンの送信先を設定
-      this.approvalManager.setChannel(job.channelId);
 
       const jobConfig: ClaudeConfig = {
         ...this.config,
@@ -143,9 +147,12 @@ export class CronExecutor {
       }
 
       if ("result" in resultEvent && typeof resultEvent.result === "string") {
-        const chunks = splitMessage(resultEvent.result);
-        for (const chunk of chunks) {
-          await textChannel.send(chunk);
+        // channelId 指定時のみ executor が投稿する
+        if (textChannel) {
+          const chunks = splitMessage(resultEvent.result);
+          for (const chunk of chunks) {
+            await textChannel.send(chunk);
+          }
         }
       } else {
         const errors = "errors" in resultEvent
@@ -159,16 +166,18 @@ export class CronExecutor {
       const errMsg = error instanceof Error ? error.message : String(error);
       log.error(`cron job "${job.name}" failed:`, errMsg);
 
-      // エラーをチャンネルに通知（チャンネル取得自体の失敗時は無視）
-      try {
-        const ch = await this.client.channels.fetch(job.channelId);
-        if (ch && "send" in ch) {
-          await (ch as GuildTextBasedChannel).send(
-            `[cron: ${job.name}] Error: ${errMsg}`,
-          );
+      // channelId 指定時はエラーをチャンネルに通知
+      if (job.channelId) {
+        try {
+          const ch = await this.client.channels.fetch(job.channelId);
+          if (ch && "send" in ch) {
+            await (ch as GuildTextBasedChannel).send(
+              `[cron: ${job.name}] Error: ${errMsg}`,
+            );
+          }
+        } catch {
+          // チャンネルへの通知も失敗した場合はログのみ
         }
-      } catch {
-        // チャンネルへの通知も失敗した場合はログのみ
       }
     } finally {
       this.running.delete(job.name);

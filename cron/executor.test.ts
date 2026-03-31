@@ -165,6 +165,35 @@ Deno.test("CronExecutor", async (t) => {
     assertEquals(getChannelId(), "ch-approval");
   });
 
+  await t.step(
+    "channelId なしで承認先チャンネルが設定されないこと",
+    async () => {
+      const client = createMockClient(null);
+      const sessions = new SessionStore();
+      const { manager, getChannelId } = createMockApprovalManager();
+      const systemPrompts = createMockSystemPromptStore();
+
+      const executor = new CronExecutor(
+        client as never,
+        TEST_CONFIG,
+        "guild-1",
+        sessions,
+        manager as never,
+        systemPrompts,
+      );
+
+      const job: CronJobDef = {
+        name: "no-channel-job",
+        schedule: "0 0 * * *",
+        prompt: "hello",
+      };
+
+      // askClaude が無いためエラーになるが、setChannel は呼ばれない
+      await executor.runJob(job);
+      assertEquals(getChannelId(), undefined);
+    },
+  );
+
   await t.step("start/stop でスケジューラが制御されること", () => {
     const { channel } = createMockChannel();
     const client = createMockClient(channel);

@@ -87,12 +87,12 @@ export function validateCronJob(
     }
   }
 
-  // channelId は数値でも文字列でも許容（YAML で引用符なしだと number になる）
+  // channelId はオプション。指定時は数値でも文字列でも許容
   if (
-    meta.channelId === undefined || meta.channelId === null ||
-    String(meta.channelId) === ""
+    meta.channelId !== undefined && meta.channelId !== null &&
+    typeof meta.channelId !== "string" && typeof meta.channelId !== "number"
   ) {
-    errors.push('"channelId" is required');
+    errors.push('"channelId" must be a string or number');
   }
 
   // オプション string
@@ -142,7 +142,7 @@ export function validateCronJob(
     description: meta.description as string | undefined,
     schedule: meta.schedule as string,
     prompt: body,
-    channelId: String(meta.channelId),
+    channelId: meta.channelId != null ? String(meta.channelId) : undefined,
     maxTurns: meta.maxTurns as number | undefined,
     timeout: meta.timeout as number | undefined,
     resumeSession: (meta.resumeSession as boolean | undefined) ?? false,

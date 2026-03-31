@@ -188,23 +188,24 @@ timeout: 120000
 今日のニュースを要約して。重要度の高いものから3件。
 ```
 
-| フィールド      | 必須 | 説明                                          |
-| --------------- | ---- | --------------------------------------------- |
-| `name`          | yes  | ジョブ名（一意、ファイル名と一致させる）      |
-| `description`   | no   | 人間向け説明                                  |
-| `schedule`      | yes  | cron 式（5フィールド、TZ 依存）               |
-| `channelId`     | yes  | 結果送信先の Discord チャンネル ID            |
-| `resumeSession` | no   | 前回セッション引き継ぎ（デフォルト: `false`） |
-| `maxTurns`      | no   | `CLAUDE_MAX_TURNS` のオーバーライド           |
-| `timeout`       | no   | `CLAUDE_TIMEOUT` のオーバーライド（ms）       |
+| フィールド      | 必須 | 説明                                                      |
+| --------------- | ---- | --------------------------------------------------------- |
+| `name`          | yes  | ジョブ名（一意、ファイル名と一致させる）                  |
+| `description`   | no   | 人間向け説明                                              |
+| `schedule`      | yes  | cron 式（5フィールド、TZ 依存）                           |
+| `channelId`     | no   | 指定時: 結果を自動投稿。省略時: 投稿しない               |
+| `resumeSession` | no   | 前回セッション引き継ぎ（デフォルト: `false`）             |
+| `maxTurns`      | no   | `CLAUDE_MAX_TURNS` のオーバーライド                       |
+| `timeout`       | no   | `CLAUDE_TIMEOUT` のオーバーライド（ms）                   |
 
 ### 動作の仕組み
 
 1. Bot 起動時（`ClientReady` 後）に `.claude/cron/` 配下の `.md` ファイルを読み込み
 2. `CronScheduler`（60秒 interval）でスケジュールを評価
-3. マッチ時に `askClaude()` を実行、結果を指定チャンネルに送信
-4. セッション ID を `cron:{name}` キーで保存（実行間のコンテキスト維持）
-5. 同一ジョブの並行実行は防止される（前回実行中ならスキップ）
+3. マッチ時に `askClaude()` を実行
+4. `channelId` 指定時は結果テキストを executor がチャンネルに送信。省略時は投稿しない
+5. セッション ID を `cron:{name}` キーで保存（実行間のコンテキスト維持）
+6. 同一ジョブの並行実行は防止される（前回実行中ならスキップ）
 
 ### ホットリロード
 

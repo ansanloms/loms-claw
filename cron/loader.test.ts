@@ -109,11 +109,21 @@ Deno.test("validateCronJob", async (t) => {
     assertEquals(job.channelId, "123456");
   });
 
+  await t.step("channelId なしでもジョブが作成されること", () => {
+    const job = validateCronJob(
+      { name: "no-channel", schedule: "0 9 * * *" },
+      "prompt text",
+      "test.md",
+    );
+    assertEquals(job.name, "no-channel");
+    assertEquals(job.channelId, undefined);
+  });
+
   await t.step("必須フィールドが欠けている場合はエラーになること", () => {
     assertThrows(
       () =>
         validateCronJob(
-          { schedule: "0 9 * * *", channelId: "123" },
+          { schedule: "0 9 * * *" },
           "prompt",
           "test.md",
         ),

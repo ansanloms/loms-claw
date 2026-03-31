@@ -13,7 +13,8 @@
       "Glob",
       "Bash",
       "Read",
-      "Write"
+      "Write",
+      "Edit"
     ]
   }
 }

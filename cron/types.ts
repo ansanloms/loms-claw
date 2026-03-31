@@ -19,8 +19,8 @@ export interface CronJobDef {
   schedule: string;
   /** Claude に送るプロンプト（Markdown 本文）。 */
   prompt: string;
-  /** 結果送信先の Discord チャンネル ID。 */
-  channelId: string;
+  /** 承認ボタン送信先の Discord チャンネル ID（省略可）。 */
+  channelId?: string;
   /** ClaudeConfig.maxTurns のオーバーライド。 */
   maxTurns?: number;
   /** ClaudeConfig.timeout のオーバーライド（ミリ秒）。 */

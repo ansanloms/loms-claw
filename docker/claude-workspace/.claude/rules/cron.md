@@ -19,19 +19,27 @@ timeout: 120000
 ---
 
 ここにプロンプトを書く。
+チャンネル 1234567890123456789 に結果を投稿しろ。
 ```
 
 ## フロントマターのフィールド
 
-| フィールド      | 必須 | 型      | デフォルト | 説明                                     |
-| --------------- | ---- | ------- | ---------- | ---------------------------------------- |
-| `name`          | yes  | string  | —          | ジョブ名（一意、ファイル名と一致させる） |
-| `description`   | no   | string  | —          | 人間向け説明                             |
-| `schedule`      | yes  | string  | —          | cron 式（5フィールド、TZ 環境変数依存）  |
-| `channelId`     | yes  | string  | —          | 結果送信先の Discord チャンネル ID       |
-| `resumeSession` | no   | boolean | `false`    | 前回のセッションを引き継ぐか            |
-| `maxTurns`      | no   | number  | 10         | Claude の最大ターン数                    |
-| `timeout`       | no   | number  | 300000     | タイムアウト（ミリ秒）                   |
+| フィールド      | 必須 | 型      | デフォルト | 説明                                              |
+| --------------- | ---- | ------- | ---------- | ------------------------------------------------- |
+| `name`          | yes  | string  | —          | ジョブ名（一意、ファイル名と一致させる）          |
+| `description`   | no   | string  | —          | 人間向け説明                                      |
+| `schedule`      | yes  | string  | —          | cron 式（5フィールド、TZ 環境変数依存）           |
+| `channelId`     | no   | string  | —          | 承認ボタン送信先の Discord チャンネル ID          |
+| `resumeSession` | no   | boolean | `false`    | 前回のセッションを引き継ぐか                     |
+| `maxTurns`      | no   | number  | 10         | Claude の最大ターン数                             |
+| `timeout`       | no   | number  | 300000     | タイムアウト（ミリ秒）                            |
+
+### channelId について
+
+`channelId` の有無で結果の投稿方法が変わる。
+
+- **指定あり**: Claude のテキスト出力が自動的にそのチャンネルに投稿される。ツール承認ボタンもこのチャンネルに送信される。
+- **省略**: テキスト出力は投稿されない。投稿が不要なジョブや、プロンプトの指示で Claude が REST API を使って投稿するジョブで使う。
 
 ### resumeSession について
 
