@@ -12,9 +12,7 @@ const baseConfig: Config = {
     verbose: false,
     timeout: 300000,
     cwd: "/tmp",
-    approvalPort: 3000,
-    discordMcpEnabled: true,
-    discordMcpPort: 3001,
+    apiPort: 3000,
   },
   voice: {
     enabled: false,

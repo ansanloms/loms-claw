@@ -1,16 +1,16 @@
 /**
- * Discord MCP サーバーの共通型定義。
+ * 内部 API サーバーの共通型定義。
  */
 
 import type { Client } from "discord.js";
 
 /**
- * MCP ツールハンドラに渡すコンテキスト。
+ * Discord API ハンドラに渡すコンテキスト。
  *
  * discord.js Client とギルド ID を保持し、
- * 各ツールがこれを通じて Discord API を操作する。
+ * 各ハンドラがこれを通じて Discord API を操作する。
  */
-export interface McpContext {
+export interface ApiContext {
   /** discord.js Client インスタンス。 */
   client: Client;
   /** 操作対象のギルド ID。 */
