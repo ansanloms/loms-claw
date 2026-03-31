@@ -119,9 +119,11 @@ session/mod.ts         SessionStore: チャンネル/スレッド ID → session
 approval/manager.ts    ApprovalManager: Discord ボタンによるツール承認/拒否。
 approval/manager.ts    ApprovalManager: Discord ボタンによるツール承認/拒否。
 approval/types.ts      HookInput, ApprovalResult の型定義。
-api/server.ts          統合 HTTP サーバー。承認フック + Discord REST API を単一ポートで提供。
-api/discord.ts         Discord REST API ハンドラ。discord.js Client を通じて Discord を操作。
-api/types.ts           API 共通型（ApiContext）。
+api/server.ts              統合 HTTP サーバー。Hono アプリ作成、サブルートマウント、共通エラーハンドラ。
+api/routes/approval.ts     承認フックルート（POST /approval）。
+api/routes/cron.ts         cron リロードルート（POST /cron/reload）。
+api/routes/discord.ts      Discord REST API ルート + ハンドラ。discord.js Client を通じて Discord を操作。
+api/types.ts               API 共通型（ApiContext）。
 voice/mod.ts           VoiceManager: VC 接続管理、STT→Claude CLI→TTS パイプライン、auto-join/leave。
 voice/adapter.ts       askClaudeForVoice(): askClaude() の SDKMessage ストリームからテキストを抽出するアダプタ。
 voice/codec.ts         Opus デコード、PCM→WAV 変換、RMS 計算。
