@@ -86,9 +86,10 @@ export class CronExecutor {
     this.running.add(job.name);
     log.info(`cron job "${job.name}" started`);
 
+    // channelId 指定時はチャンネルを事前取得（catch 内でもエラー通知に使う）
+    let textChannel: GuildTextBasedChannel | undefined;
+
     try {
-      // channelId 指定時はチャンネルを事前取得
-      let textChannel: GuildTextBasedChannel | undefined;
       if (job.channelId) {
         const channel = await this.client.channels.fetch(job.channelId);
         if (!channel || !("send" in channel)) {
@@ -166,15 +167,10 @@ export class CronExecutor {
       const errMsg = error instanceof Error ? error.message : String(error);
       log.error(`cron job "${job.name}" failed:`, errMsg);
 
-      // channelId 指定時はエラーをチャンネルに通知
-      if (job.channelId) {
+      // channelId 指定時かつチャンネル取得済みならエラーを通知
+      if (textChannel) {
         try {
-          const ch = await this.client.channels.fetch(job.channelId);
-          if (ch && "send" in ch) {
-            await (ch as GuildTextBasedChannel).send(
-              `[cron: ${job.name}] Error: ${errMsg}`,
-            );
-          }
+          await textChannel.send(`[cron: ${job.name}] Error: ${errMsg}`);
         } catch {
           // チャンネルへの通知も失敗した場合はログのみ
         }

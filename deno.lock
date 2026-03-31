@@ -6,11 +6,12 @@
     "jsr:@std/assert@^1.0.19": "1.0.19",
     "jsr:@std/bytes@^1.0.6": "1.0.6",
     "jsr:@std/dotenv@~0.225.6": "0.225.6",
+    "jsr:@std/front-matter@^1.0.9": "1.0.9",
     "jsr:@std/internal@^1.0.12": "1.0.12",
     "jsr:@std/path@1": "1.1.4",
     "jsr:@std/path@^1.1.4": "1.1.4",
     "jsr:@std/streams@^1.0.17": "1.0.17",
-    "jsr:@std/yaml@^1.0.12": "1.0.12",
+    "jsr:@std/yaml@^1.0.5": "1.0.12",
     "npm:@anthropic-ai/claude-agent-sdk@~0.2.88": "0.2.88_zod@3.25.76",
     "npm:@discordjs/voice@0.19.2": "0.19.2_opusscript@0.1.1",
     "npm:@snazzah/davey@~0.1.11": "0.1.11",
@@ -40,6 +41,12 @@
     },
     "@std/dotenv@0.225.6": {
       "integrity": "1d6f9db72f565bd26790fa034c26e45ecb260b5245417be76c2279e5734c421b"
+    },
+    "@std/front-matter@1.0.9": {
+      "integrity": "ee6201d06674cbef137dda2252f62477450b48249e7d8d9ab57a30f85ff6f051",
+      "dependencies": [
+        "jsr:@std/yaml"
+      ]
     },
     "@std/internal@1.0.12": {
       "integrity": "972a634fd5bc34b242024402972cd5143eac68d8dffaca5eaa4dba30ce17b027"
@@ -1446,9 +1453,9 @@
       "jsr:@openai/openai@^6.33.0",
       "jsr:@std/assert@^1.0.19",
       "jsr:@std/dotenv@~0.225.6",
+      "jsr:@std/front-matter@^1.0.9",
       "jsr:@std/path@^1.1.4",
       "jsr:@std/streams@^1.0.17",
-      "jsr:@std/yaml@^1.0.12",
       "npm:@anthropic-ai/claude-agent-sdk@~0.2.88",
       "npm:@discordjs/voice@0.19.2",
       "npm:@snazzah/davey@~0.1.11",

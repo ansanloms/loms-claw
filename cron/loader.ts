@@ -8,62 +8,12 @@
  */
 
 import { join } from "jsr:@std/path@^1/join";
-import { parse as parseYaml } from "@std/yaml";
+import { extract } from "@std/front-matter/yaml";
 import { createLogger } from "../logger.ts";
 import { parseCronExpression } from "./match.ts";
 import type { CronJobDef } from "./types.ts";
 
 const log = createLogger("cron-loader");
-
-/**
- * フロントマターのパース結果。
- */
-export interface FrontmatterResult {
-  /** YAML パース済みのメタデータ。 */
-  meta: Record<string, unknown>;
-  /** フロントマター後の本文。 */
-  body: string;
-}
-
-/**
- * Markdown 文字列から YAML フロントマターと本文を分離する。
- *
- * フォーマット:
- * ```
- * ---
- * key: value
- * ---
- * 本文
- * ```
- *
- * @throws フロントマターの区切りが見つからない場合。
- */
-export function parseFrontmatter(raw: string): FrontmatterResult {
-  const trimmed = raw.trimStart();
-  if (!trimmed.startsWith("---")) {
-    throw new Error("frontmatter opening delimiter '---' not found");
-  }
-
-  // 閉じ区切り: "\n---\n" または "\n---" + EOF
-  const closingPattern = /\n---(?:\n|$)/;
-  const match = closingPattern.exec(trimmed.slice(3));
-  if (!match) {
-    throw new Error("frontmatter closing delimiter '---' not found");
-  }
-  const endIdx = 3 + match.index;
-
-  const yamlStr = trimmed.slice(3, endIdx).trim();
-  const meta = parseYaml(yamlStr);
-
-  if (typeof meta !== "object" || meta === null || Array.isArray(meta)) {
-    throw new Error("frontmatter must be a YAML mapping");
-  }
-
-  const bodyStart = endIdx + match[0].length;
-  const body = trimmed.slice(bodyStart).trim();
-
-  return { meta: meta as Record<string, unknown>, body };
-}
 
 /**
  * パース済みのフロントマターと本文を CronJobDef にバリデーションする。
@@ -175,8 +125,8 @@ export async function loadCronJobsFromDir(
 
       try {
         const raw = await Deno.readTextFile(filePath);
-        const { meta, body } = parseFrontmatter(raw);
-        const job = validateCronJob(meta, body, entry.name);
+        const { attrs, body } = extract<Record<string, unknown>>(raw);
+        const job = validateCronJob(attrs, body.trim(), entry.name);
 
         if (names.has(job.name)) {
           log.warn(`duplicate cron job name "${job.name}" in ${entry.name}`);

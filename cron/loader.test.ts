@@ -1,10 +1,6 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import { join } from "jsr:@std/path@^1/join";
-import {
-  loadCronJobsFromDir,
-  parseFrontmatter,
-  validateCronJob,
-} from "./loader.ts";
+import { loadCronJobsFromDir, validateCronJob } from "./loader.ts";
 
 async function withTempDir(
   fn: (dir: string) => Promise<void>,
@@ -36,46 +32,6 @@ description: テストジョブ
 
 テストプロンプト。
 `;
-
-Deno.test("parseFrontmatter", async (t) => {
-  await t.step("有効なフロントマターをパースできること", () => {
-    const result = parseFrontmatter(VALID_MD);
-    assertEquals(result.meta.name, "test-job");
-    assertEquals(result.meta.schedule, "0 9 * * *");
-    assertEquals(result.meta.channelId, "123456");
-    assertEquals(result.body, "テストプロンプト。");
-  });
-
-  await t.step("開始区切りが無い場合はエラーになること", () => {
-    assertThrows(
-      () => parseFrontmatter("no frontmatter here"),
-      Error,
-      "opening delimiter",
-    );
-  });
-
-  await t.step("終了区切りが無い場合はエラーになること", () => {
-    assertThrows(
-      () => parseFrontmatter("---\nname: test\nno closing"),
-      Error,
-      "closing delimiter",
-    );
-  });
-
-  await t.step("フロントマターが配列の場合はエラーになること", () => {
-    assertThrows(
-      () => parseFrontmatter("---\n- item1\n- item2\n---\nbody"),
-      Error,
-      "must be a YAML mapping",
-    );
-  });
-
-  await t.step("本文が空でもパースできること", () => {
-    const result = parseFrontmatter("---\nname: test\n---\n");
-    assertEquals(result.meta.name, "test");
-    assertEquals(result.body, "");
-  });
-});
 
 Deno.test("validateCronJob", async (t) => {
   await t.step("有効なメタデータと本文でジョブが作成されること", () => {

@@ -285,6 +285,9 @@ export class DiscordBot {
     dir: string,
     reload: () => Promise<void>,
   ): Promise<void> {
+    // Deno.watchFs は存在しないディレクトリを監視できないため事前作成する。
+    // loadCronJobsFromDir はディレクトリ不在で空配列を返す設計だが、
+    // 監視のためにここで作成しても空ディレクトリならジョブ数 0 で同等。
     try {
       await Deno.mkdir(dir, { recursive: true });
     } catch {
