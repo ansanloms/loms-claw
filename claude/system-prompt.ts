@@ -13,6 +13,7 @@
 
 import { basename, join } from "jsr:@std/path@^1";
 import { createLogger } from "../logger.ts";
+import { replaceTemplateVariables } from "./template.ts";
 
 const log = createLogger("system-prompt");
 
@@ -112,9 +113,14 @@ export class SystemPromptStore {
    *
    * @param context - "chat" または "vc"。
    * @param channelId - Discord チャンネル ID。
+   * @param vars - テンプレート変数。`{{key}}` を値で置換する。
    * @returns 結合されたシステムプロンプト。全不在なら undefined。
    */
-  resolve(context: PromptContext, channelId: string): string | undefined {
+  resolve(
+    context: PromptContext,
+    channelId: string,
+    vars?: Record<string, string>,
+  ): string | undefined {
     const parts: string[] = [];
 
     if (this.defaultPrompt) {
@@ -131,6 +137,11 @@ export class SystemPromptStore {
       parts.push(channelPrompt);
     }
 
-    return parts.length > 0 ? parts.join("\n\n") : undefined;
+    if (parts.length === 0) {
+      return undefined;
+    }
+
+    const joined = parts.join("\n\n");
+    return vars ? replaceTemplateVariables(joined, vars) : joined;
   }
 }

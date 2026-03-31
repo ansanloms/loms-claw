@@ -114,6 +114,7 @@ bot/commands.ts        スラッシュコマンド定義とハンドラ（/claw 
 bot/guard.ts           isAuthorized(): ギルド ID + ユーザー ID + bot 除外の認可チェック。
 bot/message.ts         splitMessage(): 2000 文字分割。keepTyping(): typing インジケーター維持。ProgressReporter: ツール進捗表示。
 claude/mod.ts          askClaude(): Deno.Command で claude -p を spawn し stream-json 出力を逐次パース。
+claude/template.ts     replaceTemplateVariables(): システムプロンプトの {{key}} 置換。
 session/mod.ts         SessionStore: チャンネル/スレッド ID → session_id のマッピング。JSON ファイルへの永続化対応。
 approval/manager.ts    ApprovalManager: Discord ボタンによるツール承認/拒否。
 approval/server.ts     承認 HTTP サーバー。PreToolUse フックのエンドポイント。
@@ -131,6 +132,28 @@ mcp/types.ts           MCP 共通型（McpContext）。
 Dockerfile             Deno + Claude Code CLI のコンテナイメージ。
 docker/compose.yaml    本番サービス定義。
 docker/compose.dev.yaml  開発用オーバーライド（ソース bind mount + watch モード）。
+```
+
+## システムプロンプトのテンプレート変数
+
+`.claude/system-prompt/` 配下のファイル内で `{{key}}` 形式のプレースホルダーを使用できる。
+`resolve()` 呼び出し時に実際の値で置換される。未定義のキーはそのまま残る。
+
+| 変数                       | 説明                           |
+| -------------------------- | ------------------------------ |
+| `{{discord.guild.id}}`     | ギルド ID                      |
+| `{{discord.guild.name}}`   | ギルド名                       |
+| `{{discord.channel.id}}`   | 現在のチャンネル ID            |
+| `{{discord.channel.name}}` | 現在のチャンネル名             |
+| `{{discord.channel.type}}` | チャンネル種別（text / voice） |
+| `{{discord.user.id}}`      | メッセージ送信者の ID          |
+| `{{discord.user.name}}`    | メッセージ送信者の名前         |
+
+使用例（`.claude/system-prompt/DEFAULT.md`）:
+
+```markdown
+現在のチャンネル: {{discord.channel.name}}（ID: {{discord.channel.id}}）
+Discord MCP ツールでこのチャンネルを操作する場合は上記 ID を使うこと。
 ```
 
 ## 処理フロー

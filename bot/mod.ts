@@ -291,9 +291,20 @@ export class DiscordBot {
       // 承認ボタンの送信先チャンネルを設定
       this.approvalManager.setChannel(channelId);
 
+      const templateVars: Record<string, string> = {
+        "discord.guild.id": this.config.guildId,
+        "discord.guild.name": message.guild?.name ?? "",
+        "discord.channel.id": channelId,
+        "discord.channel.name": ("name" in channel ? channel.name : "") ?? "",
+        "discord.channel.type": "text",
+        "discord.user.id": message.author.id,
+        "discord.user.name": message.author.displayName,
+      };
+
       const appendSystemPrompt = this.systemPrompts.resolve(
         "chat",
         channelId,
+        templateVars,
       );
 
       const stream = askClaude(prompt, {

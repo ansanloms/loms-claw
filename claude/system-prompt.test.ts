@@ -135,4 +135,34 @@ Deno.test("SystemPromptStore", async (t) => {
       assertEquals(result, "sync test");
     });
   });
+
+  await t.step("テンプレート変数が置換されること", async () => {
+    await withTempDir(async (dir) => {
+      await writeFile(
+        dir,
+        "DEFAULT.md",
+        "Guild: {{discord.guild.name}} Channel: {{discord.channel.id}}",
+      );
+      const store = new SystemPromptStore(dir);
+      await store.load();
+      const result = store.resolve("chat", "ch-1", {
+        "discord.guild.name": "test-guild",
+        "discord.channel.id": "ch-1",
+      });
+      assertEquals(result, "Guild: test-guild Channel: ch-1");
+    });
+  });
+
+  await t.step(
+    "vars 未指定時はテンプレート変数がそのまま残ること",
+    async () => {
+      await withTempDir(async (dir) => {
+        await writeFile(dir, "DEFAULT.md", "ID: {{discord.channel.id}}");
+        const store = new SystemPromptStore(dir);
+        await store.load();
+        const result = store.resolve("chat", "ch-1");
+        assertEquals(result, "ID: {{discord.channel.id}}");
+      });
+    },
+  );
 });
