@@ -188,14 +188,15 @@ timeout: 120000
 今日のニュースを要約して。重要度の高いものから3件。
 ```
 
-| フィールド    | 必須 | 説明                                     |
-| ------------- | ---- | ---------------------------------------- |
-| `name`        | yes  | ジョブ名（一意、ファイル名と一致させる） |
-| `description` | no   | 人間向け説明                             |
-| `schedule`    | yes  | cron 式（5フィールド、TZ 依存）          |
-| `channelId`   | yes  | 結果送信先の Discord チャンネル ID       |
-| `maxTurns`    | no   | `CLAUDE_MAX_TURNS` のオーバーライド      |
-| `timeout`     | no   | `CLAUDE_TIMEOUT` のオーバーライド（ms）  |
+| フィールド      | 必須 | 説明                                          |
+| --------------- | ---- | --------------------------------------------- |
+| `name`          | yes  | ジョブ名（一意、ファイル名と一致させる）      |
+| `description`   | no   | 人間向け説明                                  |
+| `schedule`      | yes  | cron 式（5フィールド、TZ 依存）               |
+| `channelId`     | yes  | 結果送信先の Discord チャンネル ID            |
+| `resumeSession` | no   | 前回セッション引き継ぎ（デフォルト: `false`） |
+| `maxTurns`      | no   | `CLAUDE_MAX_TURNS` のオーバーライド           |
+| `timeout`       | no   | `CLAUDE_TIMEOUT` のオーバーライド（ms）       |
 
 ### 動作の仕組み
 

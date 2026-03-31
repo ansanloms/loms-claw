@@ -25,4 +25,6 @@ export interface CronJobDef {
   maxTurns?: number;
   /** ClaudeConfig.timeout のオーバーライド（ミリ秒）。 */
   timeout?: number;
+  /** 前回のセッションを引き継ぐか（デフォルト: false）。 */
+  resumeSession?: boolean;
 }

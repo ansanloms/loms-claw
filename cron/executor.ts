@@ -94,7 +94,9 @@ export class CronExecutor {
       const textChannel = channel as GuildTextBasedChannel;
 
       const sessionKey = `cron:${job.name}`;
-      const sessionId = this.sessions.get(sessionKey);
+      const sessionId = job.resumeSession
+        ? this.sessions.get(sessionKey)
+        : undefined;
 
       // テンプレート変数はギルドレベルのみ（cron にはユーザー/チャンネルコンテキストが無い）
       const guild = this.client.guilds.cache.get(this.guildId);
@@ -130,8 +132,9 @@ export class CronExecutor {
       for await (const event of stream) {
         if (event.type === "result") {
           resultEvent = event;
-          // 非ゼロ終了でもセッションが残るよう即座に保存
-          this.sessions.set(sessionKey, event.session_id);
+          if (job.resumeSession) {
+            this.sessions.set(sessionKey, event.session_id);
+          }
         }
       }
 

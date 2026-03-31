@@ -109,6 +109,11 @@ export function validateCronJob(
   if (meta.timeout !== undefined && typeof meta.timeout !== "number") {
     errors.push('"timeout" must be a number');
   }
+  if (
+    meta.resumeSession !== undefined && typeof meta.resumeSession !== "boolean"
+  ) {
+    errors.push('"resumeSession" must be a boolean');
+  }
 
   // プロンプト（本文）が空でないこと
   if (!body) {
@@ -140,6 +145,7 @@ export function validateCronJob(
     channelId: String(meta.channelId),
     maxTurns: meta.maxTurns as number | undefined,
     timeout: meta.timeout as number | undefined,
+    resumeSession: (meta.resumeSession as boolean | undefined) ?? false,
   };
 }
 
