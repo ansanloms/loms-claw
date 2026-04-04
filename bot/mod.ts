@@ -405,6 +405,11 @@ export class DiscordBot {
           textBuffer.lastIndexOf("\n"),
         );
         if (lastBoundary < 0) {
+          // 境界が見つからないが閾値の 2 倍を超えたら強制フラッシュ。
+          // コードブロック・英語テキスト・URL 等が連続するケースへの対策。
+          if (textBuffer.length >= FLUSH_THRESHOLD * 2) {
+            await flushBuffer(true);
+          }
           return;
         }
         const send = textBuffer.slice(0, lastBoundary + 1).trim();
@@ -457,7 +462,9 @@ export class DiscordBot {
             await channel.send(chunk);
           }
         } else {
-          const errorDetail = resultEvent.subtype ?? "unknown error";
+          const errorDetail = resultEvent.errors
+            ? JSON.stringify(resultEvent.errors)
+            : resultEvent.subtype ?? "unknown error";
           throw new Error(`claude returned error: ${errorDetail}`);
         }
       }

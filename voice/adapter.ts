@@ -161,7 +161,9 @@ export async function* streamClaudeForVoice(
         sessionId = event.session_id;
         resultText = r.result;
       } else {
-        const errorDetail = r.subtype ?? "unknown error";
+        const errorDetail = r.errors
+          ? JSON.stringify(r.errors)
+          : r.subtype ?? "unknown error";
         throw new Error(`claude returned error: ${errorDetail}`);
       }
     }
@@ -175,6 +177,11 @@ export async function* streamClaudeForVoice(
     yield { type: "text", text: remaining };
   }
 
+  // hasStreamedText が true の場合、error_max_turns 等でも
+  // ストリーム済みテキストをそのまま使用する（resultText は無視）。
+  // ストリーミング中に yield 済みのテキストと resultText は同一内容のため、
+  // 二重に yield する必要はない。
+  //
   // stream_event が出力されなかった場合、result.result からテキストを抽出する。
   if (!hasStreamedText && resultText) {
     log.info("no stream_event received, falling back to result text");
