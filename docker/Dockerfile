@@ -1,4 +1,4 @@
-FROM docker.io/denoland/deno:debian-2.7.8
+FROM docker.io/denoland/deno:debian-2.7.11
 
 RUN <<EOF
 apt-get update
