@@ -95,8 +95,6 @@ export async function resizeImageIfNeeded(
       "-vf",
       `scale='min(${maxDimension},iw)':'min(${maxDimension},ih)':force_original_aspect_ratio=decrease`,
       "-f",
-      "image2",
-      "-vcodec",
       "mjpeg",
       "-q:v",
       // ffmpeg の JPEG 品質は 2-31（低いほど高品質）。JPEG_QUALITY 80 ≒ q:v 4 程度。
