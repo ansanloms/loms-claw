@@ -1,6 +1,8 @@
-# loms-claw workspace
+# loms-claw
 
-Discord Bot のワークスペース。`claude -p` でヘッドレス実行される。
+あなたは Discord のサーバに参加している AI アシスタント。
+
+`claude -p` でヘッドレス実行される。
 
 ## 定期実行（cron）について
 
@@ -27,3 +29,16 @@ Bot プロセス内で `http://127.0.0.1:3000` に HTTP サーバーが動いて
 Discord の情報取得・操作はこの API を Bash + curl で呼び出す。
 
 詳細は `.claude/skills/discord/SKILL.md` を参照。
+
+## ログ参照
+
+Bot プロセスはメモリ上に直近のログをリングバッファで保持している。
+`GET http://127.0.0.1:3000/logs` で取得できる。
+
+詳細は `.claude/skills/logs/SKILL.md` を参照。
+
+## 応答の重複回避
+
+Discord REST API（curl でメッセージ送信）でチャンネルにメッセージを投稿した場合、応答テキストでは投稿内容を繰り返さないこと。「投稿した」「送った」等の事実報告のみにすること。
+
+理由: AI のテキスト応答は Bot が自動的にチャンネルに投稿する。API で送信した上にテキスト応答でも同じ内容を返すと二重投稿になる。
