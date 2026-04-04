@@ -186,14 +186,17 @@ export async function* askClaude(
 
   const [stderrText, exitStatus] = await Promise.all([stderr, status]);
 
-  if (stderrText.trim()) {
-    log.debug("claude stderr:", stderrText.trim());
-  }
-
   if (!exitStatus.success) {
+    if (stderrText.trim()) {
+      log.error("claude stderr:", stderrText.trim());
+    }
     throw new Error(
       `claude exited with code ${exitStatus.code}: ${stderrText.trim()}`,
     );
+  }
+
+  if (stderrText.trim()) {
+    log.debug("claude stderr:", stderrText.trim());
   }
 
   log.info("claude stream completed");
