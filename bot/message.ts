@@ -8,7 +8,6 @@
 import type { Attachment, GuildTextBasedChannel } from "discord.js";
 import { dirname } from "@std/path/dirname";
 import { join } from "@std/path/join";
-import { Jimp } from "jimp";
 import { createLogger } from "../logger.ts";
 
 const log = createLogger("message");
@@ -19,9 +18,6 @@ const IMAGE_CONTENT_TYPE_PREFIX = "image/";
 /** Claude Vision の推奨最大長辺（px）。 */
 const MAX_IMAGE_DIMENSION = 1568;
 
-/** リサイズ後の JPEG 品質。 */
-const JPEG_QUALITY = 80;
-
 /**
  * ダウンロード済み画像の情報。
  */
@@ -30,6 +26,47 @@ export interface DownloadedImage {
   path: string;
   /** 元のファイル名。 */
   originalName: string;
+}
+
+/**
+ * ffprobe で画像の幅と高さを取得する。
+ */
+async function getImageDimensions(
+  buffer: Uint8Array,
+): Promise<{ width: number; height: number }> {
+  const cmd = new Deno.Command("ffprobe", {
+    args: [
+      "-v",
+      "quiet",
+      "-print_format",
+      "json",
+      "-show_streams",
+      "-select_streams",
+      "v:0",
+      "pipe:0",
+    ],
+    stdin: "piped",
+    stdout: "piped",
+    stderr: "piped",
+  });
+
+  const child = cmd.spawn();
+  const writer = child.stdin.getWriter();
+  await writer.write(buffer);
+  await writer.close();
+
+  const output = await child.output();
+  if (!output.success) {
+    const stderr = new TextDecoder().decode(output.stderr);
+    throw new Error(`ffprobe failed: ${stderr}`);
+  }
+  const json = JSON.parse(new TextDecoder().decode(output.stdout));
+  const stream = json.streams?.[0];
+
+  return {
+    width: Number(stream?.width ?? 0),
+    height: Number(stream?.height ?? 0),
+  };
 }
 
 /**
@@ -44,26 +81,52 @@ export async function resizeImageIfNeeded(
   buffer: Uint8Array,
   maxDimension: number = MAX_IMAGE_DIMENSION,
 ): Promise<[Uint8Array, string]> {
-  const img = await Jimp.fromBuffer(new Uint8Array(buffer).buffer);
-  const { width, height } = img;
+  const { width, height } = await getImageDimensions(buffer);
   const longer = Math.max(width, height);
 
   if (longer <= maxDimension) {
     return [buffer, ""];
   }
 
-  if (width >= height) {
-    img.resize({ w: maxDimension });
-  } else {
-    img.resize({ h: maxDimension });
+  const cmd = new Deno.Command("ffmpeg", {
+    args: [
+      "-i",
+      "pipe:0",
+      "-vf",
+      `scale='min(${maxDimension},iw)':'min(${maxDimension},ih)':force_original_aspect_ratio=decrease`,
+      "-f",
+      "mjpeg",
+      "-q:v",
+      // ffmpeg の JPEG 品質は 2-31（低いほど高品質）。JPEG_QUALITY 80 ≒ q:v 4 程度。
+      "4",
+      "pipe:1",
+    ],
+    stdin: "piped",
+    stdout: "piped",
+    stderr: "piped",
+  });
+
+  const child = cmd.spawn();
+  const writer = child.stdin.getWriter();
+  await writer.write(buffer);
+  await writer.close();
+
+  const output = await child.output();
+
+  if (!output.success) {
+    const stderr = new TextDecoder().decode(output.stderr);
+    throw new Error(`ffmpeg resize failed: ${stderr}`);
   }
 
-  log.info(
-    `resized image: ${width}x${height} -> ${img.width}x${img.height}`,
-  );
+  const resized = new Uint8Array(output.stdout);
 
-  const resized = await img.getBuffer("image/jpeg", { quality: JPEG_QUALITY });
-  return [new Uint8Array(resized), ".jpg"];
+  // scale フィルタの force_original_aspect_ratio=decrease と同じ計算
+  const scale = Math.min(maxDimension / width, maxDimension / height);
+  const newW = Math.round(width * scale);
+  const newH = Math.round(height * scale);
+  log.info(`resized image: ${width}x${height} -> ${newW}x${newH}`);
+
+  return [resized, ".jpg"];
 }
 
 /**
