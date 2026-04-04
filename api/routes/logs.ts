@@ -19,8 +19,8 @@ export function createLogsRoutes() {
   // GET /
   app.get("/", (c) => {
     const levelParam = c.req.query("level")?.toUpperCase();
-    const namespace = c.req.query("namespace") ?? undefined;
-    const since = c.req.query("since") ?? undefined;
+    const namespace = c.req.query("namespace");
+    const since = c.req.query("since");
     const limitParam = c.req.query("limit");
 
     const filter: LogFilter = {};
@@ -43,12 +43,17 @@ export function createLogsRoutes() {
     }
 
     if (since) {
-      filter.since = since;
+      try {
+        Temporal.Instant.from(since);
+        filter.since = since;
+      } catch {
+        return c.json({ error: "invalid since: must be ISO 8601" }, 400);
+      }
     }
 
     if (limitParam) {
       const n = Number(limitParam);
-      if (!Number.isFinite(n) || n < 1) {
+      if (!Number.isInteger(n) || n < 1) {
         return c.json({ error: "limit must be a positive integer" }, 400);
       }
       filter.limit = n;
