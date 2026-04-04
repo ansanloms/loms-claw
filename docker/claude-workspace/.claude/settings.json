@@ -16,7 +16,10 @@
       "Read",
       "Write",
       "Edit",
-      "Skill"
+      "Skill",
+      "WebFetch",
+      "Agent",
+      "Grep"
     ]
   }
 }

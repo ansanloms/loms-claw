@@ -49,7 +49,9 @@ export class VoiceManager {
     texts: string[];
     displayName: string;
     timer: ReturnType<typeof setTimeout>;
+    timerActive: boolean;
   }>();
+  private readonly processingUsers = new Set<string>();
 
   constructor(
     private readonly voiceConfig: VoiceConfig,
@@ -162,6 +164,7 @@ export class VoiceManager {
       clearTimeout(entry.timer);
     }
     this.speechDebounce.clear();
+    this.processingUsers.clear();
     if (this.currentConnection) {
       try {
         this.currentConnection.destroy();
@@ -403,10 +406,15 @@ export class VoiceManager {
     const existing = this.speechDebounce.get(userId);
     const scheduleFlush = () =>
       setTimeout(
-        () =>
+        () => {
+          const entry = this.speechDebounce.get(userId);
+          if (entry) {
+            entry.timerActive = false;
+          }
           this.flushSpeech(userId).catch((e) =>
             log.error(`flush error for user ${userId}:`, e)
-          ),
+          );
+        },
         this.voiceConfig.speechDebounceMs,
       );
 
@@ -414,16 +422,30 @@ export class VoiceManager {
       clearTimeout(existing.timer);
       existing.texts.push(text);
       existing.timer = scheduleFlush();
+      existing.timerActive = true;
     } else {
       const timer = scheduleFlush();
-      this.speechDebounce.set(userId, { texts: [text], displayName, timer });
+      this.speechDebounce.set(userId, {
+        texts: [text],
+        displayName,
+        timer,
+        timerActive: true,
+      });
     }
   }
 
   /**
    * デバウンスバッファをフラッシュし、Claude CLI → TTS パイプラインを実行する。
+   * 同一ユーザーの並行実行を防ぐ排他制御付き。
    */
   private async flushSpeech(userId: string): Promise<void> {
+    if (this.processingUsers.has(userId)) {
+      // 前の実行が完了するまでバッファに残しておく。
+      // 完了後に再フラッシュされる。
+      log.debug(`skipping flush for ${userId} (already processing)`);
+      return;
+    }
+
     const entry = this.speechDebounce.get(userId);
     this.speechDebounce.delete(userId);
     if (!entry || entry.texts.length === 0) {
@@ -436,6 +458,7 @@ export class VoiceManager {
       return;
     }
 
+    this.processingUsers.add(userId);
     try {
       log.info(
         `sending to Claude (${entry.texts.length} segment(s)): ${mergedText}`,
@@ -484,6 +507,18 @@ export class VoiceManager {
       log.error(`pipeline error for user ${userId}:`, e);
       this.voicePlayer.stopThinking();
       this.voicePlayer.playErrorTone();
+    } finally {
+      this.processingUsers.delete(userId);
+      // 処理中に溜まった発話があれば再フラッシュする。
+      // ただしデバウンスタイマーがまだ動いている場合はタイマーに任せる
+      // （ユーザーがまだ話し続けている可能性がある）。
+      const pending = this.speechDebounce.get(userId);
+      if (pending && !pending.timerActive) {
+        log.info(`flushing queued speech for ${userId}`);
+        this.flushSpeech(userId).catch((e) =>
+          log.error(`flush error for user ${userId}:`, e)
+        );
+      }
     }
   }
 
