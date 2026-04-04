@@ -119,11 +119,12 @@ export async function resizeImageIfNeeded(
   }
 
   const resized = new Uint8Array(output.stdout);
-  const resizedDims = await getImageDimensions(resized);
 
-  log.info(
-    `resized image: ${width}x${height} -> ${resizedDims.width}x${resizedDims.height}`,
-  );
+  // scale フィルタの force_original_aspect_ratio=decrease と同じ計算
+  const scale = Math.min(maxDimension / width, maxDimension / height);
+  const newW = Math.round(width * scale);
+  const newH = Math.round(height * scale);
+  log.info(`resized image: ${width}x${height} -> ${newW}x${newH}`);
 
   return [resized, ".jpg"];
 }
