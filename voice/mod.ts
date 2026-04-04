@@ -49,6 +49,7 @@ export class VoiceManager {
     texts: string[];
     displayName: string;
     timer: ReturnType<typeof setTimeout>;
+    timerActive: boolean;
   }>();
   private readonly processingUsers = new Set<string>();
 
@@ -163,6 +164,7 @@ export class VoiceManager {
       clearTimeout(entry.timer);
     }
     this.speechDebounce.clear();
+    this.processingUsers.clear();
     if (this.currentConnection) {
       try {
         this.currentConnection.destroy();
@@ -404,10 +406,15 @@ export class VoiceManager {
     const existing = this.speechDebounce.get(userId);
     const scheduleFlush = () =>
       setTimeout(
-        () =>
+        () => {
+          const entry = this.speechDebounce.get(userId);
+          if (entry) {
+            entry.timerActive = false;
+          }
           this.flushSpeech(userId).catch((e) =>
             log.error(`flush error for user ${userId}:`, e)
-          ),
+          );
+        },
         this.voiceConfig.speechDebounceMs,
       );
 
@@ -415,9 +422,15 @@ export class VoiceManager {
       clearTimeout(existing.timer);
       existing.texts.push(text);
       existing.timer = scheduleFlush();
+      existing.timerActive = true;
     } else {
       const timer = scheduleFlush();
-      this.speechDebounce.set(userId, { texts: [text], displayName, timer });
+      this.speechDebounce.set(userId, {
+        texts: [text],
+        displayName,
+        timer,
+        timerActive: true,
+      });
     }
   }
 
@@ -497,7 +510,10 @@ export class VoiceManager {
     } finally {
       this.processingUsers.delete(userId);
       // 処理中に溜まった発話があれば再フラッシュする。
-      if (this.speechDebounce.has(userId)) {
+      // ただしデバウンスタイマーがまだ動いている場合はタイマーに任せる
+      // （ユーザーがまだ話し続けている可能性がある）。
+      const pending = this.speechDebounce.get(userId);
+      if (pending && !pending.timerActive) {
         log.info(`flushing queued speech for ${userId}`);
         this.flushSpeech(userId).catch((e) =>
           log.error(`flush error for user ${userId}:`, e)
