@@ -37,19 +37,19 @@ GET http://127.0.0.1:{API_PORT}/logs
 
 ```bash
 # 直近のログ（デフォルト100件）
-curl -s http://127.0.0.1:3000/logs
+curl -s http://127.0.0.1:${API_PORT:-3000}/logs
 
 # エラーのみ
-curl -s 'http://127.0.0.1:3000/logs?level=ERROR'
+curl -s 'http://127.0.0.1:${API_PORT:-3000}/logs?level=ERROR'
 
 # claude 関連のログ
-curl -s 'http://127.0.0.1:3000/logs?namespace=claude'
+curl -s 'http://127.0.0.1:${API_PORT:-3000}/logs?namespace=claude'
 
 # 特定時刻以降の WARN 以上
-curl -s 'http://127.0.0.1:3000/logs?level=WARN&since=2026-04-04T10:00:00Z'
+curl -s 'http://127.0.0.1:${API_PORT:-3000}/logs?level=WARN&since=2026-04-04T10:00:00Z'
 
 # 最新 20 件だけ
-curl -s 'http://127.0.0.1:3000/logs?limit=20'
+curl -s 'http://127.0.0.1:${API_PORT:-3000}/logs?limit=20'
 ```
 
 ## 主な名前空間
