@@ -22,7 +22,7 @@
     "@std/dotenv": "jsr:@std/dotenv@^0.225.6",
     "@std/path": "jsr:@std/path@^1.1.4",
     "@std/streams": "jsr:@std/streams@^1.0.17",
-    "jimp": "npm:jimp@^1.6.0"
+    "@std/streams": "jsr:@std/streams@^1.0.17"
   },
   "tasks": {
     "start": "deno run -A main.ts",

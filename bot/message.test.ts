@@ -1,6 +1,5 @@
 import { assertEquals } from "@std/assert";
 import type { GuildTextBasedChannel } from "discord.js";
-import { Jimp } from "jimp";
 import {
   appendImageReferences,
   cleanupImageFiles,
@@ -206,14 +205,62 @@ Deno.test("createProgressReporter", async (t) => {
   );
 });
 
-/** テスト用の PNG バッファを生成する。 */
+/** ffmpeg で テスト用の PNG バッファを生成する。 */
 async function createTestPng(
   width: number,
   height: number,
 ): Promise<Uint8Array> {
-  const img = new Jimp({ width, height, color: 0xff0000ff });
-  const buf = await img.getBuffer("image/png");
-  return new Uint8Array(buf);
+  const cmd = new Deno.Command("ffmpeg", {
+    args: [
+      "-f",
+      "lavfi",
+      "-i",
+      `color=c=red:s=${width}x${height}:d=1`,
+      "-frames:v",
+      "1",
+      "-f",
+      "image2",
+      "-vcodec",
+      "png",
+      "pipe:1",
+    ],
+    stdin: "null",
+    stdout: "piped",
+    stderr: "null",
+  });
+  const output = await cmd.output();
+  return new Uint8Array(output.stdout);
+}
+
+/** ffprobe で画像のサイズを取得する。 */
+async function probeSize(
+  buf: Uint8Array,
+): Promise<{ width: number; height: number }> {
+  const cmd = new Deno.Command("ffprobe", {
+    args: [
+      "-v",
+      "quiet",
+      "-print_format",
+      "json",
+      "-show_streams",
+      "-select_streams",
+      "v:0",
+      "pipe:0",
+    ],
+    stdin: "piped",
+    stdout: "piped",
+    stderr: "null",
+  });
+  const child = cmd.spawn();
+  const writer = child.stdin.getWriter();
+  await writer.write(buf);
+  await writer.close();
+  const output = await child.output();
+  const json = JSON.parse(new TextDecoder().decode(output.stdout));
+  return {
+    width: Number(json.streams?.[0]?.width ?? 0),
+    height: Number(json.streams?.[0]?.height ?? 0),
+  };
 }
 
 Deno.test("resizeImageIfNeeded", async (t) => {
@@ -229,9 +276,9 @@ Deno.test("resizeImageIfNeeded", async (t) => {
     const [result, ext] = await resizeImageIfNeeded(buf, 1568);
     assertEquals(ext, ".jpg");
 
-    const resized = await Jimp.fromBuffer(new Uint8Array(result).buffer);
-    assertEquals(resized.width, 1568);
-    assertEquals(resized.height <= 1568, true);
+    const dims = await probeSize(result);
+    assertEquals(dims.width, 1568);
+    assertEquals(dims.height <= 1568, true);
   });
 
   await t.step("高さが長辺の場合にリサイズされること", async () => {
@@ -239,9 +286,9 @@ Deno.test("resizeImageIfNeeded", async (t) => {
     const [result, ext] = await resizeImageIfNeeded(buf, 1568);
     assertEquals(ext, ".jpg");
 
-    const resized = await Jimp.fromBuffer(new Uint8Array(result).buffer);
-    assertEquals(resized.height, 1568);
-    assertEquals(resized.width <= 1568, true);
+    const dims = await probeSize(result);
+    assertEquals(dims.height, 1568);
+    assertEquals(dims.width <= 1568, true);
   });
 
   await t.step("ちょうど最大サイズの場合はリサイズされないこと", async () => {
@@ -256,8 +303,8 @@ Deno.test("resizeImageIfNeeded", async (t) => {
     const [result, ext] = await resizeImageIfNeeded(buf, 50);
     assertEquals(ext, ".jpg");
 
-    const resized = await Jimp.fromBuffer(new Uint8Array(result).buffer);
-    assertEquals(resized.width, 50);
+    const dims = await probeSize(result);
+    assertEquals(dims.width, 50);
   });
 });
 
