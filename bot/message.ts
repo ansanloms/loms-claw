@@ -29,14 +29,6 @@ export interface DownloadedImage {
 }
 
 /**
- * 画像バッファを最大サイズ以内にリサイズする。
- *
- * 長辺が MAX_IMAGE_DIMENSION を超える場合のみ縮小し、JPEG で再エンコードする。
- * 超えない場合は元のバッファをそのまま返す。
- *
- * @returns [リサイズ後バッファ, 拡張子]
- */
-/**
  * ffprobe で画像の幅と高さを取得する。
  */
 async function getImageDimensions(
@@ -55,7 +47,7 @@ async function getImageDimensions(
     ],
     stdin: "piped",
     stdout: "piped",
-    stderr: "null",
+    stderr: "piped",
   });
 
   const child = cmd.spawn();
@@ -64,6 +56,10 @@ async function getImageDimensions(
   await writer.close();
 
   const output = await child.output();
+  if (!output.success) {
+    const stderr = new TextDecoder().decode(output.stderr);
+    throw new Error(`ffprobe failed: ${stderr}`);
+  }
   const json = JSON.parse(new TextDecoder().decode(output.stdout));
   const stream = json.streams?.[0];
 
@@ -73,6 +69,14 @@ async function getImageDimensions(
   };
 }
 
+/**
+ * 画像バッファを最大サイズ以内にリサイズする。
+ *
+ * 長辺が MAX_IMAGE_DIMENSION を超える場合のみ縮小し、JPEG で再エンコードする。
+ * 超えない場合は元のバッファをそのまま返す。
+ *
+ * @returns [リサイズ後バッファ, 拡張子]
+ */
 export async function resizeImageIfNeeded(
   buffer: Uint8Array,
   maxDimension: number = MAX_IMAGE_DIMENSION,
