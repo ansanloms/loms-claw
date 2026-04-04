@@ -18,7 +18,6 @@ import {
   Routes,
 } from "discord.js";
 import type { Config } from "../config.ts";
-import type { SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
 import { askClaude } from "../claude/mod.ts";
 import { SessionStore } from "../session/mod.ts";
 import { ApprovalManager } from "../approval/manager.ts";
@@ -378,10 +377,65 @@ export class DiscordBot {
         appendSystemPrompt,
       });
 
-      let resultEvent: SDKResultMessage | undefined;
+      // ストリーミング応答: text_delta をバッファに蓄積し、
+      // 閾値を超えたら文境界で区切って中間投稿する。
+      const FLUSH_THRESHOLD = 800;
+      let textBuffer = "";
+      let hasStreamedText = false;
+      let hasResult = false;
+      // deno-lint-ignore no-explicit-any
+      let resultEvent: any;
+
+      const flushBuffer = async (force: boolean) => {
+        if (force) {
+          // 残り全部を投稿。
+          const text = textBuffer.trim();
+          textBuffer = "";
+          if (text) {
+            hasStreamedText = true;
+            for (const chunk of splitMessage(text)) {
+              await channel.send(chunk);
+            }
+          }
+          return;
+        }
+        // 最後の文境界（。、改行）で区切って投稿。
+        const lastBoundary = Math.max(
+          textBuffer.lastIndexOf("。"),
+          textBuffer.lastIndexOf("\n"),
+        );
+        if (lastBoundary < 0) {
+          return;
+        }
+        const send = textBuffer.slice(0, lastBoundary + 1).trim();
+        textBuffer = textBuffer.slice(lastBoundary + 1);
+        if (!send) {
+          return;
+        }
+        hasStreamedText = true;
+        for (const chunk of splitMessage(send)) {
+          await channel.send(chunk);
+        }
+      };
 
       for await (const event of stream) {
-        if (event.type === "result") {
+        if (
+          event.type === "stream_event" &&
+          !event.parent_tool_use_id
+        ) {
+          const e = event.event;
+          if (
+            e.type === "content_block_delta" &&
+            "text" in e.delta &&
+            e.delta.type === "text_delta"
+          ) {
+            textBuffer += e.delta.text;
+            if (textBuffer.length >= FLUSH_THRESHOLD) {
+              await flushBuffer(false);
+            }
+          }
+        } else if (event.type === "result") {
+          hasResult = true;
           resultEvent = event;
           // 非ゼロ終了でジェネレータがスローしてもセッションが残るよう即座に保存
           this.sessions.set(channelId, event.session_id);
@@ -390,21 +444,22 @@ export class DiscordBot {
         }
       }
 
-      if (!resultEvent) {
-        throw new Error("claude stream ended without result event");
-      }
+      // バッファに残ったテキストを投稿。
+      await flushBuffer(true);
 
-      // 応答送信
-      if ("result" in resultEvent && typeof resultEvent.result === "string") {
-        const chunks = splitMessage(resultEvent.result);
-        for (const chunk of chunks) {
-          await channel.send(chunk);
+      // stream_event がなかった場合は result.result からフォールバック。
+      if (!hasStreamedText) {
+        if (!hasResult) {
+          throw new Error("claude stream ended without result event");
         }
-      } else {
-        const errors = "errors" in resultEvent
-          ? JSON.stringify(resultEvent.errors)
-          : resultEvent.subtype ?? "unknown error";
-        throw new Error(`claude returned error: ${errors}`);
+        if (typeof resultEvent.result === "string") {
+          for (const chunk of splitMessage(resultEvent.result)) {
+            await channel.send(chunk);
+          }
+        } else {
+          const errorDetail = resultEvent.subtype ?? "unknown error";
+          throw new Error(`claude returned error: ${errorDetail}`);
+        }
       }
     } catch (error: unknown) {
       const errMsg = error instanceof Error ? error.message : String(error);

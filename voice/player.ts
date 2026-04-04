@@ -246,6 +246,46 @@ export class VoicePlayer {
     }
   }
 
+  /**
+   * テキストチャンクを逐次受信し、到着順に合成・再生する。
+   *
+   * AsyncIterable から文を 1 つずつ受け取り、TTS 合成が完了次第
+   * 再生キューに追加する。interrupt() による中断にも対応する。
+   *
+   * @param chunks - 文単位のテキストを逐次 yield する AsyncIterable。
+   */
+  async speakStreaming(chunks: AsyncIterable<string>): Promise<void> {
+    const generation = ++this.speakGeneration;
+    log.info(`streaming speech started (gen=${generation})`);
+    this.isSpeaking = true;
+
+    for await (const chunk of chunks) {
+      if (this.speakGeneration !== generation) {
+        return;
+      }
+
+      log.debug(`synthesizing streaming chunk: "${chunk}"`);
+      const buf = await this.tts.synthesize(chunk);
+
+      if (this.speakGeneration !== generation) {
+        return;
+      }
+
+      this.isSpeaking = true;
+      if (buf.length > 0) {
+        this.queue.push(buf);
+        if (!this.isPlaying) {
+          this.playNext();
+        }
+      }
+    }
+
+    // 全チャンクが空だった場合のフォールバック。
+    if (!this.isPlaying && this.queue.length === 0) {
+      this.isSpeaking = false;
+    }
+  }
+
   private playNext(): void {
     if (this.queue.length === 0) {
       this.isPlaying = false;
