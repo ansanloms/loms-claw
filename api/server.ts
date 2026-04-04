@@ -11,6 +11,7 @@ import type { ApiContext } from "./types.ts";
 import { createApprovalRoutes } from "./routes/approval.ts";
 import { createCronRoutes } from "./routes/cron.ts";
 import { createDiscordRoutes } from "./routes/discord.ts";
+import { createLogsRoutes } from "./routes/logs.ts";
 import { createLogger } from "../logger.ts";
 
 const log = createLogger("api-server");
@@ -42,6 +43,7 @@ export function startApiServer(
   app.route("/approval", createApprovalRoutes(manager));
   app.route("/cron", createCronRoutes(reloadCronJobs));
   app.route("/discord", createDiscordRoutes(discordCtx));
+  app.route("/logs", createLogsRoutes());
 
   // 未定義パスへのアクセス
   app.notFound((c) => c.json({ error: "Not Found" }, 404));
