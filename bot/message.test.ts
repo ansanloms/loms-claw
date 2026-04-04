@@ -1,13 +1,11 @@
 import { assertEquals } from "@std/assert";
 import type { GuildTextBasedChannel } from "discord.js";
-import { Jimp } from "jimp";
 import {
   appendImageReferences,
   cleanupImageFiles,
   createProgressReporter,
   type DownloadedImage,
   keepTyping,
-  resizeImageIfNeeded,
   splitMessage,
 } from "./message.ts";
 
@@ -204,61 +202,6 @@ Deno.test("createProgressReporter", async (t) => {
       assertEquals(calls.length, 0);
     },
   );
-});
-
-/** テスト用の PNG バッファを生成する。 */
-async function createTestPng(
-  width: number,
-  height: number,
-): Promise<Uint8Array> {
-  const img = new Jimp({ width, height, color: 0xff0000ff });
-  const buf = await img.getBuffer("image/png");
-  return new Uint8Array(buf);
-}
-
-Deno.test("resizeImageIfNeeded", async (t) => {
-  await t.step("小さい画像はリサイズされないこと", async () => {
-    const buf = await createTestPng(800, 600);
-    const [result, ext] = await resizeImageIfNeeded(buf, 1568);
-    assertEquals(ext, "");
-    assertEquals(result, buf);
-  });
-
-  await t.step("幅が長辺の場合にリサイズされること", async () => {
-    const buf = await createTestPng(3000, 2000);
-    const [result, ext] = await resizeImageIfNeeded(buf, 1568);
-    assertEquals(ext, ".jpg");
-
-    const resized = await Jimp.fromBuffer(new Uint8Array(result).buffer);
-    assertEquals(resized.width, 1568);
-    assertEquals(resized.height <= 1568, true);
-  });
-
-  await t.step("高さが長辺の場合にリサイズされること", async () => {
-    const buf = await createTestPng(1000, 3000);
-    const [result, ext] = await resizeImageIfNeeded(buf, 1568);
-    assertEquals(ext, ".jpg");
-
-    const resized = await Jimp.fromBuffer(new Uint8Array(result).buffer);
-    assertEquals(resized.height, 1568);
-    assertEquals(resized.width <= 1568, true);
-  });
-
-  await t.step("ちょうど最大サイズの場合はリサイズされないこと", async () => {
-    const buf = await createTestPng(1568, 1000);
-    const [result, ext] = await resizeImageIfNeeded(buf, 1568);
-    assertEquals(ext, "");
-    assertEquals(result, buf);
-  });
-
-  await t.step("カスタム最大サイズで動作すること", async () => {
-    const buf = await createTestPng(200, 100);
-    const [result, ext] = await resizeImageIfNeeded(buf, 50);
-    assertEquals(ext, ".jpg");
-
-    const resized = await Jimp.fromBuffer(new Uint8Array(result).buffer);
-    assertEquals(resized.width, 50);
-  });
 });
 
 Deno.test("appendImageReferences", async (t) => {
