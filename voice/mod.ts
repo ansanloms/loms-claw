@@ -24,7 +24,7 @@ import type { SystemPromptStore } from "../claude/system-prompt.ts";
 import { calcRms, concatBytes, createOpusDecoder } from "./codec.ts";
 import type { SpeechToText } from "./stt.ts";
 import type { VoicePlayer } from "./player.ts";
-import { askClaudeForVoice } from "./adapter.ts";
+import { streamClaudeForVoice } from "./adapter.ts";
 
 const log = createLogger("voice");
 
@@ -487,21 +487,44 @@ export class VoiceManager {
         channelId,
         templateVars,
       );
-      const result = await askClaudeForVoice(mergedText, {
+
+      // ストリーミングで Claude CLI を呼び出し、文単位で逐次 TTS → 再生する。
+      const voiceStream = streamClaudeForVoice(mergedText, {
         sessionId,
         config: this.claudeConfig,
         signal: AbortSignal.timeout(this.claudeConfig.timeout),
         appendSystemPrompt,
       });
 
+      const player = this.voicePlayer;
+      let newSessionId = "";
+
+      // テキストチャンクだけを抽出する AsyncGenerator。
+      // 最初のチャンク到着時に thinking tone を停止する。
+      const textChunks = async function* () {
+        let thinkingStopped = false;
+        for await (const event of voiceStream) {
+          if (event.type === "text") {
+            if (!thinkingStopped) {
+              player.stopThinking();
+              thinkingStopped = true;
+            }
+            log.info(`reply chunk: ${event.text.slice(0, 200)}`);
+            yield event.text;
+          } else if (event.type === "end") {
+            newSessionId = event.sessionId;
+          }
+        }
+        if (!thinkingStopped) {
+          player.stopThinking();
+        }
+      };
+
+      await player.speakStreaming(textChunks());
+
       // セッション ID を保存。
-      this.sessions.set(channelId, result.sessionId);
-
-      this.voicePlayer.stopThinking();
-
-      if (result.text) {
-        log.info(`reply: ${result.text.slice(0, 200)}`);
-        await this.voicePlayer.speak(result.text);
+      if (newSessionId) {
+        this.sessions.set(channelId, newSessionId);
       }
     } catch (e: unknown) {
       log.error(`pipeline error for user ${userId}:`, e);
