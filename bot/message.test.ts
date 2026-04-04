@@ -6,7 +6,6 @@ import {
   createProgressReporter,
   type DownloadedImage,
   keepTyping,
-  resizeImageIfNeeded,
   splitMessage,
 } from "./message.ts";
 
@@ -203,109 +202,6 @@ Deno.test("createProgressReporter", async (t) => {
       assertEquals(calls.length, 0);
     },
   );
-});
-
-/** ffmpeg で テスト用の PNG バッファを生成する。 */
-async function createTestPng(
-  width: number,
-  height: number,
-): Promise<Uint8Array> {
-  const cmd = new Deno.Command("ffmpeg", {
-    args: [
-      "-f",
-      "lavfi",
-      "-i",
-      `color=c=red:s=${width}x${height}:d=1`,
-      "-frames:v",
-      "1",
-      "-f",
-      "image2",
-      "-vcodec",
-      "png",
-      "pipe:1",
-    ],
-    stdin: "null",
-    stdout: "piped",
-    stderr: "null",
-  });
-  const output = await cmd.output();
-  return new Uint8Array(output.stdout);
-}
-
-/** ffprobe で画像のサイズを取得する。 */
-async function probeSize(
-  buf: Uint8Array,
-): Promise<{ width: number; height: number }> {
-  const cmd = new Deno.Command("ffprobe", {
-    args: [
-      "-v",
-      "quiet",
-      "-print_format",
-      "json",
-      "-show_streams",
-      "-select_streams",
-      "v:0",
-      "pipe:0",
-    ],
-    stdin: "piped",
-    stdout: "piped",
-    stderr: "null",
-  });
-  const child = cmd.spawn();
-  const writer = child.stdin.getWriter();
-  await writer.write(buf);
-  await writer.close();
-  const output = await child.output();
-  const json = JSON.parse(new TextDecoder().decode(output.stdout));
-  return {
-    width: Number(json.streams?.[0]?.width ?? 0),
-    height: Number(json.streams?.[0]?.height ?? 0),
-  };
-}
-
-Deno.test("resizeImageIfNeeded", async (t) => {
-  await t.step("小さい画像はリサイズされないこと", async () => {
-    const buf = await createTestPng(800, 600);
-    const [result, ext] = await resizeImageIfNeeded(buf, 1568);
-    assertEquals(ext, "");
-    assertEquals(result, buf);
-  });
-
-  await t.step("幅が長辺の場合にリサイズされること", async () => {
-    const buf = await createTestPng(3000, 2000);
-    const [result, ext] = await resizeImageIfNeeded(buf, 1568);
-    assertEquals(ext, ".jpg");
-
-    const dims = await probeSize(result);
-    assertEquals(dims.width, 1568);
-    assertEquals(dims.height <= 1568, true);
-  });
-
-  await t.step("高さが長辺の場合にリサイズされること", async () => {
-    const buf = await createTestPng(1000, 3000);
-    const [result, ext] = await resizeImageIfNeeded(buf, 1568);
-    assertEquals(ext, ".jpg");
-
-    const dims = await probeSize(result);
-    assertEquals(dims.height, 1568);
-    assertEquals(dims.width <= 1568, true);
-  });
-
-  await t.step("ちょうど最大サイズの場合はリサイズされないこと", async () => {
-    const buf = await createTestPng(1568, 1000);
-    const [result, ext] = await resizeImageIfNeeded(buf, 1568);
-    assertEquals(ext, "");
-    assertEquals(result, buf);
-  });
-
-  await t.step("カスタム最大サイズで動作すること", async () => {
-    const buf = await createTestPng(200, 100);
-    const [result, ext] = await resizeImageIfNeeded(buf, 50);
-    assertEquals(ext, ".jpg");
-
-    const dims = await probeSize(result);
-    assertEquals(dims.width, 50);
-  });
 });
 
 Deno.test("appendImageReferences", async (t) => {
