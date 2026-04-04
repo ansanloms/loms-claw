@@ -108,7 +108,7 @@ docker compose down
 ```
 main.ts                エントリポイント。dotenv → loadConfig → DiscordBot → start。リトライ付き。
 config.ts              環境変数 → Config 型。必須項目のバリデーション。
-logger.ts              名前空間付き軽量ロガー。LOG_LEVEL 環境変数で制御。
+logger.ts              名前空間付き軽量ロガー。LOG_LEVEL 環境変数で制御。リングバッファで直近ログをメモリ保持。
 bot/mod.ts             DiscordBot クラス。messageCreate ハンドラ、start/shutdown。
 bot/commands.ts        スラッシュコマンド定義とハンドラ（/claw clear, /claw vc join|leave）。
 bot/guard.ts           isAuthorized(): ギルド ID + ユーザー ID + bot 除外の認可チェック。
@@ -123,6 +123,7 @@ api/server.ts              統合 HTTP サーバー。Hono アプリ作成、サ
 api/routes/approval.ts     承認フックルート（POST /approval）。
 api/routes/cron.ts         cron リロードルート（POST /cron/reload）。
 api/routes/discord.ts      Discord REST API ルート + ハンドラ。discord.js Client を通じて Discord を操作。
+api/routes/logs.ts         ログ取得ルート（GET /logs）。リングバッファからフィルタ付きで取得。
 api/types.ts               API 共通型（ApiContext）。
 voice/mod.ts           VoiceManager: VC 接続管理、STT→Claude CLI→TTS パイプライン、auto-join/leave。
 voice/adapter.ts       askClaudeForVoice(): askClaude() の SDKMessage ストリームからテキストを抽出するアダプタ。
@@ -260,6 +261,7 @@ Bot プロセス内で HTTP サーバーを起動し、Discord 操作用の REST
 | `POST`   | `/discord/channels/:id/messages`                 | メッセージ送信    |
 | `POST`   | `/discord/channels/:cid/messages/:mid/reactions` | リアクション追加  |
 | `GET`    | `/discord/members`                               | メンバー一覧/検索 |
+| `GET`    | `/logs`                                          | ログ取得          |
 
 ### 前提条件
 
