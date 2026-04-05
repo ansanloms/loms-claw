@@ -41,7 +41,8 @@ export function isAuthorized(
  *   - bot へのメンションがなく他ユーザーへのメンションがある場合は無視
  * - それ以外 → bot mention 必須
  *
- * @param hasNonBotMentions - メッセージに bot 以外のユーザーメンションが含まれるか
+ * @param hasNonBotMentions - メッセージに bot 以外のユーザーメンションが含まれるか。
+ *   @everyone や @role は対象外（discord.js の mentions.users にはユーザー個別メンションのみ含まれる）。
  */
 export function shouldRespond(
   channelId: string,

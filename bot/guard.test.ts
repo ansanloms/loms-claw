@@ -149,6 +149,23 @@ Deno.test("shouldRespond", async (t) => {
     },
   );
 
+  await t.step(
+    "active channel で bot メンションのみの場合は反応すること",
+    () => {
+      assertEquals(
+        shouldRespond(
+          "ch-active-1",
+          activeChannels,
+          false,
+          null,
+          true,
+          false,
+        ),
+        true,
+      );
+    },
+  );
+
   // 他ユーザーメンション判定
   await t.step(
     "active channel で bot メンションなし + 他ユーザーメンションありの場合は無視すること",
