@@ -292,6 +292,7 @@ export class DiscordBot {
     const isMentioned = this.client.user
       ? message.mentions.has(this.client.user)
       : false;
+    const hasNonBotMentions = message.mentions.users.some((u) => !u.bot);
     if (
       !shouldRespond(
         message.channelId,
@@ -299,6 +300,7 @@ export class DiscordBot {
         message.channel.isThread(),
         message.channel.isThread() ? message.channel.parentId : null,
         isMentioned,
+        hasNonBotMentions,
       )
     ) {
       return;
