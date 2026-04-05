@@ -36,9 +36,12 @@ export function isAuthorized(
 /**
  * メッセージに反応すべきか判定する。
  *
- * - activeChannelIds に含まれるチャンネル → 全メッセージ
- * - スレッドの親チャンネルが active → mention 不要
+ * - activeChannelIds に含まれるチャンネル → 原則全メッセージに反応
+ *   - ただしスレッドは全て無視
+ *   - bot へのメンションがなく他ユーザーへのメンションがある場合は無視
  * - それ以外 → bot mention 必須
+ *
+ * @param hasNonBotMentions - メッセージに bot 以外のユーザーメンションが含まれるか
  */
 export function shouldRespond(
   channelId: string,
@@ -46,12 +49,18 @@ export function shouldRespond(
   isThread: boolean,
   parentId: string | null,
   isMentioned: boolean,
+  hasNonBotMentions: boolean,
 ): boolean {
-  if (activeChannelIds.includes(channelId)) {
-    return true;
-  }
+  const isActive = activeChannelIds.includes(channelId) ||
+    (isThread && parentId !== null && activeChannelIds.includes(parentId));
 
-  if (isThread && parentId && activeChannelIds.includes(parentId)) {
+  if (isActive) {
+    if (isThread) {
+      return false;
+    }
+    if (!isMentioned && hasNonBotMentions) {
+      return false;
+    }
     return true;
   }
 

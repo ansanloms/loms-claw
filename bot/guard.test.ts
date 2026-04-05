@@ -64,49 +64,35 @@ const activeChannels = ["ch-active-1", "ch-active-2"];
 Deno.test("shouldRespond", async (t) => {
   await t.step("active channel では反応すること", () => {
     assertEquals(
-      shouldRespond("ch-active-1", activeChannels, false, null, false),
+      shouldRespond("ch-active-1", activeChannels, false, null, false, false),
       true,
     );
   });
 
   await t.step("非 active channel で mention なしの場合は無視すること", () => {
     assertEquals(
-      shouldRespond("ch-other", activeChannels, false, null, false),
+      shouldRespond("ch-other", activeChannels, false, null, false, false),
       false,
     );
   });
 
   await t.step("非 active channel で mention ありの場合は反応すること", () => {
     assertEquals(
-      shouldRespond("ch-other", activeChannels, false, null, true),
+      shouldRespond("ch-other", activeChannels, false, null, true, false),
       true,
-    );
-  });
-
-  await t.step("親チャンネルが active なスレッドでは反応すること", () => {
-    assertEquals(
-      shouldRespond("thread-1", activeChannels, true, "ch-active-1", false),
-      true,
-    );
-  });
-
-  await t.step("親チャンネルが非 active なスレッドでは無視すること", () => {
-    assertEquals(
-      shouldRespond("thread-1", activeChannels, true, "ch-other", false),
-      false,
     );
   });
 
   await t.step("スレッドで mention ありの場合は反応すること", () => {
     assertEquals(
-      shouldRespond("thread-1", activeChannels, true, "ch-other", true),
+      shouldRespond("thread-1", activeChannels, true, "ch-other", true, false),
       true,
     );
   });
 
   await t.step("親チャンネルが null のスレッドでは無視すること", () => {
     assertEquals(
-      shouldRespond("thread-1", activeChannels, true, null, false),
+      shouldRespond("thread-1", activeChannels, true, null, false, false),
       false,
     );
   });
@@ -115,7 +101,7 @@ Deno.test("shouldRespond", async (t) => {
     "activeChannelIds が空で mention ありの場合は反応すること",
     () => {
       assertEquals(
-        shouldRespond("ch-any", [], false, null, true),
+        shouldRespond("ch-any", [], false, null, true, false),
         true,
       );
     },
@@ -125,8 +111,85 @@ Deno.test("shouldRespond", async (t) => {
     "activeChannelIds が空で mention なしの場合は無視すること",
     () => {
       assertEquals(
-        shouldRespond("ch-any", [], false, null, false),
+        shouldRespond("ch-any", [], false, null, false, false),
         false,
+      );
+    },
+  );
+
+  // active channel スレッド無視
+  await t.step("active channel のスレッドは無視すること", () => {
+    assertEquals(
+      shouldRespond(
+        "thread-1",
+        activeChannels,
+        true,
+        "ch-active-1",
+        false,
+        false,
+      ),
+      false,
+    );
+  });
+
+  await t.step(
+    "active channel のスレッドは mention ありでも無視すること",
+    () => {
+      assertEquals(
+        shouldRespond(
+          "thread-1",
+          activeChannels,
+          true,
+          "ch-active-1",
+          true,
+          false,
+        ),
+        false,
+      );
+    },
+  );
+
+  // 他ユーザーメンション判定
+  await t.step(
+    "active channel で bot メンションなし + 他ユーザーメンションありの場合は無視すること",
+    () => {
+      assertEquals(
+        shouldRespond(
+          "ch-active-1",
+          activeChannels,
+          false,
+          null,
+          false,
+          true,
+        ),
+        false,
+      );
+    },
+  );
+
+  await t.step(
+    "active channel で bot メンション + 他ユーザーメンションありの場合は反応すること",
+    () => {
+      assertEquals(
+        shouldRespond(
+          "ch-active-1",
+          activeChannels,
+          false,
+          null,
+          true,
+          true,
+        ),
+        true,
+      );
+    },
+  );
+
+  await t.step(
+    "非 active channel では他ユーザーメンションに関係なく mention で反応すること",
+    () => {
+      assertEquals(
+        shouldRespond("ch-other", activeChannels, false, null, true, true),
+        true,
       );
     },
   );
