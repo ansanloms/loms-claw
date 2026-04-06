@@ -25,4 +25,6 @@ export interface CronJobDef {
   timeout?: number;
   /** 前回のセッションを引き継ぐか（デフォルト: false）。 */
   resumeSession?: boolean;
+  /** true の場合、1回実行後にジョブファイルを削除する（デフォルト: false）。 */
+  once?: boolean;
 }

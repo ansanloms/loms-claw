@@ -56,6 +56,9 @@ export function validateCronJob(
   ) {
     errors.push('"resumeSession" must be a boolean');
   }
+  if (meta.once !== undefined && typeof meta.once !== "boolean") {
+    errors.push('"once" must be a boolean');
+  }
 
   // プロンプト（本文）が空でないこと
   if (!body) {
@@ -87,6 +90,7 @@ export function validateCronJob(
     maxTurns: meta.maxTurns as number | undefined,
     timeout: meta.timeout as number | undefined,
     resumeSession: (meta.resumeSession as boolean | undefined) ?? false,
+    once: (meta.once as boolean | undefined) ?? false,
   };
 }
 

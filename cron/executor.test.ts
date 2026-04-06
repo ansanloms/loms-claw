@@ -250,4 +250,182 @@ Deno.test("CronExecutor", async (t) => {
     sessions.set("cron:my-job", "session-abc");
     assertEquals(sessions.get("cron:my-job"), "session-abc");
   });
+
+  await t.step(
+    "once: true のジョブ実行後にコールバックが呼ばれること",
+    async () => {
+      const client = createMockClient(null);
+      const sessions = new SessionStore();
+      const { manager } = createMockApprovalManager();
+      const systemPrompts = createMockSystemPromptStore();
+
+      const executor = new CronExecutor(
+        client as never,
+        TEST_CONFIG,
+        "guild-1",
+        sessions,
+        manager as never,
+        systemPrompts,
+      );
+
+      const calledWith: string[] = [];
+      executor.setOnceCallback((name: string) => {
+        calledWith.push(name);
+        return Promise.resolve();
+      });
+
+      const job: CronJobDef = {
+        name: "once-job",
+        schedule: "0 0 * * *",
+        prompt: "hello",
+        once: true,
+      };
+
+      // askClaude が無いためエラーになるが、once コールバックは finally で await される
+      await executor.runJob(job);
+      assertEquals(calledWith, ["once-job"]);
+    },
+  );
+
+  await t.step(
+    "once: false のジョブではコールバックが呼ばれないこと",
+    async () => {
+      const client = createMockClient(null);
+      const sessions = new SessionStore();
+      const { manager } = createMockApprovalManager();
+      const systemPrompts = createMockSystemPromptStore();
+
+      const executor = new CronExecutor(
+        client as never,
+        TEST_CONFIG,
+        "guild-1",
+        sessions,
+        manager as never,
+        systemPrompts,
+      );
+
+      const calledWith: string[] = [];
+      executor.setOnceCallback((name: string) => {
+        calledWith.push(name);
+        return Promise.resolve();
+      });
+
+      const job: CronJobDef = {
+        name: "normal-job",
+        schedule: "0 0 * * *",
+        prompt: "hello",
+        once: false,
+      };
+
+      await executor.runJob(job);
+      assertEquals(calledWith, []);
+    },
+  );
+
+  await t.step("findJob / listJobs でジョブが取得できること", () => {
+    const { channel } = createMockChannel();
+    const client = createMockClient(channel);
+    const sessions = new SessionStore();
+    const { manager } = createMockApprovalManager();
+    const systemPrompts = createMockSystemPromptStore();
+
+    const executor = new CronExecutor(
+      client as never,
+      TEST_CONFIG,
+      "guild-1",
+      sessions,
+      manager as never,
+      systemPrompts,
+    );
+
+    const jobs: CronJobDef[] = [
+      { name: "j1", schedule: "0 9 * * *", prompt: "test1" },
+      { name: "j2", schedule: "0 18 * * *", prompt: "test2" },
+    ];
+
+    executor.start(jobs);
+
+    assertEquals(executor.findJob("j1")?.name, "j1");
+    assertEquals(executor.findJob("j2")?.prompt, "test2");
+    assertEquals(executor.findJob("nonexistent"), undefined);
+    assertEquals(executor.listJobs().length, 2);
+
+    executor.stop();
+  });
+
+  await t.step(
+    "once: true でコールバック未設定の場合にサイレントスキップされること",
+    async () => {
+      const client = createMockClient(null);
+      const sessions = new SessionStore();
+      const { manager } = createMockApprovalManager();
+      const systemPrompts = createMockSystemPromptStore();
+
+      const executor = new CronExecutor(
+        client as never,
+        TEST_CONFIG,
+        "guild-1",
+        sessions,
+        manager as never,
+        systemPrompts,
+      );
+
+      // setOnceCallback を呼ばない
+      const job: CronJobDef = {
+        name: "once-no-callback",
+        schedule: "0 0 * * *",
+        prompt: "hello",
+        once: true,
+      };
+
+      // エラーにならずに完了すること
+      await executor.runJob(job);
+
+      // running からクリアされていること
+      // @ts-ignore: private フィールドへのアクセス
+      assertEquals(executor.running.has("once-no-callback"), false);
+    },
+  );
+
+  await t.step(
+    "once ジョブ実行後に running がコールバック完了後にクリアされること",
+    async () => {
+      const client = createMockClient(null);
+      const sessions = new SessionStore();
+      const { manager } = createMockApprovalManager();
+      const systemPrompts = createMockSystemPromptStore();
+
+      const executor = new CronExecutor(
+        client as never,
+        TEST_CONFIG,
+        "guild-1",
+        sessions,
+        manager as never,
+        systemPrompts,
+      );
+
+      let runningDuringCallback = false;
+      executor.setOnceCallback((name: string) => {
+        // コールバック実行中は running に残っているはず
+        // @ts-ignore: private フィールドへのアクセス
+        runningDuringCallback = executor.running.has(name);
+        return Promise.resolve();
+      });
+
+      const job: CronJobDef = {
+        name: "once-running-check",
+        schedule: "0 0 * * *",
+        prompt: "hello",
+        once: true,
+      };
+
+      await executor.runJob(job);
+
+      // コールバック実行中は running に含まれていた
+      assertEquals(runningDuringCallback, true);
+      // 完了後はクリアされている
+      // @ts-ignore: private フィールドへのアクセス
+      assertEquals(executor.running.has("once-running-check"), false);
+    },
+  );
 });
