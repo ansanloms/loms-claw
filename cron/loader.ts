@@ -10,6 +10,7 @@
 import { join } from "jsr:@std/path@^1/join";
 import { extract } from "@std/front-matter/yaml";
 import Ajv from "ajv";
+import type { ErrorObject, ValidateFunction } from "ajv";
 import { createLogger } from "../logger.ts";
 import { parseCronExpression } from "./match.ts";
 import type { CronJobDef } from "./types.ts";
@@ -43,6 +44,8 @@ const cronExpressionValidate = Object.assign(
     } catch (e) {
       cronExpressionValidate.errors = [{
         keyword: "cronExpression",
+        instancePath: "",
+        schemaPath: "#/cronExpression",
         message: `invalid cron expression: ${
           e instanceof Error ? e.message : String(e)
         }`,
@@ -51,7 +54,7 @@ const cronExpressionValidate = Object.assign(
       return false;
     }
   },
-  { errors: [] as { keyword: string; message: string; params: unknown }[] },
+  { errors: [] as ErrorObject[] },
 );
 
 ajv.addKeyword({
@@ -60,8 +63,6 @@ ajv.addKeyword({
   validate: cronExpressionValidate,
   errors: true,
 });
-
-import type { ValidateFunction } from "ajv";
 
 const validateFrontMatter: ValidateFunction<CronFrontMatter> = ajv.compile<CronFrontMatter>({
   type: "object",
@@ -126,6 +127,10 @@ export function validateCronJob(
       errors.push('"schedule" is required and must be a non-empty string');
     } else if (err.keyword === "type") {
       const field = err.instancePath.slice(1);
+      // oneOf 配下の type エラーは親の oneOf エラーで処理するためスキップ
+      if (field === "channelId") {
+        continue;
+      }
       const expected = err.params.type;
       errors.push(`"${field}" must be a ${expected}`);
     } else if (err.keyword === "oneOf" && err.instancePath === "/channelId") {

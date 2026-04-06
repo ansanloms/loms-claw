@@ -152,6 +152,19 @@ Deno.test("validateCronJob", async (t) => {
     assertEquals(job.once, false);
   });
 
+  await t.step("channelId が string でも number でもない場合はエラーになること", () => {
+    assertThrows(
+      () =>
+        validateCronJob(
+          { schedule: "0 9 * * *", channelId: true },
+          "prompt",
+          "test.md",
+        ),
+      Error,
+      '"channelId" must be a string or number',
+    );
+  });
+
   await t.step("once が boolean でない場合はエラーになること", () => {
     assertThrows(
       () =>
