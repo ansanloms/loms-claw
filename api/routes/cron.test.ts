@@ -186,4 +186,28 @@ Deno.test("createCronRoutes", async (t) => {
 
     assertEquals(res.status, 503);
   });
+
+  await t.step(
+    "POST /run: 不正な JSON ボディで 500 を返すこと",
+    async () => {
+      const app = new Hono();
+      app.route(
+        "/cron",
+        createCronRoutes({
+          runJob: () => Promise.resolve(),
+        }),
+      );
+      app.onError((err, c) => {
+        return c.json({ error: err.message }, 500);
+      });
+
+      const res = await app.request("/cron/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "not-json",
+      });
+
+      assertEquals(res.status, 500);
+    },
+  );
 });

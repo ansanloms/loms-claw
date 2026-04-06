@@ -200,12 +200,14 @@ export class CronExecutor {
         }
       }
     } finally {
-      this.running.delete(job.name);
       if (job.once && this.onceCallback) {
-        this.onceCallback(job.name).catch((e) =>
-          log.error(`once callback failed for "${job.name}":`, e)
-        );
+        try {
+          await this.onceCallback(job.name);
+        } catch (e) {
+          log.error(`once callback failed for "${job.name}":`, e);
+        }
       }
+      this.running.delete(job.name);
     }
   }
 }
