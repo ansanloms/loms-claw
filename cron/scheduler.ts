@@ -96,6 +96,20 @@ export class CronScheduler {
   }
 
   /**
+   * 名前でジョブを検索する。
+   */
+  getJob(name: string): CronJobDef | undefined {
+    return this.jobs.get(name);
+  }
+
+  /**
+   * 全ジョブ定義を返す。
+   */
+  getAllJobs(): CronJobDef[] {
+    return [...this.jobs.values()];
+  }
+
+  /**
    * tick 処理。全ジョブの cron 式を評価し、マッチするものを実行する。
    *
    * テスト用に `now` パラメータを受け付ける。

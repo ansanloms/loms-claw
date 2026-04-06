@@ -250,4 +250,110 @@ Deno.test("CronExecutor", async (t) => {
     sessions.set("cron:my-job", "session-abc");
     assertEquals(sessions.get("cron:my-job"), "session-abc");
   });
+
+  await t.step(
+    "once: true のジョブ実行後にコールバックが呼ばれること",
+    async () => {
+      const client = createMockClient(null);
+      const sessions = new SessionStore();
+      const { manager } = createMockApprovalManager();
+      const systemPrompts = createMockSystemPromptStore();
+
+      const executor = new CronExecutor(
+        client as never,
+        TEST_CONFIG,
+        "guild-1",
+        sessions,
+        manager as never,
+        systemPrompts,
+      );
+
+      const calledWith: string[] = [];
+      executor.setOnceCallback((name: string) => {
+        calledWith.push(name);
+        return Promise.resolve();
+      });
+
+      const job: CronJobDef = {
+        name: "once-job",
+        schedule: "0 0 * * *",
+        prompt: "hello",
+        once: true,
+      };
+
+      // askClaude が無いためエラーになるが、once コールバックは finally で呼ばれる
+      await executor.runJob(job);
+
+      // コールバックは非同期で fire-and-forget されるため少し待つ
+      await new Promise((r) => setTimeout(r, 50));
+      assertEquals(calledWith, ["once-job"]);
+    },
+  );
+
+  await t.step(
+    "once: false のジョブではコールバックが呼ばれないこと",
+    async () => {
+      const client = createMockClient(null);
+      const sessions = new SessionStore();
+      const { manager } = createMockApprovalManager();
+      const systemPrompts = createMockSystemPromptStore();
+
+      const executor = new CronExecutor(
+        client as never,
+        TEST_CONFIG,
+        "guild-1",
+        sessions,
+        manager as never,
+        systemPrompts,
+      );
+
+      const calledWith: string[] = [];
+      executor.setOnceCallback((name: string) => {
+        calledWith.push(name);
+        return Promise.resolve();
+      });
+
+      const job: CronJobDef = {
+        name: "normal-job",
+        schedule: "0 0 * * *",
+        prompt: "hello",
+        once: false,
+      };
+
+      await executor.runJob(job);
+      await new Promise((r) => setTimeout(r, 50));
+      assertEquals(calledWith, []);
+    },
+  );
+
+  await t.step("findJob / listJobs でジョブが取得できること", () => {
+    const { channel } = createMockChannel();
+    const client = createMockClient(channel);
+    const sessions = new SessionStore();
+    const { manager } = createMockApprovalManager();
+    const systemPrompts = createMockSystemPromptStore();
+
+    const executor = new CronExecutor(
+      client as never,
+      TEST_CONFIG,
+      "guild-1",
+      sessions,
+      manager as never,
+      systemPrompts,
+    );
+
+    const jobs: CronJobDef[] = [
+      { name: "j1", schedule: "0 9 * * *", prompt: "test1" },
+      { name: "j2", schedule: "0 18 * * *", prompt: "test2" },
+    ];
+
+    executor.start(jobs);
+
+    assertEquals(executor.findJob("j1")?.name, "j1");
+    assertEquals(executor.findJob("j2")?.prompt, "test2");
+    assertEquals(executor.findJob("nonexistent"), undefined);
+    assertEquals(executor.listJobs().length, 2);
+
+    executor.stop();
+  });
 });

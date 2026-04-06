@@ -41,6 +41,7 @@ import { WhisperStt } from "../voice/stt.ts";
 import { OpenAiTts } from "../voice/tts.ts";
 import { VoicePlayer } from "../voice/player.ts";
 import { startApiServer } from "../api/server.ts";
+import type { CronRouteContext } from "../api/routes/cron.ts";
 import { CronExecutor } from "../cron/executor.ts";
 import { loadCronJobsFromDir } from "../cron/loader.ts";
 
@@ -145,16 +146,46 @@ export class DiscordBot {
           this.cronExecutor!.reload(jobs);
         };
 
-        // 統合 API サーバーを起動する（承認フック + Discord REST API + cron reload）。
+        // once ジョブのコールバック: ファイル削除 → reload
+        this.cronExecutor.setOnceCallback(async (jobName: string) => {
+          const filePath = join(
+            this.config.claude.cwd,
+            "cron",
+            `${jobName}.md`,
+          );
+          try {
+            await Deno.remove(filePath);
+            log.info(`once job file deleted: ${filePath}`);
+          } catch (e) {
+            log.error(`failed to delete once job file: ${filePath}`, e);
+          }
+          await reloadJobs();
+        });
+
+        // 手動実行関数
+        const runJobByName = async (name: string) => {
+          const job = this.cronExecutor!.findJob(name);
+          if (!job) {
+            throw new Error(`job not found: ${name}`);
+          }
+          await this.cronExecutor!.runJob(job);
+        };
+
+        // 統合 API サーバーを起動する（承認フック + Discord REST API + cron）。
         const discordCtx = {
           client: this.client,
           guildId: this.config.guildId,
+        };
+        const cronCtx: CronRouteContext = {
+          reloadCronJobs: reloadJobs,
+          runJob: runJobByName,
+          listJobs: () => this.cronExecutor!.listJobs(),
         };
         this.apiServer = startApiServer(
           this.approvalManager,
           discordCtx,
           this.config.claude.apiPort,
-          reloadJobs,
+          cronCtx,
         );
 
         // 起動時に auto-join 条件を満たす VC があれば参加する。

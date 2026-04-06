@@ -15,7 +15,8 @@ cron ジョブの管理はファイル操作で行う。`RemoteTrigger`、`CronC
 - ジョブ追加: `cron/{name}.md` ファイルを作成し、reload API を叩く
 - ジョブ編集: 該当ファイルを編集し、reload API を叩く
 - ジョブ削除: 該当ファイルを削除し、reload API を叩く
-- ジョブ一覧: `cron/` ディレクトリを `ls` する
+- ジョブ一覧: `curl -s http://127.0.0.1:3000/cron` または `ls cron/`
+- 手動実行: `curl -s -X POST -H 'Content-Type: application/json' -d '{"name":"ジョブ名"}' http://127.0.0.1:3000/cron/run`
 
 **ファイルを変更したら必ず reload API を叩くこと。** reload しないと変更が反映されない。
 
@@ -48,6 +49,7 @@ timeout: 120000
 | `resumeSession` | no   | boolean | `false`    | 前回のセッションを引き継ぐか                     |
 | `maxTurns`      | no   | number  | 10         | Claude の最大ターン数                             |
 | `timeout`       | no   | number  | 300000     | タイムアウト（ミリ秒）                            |
+| `once`          | no   | boolean | `false`    | `true` で1回実行後にファイル自動削除             |
 
 ### channelId について
 
@@ -60,6 +62,24 @@ timeout: 120000
 
 - `false`（デフォルト）: 毎回新規セッションで実行する。前回の会話コンテキストは引き継がない。
 - `true`: 前回のセッション ID を `--resume` で渡し、会話を継続する。コンテキストが蓄積し続ける点に注意。プロセス再起動でセッションはリセットされる。
+
+### once について
+
+- `true` に設定すると、スケジュールまたは手動実行で1回実行された後にジョブファイルが自動削除される。
+- 1回きりのリマインダーや通知に使う。
+- 成功・失敗を問わず実行後に削除される。
+
+例:
+
+```markdown
+---
+schedule: "0 15 * * *"
+channelId: "1234567890123456789"
+once: true
+---
+
+15時のリマインダー: 会議の準備をしろ。
+```
 
 ## cron 式の書き方
 

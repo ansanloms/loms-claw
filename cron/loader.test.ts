@@ -133,6 +133,37 @@ Deno.test("validateCronJob", async (t) => {
       '"maxTurns" must be a number',
     );
   });
+
+  await t.step("once: true で正しくパースされること", () => {
+    const job = validateCronJob(
+      { schedule: "0 9 * * *", once: true },
+      "prompt",
+      "test.md",
+    );
+    assertEquals(job.once, true);
+  });
+
+  await t.step("once 未指定で false になること", () => {
+    const job = validateCronJob(
+      { schedule: "0 9 * * *" },
+      "prompt",
+      "test.md",
+    );
+    assertEquals(job.once, false);
+  });
+
+  await t.step("once が boolean でない場合はエラーになること", () => {
+    assertThrows(
+      () =>
+        validateCronJob(
+          { schedule: "0 9 * * *", once: "yes" },
+          "prompt",
+          "test.md",
+        ),
+      Error,
+      '"once" must be a boolean',
+    );
+  });
 });
 
 Deno.test("loadCronJobsFromDir", async (t) => {

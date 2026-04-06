@@ -31,6 +31,7 @@ export class CronExecutor {
   /** 実行中のジョブ名を追跡し、同一ジョブの並行実行を防止する。 */
   private running = new Set<string>();
   private scheduler: CronScheduler;
+  private onceCallback?: (jobName: string) => Promise<void>;
 
   constructor(
     private readonly client: Client,
@@ -41,6 +42,29 @@ export class CronExecutor {
     private readonly systemPrompts: SystemPromptStore,
   ) {
     this.scheduler = new CronScheduler((job) => this.runJob(job));
+  }
+
+  /**
+   * once ジョブ実行後に呼ばれるコールバックを設定する。
+   *
+   * コールバックはジョブ名を受け取り、ファイル削除・リロード等の後処理を行う。
+   */
+  setOnceCallback(cb: (jobName: string) => Promise<void>): void {
+    this.onceCallback = cb;
+  }
+
+  /**
+   * 名前でジョブを検索する。
+   */
+  findJob(name: string): CronJobDef | undefined {
+    return this.scheduler.getJob(name);
+  }
+
+  /**
+   * 登録済みジョブ一覧を返す。
+   */
+  listJobs(): CronJobDef[] {
+    return this.scheduler.getAllJobs();
   }
 
   /**
@@ -177,6 +201,11 @@ export class CronExecutor {
       }
     } finally {
       this.running.delete(job.name);
+      if (job.once && this.onceCallback) {
+        this.onceCallback(job.name).catch((e) =>
+          log.error(`once callback failed for "${job.name}":`, e)
+        );
+      }
     }
   }
 }

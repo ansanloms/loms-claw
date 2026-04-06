@@ -9,7 +9,7 @@ import { Hono } from "hono";
 import type { ApprovalManager } from "../approval/manager.ts";
 import type { ApiContext } from "./types.ts";
 import { createApprovalRoutes } from "./routes/approval.ts";
-import { createCronRoutes } from "./routes/cron.ts";
+import { createCronRoutes, type CronRouteContext } from "./routes/cron.ts";
 import { createDiscordRoutes } from "./routes/discord.ts";
 import { createLogsRoutes } from "./routes/logs.ts";
 import { createLogger } from "../logger.ts";
@@ -22,14 +22,14 @@ const log = createLogger("api-server");
  * @param manager - 承認マネージャー。
  * @param discordCtx - Discord API コンテキスト。
  * @param port - リッスンポート。
- * @param reloadCronJobs - cron ジョブ再読み込み関数。
+ * @param cronCtx - cron ルートの依存関係コンテキスト。
  * @returns Deno.HttpServer インスタンス（shutdown() で停止可能）。
  */
 export function startApiServer(
   manager: ApprovalManager,
   discordCtx: ApiContext,
   port: number,
-  reloadCronJobs?: () => Promise<void>,
+  cronCtx?: CronRouteContext,
 ): Deno.HttpServer {
   const app = new Hono();
 
@@ -41,7 +41,7 @@ export function startApiServer(
 
   // サブルートをマウント
   app.route("/approval", createApprovalRoutes(manager));
-  app.route("/cron", createCronRoutes(reloadCronJobs));
+  app.route("/cron", createCronRoutes(cronCtx));
   app.route("/discord", createDiscordRoutes(discordCtx));
   app.route("/logs", createLogsRoutes());
 
