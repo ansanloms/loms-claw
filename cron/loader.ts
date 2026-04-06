@@ -9,11 +9,73 @@
 
 import { join } from "jsr:@std/path@^1/join";
 import { extract } from "@std/front-matter/yaml";
+import Ajv from "ajv";
 import { createLogger } from "../logger.ts";
 import { parseCronExpression } from "./match.ts";
 import type { CronJobDef } from "./types.ts";
 
 const log = createLogger("cron-loader");
+
+/**
+ * フロントマター用 JSON Schema。
+ *
+ * ajv の `compile()` で型ガード関数を生成し、
+ * バリデーション通過後は `as` キャスト不要で型安全にアクセスできる。
+ */
+interface CronFrontMatter {
+  schedule: string;
+  channelId?: string | number;
+  maxTurns?: number;
+  timeout?: number;
+  resumeSession?: boolean;
+  once?: boolean;
+}
+
+// deno の npm 互換レイヤーでは CJS default export のコンストラクタ型が解決できない
+// @ts-expect-error: Ajv CJS default export
+const ajv = new Ajv({ allErrors: true });
+
+const cronExpressionValidate = Object.assign(
+  (_schema: boolean, data: string): boolean => {
+    try {
+      parseCronExpression(data);
+      return true;
+    } catch (e) {
+      cronExpressionValidate.errors = [{
+        keyword: "cronExpression",
+        message: `invalid cron expression: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+        params: { value: data },
+      }];
+      return false;
+    }
+  },
+  { errors: [] as { keyword: string; message: string; params: unknown }[] },
+);
+
+ajv.addKeyword({
+  keyword: "cronExpression",
+  type: "string",
+  validate: cronExpressionValidate,
+  errors: true,
+});
+
+import type { ValidateFunction } from "ajv";
+
+const validateFrontMatter: ValidateFunction<CronFrontMatter> = ajv.compile<CronFrontMatter>({
+  type: "object",
+  properties: {
+    schedule: { type: "string", minLength: 1, cronExpression: true },
+    channelId: { oneOf: [{ type: "string" }, { type: "number" }] },
+    maxTurns: { type: "number" },
+    timeout: { type: "number" },
+    resumeSession: { type: "boolean" },
+    once: { type: "boolean" },
+  },
+  required: ["schedule"],
+  additionalProperties: true,
+});
 
 /**
  * パース済みのフロントマターと本文を CronJobDef にバリデーションする。
@@ -29,69 +91,55 @@ export function validateCronJob(
   filename: string,
 ): CronJobDef {
   const name = filename.replace(/\.md$/, "");
+
+  if (validateFrontMatter(meta)) {
+    // 型ガード通過: meta は CronFrontMatter に narrowing 済み
+    if (!body) {
+      throw new Error(`${filename}: prompt body is empty`);
+    }
+
+    return {
+      name,
+      schedule: meta.schedule,
+      prompt: body,
+      channelId: meta.channelId != null
+        ? String(meta.channelId)
+        : undefined,
+      maxTurns: meta.maxTurns,
+      timeout: meta.timeout,
+      resumeSession: meta.resumeSession ?? false,
+      once: meta.once ?? false,
+    };
+  }
+
+  // バリデーション失敗: エラーメッセージを収集
   const errors: string[] = [];
 
-  // 必須 string フィールド
-  if (typeof meta.schedule !== "string" || (meta.schedule as string) === "") {
-    errors.push('"schedule" is required and must be a non-empty string');
+  for (const err of validateFrontMatter.errors ?? []) {
+    if (err.keyword === "cronExpression") {
+      errors.push(err.message ?? "invalid cron expression");
+    } else if (err.keyword === "required") {
+      errors.push(
+        `"${err.params.missingProperty}" is required and must be a non-empty string`,
+      );
+    } else if (err.keyword === "minLength" && err.instancePath === "/schedule") {
+      errors.push('"schedule" is required and must be a non-empty string');
+    } else if (err.keyword === "type") {
+      const field = err.instancePath.slice(1);
+      const expected = err.params.type;
+      errors.push(`"${field}" must be a ${expected}`);
+    } else if (err.keyword === "oneOf" && err.instancePath === "/channelId") {
+      errors.push('"channelId" must be a string or number');
+    } else {
+      errors.push(err.message ?? "validation error");
+    }
   }
 
-  // channelId はオプション。指定時は数値でも文字列でも許容
-  if (
-    meta.channelId !== undefined && meta.channelId !== null &&
-    typeof meta.channelId !== "string" && typeof meta.channelId !== "number"
-  ) {
-    errors.push('"channelId" must be a string or number');
-  }
-
-  // オプション number
-  if (meta.maxTurns !== undefined && typeof meta.maxTurns !== "number") {
-    errors.push('"maxTurns" must be a number');
-  }
-  if (meta.timeout !== undefined && typeof meta.timeout !== "number") {
-    errors.push('"timeout" must be a number');
-  }
-  if (
-    meta.resumeSession !== undefined && typeof meta.resumeSession !== "boolean"
-  ) {
-    errors.push('"resumeSession" must be a boolean');
-  }
-  if (meta.once !== undefined && typeof meta.once !== "boolean") {
-    errors.push('"once" must be a boolean');
-  }
-
-  // プロンプト（本文）が空でないこと
   if (!body) {
     errors.push("prompt body is empty");
   }
 
-  // cron 式のバリデーション
-  if (typeof meta.schedule === "string" && meta.schedule !== "") {
-    try {
-      parseCronExpression(meta.schedule as string);
-    } catch (e) {
-      errors.push(
-        `invalid cron expression: ${
-          e instanceof Error ? e.message : String(e)
-        }`,
-      );
-    }
-  }
-
-  if (errors.length > 0) {
-    throw new Error(`${filename}: ${errors.join("; ")}`);
-  }
-
-  return {
-    name,
-    schedule: meta.schedule as string,
-    prompt: body,
-    channelId: meta.channelId != null ? String(meta.channelId) : undefined,
-    maxTurns: meta.maxTurns as number | undefined,
-    timeout: meta.timeout as number | undefined,
-    resumeSession: (meta.resumeSession as boolean | undefined) ?? false,
-    once: (meta.once as boolean | undefined) ?? false,
-  };
+  throw new Error(`${filename}: ${errors.join("; ")}`);
 }
 
 /**
