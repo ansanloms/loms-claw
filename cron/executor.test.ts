@@ -62,6 +62,42 @@ function createMockSystemPromptStore(): SystemPromptStore {
   } as unknown as SystemPromptStore;
 }
 
+/** NDJSON ストリームを返すモック CommandSpawner。 */
+function mockSpawner(
+  lines: Record<string, unknown>[],
+  exitCode = 0,
+) {
+  return () => ({
+    stdout: new ReadableStream<Uint8Array>({
+      start(controller) {
+        const ndjson = lines.map((l) => JSON.stringify(l)).join("\n") + "\n";
+        controller.enqueue(new TextEncoder().encode(ndjson));
+        controller.close();
+      },
+    }),
+    stderr: Promise.resolve(""),
+    status: Promise.resolve({
+      success: exitCode === 0,
+      code: exitCode,
+      signal: null,
+    }),
+  });
+}
+
+/** askClaude が成功レスポンスを返す mockSpawner。 */
+function successSpawner(
+  result = "test result",
+  sessionId = "test-session",
+) {
+  return mockSpawner([{
+    type: "result",
+    subtype: "success",
+    result,
+    session_id: sessionId,
+    is_error: false,
+  }]);
+}
+
 const TEST_CONFIG = {
   maxTurns: 10,
   verbose: true,
@@ -85,6 +121,7 @@ Deno.test("CronExecutor", async (t) => {
       sessions,
       manager as never,
       systemPrompts,
+      mockSpawner([]),
     );
 
     const job: CronJobDef = {
@@ -119,6 +156,7 @@ Deno.test("CronExecutor", async (t) => {
         sessions,
         manager as never,
         systemPrompts,
+        mockSpawner([]),
       );
 
       const job: CronJobDef = {
@@ -150,6 +188,7 @@ Deno.test("CronExecutor", async (t) => {
       sessions,
       manager as never,
       systemPrompts,
+      successSpawner(),
     );
 
     const job: CronJobDef = {
@@ -159,8 +198,6 @@ Deno.test("CronExecutor", async (t) => {
       channelId: "ch-approval",
     };
 
-    // runJob はチャンネル取得後に askClaude で失敗するが、
-    // setChannel は先に呼ばれる
     await executor.runJob(job);
     assertEquals(getChannelId(), "ch-approval");
   });
@@ -180,6 +217,7 @@ Deno.test("CronExecutor", async (t) => {
         sessions,
         manager as never,
         systemPrompts,
+        successSpawner(),
       );
 
       const job: CronJobDef = {
@@ -188,7 +226,6 @@ Deno.test("CronExecutor", async (t) => {
         prompt: "hello",
       };
 
-      // askClaude が無いためエラーになるが、setChannel は呼ばれない
       await executor.runJob(job);
       assertEquals(getChannelId(), undefined);
     },
@@ -208,6 +245,7 @@ Deno.test("CronExecutor", async (t) => {
       sessions,
       manager as never,
       systemPrompts,
+      mockSpawner([]),
     );
 
     const jobs: CronJobDef[] = [
@@ -232,6 +270,7 @@ Deno.test("CronExecutor", async (t) => {
       sessions,
       manager as never,
       systemPrompts,
+      mockSpawner([]),
     );
 
     executor.start([
@@ -266,6 +305,7 @@ Deno.test("CronExecutor", async (t) => {
         sessions,
         manager as never,
         systemPrompts,
+        successSpawner(),
       );
 
       const calledWith: string[] = [];
@@ -281,7 +321,6 @@ Deno.test("CronExecutor", async (t) => {
         once: true,
       };
 
-      // askClaude が無いためエラーになるが、once コールバックは finally で await される
       await executor.runJob(job);
       assertEquals(calledWith, ["once-job"]);
     },
@@ -302,6 +341,7 @@ Deno.test("CronExecutor", async (t) => {
         sessions,
         manager as never,
         systemPrompts,
+        successSpawner(),
       );
 
       const calledWith: string[] = [];
@@ -336,6 +376,7 @@ Deno.test("CronExecutor", async (t) => {
       sessions,
       manager as never,
       systemPrompts,
+      mockSpawner([]),
     );
 
     const jobs: CronJobDef[] = [
@@ -368,6 +409,7 @@ Deno.test("CronExecutor", async (t) => {
         sessions,
         manager as never,
         systemPrompts,
+        successSpawner(),
       );
 
       // setOnceCallback を呼ばない
@@ -402,6 +444,7 @@ Deno.test("CronExecutor", async (t) => {
         sessions,
         manager as never,
         systemPrompts,
+        successSpawner(),
       );
 
       let runningDuringCallback = false;

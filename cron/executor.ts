@@ -10,7 +10,7 @@
 
 import type { Client, GuildTextBasedChannel } from "discord.js";
 import type { SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
-import { askClaude } from "../claude/mod.ts";
+import { askClaude, type CommandSpawner } from "../claude/mod.ts";
 import type { ClaudeConfig } from "../config.ts";
 import type { SessionStore } from "../session/mod.ts";
 import type { ApprovalManager } from "../approval/manager.ts";
@@ -40,6 +40,7 @@ export class CronExecutor {
     private readonly sessions: SessionStore,
     private readonly approvalManager: ApprovalManager,
     private readonly systemPrompts: SystemPromptStore,
+    private readonly spawner?: CommandSpawner,
   ) {
     this.scheduler = new CronScheduler((job) => this.runJob(job));
   }
@@ -154,6 +155,7 @@ export class CronExecutor {
         config: jobConfig,
         signal: AbortSignal.timeout(timeout),
         appendSystemPrompt,
+        spawner: this.spawner,
       });
 
       let resultEvent: SDKResultMessage | undefined;
