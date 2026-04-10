@@ -64,7 +64,9 @@ ajv.addKeyword({
   errors: true,
 });
 
-const validateFrontMatter: ValidateFunction<CronFrontMatter> = ajv.compile<CronFrontMatter>({
+const validateFrontMatter: ValidateFunction<CronFrontMatter> = ajv.compile<
+  CronFrontMatter
+>({
   type: "object",
   properties: {
     schedule: { type: "string", minLength: 1, cronExpression: true },
@@ -103,9 +105,7 @@ export function validateCronJob(
       name,
       schedule: meta.schedule,
       prompt: body,
-      channelId: meta.channelId != null
-        ? String(meta.channelId)
-        : undefined,
+      channelId: meta.channelId != null ? String(meta.channelId) : undefined,
       maxTurns: meta.maxTurns,
       timeout: meta.timeout,
       resumeSession: meta.resumeSession ?? false,
@@ -123,7 +123,9 @@ export function validateCronJob(
       errors.push(
         `"${err.params.missingProperty}" is required and must be a non-empty string`,
       );
-    } else if (err.keyword === "minLength" && err.instancePath === "/schedule") {
+    } else if (
+      err.keyword === "minLength" && err.instancePath === "/schedule"
+    ) {
       errors.push('"schedule" is required and must be a non-empty string');
     } else if (err.keyword === "type") {
       const field = err.instancePath.slice(1);
