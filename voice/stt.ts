@@ -43,6 +43,13 @@ export interface WhisperSttConfig {
    * whisper.cpp サーバーのベース URL（例: `http://localhost:8178`）。
    */
   baseUrl: string;
+
+  /**
+   * no_speech_prob の閾値。
+   * verbose_json 形式で返却される各セグメントの no_speech_prob が
+   * 全セグメントでこの値以上の場合、音声なしと判定する。
+   */
+  noSpeechProbThreshold: number;
 }
 
 /**
@@ -53,9 +60,11 @@ export interface WhisperSttConfig {
  */
 export class WhisperStt implements SpeechToText {
   private readonly baseUrl: string;
+  private readonly noSpeechProbThreshold: number;
 
   constructor(config: WhisperSttConfig) {
     this.baseUrl = config.baseUrl;
+    this.noSpeechProbThreshold = config.noSpeechProbThreshold;
   }
 
   /**
@@ -76,7 +85,7 @@ export class WhisperStt implements SpeechToText {
       new Blob([wavBytes], { type: "audio/wav" }),
       "audio.wav",
     );
-    form.append("response_format", "json");
+    form.append("response_format", "verbose_json");
     form.append("suppress_non_speech_tokens", "true");
 
     const res = await fetch(`${this.baseUrl}/inference`, {
@@ -91,6 +100,22 @@ export class WhisperStt implements SpeechToText {
     }
 
     const data = await res.json();
+
+    // 全セグメントの no_speech_prob が閾値以上なら無音と判定する。
+    const segments: { no_speech_prob?: number }[] = data.segments ?? [];
+    if (
+      segments.length > 0 &&
+      segments.every((s) =>
+        (s.no_speech_prob ?? 0) >= this.noSpeechProbThreshold
+      )
+    ) {
+      log.debug(
+        "all segments exceeded no_speech_prob threshold:",
+        segments.map((s) => s.no_speech_prob),
+      );
+      return "";
+    }
+
     const raw: string = (data.text ?? "").trim();
 
     // 非音声トークンを除去してクリーンな文字起こし結果を返す。

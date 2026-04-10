@@ -49,6 +49,8 @@ export interface VoiceConfig {
   autoLeaveMs: number;
   /** 発話デバウンス待機時間（ミリ秒）。 */
   speechDebounceMs: number;
+  /** no_speech_prob 閾値。全セグメントがこの値以上なら無音と判定。 */
+  noSpeechProbThreshold: number;
   /** 通知トーン（処理中・エラー）の有効/無効。 */
   notificationTone: boolean;
   /** auto-join: false=無効, true=全VC, string[]=指定VC IDのみ。 */
@@ -140,6 +142,9 @@ export function loadConfig(): Config {
       interruptRms: Number(Deno.env.get("INTERRUPT_RMS") ?? "500"),
       autoLeaveMs: Number(Deno.env.get("AUTO_LEAVE_MS") ?? "600000"),
       speechDebounceMs: Number(Deno.env.get("SPEECH_DEBOUNCE_MS") ?? "500"),
+      noSpeechProbThreshold: Number(
+        Deno.env.get("NO_SPEECH_PROB_THRESHOLD") ?? "0.6",
+      ),
       notificationTone:
         (Deno.env.get("NOTIFICATION_TONE") ?? "true") === "true",
       autoJoinVc: parseAutoJoinVc(Deno.env.get("AUTO_JOIN_VC")),
