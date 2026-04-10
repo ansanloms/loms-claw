@@ -81,7 +81,10 @@ export class DiscordBot {
 
     // ボイス機能の初期化。
     if (config.voice.enabled) {
-      const stt = new WhisperStt({ baseUrl: config.voice.whisperUrl });
+      const stt = new WhisperStt({
+        baseUrl: config.voice.whisperUrl,
+        noSpeechProbThreshold: config.voice.noSpeechProbThreshold,
+      });
       const tts = new OpenAiTts({
         baseUrl: config.voice.ttsUrl,
         apiKey: config.voice.ttsApiKey,

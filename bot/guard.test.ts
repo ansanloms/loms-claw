@@ -26,6 +26,7 @@ const baseConfig: Config = {
     interruptRms: 500,
     autoLeaveMs: 600000,
     speechDebounceMs: 500,
+    noSpeechProbThreshold: 0.6,
     notificationTone: true,
     autoJoinVc: false,
   },
