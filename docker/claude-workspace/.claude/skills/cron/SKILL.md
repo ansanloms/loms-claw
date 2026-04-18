@@ -35,6 +35,8 @@ channelId: "1234567890123456789"
 resumeSession: false
 maxTurns: 5
 timeout: 120000
+model: sonnet
+effort: medium
 ---
 
 ここにプロンプトを書く。
@@ -50,6 +52,8 @@ timeout: 120000
 | `maxTurns`      | no   | number  | 10         | Claude の最大ターン数                             |
 | `timeout`       | no   | number  | 300000     | タイムアウト（ミリ秒）                            |
 | `once`          | no   | boolean | `false`    | `true` で1回実行後にファイル自動削除             |
+| `model`         | no   | string  | —          | モデル alias または full name（後述）            |
+| `effort`        | no   | string  | —          | effort level（後述）                              |
 
 ### channelId について
 
@@ -79,6 +83,41 @@ once: true
 ---
 
 15時のリマインダー: 会議の準備をしろ。
+```
+
+### model / effort について
+
+ジョブごとに使用モデルと推論コスト（effort）を上書きできる。
+
+- `model`: `opus` / `sonnet` / `haiku` の alias、または `claude-sonnet-4-6` 等の full name。
+- `effort`: `low` / `medium` / `high` / `xhigh` / `max` のいずれか。
+
+#### 解決順序
+
+`frontmatter > channel 設定 > グローバルデフォルト` の順で解決される。
+
+1. ジョブの frontmatter に書かれていればそれを使う。
+2. 無ければ `channelId` で指定したチャンネルの `/claw status set` で設定された値を使う（`channelId` 省略時はスキップ）。
+3. それも無ければ `config.json` の `claude.defaults.model` / `claude.defaults.effort` を使う。
+4. いずれも未設定なら CLI のデフォルトに任せる（`--model` / `--effort` を渡さない）。
+
+#### 使い分け
+
+- **重い分析・要約等で精度が要るジョブ**: `model: opus` + `effort: high` 以上。
+- **軽量な定型通知・リマインダー**: `model: haiku` + `effort: low` でコストとレイテンシを抑える。
+- **チャンネルの既定値を使いたい**: 両方とも省略する（`channelId` 経由で `/claw status` の設定が拾われる）。
+
+例:
+
+```markdown
+---
+schedule: "0 9 * * *"
+channelId: "1234567890123456789"
+model: opus
+effort: high
+---
+
+ニュース要約: 直近24時間の重要記事を5件まとめろ。
 ```
 
 ## cron 式の書き方

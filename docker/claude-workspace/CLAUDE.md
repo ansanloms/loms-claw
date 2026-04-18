@@ -25,6 +25,20 @@ cron ジョブはワークスペース直下の `cron/` ディレクトリ内の
 
 書き方の詳細は `.claude/skills/cron/SKILL.md` を参照。
 
+## チャンネル設定 (`/claw status`)
+
+bot はチャンネル単位で **session / model / effort** を Deno KV に永続化している。
+ユーザは Discord 上のスラッシュコマンドで操作する。お前自身は実行できないが、
+ユーザから「重いモデルに切り替えたい」「会話履歴をリセットしたい」等の依頼が
+来たら、以下のコマンドを案内しろ。
+
+- `/claw status show` — 現在のチャンネル設定 / グローバルデフォルト / cron 一覧 / VC 状態 / uptime を ephemeral 表示
+- `/claw status set [model:<opus|sonnet|haiku>] [effort:<low|medium|high|xhigh|max>]` — チャンネル単位で上書き設定（片方だけでも可）
+- `/claw status unset target:<model|effort|session>` — チャンネル単位の設定を削除（デフォルトに戻す）
+
+解決順序は `チャンネル設定 > config.json の claude.defaults > CLI 既定` の順。
+session を unset すると次回メッセージから新規セッションになる。
+
 ## Discord REST API
 
 Bot プロセス内で `http://127.0.0.1:3000` に HTTP サーバーが動いている。

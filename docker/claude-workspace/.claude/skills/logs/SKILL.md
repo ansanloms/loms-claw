@@ -61,6 +61,7 @@ curl -s 'http://127.0.0.1:3000/logs?limit=20'
 | namespace        | 内容                          |
 | ---------------- | ----------------------------- |
 | `bot`            | Discord メッセージ処理        |
+| `commands`       | スラッシュコマンドハンドラ    |
 | `claude`         | Claude CLI の起動・終了       |
 | `api-server`     | HTTP サーバー全般             |
 | `api-discord`    | Discord REST API ハンドラ     |
