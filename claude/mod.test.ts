@@ -266,7 +266,7 @@ Deno.test("askClaude", async (t) => {
   });
 
   await t.step(
-    "stderr が空の非ゼロ終了でもメッセージにヒントが含まれること",
+    "イベント未受信の非ゼロ終了で 'no output' ヒントが含まれること",
     async () => {
       await assertRejects(
         async () => {
@@ -280,7 +280,35 @@ Deno.test("askClaude", async (t) => {
           }
         },
         Error,
-        "no stderr output",
+        "no output",
+      );
+    },
+  );
+
+  await t.step(
+    "result subtype がエラーの場合 reason に subtype が含まれること",
+    async () => {
+      await assertRejects(
+        async () => {
+          for await (
+            const _ of askClaude("hello", {
+              config: baseConfig,
+              spawner: mockSpawner(
+                [{
+                  type: "result",
+                  subtype: "error_max_turns",
+                  session_id: "s",
+                  is_error: true,
+                }],
+                1,
+              ),
+            })
+          ) {
+            void _;
+          }
+        },
+        Error,
+        "result subtype=error_max_turns",
       );
     },
   );
