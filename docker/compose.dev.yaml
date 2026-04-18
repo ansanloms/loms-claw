@@ -1,7 +1,0 @@
-services:
-  bot:
-    command: ["deno", "run", "-A", "--watch", "/app/main.ts"]
-    volumes:
-      - type: bind
-        source: ..
-        target: /app

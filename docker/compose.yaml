@@ -5,13 +5,6 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    env_file:
-      - ../.env
-    environment:
-      # Bot プロセスが読む config.json のパス。
-      # CLAUDE_WORKSPACE が /workspace に bind mount されるため、
-      # その直下の config.json をコンテナ内の絶対パスで指す。
-      - LOMS_CLAW_CONFIG=/workspace/config.json
     working_dir: /workspace
     command: [
       "deno",
@@ -31,6 +24,9 @@ services:
       - type: bind
         source: ${CLAUDE_WORKSPACE:-./claude-workspace}
         target: /workspace
+      - type: bind
+        source: ${LOMS_CLAW_CONFIG:-../config.json}
+        target: /workspace/config.json
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
