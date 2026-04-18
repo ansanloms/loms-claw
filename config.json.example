@@ -1,9 +1,11 @@
 {
   "$schema": "./config.schema.json",
-  "discordToken": "",
-  "guildId": "",
-  "authorizedUserId": "",
-  "activeChannelIds": [],
+  "discord": {
+    "token": "",
+    "guildId": "",
+    "userId": "",
+    "activeChannelIds": []
+  },
   "storePath": ".claude/loms-claw.kv",
   "claude": {
     "maxTurns": 10,

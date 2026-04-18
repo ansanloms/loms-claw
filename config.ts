@@ -101,17 +101,25 @@ export interface LogConfig {
 }
 
 /**
- * バリデーション済みのアプリケーション設定。
+ * Discord 接続・認可関連の設定。
  */
-export interface Config {
+export interface DiscordConfig {
   /** Discord bot トークン。 */
-  discordToken: string;
+  token: string;
   /** 対象 Discord ギルド ID。 */
   guildId: string;
   /** 操作を許可する唯一のユーザー ID。 */
-  authorizedUserId: string;
+  userId: string;
   /** mention 不要で全メッセージに反応するチャンネル ID の配列。 */
   activeChannelIds: string[];
+}
+
+/**
+ * バリデーション済みのアプリケーション設定。
+ */
+export interface Config {
+  /** Discord 接続・認可関連の設定。 */
+  discord: DiscordConfig;
   /** 永続化ストア (Deno KV / SQLite) のファイルパス。 */
   storePath: string;
   /** Claude Code CLI 設定。 */

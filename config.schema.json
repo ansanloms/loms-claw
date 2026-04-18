@@ -4,10 +4,7 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "discordToken",
-    "guildId",
-    "authorizedUserId",
-    "activeChannelIds",
+    "discord",
     "storePath",
     "claude",
     "voice",
@@ -18,13 +15,20 @@
       "type": "string",
       "description": "IDE / tooling 用の JSON Schema 参照。検証では無視される"
     },
-    "discordToken": { "type": "string", "minLength": 1 },
-    "guildId": { "type": "string", "minLength": 1 },
-    "authorizedUserId": { "type": "string", "minLength": 1 },
-    "activeChannelIds": {
-      "type": "array",
-      "items": { "type": "string" },
-      "default": []
+    "discord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["token", "guildId", "userId", "activeChannelIds"],
+      "properties": {
+        "token": { "type": "string", "minLength": 1 },
+        "guildId": { "type": "string", "minLength": 1 },
+        "userId": { "type": "string", "minLength": 1 },
+        "activeChannelIds": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": []
+        }
+      }
     },
     "storePath": { "type": "string", "default": ".claude/loms-claw.kv" },
     "claude": {

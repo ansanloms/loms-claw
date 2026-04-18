@@ -311,11 +311,11 @@ cp config.json.example config.json
 # エディタで discordToken / guildId / authorizedUserId を入力
 ```
 
-| 必須フィールド     | 内容                            |
-| ------------------ | ------------------------------- |
-| `discordToken`     | Discord bot トークン            |
-| `guildId`          | 対象ギルド ID                   |
-| `authorizedUserId` | 操作を許可する唯一のユーザー ID |
+| 必須フィールド    | 内容                            |
+| ----------------- | ------------------------------- |
+| `discord.token`   | Discord bot トークン            |
+| `discord.guildId` | 対象ギルド ID                   |
+| `discord.userId`  | 操作を許可する唯一のユーザー ID |
 
 その他のフィールドは省略可。ajv の `useDefaults: true` により schema (`config.schema.json`) の `default` が自動で補完される。未知プロパティは `additionalProperties: false` で拒否されるため typo で気付く。
 

@@ -4,9 +4,11 @@ import { loadConfig } from "./config.ts";
 const ENV_KEY = "LOMS_CLAW_CONFIG";
 
 const requiredFields = {
-  discordToken: "test-token",
-  guildId: "test-guild",
-  authorizedUserId: "test-user",
+  discord: {
+    token: "test-token",
+    guildId: "test-guild",
+    userId: "test-user",
+  },
 };
 
 /**
@@ -39,10 +41,10 @@ Deno.test("loadConfig", async (t) => {
   await t.step("必須フィールドのみでデフォルト値が補完されること", () => {
     withTempConfig(requiredFields, () => {
       const config = loadConfig();
-      assertEquals(config.discordToken, "test-token");
-      assertEquals(config.guildId, "test-guild");
-      assertEquals(config.authorizedUserId, "test-user");
-      assertEquals(config.activeChannelIds, []);
+      assertEquals(config.discord.token, "test-token");
+      assertEquals(config.discord.guildId, "test-guild");
+      assertEquals(config.discord.userId, "test-user");
+      assertEquals(config.discord.activeChannelIds, []);
       assertEquals(config.storePath, ".claude/loms-claw.kv");
       assertEquals(config.claude.defaults.model, undefined);
       assertEquals(config.claude.defaults.effort, undefined);
@@ -76,17 +78,20 @@ Deno.test("loadConfig", async (t) => {
     });
   });
 
-  await t.step("discordToken 未設定でエラーになること", () => {
-    const { discordToken: _omit, ...rest } = requiredFields;
-    withTempConfig(rest, () => {
-      assertThrows(() => loadConfig(), Error, "discordToken");
+  await t.step("discord.token 未設定でエラーになること", () => {
+    const { token: _omit, ...restDiscord } = requiredFields.discord;
+    withTempConfig({ discord: restDiscord }, () => {
+      assertThrows(() => loadConfig(), Error, "token");
     });
   });
 
-  await t.step("guildId が空文字列でエラーになること", () => {
-    withTempConfig({ ...requiredFields, guildId: "" }, () => {
-      assertThrows(() => loadConfig(), Error, "guildId");
-    });
+  await t.step("discord.guildId が空文字列でエラーになること", () => {
+    withTempConfig(
+      { discord: { ...requiredFields.discord, guildId: "" } },
+      () => {
+        assertThrows(() => loadConfig(), Error, "guildId");
+      },
+    );
   });
 
   await t.step("型不一致でエラーになること (maxTurns が string)", () => {
@@ -117,12 +122,17 @@ Deno.test("loadConfig", async (t) => {
     );
   });
 
-  await t.step("activeChannelIds を配列として受け取れること", () => {
+  await t.step("discord.activeChannelIds を配列として受け取れること", () => {
     withTempConfig(
-      { ...requiredFields, activeChannelIds: ["ch-1", "ch-2"] },
+      {
+        discord: {
+          ...requiredFields.discord,
+          activeChannelIds: ["ch-1", "ch-2"],
+        },
+      },
       () => {
         const config = loadConfig();
-        assertEquals(config.activeChannelIds, ["ch-1", "ch-2"]);
+        assertEquals(config.discord.activeChannelIds, ["ch-1", "ch-2"]);
       },
     );
   });

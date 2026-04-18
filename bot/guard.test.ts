@@ -3,10 +3,12 @@ import { isAuthorized, shouldRespond } from "./guard.ts";
 import type { Config } from "../config.ts";
 
 const baseConfig: Config = {
-  discordToken: "token",
-  guildId: "guild-1",
-  authorizedUserId: "user-1",
-  activeChannelIds: [],
+  discord: {
+    token: "token",
+    guildId: "guild-1",
+    userId: "user-1",
+    activeChannelIds: [],
+  },
   storePath: "/tmp/test-loms-claw.kv",
   claude: {
     maxTurns: 10,
