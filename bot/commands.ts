@@ -25,7 +25,6 @@ const MODEL_CHOICES = [
   { name: "opus", value: "opus" },
   { name: "sonnet", value: "sonnet" },
   { name: "haiku", value: "haiku" },
-  { name: "reset", value: "reset" },
 ] as const;
 
 const EFFORT_CHOICES = [
@@ -34,7 +33,12 @@ const EFFORT_CHOICES = [
   { name: "high", value: "high" },
   { name: "xhigh", value: "xhigh" },
   { name: "max", value: "max" },
-  { name: "reset", value: "reset" },
+] as const;
+
+const UNSET_TARGET_CHOICES = [
+  { name: "model", value: "model" },
+  { name: "effort", value: "effort" },
+  { name: "session", value: "session" },
 ] as const;
 
 /**
@@ -43,17 +47,52 @@ const EFFORT_CHOICES = [
 export const command = new SlashCommandBuilder()
   .setName("claw")
   .setDescription("loms-claw bot commands")
-  .addSubcommand((sub) =>
-    sub
+  .addSubcommandGroup((group) =>
+    group
       .setName("status")
-      .setDescription(
-        "Show bot status (channel config, defaults, cron, VC, uptime)",
+      .setDescription("Bot status (show / set / unset channel config)")
+      .addSubcommand((sub) =>
+        sub
+          .setName("show")
+          .setDescription(
+            "Show bot status (channel config, defaults, cron, VC, uptime)",
+          )
       )
-  )
-  .addSubcommand((sub) =>
-    sub
-      .setName("clear")
-      .setDescription("Clear the conversation session for this channel")
+      .addSubcommand((sub) =>
+        sub
+          .setName("set")
+          .setDescription(
+            "Set channel-level model / effort (specify at least one)",
+          )
+          .addStringOption((opt) =>
+            opt
+              .setName("model")
+              .setDescription("Model alias for this channel")
+              .setRequired(false)
+              .addChoices(...MODEL_CHOICES)
+          )
+          .addStringOption((opt) =>
+            opt
+              .setName("effort")
+              .setDescription("Effort level for this channel")
+              .setRequired(false)
+              .addChoices(...EFFORT_CHOICES)
+          )
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName("unset")
+          .setDescription(
+            "Clear channel-level setting (model / effort / session)",
+          )
+          .addStringOption((opt) =>
+            opt
+              .setName("target")
+              .setDescription("Which setting to clear")
+              .setRequired(true)
+              .addChoices(...UNSET_TARGET_CHOICES)
+          )
+      )
   )
   .addSubcommandGroup((group) =>
     group
@@ -69,63 +108,7 @@ export const command = new SlashCommandBuilder()
           .setName("leave")
           .setDescription("Leave the voice channel")
       )
-  )
-  .addSubcommandGroup((group) =>
-    group
-      .setName("config")
-      .setDescription("Per-channel model / effort configuration")
-      .addSubcommand((sub) =>
-        sub
-          .setName("show")
-          .setDescription("Show current channel config (with defaults)")
-      )
-      .addSubcommand((sub) =>
-        sub
-          .setName("model")
-          .setDescription("Set or reset model for this channel")
-          .addStringOption((opt) =>
-            opt
-              .setName("value")
-              .setDescription(
-                "Model alias (or 'reset' to fall back to default)",
-              )
-              .setRequired(true)
-              .addChoices(...MODEL_CHOICES)
-          )
-      )
-      .addSubcommand((sub) =>
-        sub
-          .setName("effort")
-          .setDescription("Set or reset effort level for this channel")
-          .addStringOption((opt) =>
-            opt
-              .setName("value")
-              .setDescription(
-                "Effort level (or 'reset' to fall back to default)",
-              )
-              .setRequired(true)
-              .addChoices(...EFFORT_CHOICES)
-          )
-      )
   );
-
-/**
- * /claw clear — 現在のチャンネルのセッションをクリアする。
- *
- * model / effort は触らず session のみ削除する。
- * model / effort は `/claw config <kind> reset` で個別に削除する。
- */
-export async function handleClear(
-  interaction: ChatInputCommandInteraction,
-  store: Store,
-): Promise<void> {
-  await store.deleteSession(interaction.channelId);
-  await interaction.reply({
-    content: "Session cleared.",
-    flags: MessageFlags.Ephemeral,
-  });
-  log.info("session cleared for channel:", interaction.channelId);
-}
 
 /**
  * /claw vc join — ユーザーが居る VC に参加する。
@@ -177,93 +160,7 @@ export async function handleVcLeave(
 }
 
 /**
- * /claw config show — 現在のチャンネル設定を表示する。
- */
-export async function handleConfigShow(
-  interaction: ChatInputCommandInteraction,
-  store: Store,
-): Promise<void> {
-  const settings = await store.getChannelSettings(interaction.channelId);
-  const lines: string[] = [`**Channel:** ${interaction.channelId}`];
-
-  if (settings.session) {
-    lines.push(`**Session:** \`${settings.session}\``);
-  } else {
-    lines.push("**Session:** (none)");
-  }
-
-  if (settings.model) {
-    const tag = settings.model.source === "channel" ? "channel" : "default";
-    lines.push(`**Model:** \`${settings.model.value}\` (${tag})`);
-  } else {
-    lines.push("**Model:** (unset; CLI default applies)");
-  }
-
-  if (settings.effort) {
-    const tag = settings.effort.source === "channel" ? "channel" : "default";
-    lines.push(`**Effort:** \`${settings.effort.value}\` (${tag})`);
-  } else {
-    lines.push("**Effort:** (unset; CLI default applies)");
-  }
-
-  await interaction.reply({
-    content: lines.join("\n"),
-    flags: MessageFlags.Ephemeral,
-  });
-}
-
-/**
- * /claw config model — モデルを設定または reset する。
- */
-export async function handleConfigModel(
-  interaction: ChatInputCommandInteraction,
-  store: Store,
-): Promise<void> {
-  const value = interaction.options.getString("value", true);
-  if (value === "reset") {
-    await store.deleteModel(interaction.channelId);
-    await interaction.reply({
-      content: "Model reset for this channel (default applies).",
-      flags: MessageFlags.Ephemeral,
-    });
-    log.info("model reset for channel:", interaction.channelId);
-    return;
-  }
-  await store.setModel(interaction.channelId, value);
-  await interaction.reply({
-    content: `Model set to \`${value}\` for this channel.`,
-    flags: MessageFlags.Ephemeral,
-  });
-  log.info(`model set for channel ${interaction.channelId}:`, value);
-}
-
-/**
- * /claw config effort — effort level を設定または reset する。
- */
-export async function handleConfigEffort(
-  interaction: ChatInputCommandInteraction,
-  store: Store,
-): Promise<void> {
-  const value = interaction.options.getString("value", true);
-  if (value === "reset") {
-    await store.deleteEffort(interaction.channelId);
-    await interaction.reply({
-      content: "Effort reset for this channel (default applies).",
-      flags: MessageFlags.Ephemeral,
-    });
-    log.info("effort reset for channel:", interaction.channelId);
-    return;
-  }
-  await store.setEffort(interaction.channelId, value);
-  await interaction.reply({
-    content: `Effort set to \`${value}\` for this channel.`,
-    flags: MessageFlags.Ephemeral,
-  });
-  log.info(`effort set for channel ${interaction.channelId}:`, value);
-}
-
-/**
- * /claw status — bot 全体のステータスを表示する。
+ * /claw status show — bot 全体のステータスを表示する。
  *
  * 含む情報:
  *   - 起動時刻 / uptime
@@ -272,7 +169,7 @@ export async function handleConfigEffort(
  *   - cron ジョブ数 + 名前一覧
  *   - VC 接続状態 (有効時のみ)
  */
-export async function handleStatus(
+export async function handleStatusShow(
   interaction: ChatInputCommandInteraction,
   deps: {
     store: Store;
@@ -348,6 +245,93 @@ export async function handleStatus(
     content: lines.join("\n"),
     flags: MessageFlags.Ephemeral,
   });
+}
+
+/**
+ * /claw status set — チャンネル単位で model / effort を設定する。
+ *
+ * model と effort は両方 optional。少なくとも片方の指定が必須。
+ * 両方指定した場合は同時に保存する。
+ */
+export async function handleStatusSet(
+  interaction: ChatInputCommandInteraction,
+  store: Store,
+): Promise<void> {
+  const model = interaction.options.getString("model");
+  const effort = interaction.options.getString("effort");
+
+  if (!model && !effort) {
+    await interaction.reply({
+      content: "Specify at least one of `model` or `effort`.",
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  const updates: string[] = [];
+  if (model) {
+    await store.setModel(interaction.channelId, model);
+    updates.push(`model = \`${model}\``);
+  }
+  if (effort) {
+    await store.setEffort(interaction.channelId, effort);
+    updates.push(`effort = \`${effort}\``);
+  }
+  await interaction.reply({
+    content: `Updated for this channel: ${updates.join(", ")}.`,
+    flags: MessageFlags.Ephemeral,
+  });
+  log.info(
+    `status set for channel ${interaction.channelId}:`,
+    updates.join(", "),
+  );
+}
+
+/**
+ * /claw status unset — チャンネル単位の設定を削除する。
+ *
+ * target に指定したものをデフォルトに戻す:
+ *   - "model"   → channel の model を削除 (env defaults にフォールバック)
+ *   - "effort"  → channel の effort を削除 (env defaults にフォールバック)
+ *   - "session" → 会話セッションを削除 (旧 /claw clear と同義)
+ */
+export async function handleStatusUnset(
+  interaction: ChatInputCommandInteraction,
+  store: Store,
+): Promise<void> {
+  const target = interaction.options.getString("target", true);
+  const channelId = interaction.channelId;
+
+  switch (target) {
+    case "model":
+      await store.deleteModel(channelId);
+      await interaction.reply({
+        content: "Model unset for this channel (default applies).",
+        flags: MessageFlags.Ephemeral,
+      });
+      break;
+    case "effort":
+      await store.deleteEffort(channelId);
+      await interaction.reply({
+        content: "Effort unset for this channel (default applies).",
+        flags: MessageFlags.Ephemeral,
+      });
+      break;
+    case "session":
+      await store.deleteSession(channelId);
+      await interaction.reply({
+        content: "Session cleared for this channel.",
+        flags: MessageFlags.Ephemeral,
+      });
+      break;
+    default:
+      await interaction.reply({
+        content: `Unknown target: ${target}`,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+  }
+  log.info(`status unset ${target} for channel ${channelId}`);
 }
 
 function formatSetting(

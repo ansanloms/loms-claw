@@ -36,11 +36,9 @@ import { join } from "jsr:@std/path@^1/join";
 import { createLogger } from "../logger.ts";
 import { SystemPromptStore } from "../claude/system-prompt.ts";
 import {
-  handleClear,
-  handleConfigEffort,
-  handleConfigModel,
-  handleConfigShow,
-  handleStatus,
+  handleStatusSet,
+  handleStatusShow,
+  handleStatusUnset,
   handleVcJoin,
   handleVcLeave,
 } from "./commands.ts";
@@ -307,34 +305,24 @@ export class DiscordBot {
       return;
     }
 
-    // /claw config <sub>
-    if (group === "config") {
+    // /claw status <sub>
+    if (group === "status") {
       if (sub === "show") {
-        return handleConfigShow(interaction, this.store);
+        return handleStatusShow(interaction, {
+          store: this.store,
+          defaults: this.config.defaults,
+          cronExecutor: this.cronExecutor,
+          voiceManager: this.voiceManager,
+          startedAt: this.startedAt,
+        });
       }
-      if (sub === "model") {
-        return handleConfigModel(interaction, this.store);
+      if (sub === "set") {
+        return handleStatusSet(interaction, this.store);
       }
-      if (sub === "effort") {
-        return handleConfigEffort(interaction, this.store);
+      if (sub === "unset") {
+        return handleStatusUnset(interaction, this.store);
       }
       return;
-    }
-
-    // /claw clear
-    if (sub === "clear") {
-      return handleClear(interaction, this.store);
-    }
-
-    // /claw status
-    if (sub === "status") {
-      return handleStatus(interaction, {
-        store: this.store,
-        defaults: this.config.defaults,
-        cronExecutor: this.cronExecutor,
-        voiceManager: this.voiceManager,
-        startedAt: this.startedAt,
-      });
     }
   }
 

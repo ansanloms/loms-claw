@@ -81,12 +81,6 @@ docker compose up -d
 # 本番停止
 docker compose down
 
-# 開発起動（watch モード、ソースコード bind mount。ファイル保存で自動再起動）
-docker compose -f compose.yaml -f compose.dev.yaml up
-
-# 開発停止
-docker compose -f compose.yaml -f compose.dev.yaml down
-
 # ログ確認
 docker compose logs -f
 
@@ -110,7 +104,7 @@ main.ts                エントリポイント。dotenv → loadConfig → Disc
 config.ts              環境変数 → Config 型。必須項目のバリデーション。
 logger.ts              名前空間付き軽量ロガー。LOG_LEVEL 環境変数で制御。リングバッファで直近ログをメモリ保持。
 bot/mod.ts             DiscordBot クラス。messageCreate ハンドラ、start/shutdown。
-bot/commands.ts        スラッシュコマンド定義とハンドラ（/claw status, /claw clear, /claw vc join|leave, /claw config show|model|effort）。
+bot/commands.ts        スラッシュコマンド定義とハンドラ（/claw status show|set|unset, /claw vc join|leave）。
 bot/guard.ts           isAuthorized(): ギルド ID + ユーザー ID + bot 除外の認可チェック。
 bot/message.ts         splitMessage(): 2000 文字分割。keepTyping(): typing インジケーター維持。ProgressReporter: ツール進捗表示。
 claude/mod.ts          askClaude(): Deno.Command で claude -p を spawn し stream-json 出力を逐次パース。
