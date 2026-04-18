@@ -1,56 +1,92 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "loms-claw config",
+  "description": "Discord + Claude Code CLI パーソナル AI エージェントのアプリケーション設定。",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "discord",
-    "storePath",
-    "claude",
-    "voice",
-    "log"
-  ],
+  "required": ["discord", "storePath", "claude", "voice", "log"],
   "properties": {
     "$schema": {
       "type": "string",
-      "description": "IDE / tooling 用の JSON Schema 参照。検証では無視される"
+      "description": "IDE / tooling 用の JSON Schema 参照。検証では無視される。"
     },
     "discord": {
       "type": "object",
+      "description": "Discord 接続・認可関連の設定。",
       "additionalProperties": false,
       "required": ["token", "guildId", "userId", "activeChannelIds"],
       "properties": {
-        "token": { "type": "string", "minLength": 1 },
-        "guildId": { "type": "string", "minLength": 1 },
-        "userId": { "type": "string", "minLength": 1 },
+        "token": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Discord bot トークン（必須）。Developer Portal > Bot > Token で取得。"
+        },
+        "guildId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "対象ギルド（サーバー）ID（必須）。開発者モードを有効にしてサーバー名を右クリック > ID をコピー。"
+        },
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "操作を許可するユーザー ID（必須）。この ID のユーザーのみが bot を操作できる。"
+        },
         "activeChannelIds": {
           "type": "array",
           "items": { "type": "string" },
-          "default": []
+          "default": [],
+          "description": "mention 不要で全メッセージに反応するチャンネル ID の配列。空配列なら全チャンネルで bot への mention が必要。"
         }
       }
     },
-    "storePath": { "type": "string", "default": ".claude/loms-claw.kv" },
+    "storePath": {
+      "type": "string",
+      "default": ".claude/loms-claw.kv",
+      "description": "session_id / model / effort を保存する Deno KV ファイルのパス。相対パスは cwd 基準。"
+    },
     "claude": {
       "type": "object",
+      "description": "Claude Code CLI (`claude -p`) の挙動とグローバルデフォルト。",
       "default": {},
       "additionalProperties": false,
       "required": ["maxTurns", "verbose", "timeout", "apiPort", "defaults"],
       "properties": {
-        "maxTurns": { "type": "number", "default": 10 },
-        "verbose": { "type": "boolean", "default": true },
-        "timeout": { "type": "number", "default": 300000 },
-        "apiPort": { "type": "number", "default": 3000 },
+        "maxTurns": {
+          "type": "number",
+          "default": 10,
+          "description": "エージェントの最大ターン数（`--max-turns` に渡される）。"
+        },
+        "verbose": {
+          "type": "boolean",
+          "default": true,
+          "description": "verbose ログの有効/無効（`--verbose` フラグ）。"
+        },
+        "timeout": {
+          "type": "number",
+          "default": 300000,
+          "description": "`claude` プロセスのタイムアウト（ミリ秒）。"
+        },
+        "apiPort": {
+          "type": "number",
+          "default": 3000,
+          "description": "内部 API サーバーのポート（承認フック + Discord REST API）。"
+        },
         "defaults": {
           "type": "object",
+          "description": "チャンネル単位の上書きが無いときに使われるグローバルデフォルト。",
           "default": {},
           "additionalProperties": false,
           "properties": {
-            "model": { "type": "string", "nullable": true },
+            "model": {
+              "type": "string",
+              "nullable": true,
+              "description": "デフォルトモデル alias または full name（例: opus / sonnet / haiku / claude-sonnet-4-6）。"
+            },
             "effort": {
               "type": "string",
               "enum": ["low", "medium", "high", "xhigh", "max"],
-              "nullable": true
+              "nullable": true,
+              "description": "デフォルト effort level。"
             }
           }
         }
@@ -58,6 +94,7 @@
     },
     "voice": {
       "type": "object",
+      "description": "ボイスチャンネル機能関連の設定（VC 参加・STT・TTS）。",
       "default": {},
       "additionalProperties": false,
       "required": [
@@ -74,47 +111,107 @@
         "autoJoinVc"
       ],
       "properties": {
-        "enabled": { "type": "boolean", "default": false },
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "VC 機能の有効/無効。false の場合 `voice.*` 以下の設定は使用されない。"
+        },
         "whisper": {
           "type": "object",
+          "description": "whisper.cpp（STT）サーバー設定。",
           "default": {},
           "additionalProperties": false,
           "required": ["url"],
           "properties": {
-            "url": { "type": "string", "default": "http://localhost:8178" }
+            "url": {
+              "type": "string",
+              "default": "http://localhost:8178",
+              "description": "whisper.cpp HTTP サーバーの URL。"
+            }
           }
         },
         "tts": {
           "type": "object",
+          "description": "TTS（OpenAI 互換 API）サーバー設定。",
           "default": {},
           "additionalProperties": false,
           "required": ["url", "model", "speaker", "speed"],
           "properties": {
-            "url": { "type": "string", "default": "http://localhost:8000" },
-            "apiKey": { "type": "string", "nullable": true },
-            "model": { "type": "string", "default": "voicevox" },
-            "speaker": { "type": "string", "default": "1" },
-            "speed": { "type": "number", "default": 1 }
+            "url": {
+              "type": "string",
+              "default": "http://localhost:8000",
+              "description": "TTS サーバーの URL（OpenAI 互換、例: voicevox-openai-tts）。"
+            },
+            "apiKey": {
+              "type": "string",
+              "nullable": true,
+              "description": "TTS API キー（不要な場合は null または省略）。"
+            },
+            "model": {
+              "type": "string",
+              "default": "voicevox",
+              "description": "TTS モデル名。"
+            },
+            "speaker": {
+              "type": "string",
+              "default": "1",
+              "description": "TTS スピーカー/音声 ID。"
+            },
+            "speed": {
+              "type": "number",
+              "default": 1,
+              "description": "TTS 再生速度（1.0 が等倍）。"
+            }
           }
         },
-        "minSpeechMs": { "type": "number", "default": 500 },
-        "speechRms": { "type": "number", "default": 200 },
-        "interruptRms": { "type": "number", "default": 500 },
-        "autoLeaveMs": { "type": "number", "default": 600000 },
-        "speechDebounceMs": { "type": "number", "default": 500 },
-        "noSpeechProbThreshold": { "type": "number", "default": 0.6 },
-        "notificationTone": { "type": "boolean", "default": true },
+        "minSpeechMs": {
+          "type": "number",
+          "default": 500,
+          "description": "STT に送る最小発話時間（ミリ秒）。これより短い発話は無視。"
+        },
+        "speechRms": {
+          "type": "number",
+          "default": 200,
+          "description": "発話とみなす最小 RMS 振幅。これ未満の音はノイズ扱い。"
+        },
+        "interruptRms": {
+          "type": "number",
+          "default": 500,
+          "description": "AI 再生を中断する最小 RMS 振幅。ユーザーの割り込みを検知する閾値。"
+        },
+        "autoLeaveMs": {
+          "type": "number",
+          "default": 600000,
+          "description": "無人 VC からの自動退出タイムアウト（ミリ秒）。-1 で無効。"
+        },
+        "speechDebounceMs": {
+          "type": "number",
+          "default": 500,
+          "description": "発話デバウンス待機時間（ミリ秒）。同一ユーザーの連続発話をこの間マージする。"
+        },
+        "noSpeechProbThreshold": {
+          "type": "number",
+          "default": 0.6,
+          "description": "whisper の no_speech_prob 閾値。全セグメントがこの値以上なら無音と判定し破棄する（ハルシネーション対策）。"
+        },
+        "notificationTone": {
+          "type": "boolean",
+          "default": true,
+          "description": "処理中・エラー通知トーンの有効/無効。"
+        },
         "autoJoinVc": {
           "anyOf": [
             { "type": "boolean" },
             { "type": "array", "items": { "type": "string" } }
           ],
-          "default": false
+          "default": false,
+          "description": "auto-join 設定。false=無効、true=全 VC、文字列配列=指定した VC ID のみ。"
         }
       }
     },
     "log": {
       "type": "object",
+      "description": "ロガー設定。",
       "default": {},
       "additionalProperties": false,
       "required": ["level", "bufferSize"],
@@ -122,13 +219,15 @@
         "level": {
           "type": "string",
           "enum": ["DEBUG", "INFO", "WARN", "ERROR"],
-          "default": "INFO"
+          "default": "INFO",
+          "description": "出力する最低ログレベル。"
         },
         "bufferSize": {
           "type": "number",
           "default": 1000,
           "minimum": 1,
-          "maximum": 10000
+          "maximum": 10000,
+          "description": "メモリ上のリングバッファ容量。GET /logs API で直近のログをこの件数まで遡れる。"
         }
       }
     }
