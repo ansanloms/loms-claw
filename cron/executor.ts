@@ -178,6 +178,12 @@ export class CronExecutor {
       for await (const event of stream) {
         if (event.type === "result") {
           resultEvent = event;
+          if (event.subtype !== "success") {
+            log.warn(
+              `cron job "${job.name}" non-success subtype "${event.subtype}":`,
+              JSON.stringify(event),
+            );
+          }
           if (job.resumeSession) {
             await this.store.setSession(sessionKey, event.session_id);
           }
@@ -205,8 +211,9 @@ export class CronExecutor {
 
       log.info(`cron job "${job.name}" completed`);
     } catch (error: unknown) {
+      // logger は Error の stack を自動で展開する。
+      log.error(`cron job "${job.name}" failed:`, error);
       const errMsg = error instanceof Error ? error.message : String(error);
-      log.error(`cron job "${job.name}" failed:`, errMsg);
 
       // channelId 指定時かつチャンネル取得済みならエラーを通知
       if (textChannel) {

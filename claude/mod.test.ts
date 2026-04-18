@@ -265,6 +265,26 @@ Deno.test("askClaude", async (t) => {
     );
   });
 
+  await t.step(
+    "stderr が空の非ゼロ終了でもメッセージにヒントが含まれること",
+    async () => {
+      await assertRejects(
+        async () => {
+          for await (
+            const _ of askClaude("hello", {
+              config: baseConfig,
+              spawner: mockSpawner([], 1),
+            })
+          ) {
+            void _;
+          }
+        },
+        Error,
+        "no stderr output",
+      );
+    },
+  );
+
   await t.step("セッション ID が引数に渡されること", async () => {
     let capturedArgs: string[] = [];
     const inner = mockSpawner([

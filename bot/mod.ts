@@ -521,6 +521,13 @@ export class DiscordBot {
         } else if (event.type === "result") {
           hasResult = true;
           resultEvent = event;
+          // 非 success の subtype (error_max_turns 等) は Docker logs から原因を追えるよう詳細を残す。
+          if (event.subtype !== "success") {
+            log.warn(
+              `claude returned non-success subtype "${event.subtype}":`,
+              JSON.stringify(event),
+            );
+          }
           // 非ゼロ終了でジェネレータがスローしてもセッションが残るよう即座に保存
           await this.store.setSession(channelId, event.session_id);
         } else if (event.type === "tool_progress") {
@@ -548,8 +555,9 @@ export class DiscordBot {
         }
       }
     } catch (error: unknown) {
+      // logger は Error の stack を自動で展開する。
+      log.error("failed to process message:", error);
       const errMsg = error instanceof Error ? error.message : String(error);
-      log.error("failed to process message:", errMsg);
       await channel.send(`Error: ${errMsg}`).catch(() => {});
     } finally {
       if (downloadedImages.length > 0) {

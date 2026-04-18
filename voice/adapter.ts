@@ -84,6 +84,10 @@ export async function askClaudeForVoice(
   const errors = "errors" in resultEvent
     ? JSON.stringify(resultEvent.errors)
     : resultEvent.subtype ?? "unknown error";
+  log.error(
+    `claude returned non-success subtype "${resultEvent.subtype}":`,
+    JSON.stringify(resultEvent),
+  );
   throw new Error(`claude returned error: ${errors}`);
 }
 
@@ -159,11 +163,22 @@ export async function* streamClaudeForVoice(
       // （元の askClaudeForVoice と同じ挙動）。
       if (typeof r.result === "string") {
         sessionId = event.session_id;
+        if (event.subtype !== "success") {
+          // result はあるが non-success: streaming は使うがログには警告を残す。
+          log.warn(
+            `claude voice non-success subtype "${event.subtype}":`,
+            JSON.stringify(event),
+          );
+        }
         resultText = r.result;
       } else {
         const errorDetail = r.errors
           ? JSON.stringify(r.errors)
           : r.subtype ?? "unknown error";
+        log.error(
+          `claude voice returned non-success subtype "${r.subtype}":`,
+          JSON.stringify(event),
+        );
         throw new Error(`claude returned error: ${errorDetail}`);
       }
     }

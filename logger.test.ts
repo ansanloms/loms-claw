@@ -142,4 +142,17 @@ Deno.test("getLogEntries", async (t) => {
     assertEquals(entries[0].message.includes("msg"), true);
     assertEquals(entries[0].message.includes('"key"'), true);
   });
+
+  await t.step("Error の stack が展開されること", () => {
+    const NS3 = `test-error-${crypto.randomUUID().slice(0, 8)}`;
+    silenced(() => {
+      const log = createLogger(NS3);
+      log.error("boom:", new Error("explicit failure"));
+    });
+    const entries = getLogEntries({ namespace: NS3, limit: 1 });
+    assertEquals(entries[0].message.includes("boom:"), true);
+    assertEquals(entries[0].message.includes("explicit failure"), true);
+    // stack に最低限ファイル名が含まれること
+    assertEquals(entries[0].message.includes("logger.test.ts"), true);
+  });
 });

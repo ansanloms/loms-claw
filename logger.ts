@@ -162,9 +162,7 @@ export function createLogger(namespace: string): Logger {
 
     // リングバッファには minLevel に関係なく全レベルを記録する
     const fullMessage = args.length > 0
-      ? `${msg} ${
-        args.map((a) => typeof a === "string" ? a : JSON.stringify(a)).join(" ")
-      }`
+      ? `${msg} ${args.map(stringifyArg).join(" ")}`
       : msg;
     pushEntry({ timestamp: ts, level, namespace, message: fullMessage });
 
@@ -187,4 +185,24 @@ export function createLogger(namespace: string): Logger {
     warn: (msg, ...args) => emit("WARN", msg, args),
     error: (msg, ...args) => emit("ERROR", msg, args),
   };
+}
+
+/**
+ * ログ引数を文字列化する。
+ *
+ * Error オブジェクトは `JSON.stringify` だと `{}` になり情報が落ちるため、
+ * stack (あれば) または message を抽出する。
+ */
+function stringifyArg(a: unknown): string {
+  if (typeof a === "string") {
+    return a;
+  }
+  if (a instanceof Error) {
+    return a.stack ?? `${a.name}: ${a.message}`;
+  }
+  try {
+    return JSON.stringify(a);
+  } catch {
+    return String(a);
+  }
 }

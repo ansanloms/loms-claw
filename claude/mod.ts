@@ -205,11 +205,19 @@ export async function* askClaude(
   const [stderrText, exitStatus] = await Promise.all([stderr, status]);
 
   if (!exitStatus.success) {
-    if (stderrText.trim()) {
-      log.error("claude stderr:", stderrText.trim());
-    }
+    const trimmedStderr = stderrText.trim();
+    const signalPart = exitStatus.signal
+      ? ` (signal: ${exitStatus.signal})`
+      : "";
+    // stderr が空のケースが多い (Claude CLI はエラーも stdout の result イベントに乗せる)
+    // 必ずログを残し、Docker logs で原因が追えるようにする。
+    log.error(
+      `claude exited with code ${exitStatus.code}${signalPart}` +
+        (trimmedStderr ? `\nstderr:\n${trimmedStderr}` : " (no stderr output)"),
+    );
     throw new Error(
-      `claude exited with code ${exitStatus.code}: ${stderrText.trim()}`,
+      `claude exited with code ${exitStatus.code}${signalPart}` +
+        (trimmedStderr ? `: ${trimmedStderr}` : " (no stderr output)"),
     );
   }
 
