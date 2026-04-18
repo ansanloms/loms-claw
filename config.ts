@@ -11,6 +11,16 @@ import type { LogLevel } from "./logger.ts";
 import { formatConfigErrors, validateConfigFile } from "./config.schema.ts";
 
 /**
+ * Claude のグローバルデフォルト。チャンネル単位の上書きが無いときに使われる。
+ */
+export interface ClaudeDefaults {
+  /** デフォルトのモデル alias または full name。 */
+  model?: string;
+  /** デフォルトの effort level (low / medium / high / xhigh / max)。 */
+  effort?: string;
+}
+
+/**
  * Claude Code CLI 設定。
  */
 export interface ClaudeConfig {
@@ -24,6 +34,32 @@ export interface ClaudeConfig {
   apiPort: number;
   /** `claude` プロセスの作業ディレクトリ。実行時に `Deno.cwd()` が注入される。 */
   cwd: string;
+  /** Claude のグローバルデフォルト (model / effort)。 */
+  defaults: ClaudeDefaults;
+}
+
+/**
+ * whisper.cpp (STT) 設定。
+ */
+export interface WhisperConfig {
+  /** whisper.cpp サーバーの URL。 */
+  url: string;
+}
+
+/**
+ * TTS (OpenAI 互換) 設定。
+ */
+export interface TtsConfig {
+  /** TTS サーバーの URL（OpenAI 互換）。 */
+  url: string;
+  /** TTS API キー。 */
+  apiKey?: string;
+  /** TTS モデル名。 */
+  model: string;
+  /** TTS スピーカー/音声 ID。 */
+  speaker: string;
+  /** TTS 再生速度。 */
+  speed: number;
 }
 
 /**
@@ -32,18 +68,10 @@ export interface ClaudeConfig {
 export interface VoiceConfig {
   /** VC 機能の有効/無効。 */
   enabled: boolean;
-  /** whisper.cpp サーバーの URL。 */
-  whisperUrl: string;
-  /** TTS サーバーの URL（OpenAI 互換）。 */
-  ttsUrl: string;
-  /** TTS API キー。 */
-  ttsApiKey?: string;
-  /** TTS モデル名。 */
-  ttsModel: string;
-  /** TTS スピーカー/音声 ID。 */
-  ttsSpeaker: string;
-  /** TTS 再生速度。 */
-  ttsSpeed: number;
+  /** whisper.cpp (STT) 設定。 */
+  whisper: WhisperConfig;
+  /** TTS 設定。 */
+  tts: TtsConfig;
   /** STT に送る最小発話時間（ミリ秒）。 */
   minSpeechMs: number;
   /** 発話とみなす最小 RMS 振幅。 */
@@ -60,16 +88,6 @@ export interface VoiceConfig {
   notificationTone: boolean;
   /** auto-join: false=無効, true=全VC, string[]=指定VC IDのみ。 */
   autoJoinVc: false | true | string[];
-}
-
-/**
- * Claude のグローバルデフォルト。チャンネル単位の上書きが無いときに使われる。
- */
-export interface ClaudeDefaults {
-  /** デフォルトのモデル alias または full name。 */
-  model?: string;
-  /** デフォルトの effort level (low / medium / high / xhigh / max)。 */
-  effort?: string;
 }
 
 /**
@@ -96,8 +114,6 @@ export interface Config {
   activeChannelIds: string[];
   /** 永続化ストア (Deno KV / SQLite) のファイルパス。 */
   storePath: string;
-  /** Claude のグローバルデフォルト (model / effort)。 */
-  defaults: ClaudeDefaults;
   /** Claude Code CLI 設定。 */
   claude: ClaudeConfig;
   /** ボイスチャンネル設定。 */

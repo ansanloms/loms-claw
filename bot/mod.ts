@@ -91,15 +91,15 @@ export class DiscordBot {
     // ボイス機能の初期化。
     if (config.voice.enabled) {
       const stt = new WhisperStt({
-        baseUrl: config.voice.whisperUrl,
+        baseUrl: config.voice.whisper.url,
         noSpeechProbThreshold: config.voice.noSpeechProbThreshold,
       });
       const tts = new OpenAiTts({
-        baseUrl: config.voice.ttsUrl,
-        apiKey: config.voice.ttsApiKey,
-        model: config.voice.ttsModel,
-        voice: config.voice.ttsSpeaker,
-        speed: config.voice.ttsSpeed,
+        baseUrl: config.voice.tts.url,
+        apiKey: config.voice.tts.apiKey,
+        model: config.voice.tts.model,
+        voice: config.voice.tts.speaker,
+        speed: config.voice.tts.speed,
       });
       const voicePlayer = new VoicePlayer(tts, config.voice.notificationTone);
 
@@ -146,7 +146,7 @@ export class DiscordBot {
           this.config.claude,
           this.config.guildId,
           this.store,
-          this.config.defaults,
+          this.config.claude.defaults,
           this.approvalManager,
           this.systemPrompts,
         );
@@ -311,7 +311,7 @@ export class DiscordBot {
       if (sub === "show") {
         return handleStatusShow(interaction, {
           store: this.store,
-          defaults: this.config.defaults,
+          defaults: this.config.claude.defaults,
           cronExecutor: this.cronExecutor,
           voiceManager: this.voiceManager,
           startedAt: this.startedAt,

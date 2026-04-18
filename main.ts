@@ -31,7 +31,7 @@ initLogger(config.log);
 // kv は起動リトライの外側で 1 度だけ open し、bot.shutdown() で close される。
 await Deno.mkdir(dirname(config.storePath), { recursive: true });
 const kv = await Deno.openKv(config.storePath);
-const store = new Store(kv, config.defaults);
+const store = new Store(kv, config.claude.defaults);
 log.info(`store opened: ${config.storePath}`);
 
 /**

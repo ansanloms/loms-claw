@@ -44,18 +44,18 @@ Deno.test("loadConfig", async (t) => {
       assertEquals(config.authorizedUserId, "test-user");
       assertEquals(config.activeChannelIds, []);
       assertEquals(config.storePath, ".claude/loms-claw.kv");
-      assertEquals(config.defaults.model, undefined);
-      assertEquals(config.defaults.effort, undefined);
+      assertEquals(config.claude.defaults.model, undefined);
+      assertEquals(config.claude.defaults.effort, undefined);
       assertEquals(config.claude.maxTurns, 10);
       assertEquals(config.claude.verbose, true);
       assertEquals(config.claude.timeout, 300000);
       assertEquals(config.claude.apiPort, 3000);
       assertEquals(config.voice.enabled, false);
-      assertEquals(config.voice.whisperUrl, "http://localhost:8178");
-      assertEquals(config.voice.ttsUrl, "http://localhost:8000");
-      assertEquals(config.voice.ttsModel, "voicevox");
-      assertEquals(config.voice.ttsSpeaker, "1");
-      assertEquals(config.voice.ttsSpeed, 1);
+      assertEquals(config.voice.whisper.url, "http://localhost:8178");
+      assertEquals(config.voice.tts.url, "http://localhost:8000");
+      assertEquals(config.voice.tts.model, "voicevox");
+      assertEquals(config.voice.tts.speaker, "1");
+      assertEquals(config.voice.tts.speed, 1);
       assertEquals(config.voice.minSpeechMs, 500);
       assertEquals(config.voice.speechRms, 200);
       assertEquals(config.voice.interruptRms, 500);
@@ -127,13 +127,16 @@ Deno.test("loadConfig", async (t) => {
     );
   });
 
-  await t.step("defaults.model / effort を指定できること", () => {
+  await t.step("claude.defaults.model / effort を指定できること", () => {
     withTempConfig(
-      { ...requiredFields, defaults: { model: "opus", effort: "high" } },
+      {
+        ...requiredFields,
+        claude: { defaults: { model: "opus", effort: "high" } },
+      },
       () => {
         const config = loadConfig();
-        assertEquals(config.defaults.model, "opus");
-        assertEquals(config.defaults.effort, "high");
+        assertEquals(config.claude.defaults.model, "opus");
+        assertEquals(config.claude.defaults.effort, "high");
       },
     );
   });

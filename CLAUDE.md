@@ -102,7 +102,8 @@ docker compose down
 ```
 main.ts                エントリポイント。loadConfig → initLogger → DiscordBot → start。リトライ付き。
 config.ts              config.json → Config 型。ajv で検証、`claude.cwd` は実行時注入。`LOMS_CLAW_CONFIG` でパス変更可。
-config.schema.ts       ajv の `JSONSchemaType<ConfigFile>` 相当の schema 定義とバリデータ。`useDefaults: true` で既定値補完。
+config.schema.json     JSON Schema 本体 (外出し)。`config.json` 側で `$schema` として参照すれば IDE 補完が効く。
+config.schema.ts       config.schema.json を ajv に渡すコンパイルロジックとエラー整形。`useDefaults: true` で既定値補完。
 logger.ts              名前空間付き軽量ロガー。`initLogger({ level, bufferSize })` で設定。リングバッファで直近ログをメモリ保持。
 bot/mod.ts             DiscordBot クラス。messageCreate ハンドラ、start/shutdown。
 bot/commands.ts        スラッシュコマンド定義とハンドラ（/claw status show|set|unset, /claw vc join|leave）。
@@ -316,7 +317,9 @@ cp config.json.example config.json
 | `guildId`          | 対象ギルド ID                   |
 | `authorizedUserId` | 操作を許可する唯一のユーザー ID |
 
-その他のフィールドは省略可。ajv の `useDefaults: true` により schema (`config.schema.ts`) の `default` が自動で補完される。未知プロパティは `additionalProperties: false` で拒否されるため typo で気付く。
+その他のフィールドは省略可。ajv の `useDefaults: true` により schema (`config.schema.json`) の `default` が自動で補完される。未知プロパティは `additionalProperties: false` で拒否されるため typo で気付く。
+
+`config.json` の先頭に `"$schema": "./config.schema.json"` を書くと VS Code 等の IDE が補完・検証に使う (`config.json.example` にも入っている)。
 
 ### パス指定
 

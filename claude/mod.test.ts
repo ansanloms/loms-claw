@@ -15,6 +15,7 @@ const baseConfig: ClaudeConfig = {
   timeout: 300000,
   cwd: "/workspace",
   apiPort: 3000,
+  defaults: {},
 };
 
 Deno.test("buildArgs", async (t) => {

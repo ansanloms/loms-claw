@@ -1,0 +1,132 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "loms-claw config",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "discordToken",
+    "guildId",
+    "authorizedUserId",
+    "activeChannelIds",
+    "storePath",
+    "claude",
+    "voice",
+    "log"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "IDE / tooling 用の JSON Schema 参照。検証では無視される"
+    },
+    "discordToken": { "type": "string", "minLength": 1 },
+    "guildId": { "type": "string", "minLength": 1 },
+    "authorizedUserId": { "type": "string", "minLength": 1 },
+    "activeChannelIds": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "storePath": { "type": "string", "default": ".claude/loms-claw.kv" },
+    "claude": {
+      "type": "object",
+      "default": {},
+      "additionalProperties": false,
+      "required": ["maxTurns", "verbose", "timeout", "apiPort", "defaults"],
+      "properties": {
+        "maxTurns": { "type": "number", "default": 10 },
+        "verbose": { "type": "boolean", "default": true },
+        "timeout": { "type": "number", "default": 300000 },
+        "apiPort": { "type": "number", "default": 3000 },
+        "defaults": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": false,
+          "properties": {
+            "model": { "type": "string", "nullable": true },
+            "effort": {
+              "type": "string",
+              "enum": ["low", "medium", "high", "xhigh", "max"],
+              "nullable": true
+            }
+          }
+        }
+      }
+    },
+    "voice": {
+      "type": "object",
+      "default": {},
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "whisper",
+        "tts",
+        "minSpeechMs",
+        "speechRms",
+        "interruptRms",
+        "autoLeaveMs",
+        "speechDebounceMs",
+        "noSpeechProbThreshold",
+        "notificationTone",
+        "autoJoinVc"
+      ],
+      "properties": {
+        "enabled": { "type": "boolean", "default": false },
+        "whisper": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": false,
+          "required": ["url"],
+          "properties": {
+            "url": { "type": "string", "default": "http://localhost:8178" }
+          }
+        },
+        "tts": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": false,
+          "required": ["url", "model", "speaker", "speed"],
+          "properties": {
+            "url": { "type": "string", "default": "http://localhost:8000" },
+            "apiKey": { "type": "string", "nullable": true },
+            "model": { "type": "string", "default": "voicevox" },
+            "speaker": { "type": "string", "default": "1" },
+            "speed": { "type": "number", "default": 1 }
+          }
+        },
+        "minSpeechMs": { "type": "number", "default": 500 },
+        "speechRms": { "type": "number", "default": 200 },
+        "interruptRms": { "type": "number", "default": 500 },
+        "autoLeaveMs": { "type": "number", "default": 600000 },
+        "speechDebounceMs": { "type": "number", "default": 500 },
+        "noSpeechProbThreshold": { "type": "number", "default": 0.6 },
+        "notificationTone": { "type": "boolean", "default": true },
+        "autoJoinVc": {
+          "anyOf": [
+            { "type": "boolean" },
+            { "type": "array", "items": { "type": "string" } }
+          ],
+          "default": false
+        }
+      }
+    },
+    "log": {
+      "type": "object",
+      "default": {},
+      "additionalProperties": false,
+      "required": ["level", "bufferSize"],
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": ["DEBUG", "INFO", "WARN", "ERROR"],
+          "default": "INFO"
+        },
+        "bufferSize": {
+          "type": "number",
+          "default": 1000,
+          "minimum": 1,
+          "maximum": 10000
+        }
+      }
+    }
+  }
+}
