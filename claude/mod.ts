@@ -203,6 +203,9 @@ export async function* askClaude(
 
   const { stdout, stderr, status } = spawner(args, config.cwd, signal);
 
+  // 診断情報 (eventTypes / lastEvent / invalidLines) を収集するため、
+  // parseNdjsonStream をそのまま使わずに inline でパースする。
+  // parseNdjsonStream の挙動を変える場合は、この inline 版も合わせて見直すこと。
   const eventTypes: string[] = [];
   let lastEvent: SDKMessage | undefined;
   const invalidLines: string[] = [];

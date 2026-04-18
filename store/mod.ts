@@ -102,13 +102,17 @@ export class Store {
   /**
    * 指定チャンネルの session / model / effort を全削除する。
    * デフォルトは消えないため、削除後も getModel / getEffort は defaults を返す。
+   *
+   * delete を atomic で 1 コミットにまとめる。`kv.list` 自体は atomic では
+   * ないが、取得済みキーの削除を 1 トランザクションに集約することで「複数
+   * キーが中途半端に残る」状態を防ぐ。
    */
   async clearChannel(channelId: string): Promise<void> {
-    const ops: Promise<unknown>[] = [];
+    const atomic = this.kv.atomic();
     for await (const entry of this.kv.list({ prefix: [NS, channelId] })) {
-      ops.push(this.kv.delete(entry.key));
+      atomic.delete(entry.key);
     }
-    await Promise.all(ops);
+    await atomic.commit();
   }
 
   /**
