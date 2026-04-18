@@ -27,4 +27,8 @@ export interface CronJobDef {
   resumeSession?: boolean;
   /** true の場合、1回実行後にジョブファイルを削除する（デフォルト: false）。 */
   once?: boolean;
+  /** モデル alias または full name のオーバーライド。 */
+  model?: string;
+  /** effort level (low / medium / high / xhigh / max) のオーバーライド。 */
+  effort?: string;
 }

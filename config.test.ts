@@ -88,6 +88,61 @@ Deno.test("loadConfig", async (t) => {
     });
   });
 
+  await t.step(
+    "STORE_PATH 未設定時は <cwd>/.claude/loms-claw.kv になること",
+    () => {
+      withEnv(requiredEnv, () => {
+        Deno.env.delete("STORE_PATH");
+        const config = loadConfig();
+        assertEquals(
+          config.storePath.endsWith("/.claude/loms-claw.kv"),
+          true,
+        );
+      });
+    },
+  );
+
+  await t.step("STORE_PATH を環境変数で上書きできること", () => {
+    withEnv(
+      { ...requiredEnv, STORE_PATH: "/tmp/custom-store.kv" },
+      () => {
+        const config = loadConfig();
+        assertEquals(config.storePath, "/tmp/custom-store.kv");
+      },
+    );
+  });
+
+  await t.step(
+    "CLAUDE_DEFAULT_MODEL / CLAUDE_DEFAULT_EFFORT 未設定で undefined になること",
+    () => {
+      withEnv(requiredEnv, () => {
+        Deno.env.delete("CLAUDE_DEFAULT_MODEL");
+        Deno.env.delete("CLAUDE_DEFAULT_EFFORT");
+        const config = loadConfig();
+        assertEquals(config.defaults.model, undefined);
+        assertEquals(config.defaults.effort, undefined);
+      });
+    },
+  );
+
+  await t.step(
+    "CLAUDE_DEFAULT_MODEL / CLAUDE_DEFAULT_EFFORT で defaults が設定されること",
+    () => {
+      withEnv(
+        {
+          ...requiredEnv,
+          CLAUDE_DEFAULT_MODEL: "opus",
+          CLAUDE_DEFAULT_EFFORT: "high",
+        },
+        () => {
+          const config = loadConfig();
+          assertEquals(config.defaults.model, "opus");
+          assertEquals(config.defaults.effort, "high");
+        },
+      );
+    },
+  );
+
   await t.step("claude 設定を環境変数で上書きできること", () => {
     withEnv(
       {

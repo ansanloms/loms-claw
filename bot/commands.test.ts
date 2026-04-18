@@ -1,22 +1,42 @@
 import { assertEquals } from "@std/assert";
-import { SessionStore } from "../session/mod.ts";
-import { handleClear } from "./commands.ts";
+import { Store } from "../store/mod.ts";
+import { handleStatusSet, handleStatusUnset } from "./commands.ts";
+
+/**
+ * `:memory:` KV を持つ Store を生成し、関数実行後に必ず close する。
+ */
+async function withStore(
+  fn: (store: Store) => Promise<void> | void,
+): Promise<void> {
+  const kv = await Deno.openKv(":memory:");
+  const store = new Store(kv, {});
+  try {
+    await fn(store);
+  } finally {
+    store.close();
+  }
+}
 
 /**
  * ChatInputCommandInteraction の最小モック。
- * handleClear が使うプロパティのみ実装する。
+ * handleStatusSet / handleStatusUnset が使うプロパティのみ実装する。
  */
-function mockInteraction(channelId: string) {
+function mockInteraction(channelId: string, options: Record<string, string>) {
   let replied = false;
   let replyContent = "";
   return {
     channelId,
+    options: {
+      getString(name: string, _required?: boolean) {
+        return options[name] ?? null;
+      },
+    },
     get replied() {
       return replied;
     },
-    reply(options: { content: string; flags?: number }) {
+    reply(opts: { content: string; flags?: number }) {
       replied = true;
-      replyContent = options.content;
+      replyContent = opts.content;
       return Promise.resolve();
     },
     getReplyContent() {
@@ -25,28 +45,133 @@ function mockInteraction(channelId: string) {
   };
 }
 
-Deno.test("handleClear", async (t) => {
-  await t.step("セッションが削除されること", async () => {
-    const sessions = new SessionStore();
-    sessions.set("ch-1", "sess-1");
-    sessions.set("ch-2", "sess-2");
+Deno.test("handleStatusSet", async (t) => {
+  await t.step(
+    "model のみ指定で設定されること",
+    () =>
+      withStore(async (store) => {
+        // deno-lint-ignore no-explicit-any
+        const interaction = mockInteraction("ch-1", { model: "opus" }) as any;
+        await handleStatusSet(interaction, store);
+        assertEquals(await store.getModel("ch-1"), "opus");
+        assertEquals(await store.getEffort("ch-1"), undefined);
+      }),
+  );
 
-    // deno-lint-ignore no-explicit-any
-    const interaction = mockInteraction("ch-1") as any;
-    await handleClear(interaction, sessions);
+  await t.step(
+    "effort のみ指定で設定されること",
+    () =>
+      withStore(async (store) => {
+        // deno-lint-ignore no-explicit-any
+        const interaction = mockInteraction("ch-1", { effort: "high" }) as any;
+        await handleStatusSet(interaction, store);
+        assertEquals(await store.getEffort("ch-1"), "high");
+        assertEquals(await store.getModel("ch-1"), undefined);
+      }),
+  );
 
-    assertEquals(sessions.get("ch-1"), undefined);
-    assertEquals(sessions.get("ch-2"), "sess-2");
-  });
+  await t.step(
+    "model と effort を同時に設定できること",
+    () =>
+      withStore(async (store) => {
+        const interaction = mockInteraction("ch-1", {
+          model: "sonnet",
+          effort: "max",
+          // deno-lint-ignore no-explicit-any
+        }) as any;
+        await handleStatusSet(interaction, store);
+        assertEquals(await store.getModel("ch-1"), "sonnet");
+        assertEquals(await store.getEffort("ch-1"), "max");
+      }),
+  );
 
-  await t.step("インタラクションに応答すること", async () => {
-    const sessions = new SessionStore();
-    const interaction = mockInteraction("ch-1");
+  await t.step(
+    "どちらも未指定で何も設定されないこと",
+    () =>
+      withStore(async (store) => {
+        // deno-lint-ignore no-explicit-any
+        const interaction = mockInteraction("ch-1", {}) as any;
+        await handleStatusSet(interaction, store);
+        assertEquals(await store.getModel("ch-1"), undefined);
+        assertEquals(await store.getEffort("ch-1"), undefined);
+        assertEquals(
+          interaction.getReplyContent(),
+          "Specify at least one of `model` or `effort`.",
+        );
+      }),
+  );
+});
 
-    // deno-lint-ignore no-explicit-any
-    await handleClear(interaction as any, sessions);
+Deno.test("handleStatusUnset", async (t) => {
+  await t.step(
+    "target=model でチャンネルの model のみ削除されること",
+    () =>
+      withStore(async (store) => {
+        await store.setModel("ch-1", "opus");
+        await store.setEffort("ch-1", "high");
+        await store.setSession("ch-1", "sess-1");
 
-    assertEquals(interaction.replied, true);
-    assertEquals(interaction.getReplyContent(), "Session cleared.");
-  });
+        const interaction = mockInteraction("ch-1", {
+          target: "model",
+          // deno-lint-ignore no-explicit-any
+        }) as any;
+        await handleStatusUnset(interaction, store);
+
+        assertEquals(await store.getModel("ch-1"), undefined);
+        assertEquals(await store.getEffort("ch-1"), "high");
+        assertEquals(await store.getSession("ch-1"), "sess-1");
+      }),
+  );
+
+  await t.step(
+    "target=effort でチャンネルの effort のみ削除されること",
+    () =>
+      withStore(async (store) => {
+        await store.setEffort("ch-1", "high");
+        await store.setModel("ch-1", "opus");
+
+        const interaction = mockInteraction("ch-1", {
+          target: "effort",
+          // deno-lint-ignore no-explicit-any
+        }) as any;
+        await handleStatusUnset(interaction, store);
+
+        assertEquals(await store.getEffort("ch-1"), undefined);
+        assertEquals(await store.getModel("ch-1"), "opus");
+      }),
+  );
+
+  await t.step(
+    "target=session でチャンネルの session のみ削除されること",
+    () =>
+      withStore(async (store) => {
+        await store.setSession("ch-1", "sess-1");
+        await store.setModel("ch-1", "opus");
+
+        const interaction = mockInteraction("ch-1", {
+          target: "session",
+          // deno-lint-ignore no-explicit-any
+        }) as any;
+        await handleStatusUnset(interaction, store);
+
+        assertEquals(await store.getSession("ch-1"), undefined);
+        assertEquals(await store.getModel("ch-1"), "opus");
+      }),
+  );
+
+  await t.step(
+    "他チャンネルには影響しないこと",
+    () =>
+      withStore(async (store) => {
+        await store.setModel("ch-1", "opus");
+        await store.setModel("ch-2", "sonnet");
+
+        // deno-lint-ignore no-explicit-any
+        const interaction = mockInteraction("ch-1", { target: "model" }) as any;
+        await handleStatusUnset(interaction, store);
+
+        assertEquals(await store.getModel("ch-1"), undefined);
+        assertEquals(await store.getModel("ch-2"), "sonnet");
+      }),
+  );
 });

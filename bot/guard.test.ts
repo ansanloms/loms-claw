@@ -7,6 +7,8 @@ const baseConfig: Config = {
   guildId: "guild-1",
   authorizedUserId: "user-1",
   activeChannelIds: [],
+  storePath: "/tmp/test-loms-claw.kv",
+  defaults: {},
   claude: {
     maxTurns: 10,
     verbose: false,

@@ -17,9 +17,10 @@ import {
   REST,
   Routes,
 } from "discord.js";
+import type { SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { Config } from "../config.ts";
 import { askClaude } from "../claude/mod.ts";
-import { SessionStore } from "../session/mod.ts";
+import type { Store } from "../store/mod.ts";
 import { ApprovalManager } from "../approval/manager.ts";
 import { command } from "./commands.ts";
 import { isAuthorized, shouldRespond } from "./guard.ts";
@@ -35,7 +36,13 @@ import {
 import { join } from "jsr:@std/path@^1/join";
 import { createLogger } from "../logger.ts";
 import { SystemPromptStore } from "../claude/system-prompt.ts";
-import { handleClear, handleVcJoin, handleVcLeave } from "./commands.ts";
+import {
+  handleStatusSet,
+  handleStatusShow,
+  handleStatusUnset,
+  handleVcJoin,
+  handleVcLeave,
+} from "./commands.ts";
 import { VoiceManager } from "../voice/mod.ts";
 import { WhisperStt } from "../voice/stt.ts";
 import { OpenAiTts } from "../voice/tts.ts";
@@ -53,15 +60,17 @@ const log = createLogger("bot");
 export class DiscordBot {
   private client: Client;
   private config: Config;
-  private sessions = new SessionStore();
+  private store: Store;
   private approvalManager: ApprovalManager;
   private apiServer: Deno.HttpServer | null = null;
   private voiceManager: VoiceManager | null = null;
   private cronExecutor: CronExecutor | null = null;
   private systemPrompts: SystemPromptStore;
+  private startedAt: Temporal.Instant = Temporal.Now.instant();
 
-  constructor(config: Config) {
+  constructor(config: Config, store: Store) {
     this.config = config;
+    this.store = store;
     this.systemPrompts = new SystemPromptStore(
       join(config.claude.cwd, ".claude", "system-prompt"),
     );
@@ -102,7 +111,7 @@ export class DiscordBot {
         this.client,
         stt,
         voicePlayer,
-        this.sessions,
+        this.store,
         this.approvalManager,
         this.systemPrompts,
       );
@@ -136,7 +145,8 @@ export class DiscordBot {
           this.client,
           this.config.claude,
           this.config.guildId,
-          this.sessions,
+          this.store,
+          this.config.defaults,
           this.approvalManager,
           this.systemPrompts,
         );
@@ -214,6 +224,7 @@ export class DiscordBot {
       log.warn("api server shutdown error:", e)
     );
     this.client.destroy();
+    this.store.close();
     log.info("shutdown sequence complete");
   }
 
@@ -295,9 +306,24 @@ export class DiscordBot {
       return;
     }
 
-    // /claw clear
-    if (sub === "clear") {
-      return handleClear(interaction, this.sessions);
+    // /claw status <sub>
+    if (group === "status") {
+      if (sub === "show") {
+        return handleStatusShow(interaction, {
+          store: this.store,
+          defaults: this.config.defaults,
+          cronExecutor: this.cronExecutor,
+          voiceManager: this.voiceManager,
+          startedAt: this.startedAt,
+        });
+      }
+      if (sub === "set") {
+        return handleStatusSet(interaction, this.store);
+      }
+      if (sub === "unset") {
+        return handleStatusUnset(interaction, this.store);
+      }
+      return;
     }
   }
 
@@ -385,7 +411,11 @@ export class DiscordBot {
         return;
       }
 
-      const sessionId = this.sessions.get(channelId);
+      const [sessionId, model, effort] = await Promise.all([
+        this.store.getSession(channelId),
+        this.store.getModel(channelId),
+        this.store.getEffort(channelId),
+      ]);
 
       // 承認ボタンの送信先チャンネルを設定
       this.approvalManager.setChannel(channelId);
@@ -411,6 +441,8 @@ export class DiscordBot {
         config: this.config.claude,
         signal: AbortSignal.timeout(this.config.claude.timeout),
         appendSystemPrompt,
+        model,
+        effort,
       });
 
       // ストリーミング応答: text_delta をバッファに蓄積し、
@@ -418,9 +450,7 @@ export class DiscordBot {
       const FLUSH_THRESHOLD = 800;
       let textBuffer = "";
       let hasStreamedText = false;
-      let hasResult = false;
-      // deno-lint-ignore no-explicit-any
-      let resultEvent: any;
+      let resultEvent: SDKResultMessage | undefined;
 
       const flushBuffer = async (force: boolean) => {
         if (force) {
@@ -476,10 +506,16 @@ export class DiscordBot {
             }
           }
         } else if (event.type === "result") {
-          hasResult = true;
           resultEvent = event;
+          // 非 success の subtype (error_max_turns 等) は Docker logs から原因を追えるよう詳細を残す。
+          if (event.subtype !== "success") {
+            log.warn(
+              `claude returned non-success subtype "${event.subtype}":`,
+              JSON.stringify(event),
+            );
+          }
           // 非ゼロ終了でジェネレータがスローしてもセッションが残るよう即座に保存
-          this.sessions.set(channelId, event.session_id);
+          await this.store.setSession(channelId, event.session_id);
         } else if (event.type === "tool_progress") {
           await progress.report(event.tool_name, event.elapsed_time_seconds);
         }
@@ -490,23 +526,26 @@ export class DiscordBot {
 
       // stream_event がなかった場合は result.result からフォールバック。
       if (!hasStreamedText) {
-        if (!hasResult) {
+        if (!resultEvent) {
           throw new Error("claude stream ended without result event");
         }
-        if (typeof resultEvent.result === "string") {
+        if (
+          "result" in resultEvent && typeof resultEvent.result === "string"
+        ) {
           for (const chunk of splitMessage(resultEvent.result)) {
             await channel.send(chunk);
           }
         } else {
-          const errorDetail = resultEvent.errors
+          const errorDetail = "errors" in resultEvent
             ? JSON.stringify(resultEvent.errors)
             : resultEvent.subtype ?? "unknown error";
           throw new Error(`claude returned error: ${errorDetail}`);
         }
       }
     } catch (error: unknown) {
+      // logger は Error の stack を自動で展開する。
+      log.error("failed to process message:", error);
       const errMsg = error instanceof Error ? error.message : String(error);
-      log.error("failed to process message:", errMsg);
       await channel.send(`Error: ${errMsg}`).catch(() => {});
     } finally {
       if (downloadedImages.length > 0) {

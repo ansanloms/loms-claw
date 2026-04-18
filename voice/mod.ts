@@ -17,7 +17,7 @@ import {
 } from "@discordjs/voice";
 import type { VoiceConnection } from "@discordjs/voice";
 import type { ClaudeConfig, VoiceConfig } from "../config.ts";
-import type { SessionStore } from "../session/mod.ts";
+import type { Store } from "../store/mod.ts";
 import type { ApprovalManager } from "../approval/manager.ts";
 import { createLogger } from "../logger.ts";
 import type { SystemPromptStore } from "../claude/system-prompt.ts";
@@ -61,7 +61,7 @@ export class VoiceManager {
     private readonly client: Client,
     private readonly stt: SpeechToText,
     private readonly voicePlayer: VoicePlayer,
-    private readonly sessions: SessionStore,
+    private readonly store: Store,
     private readonly approvalManager: ApprovalManager,
     private readonly systemPrompts: SystemPromptStore,
   ) {
@@ -469,7 +469,11 @@ export class VoiceManager {
 
       this.voicePlayer.startThinking();
 
-      const sessionId = this.sessions.get(channelId);
+      const [sessionId, model, effort] = await Promise.all([
+        this.store.getSession(channelId),
+        this.store.getModel(channelId),
+        this.store.getEffort(channelId),
+      ]);
       const vcChannel = this.client.channels.cache.get(channelId);
       const templateVars: Record<string, string> = {
         "discord.guild.id": this.guildId,
@@ -494,6 +498,8 @@ export class VoiceManager {
         config: this.claudeConfig,
         signal: AbortSignal.timeout(this.claudeConfig.timeout),
         appendSystemPrompt,
+        model,
+        effort,
       });
 
       const player = this.voicePlayer;
@@ -524,7 +530,7 @@ export class VoiceManager {
 
       // セッション ID を保存。
       if (newSessionId) {
-        this.sessions.set(channelId, newSessionId);
+        await this.store.setSession(channelId, newSessionId);
       }
     } catch (e: unknown) {
       log.error(`pipeline error for user ${userId}:`, e);

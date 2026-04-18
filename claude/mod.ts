@@ -35,6 +35,20 @@ export function buildHookSettings(apiPort: number): string {
 }
 
 /**
+ * `buildArgs` / `askClaude` のオプション。
+ */
+export interface ClaudeCallOptions {
+  /** `--resume` に渡すセッション ID。 */
+  sessionId?: string;
+  /** `--append-system-prompt` に渡す追加プロンプト。 */
+  appendSystemPrompt?: string;
+  /** `--model` に渡すモデル alias または full name。 */
+  model?: string;
+  /** `--effort` に渡す effort level (low / medium / high / xhigh / max)。 */
+  effort?: string;
+}
+
+/**
  * `claude -p` の引数を構築する。
  *
  * tool_progress 等のイベントを受け取るため `--verbose` を強制する。
@@ -42,8 +56,7 @@ export function buildHookSettings(apiPort: number): string {
 export function buildArgs(
   prompt: string,
   config: ClaudeConfig,
-  sessionId?: string,
-  appendSystemPrompt?: string,
+  opts: ClaudeCallOptions = {},
 ): string[] {
   const args = [
     "-p",
@@ -55,12 +68,20 @@ export function buildArgs(
     String(config.maxTurns),
   ];
 
-  if (sessionId) {
-    args.push("--resume", sessionId);
+  if (opts.sessionId) {
+    args.push("--resume", opts.sessionId);
   }
 
-  if (appendSystemPrompt) {
-    args.push("--append-system-prompt", appendSystemPrompt);
+  if (opts.appendSystemPrompt) {
+    args.push("--append-system-prompt", opts.appendSystemPrompt);
+  }
+
+  if (opts.model) {
+    args.push("--model", opts.model);
+  }
+
+  if (opts.effort) {
+    args.push("--effort", opts.effort);
   }
 
   args.push("--settings", buildHookSettings(config.apiPort));
@@ -158,40 +179,104 @@ export async function* parseNdjsonStream(
  * 呼び出し側で `type === "result"` のイベントを拾い、
  * `type === "result"` のイベントから結果を取得すること。
  * 成功時は `"result" in event` で応答テキスト、エラー時は `event.errors` を参照。
+ *
+ * エラー時の診断のため、受信したイベント数 / 最後のイベント / parser が弾いた
+ * 非 JSON 行 / args を dump する。stderr が空でも root cause が追えるように。
  */
 export async function* askClaude(
   prompt: string,
-  options: {
-    sessionId?: string;
+  options: ClaudeCallOptions & {
     config: ClaudeConfig;
     signal?: AbortSignal;
     spawner?: CommandSpawner;
-    appendSystemPrompt?: string;
   },
 ): AsyncGenerator<SDKMessage> {
   const {
     config,
-    sessionId,
     signal,
     spawner = defaultSpawner,
-    appendSystemPrompt,
+    ...callOpts
   } = options;
-  const args = buildArgs(prompt, config, sessionId, appendSystemPrompt);
+  const args = buildArgs(prompt, config, callOpts);
 
   log.debug("spawning claude:", args.join(" "));
 
   const { stdout, stderr, status } = spawner(args, config.cwd, signal);
 
-  yield* parseNdjsonStream(stdout);
+  // 診断情報 (eventTypes / lastEvent / invalidLines) を収集するため、
+  // parseNdjsonStream をそのまま使わずに inline でパースする。
+  // parseNdjsonStream の挙動を変える場合は、この inline 版も合わせて見直すこと。
+  const eventTypes: string[] = [];
+  let lastEvent: SDKMessage | undefined;
+  const invalidLines: string[] = [];
+  const MAX_INVALID = 10;
+
+  const lines = stdout
+    .pipeThrough(new TextDecoderStream())
+    .pipeThrough(new TextLineStream());
+
+  for await (const line of lines) {
+    if (!line.trim()) {
+      continue;
+    }
+    let parsed: SDKMessage;
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      log.warn("skipping invalid NDJSON line:", line.slice(0, 500));
+      if (invalidLines.length < MAX_INVALID) {
+        invalidLines.push(line);
+      }
+      continue;
+    }
+    eventTypes.push(parsed.type);
+    lastEvent = parsed;
+    yield parsed;
+  }
 
   const [stderrText, exitStatus] = await Promise.all([stderr, status]);
 
   if (!exitStatus.success) {
-    if (stderrText.trim()) {
-      log.error("claude stderr:", stderrText.trim());
+    const trimmedStderr = stderrText.trim();
+    const signalPart = exitStatus.signal
+      ? ` (signal: ${exitStatus.signal})`
+      : "";
+
+    const parts: string[] = [
+      `claude exited with code ${exitStatus.code}${signalPart}`,
+      eventTypes.length > 0
+        ? `  events received (${eventTypes.length}): ${eventTypes.join(", ")}`
+        : "  events received: 0 (claude died before any output)",
+    ];
+    if (lastEvent) {
+      parts.push(
+        `  last event: ${JSON.stringify(lastEvent).slice(0, 2000)}`,
+      );
     }
+    if (invalidLines.length > 0) {
+      parts.push(
+        `  non-JSON stdout lines (${invalidLines.length}):\n    ${
+          invalidLines.map((l) => l.slice(0, 500)).join("\n    ")
+        }`,
+      );
+    }
+    if (trimmedStderr) {
+      parts.push(`  stderr:\n    ${trimmedStderr.replace(/\n/g, "\n    ")}`);
+    } else {
+      parts.push("  stderr: (empty)");
+    }
+    parts.push(`  args: ${JSON.stringify(args)}`);
+    log.error(parts.join("\n"));
+
+    // Discord 側にも root cause のヒントを返す
+    const reason = extractReason({
+      lastEvent,
+      eventTypesCount: eventTypes.length,
+      invalidLines,
+      stderr: trimmedStderr,
+    });
     throw new Error(
-      `claude exited with code ${exitStatus.code}: ${stderrText.trim()}`,
+      `claude exited with code ${exitStatus.code}${signalPart}: ${reason}`,
     );
   }
 
@@ -200,4 +285,34 @@ export async function* askClaude(
   }
 
   log.info("claude stream completed");
+}
+
+/**
+ * エラーメッセージ用に root cause の短い説明を組み立てる。
+ *
+ * 優先順: stderr → 非 JSON 出力 → result subtype → イベント未受信 → unknown。
+ */
+function extractReason(input: {
+  lastEvent?: SDKMessage;
+  eventTypesCount: number;
+  invalidLines: string[];
+  stderr: string;
+}): string {
+  if (input.stderr) {
+    return input.stderr.slice(0, 500);
+  }
+  if (input.invalidLines.length > 0) {
+    return `non-JSON stdout: ${input.invalidLines[0].slice(0, 300)}`;
+  }
+  const last = input.lastEvent;
+  if (last && last.type === "result" && "subtype" in last) {
+    const errors = "errors" in last && last.errors
+      ? ` errors=${JSON.stringify(last.errors).slice(0, 300)}`
+      : "";
+    return `result subtype=${last.subtype}${errors}`;
+  }
+  if (input.eventTypesCount === 0) {
+    return "no output (claude did not start?)";
+  }
+  return `last event type=${last?.type ?? "unknown"}`;
 }

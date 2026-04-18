@@ -9,7 +9,11 @@
  */
 
 import type { SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
-import { askClaude, type CommandSpawner } from "../claude/mod.ts";
+import {
+  askClaude,
+  type ClaudeCallOptions,
+  type CommandSpawner,
+} from "../claude/mod.ts";
 import type { ClaudeConfig } from "../config.ts";
 import { createLogger } from "../logger.ts";
 
@@ -46,12 +50,10 @@ export interface VoiceResult {
  */
 export async function askClaudeForVoice(
   prompt: string,
-  options: {
-    sessionId?: string;
+  options: ClaudeCallOptions & {
     config: ClaudeConfig;
     signal?: AbortSignal;
     spawner?: CommandSpawner;
-    appendSystemPrompt?: string;
   },
 ): Promise<VoiceResult> {
   const stream = askClaude(prompt, options);
@@ -82,6 +84,10 @@ export async function askClaudeForVoice(
   const errors = "errors" in resultEvent
     ? JSON.stringify(resultEvent.errors)
     : resultEvent.subtype ?? "unknown error";
+  log.error(
+    `claude returned non-success subtype "${resultEvent.subtype}":`,
+    JSON.stringify(resultEvent),
+  );
   throw new Error(`claude returned error: ${errors}`);
 }
 
@@ -102,12 +108,10 @@ export async function askClaudeForVoice(
  */
 export async function* streamClaudeForVoice(
   prompt: string,
-  options: {
-    sessionId?: string;
+  options: ClaudeCallOptions & {
     config: ClaudeConfig;
     signal?: AbortSignal;
     spawner?: CommandSpawner;
-    appendSystemPrompt?: string;
   },
 ): AsyncGenerator<VoiceStreamEvent> {
   const stream = askClaude(prompt, options);
@@ -150,20 +154,32 @@ export async function* streamClaudeForVoice(
     // result イベントからセッション ID とテキストを取得。
     if (event.type === "result") {
       hasResult = true;
-
-      // deno-lint-ignore no-explicit-any
-      const r = event as any;
+      // subtype を事前に string として控える。
+      // 後段で "result" in event ガードを通すと TS が subtype を success に
+      // narrow してしまうため、ガード前にローカル変数で逃がす。
+      const subtype: string = event.subtype;
 
       // result フィールドがあればテキストとして採用する。
       // error_max_turns 等でも result が含まれていればそれを使う
       // （元の askClaudeForVoice と同じ挙動）。
-      if (typeof r.result === "string") {
+      if ("result" in event && typeof event.result === "string") {
         sessionId = event.session_id;
-        resultText = r.result;
+        if (subtype !== "success") {
+          // result はあるが non-success: streaming は使うがログには警告を残す。
+          log.warn(
+            `claude voice non-success subtype "${subtype}":`,
+            JSON.stringify(event),
+          );
+        }
+        resultText = event.result;
       } else {
-        const errorDetail = r.errors
-          ? JSON.stringify(r.errors)
-          : r.subtype ?? "unknown error";
+        const errorDetail = "errors" in event
+          ? JSON.stringify(event.errors)
+          : subtype;
+        log.error(
+          `claude voice returned non-success subtype "${subtype}":`,
+          JSON.stringify(event),
+        );
         throw new Error(`claude returned error: ${errorDetail}`);
       }
     }

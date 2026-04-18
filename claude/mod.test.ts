@@ -37,7 +37,7 @@ Deno.test("buildArgs", async (t) => {
   });
 
   await t.step("セッション ID 指定時に --resume を含むこと", () => {
-    const args = buildArgs("hello", baseConfig, "session-123");
+    const args = buildArgs("hello", baseConfig, { sessionId: "session-123" });
     const idx = args.indexOf("--resume");
     assertEquals(idx >= 0, true);
     assertEquals(args[idx + 1], "session-123");
@@ -51,7 +51,9 @@ Deno.test("buildArgs", async (t) => {
   await t.step(
     "appendSystemPrompt 指定時に --append-system-prompt を含むこと",
     () => {
-      const args = buildArgs("hello", baseConfig, undefined, "extra prompt");
+      const args = buildArgs("hello", baseConfig, {
+        appendSystemPrompt: "extra prompt",
+      });
       const idx = args.indexOf("--append-system-prompt");
       assertEquals(idx >= 0, true);
       assertEquals(args[idx + 1], "extra prompt");
@@ -65,6 +67,30 @@ Deno.test("buildArgs", async (t) => {
       assertEquals(args.includes("--append-system-prompt"), false);
     },
   );
+
+  await t.step("model 指定時に --model を含むこと", () => {
+    const args = buildArgs("hello", baseConfig, { model: "opus" });
+    const idx = args.indexOf("--model");
+    assertEquals(idx >= 0, true);
+    assertEquals(args[idx + 1], "opus");
+  });
+
+  await t.step("model 未指定時は --model を含まないこと", () => {
+    const args = buildArgs("hello", baseConfig);
+    assertEquals(args.includes("--model"), false);
+  });
+
+  await t.step("effort 指定時に --effort を含むこと", () => {
+    const args = buildArgs("hello", baseConfig, { effort: "high" });
+    const idx = args.indexOf("--effort");
+    assertEquals(idx >= 0, true);
+    assertEquals(args[idx + 1], "high");
+  });
+
+  await t.step("effort 未指定時は --effort を含まないこと", () => {
+    const args = buildArgs("hello", baseConfig);
+    assertEquals(args.includes("--effort"), false);
+  });
 });
 
 Deno.test("buildHookSettings", async (t) => {
@@ -239,6 +265,54 @@ Deno.test("askClaude", async (t) => {
     );
   });
 
+  await t.step(
+    "イベント未受信の非ゼロ終了で 'no output' ヒントが含まれること",
+    async () => {
+      await assertRejects(
+        async () => {
+          for await (
+            const _ of askClaude("hello", {
+              config: baseConfig,
+              spawner: mockSpawner([], 1),
+            })
+          ) {
+            void _;
+          }
+        },
+        Error,
+        "no output",
+      );
+    },
+  );
+
+  await t.step(
+    "result subtype がエラーの場合 reason に subtype が含まれること",
+    async () => {
+      await assertRejects(
+        async () => {
+          for await (
+            const _ of askClaude("hello", {
+              config: baseConfig,
+              spawner: mockSpawner(
+                [{
+                  type: "result",
+                  subtype: "error_max_turns",
+                  session_id: "s",
+                  is_error: true,
+                }],
+                1,
+              ),
+            })
+          ) {
+            void _;
+          }
+        },
+        Error,
+        "result subtype=error_max_turns",
+      );
+    },
+  );
+
   await t.step("セッション ID が引数に渡されること", async () => {
     let capturedArgs: string[] = [];
     const inner = mockSpawner([
@@ -303,6 +377,44 @@ Deno.test("askClaude", async (t) => {
       const idx = capturedArgs.indexOf("--append-system-prompt");
       assertEquals(idx >= 0, true);
       assertEquals(capturedArgs[idx + 1], "extra prompt");
+    },
+  );
+
+  await t.step(
+    "model / effort が --model / --effort として渡されること",
+    async () => {
+      let capturedArgs: string[] = [];
+      const inner = mockSpawner([
+        {
+          type: "result",
+          subtype: "success",
+          result: "ok",
+          session_id: "s",
+          is_error: false,
+        },
+      ]);
+      const spawner: CommandSpawner = (args, cwd, signal) => {
+        capturedArgs = args;
+        return inner(args, cwd, signal);
+      };
+
+      for await (
+        const _ of askClaude("hello", {
+          config: baseConfig,
+          model: "opus",
+          effort: "high",
+          spawner,
+        })
+      ) {
+        void _;
+      }
+
+      const m = capturedArgs.indexOf("--model");
+      assertEquals(m >= 0, true);
+      assertEquals(capturedArgs[m + 1], "opus");
+      const e = capturedArgs.indexOf("--effort");
+      assertEquals(e >= 0, true);
+      assertEquals(capturedArgs[e + 1], "high");
     },
   );
 });
