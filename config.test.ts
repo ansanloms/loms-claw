@@ -1,171 +1,55 @@
-import { assertEquals, assertThrows } from "@std/assert";
+import { assertEquals, assertStringIncludes, assertThrows } from "@std/assert";
 import { loadConfig } from "./config.ts";
 
-function withEnv(
-  vars: Record<string, string>,
+const ENV_KEY = "LOMS_CLAW_CONFIG";
+
+const requiredFields = {
+  discordToken: "test-token",
+  guildId: "test-guild",
+  authorizedUserId: "test-user",
+};
+
+/**
+ * 一時 JSON に configOverride を書き出し、LOMS_CLAW_CONFIG で指してから fn を実行する。
+ * 実行後に環境変数を元に戻し、一時ファイルを削除する。
+ */
+function withTempConfig(
+  contents: Record<string, unknown>,
   fn: () => void,
 ): void {
-  const originals: Record<string, string | undefined> = {};
-  for (const key of Object.keys(vars)) {
-    originals[key] = Deno.env.get(key);
-    Deno.env.set(key, vars[key]);
-  }
+  const original = Deno.env.get(ENV_KEY);
+  const path = Deno.makeTempFileSync({ suffix: ".json" });
   try {
+    Deno.writeTextFileSync(path, JSON.stringify(contents));
+    Deno.env.set(ENV_KEY, path);
     fn();
   } finally {
-    for (const [key, original] of Object.entries(originals)) {
-      if (original === undefined) {
-        Deno.env.delete(key);
-      } else {
-        Deno.env.set(key, original);
-      }
+    if (original === undefined) {
+      Deno.env.delete(ENV_KEY);
+    } else {
+      Deno.env.set(ENV_KEY, original);
     }
+    try {
+      Deno.removeSync(path);
+    } catch { /* ignore */ }
   }
 }
 
-const requiredEnv = {
-  DISCORD_TOKEN: "test-token",
-  GUILD_ID: "test-guild",
-  AUTHORIZED_USER_ID: "test-user",
-};
-
 Deno.test("loadConfig", async (t) => {
-  await t.step("必須の環境変数を読み込むこと", () => {
-    withEnv(requiredEnv, () => {
+  await t.step("必須フィールドのみでデフォルト値が補完されること", () => {
+    withTempConfig(requiredFields, () => {
       const config = loadConfig();
       assertEquals(config.discordToken, "test-token");
       assertEquals(config.guildId, "test-guild");
       assertEquals(config.authorizedUserId, "test-user");
-    });
-  });
-
-  await t.step("DISCORD_TOKEN 未設定でエラーになること", () => {
-    withEnv({ GUILD_ID: "g", AUTHORIZED_USER_ID: "u" }, () => {
-      Deno.env.delete("DISCORD_TOKEN");
-      assertThrows(() => loadConfig(), Error, "DISCORD_TOKEN");
-    });
-  });
-
-  await t.step("GUILD_ID 未設定でエラーになること", () => {
-    withEnv({ DISCORD_TOKEN: "t", AUTHORIZED_USER_ID: "u" }, () => {
-      Deno.env.delete("GUILD_ID");
-      assertThrows(() => loadConfig(), Error, "GUILD_ID");
-    });
-  });
-
-  await t.step("AUTHORIZED_USER_ID 未設定でエラーになること", () => {
-    withEnv({ DISCORD_TOKEN: "t", GUILD_ID: "g" }, () => {
-      Deno.env.delete("AUTHORIZED_USER_ID");
-      assertThrows(() => loadConfig(), Error, "AUTHORIZED_USER_ID");
-    });
-  });
-
-  await t.step("ACTIVE_CHANNEL_IDS をカンマ区切りでパースすること", () => {
-    withEnv(
-      { ...requiredEnv, ACTIVE_CHANNEL_IDS: "ch-1, ch-2 , ch-3" },
-      () => {
-        const config = loadConfig();
-        assertEquals(config.activeChannelIds, ["ch-1", "ch-2", "ch-3"]);
-      },
-    );
-  });
-
-  await t.step("ACTIVE_CHANNEL_IDS 未設定時は空配列になること", () => {
-    withEnv(requiredEnv, () => {
-      Deno.env.delete("ACTIVE_CHANNEL_IDS");
-      const config = loadConfig();
       assertEquals(config.activeChannelIds, []);
-    });
-  });
-
-  await t.step("claude 設定のデフォルト値が適用されること", () => {
-    withEnv(requiredEnv, () => {
-      const config = loadConfig();
+      assertEquals(config.storePath, ".claude/loms-claw.kv");
+      assertEquals(config.defaults.model, undefined);
+      assertEquals(config.defaults.effort, undefined);
       assertEquals(config.claude.maxTurns, 10);
       assertEquals(config.claude.verbose, true);
       assertEquals(config.claude.timeout, 300000);
       assertEquals(config.claude.apiPort, 3000);
-    });
-  });
-
-  await t.step(
-    "STORE_PATH 未設定時は <cwd>/.claude/loms-claw.kv になること",
-    () => {
-      withEnv(requiredEnv, () => {
-        Deno.env.delete("STORE_PATH");
-        const config = loadConfig();
-        assertEquals(
-          config.storePath.endsWith("/.claude/loms-claw.kv"),
-          true,
-        );
-      });
-    },
-  );
-
-  await t.step("STORE_PATH を環境変数で上書きできること", () => {
-    withEnv(
-      { ...requiredEnv, STORE_PATH: "/tmp/custom-store.kv" },
-      () => {
-        const config = loadConfig();
-        assertEquals(config.storePath, "/tmp/custom-store.kv");
-      },
-    );
-  });
-
-  await t.step(
-    "CLAUDE_DEFAULT_MODEL / CLAUDE_DEFAULT_EFFORT 未設定で undefined になること",
-    () => {
-      withEnv(requiredEnv, () => {
-        Deno.env.delete("CLAUDE_DEFAULT_MODEL");
-        Deno.env.delete("CLAUDE_DEFAULT_EFFORT");
-        const config = loadConfig();
-        assertEquals(config.defaults.model, undefined);
-        assertEquals(config.defaults.effort, undefined);
-      });
-    },
-  );
-
-  await t.step(
-    "CLAUDE_DEFAULT_MODEL / CLAUDE_DEFAULT_EFFORT で defaults が設定されること",
-    () => {
-      withEnv(
-        {
-          ...requiredEnv,
-          CLAUDE_DEFAULT_MODEL: "opus",
-          CLAUDE_DEFAULT_EFFORT: "high",
-        },
-        () => {
-          const config = loadConfig();
-          assertEquals(config.defaults.model, "opus");
-          assertEquals(config.defaults.effort, "high");
-        },
-      );
-    },
-  );
-
-  await t.step("claude 設定を環境変数で上書きできること", () => {
-    withEnv(
-      {
-        ...requiredEnv,
-        CLAUDE_MAX_TURNS: "5",
-        CLAUDE_VERBOSE: "false",
-        CLAUDE_TIMEOUT: "60000",
-        API_PORT: "4000",
-      },
-      () => {
-        const config = loadConfig();
-        assertEquals(config.claude.maxTurns, 5);
-        assertEquals(config.claude.verbose, false);
-        assertEquals(config.claude.timeout, 60000);
-        assertEquals(config.claude.apiPort, 4000);
-      },
-    );
-  });
-
-  await t.step("voice 設定のデフォルト値が適用されること", () => {
-    withEnv(requiredEnv, () => {
-      Deno.env.delete("VOICE_ENABLED");
-      const config = loadConfig();
       assertEquals(config.voice.enabled, false);
       assertEquals(config.voice.whisperUrl, "http://localhost:8178");
       assertEquals(config.voice.ttsUrl, "http://localhost:8000");
@@ -177,72 +61,202 @@ Deno.test("loadConfig", async (t) => {
       assertEquals(config.voice.interruptRms, 500);
       assertEquals(config.voice.autoLeaveMs, 600000);
       assertEquals(config.voice.speechDebounceMs, 500);
+      assertEquals(config.voice.noSpeechProbThreshold, 0.6);
       assertEquals(config.voice.notificationTone, true);
       assertEquals(config.voice.autoJoinVc, false);
+      assertEquals(config.log.level, "INFO");
+      assertEquals(config.log.bufferSize, 1000);
     });
   });
 
-  await t.step("VOICE_ENABLED=true で有効になること", () => {
-    withEnv({ ...requiredEnv, VOICE_ENABLED: "true" }, () => {
+  await t.step("claude.cwd が Deno.cwd() で実行時注入されること", () => {
+    withTempConfig(requiredFields, () => {
       const config = loadConfig();
-      assertEquals(config.voice.enabled, true);
+      assertEquals(config.claude.cwd, Deno.cwd());
     });
   });
 
-  await t.step("AUTO_JOIN_VC=true で全 VC 対象になること", () => {
-    withEnv({ ...requiredEnv, AUTO_JOIN_VC: "true" }, () => {
-      const config = loadConfig();
-      assertEquals(config.voice.autoJoinVc, true);
+  await t.step("discordToken 未設定でエラーになること", () => {
+    const { discordToken: _omit, ...rest } = requiredFields;
+    withTempConfig(rest, () => {
+      assertThrows(() => loadConfig(), Error, "discordToken");
     });
   });
 
-  await t.step("AUTO_JOIN_VC=false で無効になること", () => {
-    withEnv({ ...requiredEnv, AUTO_JOIN_VC: "false" }, () => {
-      const config = loadConfig();
-      assertEquals(config.voice.autoJoinVc, false);
+  await t.step("guildId が空文字列でエラーになること", () => {
+    withTempConfig({ ...requiredFields, guildId: "" }, () => {
+      assertThrows(() => loadConfig(), Error, "guildId");
     });
   });
 
-  await t.step(
-    "AUTO_JOIN_VC がカンマ区切りの場合はチャンネル ID 配列になること",
-    () => {
-      withEnv({ ...requiredEnv, AUTO_JOIN_VC: "ch-1, ch-2" }, () => {
+  await t.step("型不一致でエラーになること (maxTurns が string)", () => {
+    withTempConfig(
+      { ...requiredFields, claude: { maxTurns: "ten" } },
+      () => {
+        assertThrows(() => loadConfig(), Error, "maxTurns");
+      },
+    );
+  });
+
+  await t.step("未知プロパティ (additionalProperties) を拒否すること", () => {
+    withTempConfig(
+      { ...requiredFields, UNKNOWN_KEY: "nope" },
+      () => {
+        const err = assertThrows(() => loadConfig(), Error);
+        assertStringIncludes(err.message, "UNKNOWN_KEY");
+      },
+    );
+  });
+
+  await t.step("log.level の enum 違反でエラーになること", () => {
+    withTempConfig(
+      { ...requiredFields, log: { level: "VERBOSE", bufferSize: 1000 } },
+      () => {
+        assertThrows(() => loadConfig(), Error, "level");
+      },
+    );
+  });
+
+  await t.step("activeChannelIds を配列として受け取れること", () => {
+    withTempConfig(
+      { ...requiredFields, activeChannelIds: ["ch-1", "ch-2"] },
+      () => {
         const config = loadConfig();
-        assertEquals(config.voice.autoJoinVc, ["ch-1", "ch-2"]);
-      });
-    },
-  );
+        assertEquals(config.activeChannelIds, ["ch-1", "ch-2"]);
+      },
+    );
+  });
 
-  await t.step("voice 設定を環境変数で上書きできること", () => {
-    withEnv(
+  await t.step("defaults.model / effort を指定できること", () => {
+    withTempConfig(
+      { ...requiredFields, defaults: { model: "opus", effort: "high" } },
+      () => {
+        const config = loadConfig();
+        assertEquals(config.defaults.model, "opus");
+        assertEquals(config.defaults.effort, "high");
+      },
+    );
+  });
+
+  await t.step("claude 設定を上書きできること", () => {
+    withTempConfig(
       {
-        ...requiredEnv,
-        WHISPER_URL: "http://whisper:9000",
-        OPENAI_TTS_URL: "http://tts:9001",
-        OPENAI_TTS_MODEL: "custom-model",
-        OPENAI_TTS_SPEAKER: "42",
-        OPENAI_TTS_SPEED: "1.5",
-        MIN_SPEECH_MS: "300",
-        SPEECH_RMS: "150",
-        INTERRUPT_RMS: "400",
-        AUTO_LEAVE_MS: "-1",
-        SPEECH_DEBOUNCE_MS: "1000",
-        NOTIFICATION_TONE: "false",
+        ...requiredFields,
+        claude: {
+          maxTurns: 5,
+          verbose: false,
+          timeout: 60000,
+          apiPort: 4000,
+        },
       },
       () => {
         const config = loadConfig();
-        assertEquals(config.voice.whisperUrl, "http://whisper:9000");
-        assertEquals(config.voice.ttsUrl, "http://tts:9001");
-        assertEquals(config.voice.ttsModel, "custom-model");
-        assertEquals(config.voice.ttsSpeaker, "42");
-        assertEquals(config.voice.ttsSpeed, 1.5);
-        assertEquals(config.voice.minSpeechMs, 300);
-        assertEquals(config.voice.speechRms, 150);
-        assertEquals(config.voice.interruptRms, 400);
-        assertEquals(config.voice.autoLeaveMs, -1);
-        assertEquals(config.voice.speechDebounceMs, 1000);
-        assertEquals(config.voice.notificationTone, false);
+        assertEquals(config.claude.maxTurns, 5);
+        assertEquals(config.claude.verbose, false);
+        assertEquals(config.claude.timeout, 60000);
+        assertEquals(config.claude.apiPort, 4000);
       },
     );
+  });
+
+  await t.step("voice.autoJoinVc が false で無効になること", () => {
+    withTempConfig(
+      { ...requiredFields, voice: { autoJoinVc: false } },
+      () => {
+        const config = loadConfig();
+        assertEquals(config.voice.autoJoinVc, false);
+      },
+    );
+  });
+
+  await t.step("voice.autoJoinVc が true で全 VC 対象になること", () => {
+    withTempConfig(
+      { ...requiredFields, voice: { autoJoinVc: true } },
+      () => {
+        const config = loadConfig();
+        assertEquals(config.voice.autoJoinVc, true);
+      },
+    );
+  });
+
+  await t.step(
+    "voice.autoJoinVc が string 配列で指定 VC のみ対象になること",
+    () => {
+      withTempConfig(
+        {
+          ...requiredFields,
+          voice: { autoJoinVc: ["ch-1", "ch-2"] },
+        },
+        () => {
+          const config = loadConfig();
+          assertEquals(config.voice.autoJoinVc, ["ch-1", "ch-2"]);
+        },
+      );
+    },
+  );
+
+  await t.step("voice.autoJoinVc が不正な値でエラーになること", () => {
+    withTempConfig(
+      { ...requiredFields, voice: { autoJoinVc: "invalid" } },
+      () => {
+        assertThrows(() => loadConfig(), Error, "autoJoinVc");
+      },
+    );
+  });
+
+  await t.step("LOMS_CLAW_CONFIG で指定したパスが読まれること", () => {
+    const path = Deno.makeTempFileSync({ suffix: ".json" });
+    const original = Deno.env.get(ENV_KEY);
+    try {
+      Deno.writeTextFileSync(
+        path,
+        JSON.stringify({ ...requiredFields, storePath: "/tmp/custom.kv" }),
+      );
+      Deno.env.set(ENV_KEY, path);
+      const config = loadConfig();
+      assertEquals(config.storePath, "/tmp/custom.kv");
+    } finally {
+      if (original === undefined) {
+        Deno.env.delete(ENV_KEY);
+      } else {
+        Deno.env.set(ENV_KEY, original);
+      }
+      try {
+        Deno.removeSync(path);
+      } catch { /* ignore */ }
+    }
+  });
+
+  await t.step("ファイルが存在しない場合にエラーになること", () => {
+    const original = Deno.env.get(ENV_KEY);
+    Deno.env.set(ENV_KEY, "/tmp/__does-not-exist__.json");
+    try {
+      assertThrows(() => loadConfig(), Error, "failed to read config file");
+    } finally {
+      if (original === undefined) {
+        Deno.env.delete(ENV_KEY);
+      } else {
+        Deno.env.set(ENV_KEY, original);
+      }
+    }
+  });
+
+  await t.step("不正な JSON でパースエラーになること", () => {
+    const path = Deno.makeTempFileSync({ suffix: ".json" });
+    const original = Deno.env.get(ENV_KEY);
+    try {
+      Deno.writeTextFileSync(path, "{ not valid json");
+      Deno.env.set(ENV_KEY, path);
+      assertThrows(() => loadConfig(), Error, "failed to parse config file");
+    } finally {
+      if (original === undefined) {
+        Deno.env.delete(ENV_KEY);
+      } else {
+        Deno.env.set(ENV_KEY, original);
+      }
+      try {
+        Deno.removeSync(path);
+      } catch { /* ignore */ }
+    }
   });
 });

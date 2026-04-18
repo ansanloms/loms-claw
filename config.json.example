@@ -1,0 +1,38 @@
+{
+  "discordToken": "",
+  "guildId": "",
+  "authorizedUserId": "",
+  "activeChannelIds": [],
+  "storePath": ".claude/loms-claw.kv",
+  "defaults": {
+    "model": "sonnet",
+    "effort": "medium"
+  },
+  "claude": {
+    "maxTurns": 10,
+    "verbose": true,
+    "timeout": 300000,
+    "apiPort": 3000
+  },
+  "voice": {
+    "enabled": false,
+    "whisperUrl": "http://localhost:8178",
+    "ttsUrl": "http://localhost:8000",
+    "ttsApiKey": null,
+    "ttsModel": "voicevox",
+    "ttsSpeaker": "1",
+    "ttsSpeed": 1,
+    "minSpeechMs": 500,
+    "speechRms": 200,
+    "interruptRms": 500,
+    "autoLeaveMs": 600000,
+    "speechDebounceMs": 500,
+    "noSpeechProbThreshold": 0.6,
+    "notificationTone": true,
+    "autoJoinVc": false
+  },
+  "log": {
+    "level": "INFO",
+    "bufferSize": 1000
+  }
+}

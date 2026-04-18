@@ -32,6 +32,10 @@ const baseConfig: Config = {
     notificationTone: true,
     autoJoinVc: false,
   },
+  log: {
+    level: "INFO",
+    bufferSize: 1000,
+  },
 };
 
 Deno.test("isAuthorized", async (t) => {

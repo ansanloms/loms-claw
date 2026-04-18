@@ -100,16 +100,17 @@ docker compose down
 ## ファイル構成
 
 ```
-main.ts                エントリポイント。dotenv → loadConfig → DiscordBot → start。リトライ付き。
-config.ts              環境変数 → Config 型。必須項目のバリデーション。
-logger.ts              名前空間付き軽量ロガー。LOG_LEVEL 環境変数で制御。リングバッファで直近ログをメモリ保持。
+main.ts                エントリポイント。loadConfig → initLogger → DiscordBot → start。リトライ付き。
+config.ts              config.json → Config 型。ajv で検証、`claude.cwd` は実行時注入。`LOMS_CLAW_CONFIG` でパス変更可。
+config.schema.ts       ajv の `JSONSchemaType<ConfigFile>` 相当の schema 定義とバリデータ。`useDefaults: true` で既定値補完。
+logger.ts              名前空間付き軽量ロガー。`initLogger({ level, bufferSize })` で設定。リングバッファで直近ログをメモリ保持。
 bot/mod.ts             DiscordBot クラス。messageCreate ハンドラ、start/shutdown。
 bot/commands.ts        スラッシュコマンド定義とハンドラ（/claw status show|set|unset, /claw vc join|leave）。
 bot/guard.ts           isAuthorized(): ギルド ID + ユーザー ID + bot 除外の認可チェック。
 bot/message.ts         splitMessage(): 2000 文字分割。keepTyping(): typing インジケーター維持。ProgressReporter: ツール進捗表示。
 claude/mod.ts          askClaude(): Deno.Command で claude -p を spawn し stream-json 出力を逐次パース。
 claude/template.ts     replaceTemplateVariables(): システムプロンプトの {{key}} 置換。
-store/mod.ts           Store: Deno KV (SQLite backend) によるチャンネル単位の session_id / model / effort 永続化。グローバルデフォルト (env) へのフォールバック付き。
+store/mod.ts           Store: Deno KV (SQLite backend) によるチャンネル単位の session_id / model / effort 永続化。グローバルデフォルト (config.json `defaults`) へのフォールバック付き。
 approval/manager.ts    ApprovalManager: Discord ボタンによるツール承認/拒否。
 approval/manager.ts    ApprovalManager: Discord ボタンによるツール承認/拒否。
 approval/types.ts      HookInput, ApprovalResult の型定義。
@@ -185,14 +186,14 @@ timeout: 120000
 
 ジョブ名はファイル名（拡張子除く）から自動決定される。
 
-| フィールド      | 必須 | 説明                                          |
-| --------------- | ---- | --------------------------------------------- |
-| `schedule`      | yes  | cron 式（5フィールド、TZ 依存）               |
-| `channelId`     | no   | 指定時: 結果を自動投稿。省略時: 投稿しない    |
-| `resumeSession` | no   | 前回セッション引き継ぎ（デフォルト: `false`） |
-| `maxTurns`      | no   | `CLAUDE_MAX_TURNS` のオーバーライド           |
-| `timeout`       | no   | `CLAUDE_TIMEOUT` のオーバーライド（ms）       |
-| `once`          | no   | `true` で1回実行後にファイル自動削除          |
+| フィールド      | 必須 | 説明                                                     |
+| --------------- | ---- | -------------------------------------------------------- |
+| `schedule`      | yes  | cron 式（5フィールド、TZ 依存）                          |
+| `channelId`     | no   | 指定時: 結果を自動投稿。省略時: 投稿しない               |
+| `resumeSession` | no   | 前回セッション引き継ぎ（デフォルト: `false`）            |
+| `maxTurns`      | no   | `config.json` の `claude.maxTurns` をオーバーライド      |
+| `timeout`       | no   | `config.json` の `claude.timeout` をオーバーライド（ms） |
+| `once`          | no   | `true` で1回実行後にファイル自動削除                     |
 
 ### 動作の仕組み
 
@@ -247,7 +248,7 @@ cron ジョブ用のシステムプロンプトは `.claude/system-prompt/CRON.m
 6. `SessionStore` にセッション ID 保存（次回 `--resume` で継続）
 7. `splitMessage()` で応答を分割送信
 
-### ボイスチャンネル（VOICE_ENABLED=true 時）
+### ボイスチャンネル（`voice.enabled: true` 時）
 
 1. `/claw vc join` または auto-join で VC に参加
 2. Opus フレーム受信 → PCM デコード → RMS フィルタ（ノイズ除去・割り込み検知）
@@ -288,7 +289,7 @@ Bot プロセス内で HTTP サーバーを起動し、Discord 操作用の REST
 
 ### 動作の仕組み
 
-1. Bot 起動時（`ClientReady` 後）に `startApiServer()` が `127.0.0.1:{API_PORT}` で HTTP サーバーを起動
+1. Bot 起動時（`ClientReady` 後）に `startApiServer()` が `127.0.0.1:{claude.apiPort}` で HTTP サーバーを起動
 2. 承認フック（`POST /approval`）と Discord REST API を同一ポートで提供
 3. `claude -p` から Bash ツール経由で `curl` を実行して API を呼び出す
 
@@ -300,9 +301,44 @@ Discord API と承認フックは Bot 起動時に常に有効化される。
 - `.claude/settings.json` の `permissions.allow`: 事前に許可するツール（ボタン確認をスキップ）
 - bypass モード: `claude -p --dangerously-skip-permissions` で全ツール無条件許可（必要時のみ手動で指定）
 
-## 環境変数
+## 設定ファイル
 
-`.env.example` 参照。`DISCORD_TOKEN`, `GUILD_ID`, `AUTHORIZED_USER_ID` が必須。
+設定は `config.json` に一元化されている。`config.json.example` をコピーして必須項目を埋める。
+
+```bash
+cp config.json.example config.json
+# エディタで discordToken / guildId / authorizedUserId を入力
+```
+
+| 必須フィールド     | 内容                            |
+| ------------------ | ------------------------------- |
+| `discordToken`     | Discord bot トークン            |
+| `guildId`          | 対象ギルド ID                   |
+| `authorizedUserId` | 操作を許可する唯一のユーザー ID |
+
+その他のフィールドは省略可。ajv の `useDefaults: true` により schema (`config.schema.ts`) の `default` が自動で補完される。未知プロパティは `additionalProperties: false` で拒否されるため typo で気付く。
+
+### パス指定
+
+デフォルトは `./config.json`。別パスを読ませる場合は環境変数 `LOMS_CLAW_CONFIG` で上書きする。
+
+```bash
+LOMS_CLAW_CONFIG=/path/to/config.json deno task start
+```
+
+### `.env` の役割
+
+`.env` は docker compose が **host 側で** 参照する Docker 関連変数（`CLAUDE_HOME` / `CLAUDE_WORKSPACE` / `TZ`）と、必要なら `LOMS_CLAW_CONFIG` のみを持つ。`.env.example` 参照。
+
+### Docker 運用
+
+`config.json` は `CLAUDE_WORKSPACE` にマウントされるワークスペース側に配置する。コンテナ内ではこのファイルが `/workspace/config.json` として見える。
+
+```bash
+cp config.json.example docker/claude-workspace/config.json
+# 編集
+cd docker && docker compose up -d
+```
 
 ## テスト方針
 

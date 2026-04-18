@@ -1,14 +1,17 @@
 /**
  * 名前空間付きの軽量構造化ロガー。
  *
- * ログレベルは環境変数 LOG_LEVEL で制御する（デフォルト: INFO）。
- * 有効な値: DEBUG | INFO | WARN | ERROR（大文字小文字不問）。
+ * ログレベルとバッファ容量は {@link initLogger} で設定する。
+ * 有効な値: DEBUG | INFO | WARN | ERROR。
+ *
+ * `initLogger` を呼ばない場合のデフォルトは INFO / バッファ 1000 件。
  *
  * 直近のログをメモリ上のリングバッファに保持し、
- * {@link getLogEntries} で取得できる。バッファサイズは LOG_BUFFER_SIZE で制御する（デフォルト: 1000）。
+ * {@link getLogEntries} で取得できる。
  *
  * @example
  * ```ts
+ * initLogger({ level: "INFO", bufferSize: 1000 });
  * const log = createLogger("claude");
  * log.info("プロセス起動");
  * log.error("API エラー:", status, body);
@@ -59,30 +62,50 @@ export interface LogFilter {
   limit?: number;
 }
 
-/** バッファ容量。環境変数で上書き可能。 */
-const BUFFER_CAPACITY = (() => {
-  try {
-    const v = Number(Deno.env.get("LOG_BUFFER_SIZE"));
-    if (Number.isFinite(v) && v > 0) {
-      return Math.min(v, 10000);
-    }
-  } catch { /* ignore */ }
-  return 1000;
-})();
+/**
+ * {@link initLogger} で受け取る初期化オプション。
+ */
+export interface LoggerInitOptions {
+  /** 出力する最低ログレベル。 */
+  level: LogLevel;
+  /** メモリ上のリングバッファ容量（1 以上 10000 以下）。 */
+  bufferSize: number;
+}
 
+/** 最低ログレベル。{@link initLogger} で上書き可能。 */
+let minLevel: LogLevel = "INFO";
+/** リングバッファ容量。{@link initLogger} で上書き可能。 */
+let bufferCapacity = 1000;
 /** リングバッファ本体。 */
-const buffer: (LogEntry | undefined)[] = new Array(BUFFER_CAPACITY);
+let buffer: (LogEntry | undefined)[] = new Array(bufferCapacity);
 /** 次に書き込む位置。 */
 let writePos = 0;
 /** バッファに書き込まれた総数（容量を超えても加算し続ける）。 */
 let totalWritten = 0;
 
 /**
+ * ロガーの設定を適用する。main の起動時に 1 回だけ呼ぶ想定。
+ *
+ * バッファ容量を変更する場合はリングバッファを作り直し、
+ * 既存のログは破棄される。
+ */
+export function initLogger(options: LoggerInitOptions): void {
+  minLevel = options.level;
+  const nextCapacity = Math.max(1, Math.min(options.bufferSize, 10000));
+  if (nextCapacity !== bufferCapacity) {
+    bufferCapacity = nextCapacity;
+    buffer = new Array(bufferCapacity);
+    writePos = 0;
+    totalWritten = 0;
+  }
+}
+
+/**
  * エントリをリングバッファに追加する。
  */
 function pushEntry(entry: LogEntry): void {
   buffer[writePos] = entry;
-  writePos = (writePos + 1) % BUFFER_CAPACITY;
+  writePos = (writePos + 1) % bufferCapacity;
   totalWritten++;
 }
 
@@ -90,22 +113,22 @@ function pushEntry(entry: LogEntry): void {
  * リングバッファから条件に合うログエントリを時系列順で返す。
  */
 export function getLogEntries(filter?: LogFilter): LogEntry[] {
-  const minLevel = filter?.level ? LEVEL_ORDER[filter.level] : 0;
+  const minLvl = filter?.level ? LEVEL_ORDER[filter.level] : 0;
   const ns = filter?.namespace;
   const since = filter?.since;
   const limit = Math.min(Math.max(filter?.limit ?? 100, 1), 1000);
 
   // 時系列順に走査するための開始位置を決定
-  const count = Math.min(totalWritten, BUFFER_CAPACITY);
-  const start = totalWritten <= BUFFER_CAPACITY ? 0 : writePos; // writePos が最古のエントリを指す
+  const count = Math.min(totalWritten, bufferCapacity);
+  const start = totalWritten <= bufferCapacity ? 0 : writePos; // writePos が最古のエントリを指す
 
   const result: LogEntry[] = [];
   for (let i = 0; i < count; i++) {
-    const entry = buffer[(start + i) % BUFFER_CAPACITY];
+    const entry = buffer[(start + i) % bufferCapacity];
     if (!entry) {
       continue;
     }
-    if (LEVEL_ORDER[entry.level] < minLevel) {
+    if (LEVEL_ORDER[entry.level] < minLvl) {
       continue;
     }
     if (ns && !entry.namespace.startsWith(ns)) {
@@ -120,23 +143,6 @@ export function getLogEntries(filter?: LogFilter): LogEntry[] {
   // 末尾から limit 件を返す（最新のものを優先）
   return result.slice(-limit);
 }
-
-/**
- * 環境変数から LOG_LEVEL を読み取る。未設定・無効値の場合は INFO を返す。
- */
-function getMinLevel(): LogLevel {
-  try {
-    const env = Deno.env.get("LOG_LEVEL")?.toUpperCase();
-    if (env && env in LEVEL_ORDER) {
-      return env as LogLevel;
-    }
-  } catch {
-    // --allow-env が付与されていない場合はデフォルトに落ちる
-  }
-  return "INFO";
-}
-
-const minLevel = getMinLevel();
 
 /**
  * createLogger が返すロガーインターフェース。

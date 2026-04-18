@@ -4,10 +4,8 @@
  * @module
  */
 
-import "@std/dotenv/load";
-
 import { dirname } from "jsr:@std/path@^1/dirname";
-import { createLogger } from "./logger.ts";
+import { createLogger, initLogger } from "./logger.ts";
 import { loadConfig } from "./config.ts";
 import { DiscordBot } from "./bot/mod.ts";
 import { Store } from "./store/mod.ts";
@@ -26,6 +24,7 @@ globalThis.addEventListener("error", (e) => {
 });
 
 const config = loadConfig();
+initLogger(config.log);
 
 // 永続化ストア (Deno KV / SQLite) を初期化する。
 // 親ディレクトリが存在しない可能性があるため事前に mkdir。
