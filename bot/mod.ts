@@ -66,7 +66,7 @@ export class DiscordBot {
   private voiceManager: VoiceManager | null = null;
   private cronExecutor: CronExecutor | null = null;
   private systemPrompts: SystemPromptStore;
-  private startedAt: Date = new Date();
+  private startedAt: Temporal.Instant = Temporal.Now.instant();
 
   constructor(config: Config, store: Store) {
     this.config = config;

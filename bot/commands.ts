@@ -176,7 +176,7 @@ export async function handleStatusShow(
     defaults: ClaudeDefaults;
     cronExecutor: CronExecutor | null;
     voiceManager: VoiceManager | null;
-    startedAt: Date;
+    startedAt: Temporal.Instant;
   },
 ): Promise<void> {
   const settings = await deps.store.getChannelSettings(interaction.channelId);
@@ -184,11 +184,13 @@ export async function handleStatusShow(
   const lines: string[] = ["**loms-claw status**"];
 
   // uptime
-  const uptimeMs = Date.now() - deps.startedAt.getTime();
+  const uptimeMs = Temporal.Now.instant().since(deps.startedAt).total({
+    unit: "millisecond",
+  });
   lines.push(
     `**Uptime:** ${
       formatDuration(uptimeMs)
-    } (started ${deps.startedAt.toISOString()})`,
+    } (started ${deps.startedAt.toString()})`,
   );
 
   // 現チャンネル
