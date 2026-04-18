@@ -154,29 +154,30 @@ export async function* streamClaudeForVoice(
     // result イベントからセッション ID とテキストを取得。
     if (event.type === "result") {
       hasResult = true;
-
-      // deno-lint-ignore no-explicit-any
-      const r = event as any;
+      // subtype を事前に string として控える。
+      // 後段で "result" in event ガードを通すと TS が subtype を success に
+      // narrow してしまうため、ガード前にローカル変数で逃がす。
+      const subtype: string = event.subtype;
 
       // result フィールドがあればテキストとして採用する。
       // error_max_turns 等でも result が含まれていればそれを使う
       // （元の askClaudeForVoice と同じ挙動）。
-      if (typeof r.result === "string") {
+      if ("result" in event && typeof event.result === "string") {
         sessionId = event.session_id;
-        if (event.subtype !== "success") {
+        if (subtype !== "success") {
           // result はあるが non-success: streaming は使うがログには警告を残す。
           log.warn(
-            `claude voice non-success subtype "${event.subtype}":`,
+            `claude voice non-success subtype "${subtype}":`,
             JSON.stringify(event),
           );
         }
-        resultText = r.result;
+        resultText = event.result;
       } else {
-        const errorDetail = r.errors
-          ? JSON.stringify(r.errors)
-          : r.subtype ?? "unknown error";
+        const errorDetail = "errors" in event
+          ? JSON.stringify(event.errors)
+          : subtype;
         log.error(
-          `claude voice returned non-success subtype "${r.subtype}":`,
+          `claude voice returned non-success subtype "${subtype}":`,
           JSON.stringify(event),
         );
         throw new Error(`claude returned error: ${errorDetail}`);

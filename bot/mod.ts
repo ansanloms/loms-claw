@@ -17,6 +17,7 @@ import {
   REST,
   Routes,
 } from "discord.js";
+import type { SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { Config } from "../config.ts";
 import { askClaude } from "../claude/mod.ts";
 import type { Store } from "../store/mod.ts";
@@ -449,9 +450,7 @@ export class DiscordBot {
       const FLUSH_THRESHOLD = 800;
       let textBuffer = "";
       let hasStreamedText = false;
-      let hasResult = false;
-      // deno-lint-ignore no-explicit-any
-      let resultEvent: any;
+      let resultEvent: SDKResultMessage | undefined;
 
       const flushBuffer = async (force: boolean) => {
         if (force) {
@@ -507,7 +506,6 @@ export class DiscordBot {
             }
           }
         } else if (event.type === "result") {
-          hasResult = true;
           resultEvent = event;
           // 非 success の subtype (error_max_turns 等) は Docker logs から原因を追えるよう詳細を残す。
           if (event.subtype !== "success") {
@@ -528,15 +526,17 @@ export class DiscordBot {
 
       // stream_event がなかった場合は result.result からフォールバック。
       if (!hasStreamedText) {
-        if (!hasResult) {
+        if (!resultEvent) {
           throw new Error("claude stream ended without result event");
         }
-        if (typeof resultEvent.result === "string") {
+        if (
+          "result" in resultEvent && typeof resultEvent.result === "string"
+        ) {
           for (const chunk of splitMessage(resultEvent.result)) {
             await channel.send(chunk);
           }
         } else {
-          const errorDetail = resultEvent.errors
+          const errorDetail = "errors" in resultEvent
             ? JSON.stringify(resultEvent.errors)
             : resultEvent.subtype ?? "unknown error";
           throw new Error(`claude returned error: ${errorDetail}`);
