@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { SessionStore } from "../session/mod.ts";
+import { Store } from "../store/mod.ts";
 import { handleClear } from "./commands.ts";
 
 /**
@@ -25,26 +25,49 @@ function mockInteraction(channelId: string) {
   };
 }
 
-Deno.test("handleClear", async (t) => {
-  await t.step("セッションが削除されること", async () => {
-    const sessions = new SessionStore();
-    sessions.set("ch-1", "sess-1");
-    sessions.set("ch-2", "sess-2");
+async function newStore(): Promise<Store> {
+  const kv = await Deno.openKv(":memory:");
+  return new Store(kv, {});
+}
+
+Deno.test("handleClear", { sanitizeResources: false }, async (t) => {
+  await t.step("対象チャンネルの session のみ削除されること", async () => {
+    const store = await newStore();
+    await store.setSession("ch-1", "sess-1");
+    await store.setSession("ch-2", "sess-2");
 
     // deno-lint-ignore no-explicit-any
     const interaction = mockInteraction("ch-1") as any;
-    await handleClear(interaction, sessions);
+    await handleClear(interaction, store);
 
-    assertEquals(sessions.get("ch-1"), undefined);
-    assertEquals(sessions.get("ch-2"), "sess-2");
+    assertEquals(await store.getSession("ch-1"), undefined);
+    assertEquals(await store.getSession("ch-2"), "sess-2");
   });
 
+  await t.step(
+    "model / effort には触らず session のみ削除されること",
+    async () => {
+      const store = await newStore();
+      await store.setSession("ch-1", "sess-1");
+      await store.setModel("ch-1", "opus");
+      await store.setEffort("ch-1", "high");
+
+      // deno-lint-ignore no-explicit-any
+      const interaction = mockInteraction("ch-1") as any;
+      await handleClear(interaction, store);
+
+      assertEquals(await store.getSession("ch-1"), undefined);
+      assertEquals(await store.getModel("ch-1"), "opus");
+      assertEquals(await store.getEffort("ch-1"), "high");
+    },
+  );
+
   await t.step("インタラクションに応答すること", async () => {
-    const sessions = new SessionStore();
+    const store = await newStore();
     const interaction = mockInteraction("ch-1");
 
     // deno-lint-ignore no-explicit-any
-    await handleClear(interaction as any, sessions);
+    await handleClear(interaction as any, store);
 
     assertEquals(interaction.replied, true);
     assertEquals(interaction.getReplyContent(), "Session cleared.");

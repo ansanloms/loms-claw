@@ -30,6 +30,8 @@ interface CronFrontMatter {
   timeout?: number;
   resumeSession?: boolean;
   once?: boolean;
+  model?: string;
+  effort?: "low" | "medium" | "high" | "xhigh" | "max";
 }
 
 // deno の npm 互換レイヤーでは CJS default export のコンストラクタ型が解決できない
@@ -75,6 +77,11 @@ const validateFrontMatter: ValidateFunction<CronFrontMatter> = ajv.compile<
     timeout: { type: "number" },
     resumeSession: { type: "boolean" },
     once: { type: "boolean" },
+    model: { type: "string" },
+    effort: {
+      type: "string",
+      enum: ["low", "medium", "high", "xhigh", "max"],
+    },
   },
   required: ["schedule"],
   additionalProperties: true,
@@ -110,6 +117,8 @@ export function validateCronJob(
       timeout: meta.timeout,
       resumeSession: meta.resumeSession ?? false,
       once: meta.once ?? false,
+      model: meta.model,
+      effort: meta.effort,
     };
   }
 

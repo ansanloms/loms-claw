@@ -6,9 +6,11 @@
 
 import "@std/dotenv/load";
 
+import { dirname } from "jsr:@std/path@^1/dirname";
 import { createLogger } from "./logger.ts";
 import { loadConfig } from "./config.ts";
 import { DiscordBot } from "./bot/mod.ts";
+import { Store } from "./store/mod.ts";
 
 const log = createLogger("main");
 
@@ -24,6 +26,14 @@ globalThis.addEventListener("error", (e) => {
 });
 
 const config = loadConfig();
+
+// 永続化ストア (Deno KV / SQLite) を初期化する。
+// 親ディレクトリが存在しない可能性があるため事前に mkdir。
+// kv は起動リトライの外側で 1 度だけ open し、bot.shutdown() で close される。
+await Deno.mkdir(dirname(config.storePath), { recursive: true });
+const kv = await Deno.openKv(config.storePath);
+const store = new Store(kv, config.defaults);
+log.info(`store opened: ${config.storePath}`);
 
 /**
  * 現在稼働中のボットインスタンス。シグナルハンドラから参照する。
@@ -54,7 +64,7 @@ const BASE_DELAY_MS = 3_000;
 
 for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
   try {
-    bot = new DiscordBot(config);
+    bot = new DiscordBot(config, store);
     await bot.start();
     break;
   } catch (e: unknown) {

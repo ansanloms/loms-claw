@@ -19,7 +19,7 @@ import {
 } from "discord.js";
 import type { Config } from "../config.ts";
 import { askClaude } from "../claude/mod.ts";
-import { SessionStore } from "../session/mod.ts";
+import type { Store } from "../store/mod.ts";
 import { ApprovalManager } from "../approval/manager.ts";
 import { command } from "./commands.ts";
 import { isAuthorized, shouldRespond } from "./guard.ts";
@@ -35,7 +35,14 @@ import {
 import { join } from "jsr:@std/path@^1/join";
 import { createLogger } from "../logger.ts";
 import { SystemPromptStore } from "../claude/system-prompt.ts";
-import { handleClear, handleVcJoin, handleVcLeave } from "./commands.ts";
+import {
+  handleClear,
+  handleConfigEffort,
+  handleConfigModel,
+  handleConfigShow,
+  handleVcJoin,
+  handleVcLeave,
+} from "./commands.ts";
 import { VoiceManager } from "../voice/mod.ts";
 import { WhisperStt } from "../voice/stt.ts";
 import { OpenAiTts } from "../voice/tts.ts";
@@ -53,15 +60,16 @@ const log = createLogger("bot");
 export class DiscordBot {
   private client: Client;
   private config: Config;
-  private sessions = new SessionStore();
+  private store: Store;
   private approvalManager: ApprovalManager;
   private apiServer: Deno.HttpServer | null = null;
   private voiceManager: VoiceManager | null = null;
   private cronExecutor: CronExecutor | null = null;
   private systemPrompts: SystemPromptStore;
 
-  constructor(config: Config) {
+  constructor(config: Config, store: Store) {
     this.config = config;
+    this.store = store;
     this.systemPrompts = new SystemPromptStore(
       join(config.claude.cwd, ".claude", "system-prompt"),
     );
@@ -102,7 +110,7 @@ export class DiscordBot {
         this.client,
         stt,
         voicePlayer,
-        this.sessions,
+        this.store,
         this.approvalManager,
         this.systemPrompts,
       );
@@ -136,7 +144,8 @@ export class DiscordBot {
           this.client,
           this.config.claude,
           this.config.guildId,
-          this.sessions,
+          this.store,
+          this.config.defaults,
           this.approvalManager,
           this.systemPrompts,
         );
@@ -214,6 +223,7 @@ export class DiscordBot {
       log.warn("api server shutdown error:", e)
     );
     this.client.destroy();
+    this.store.close();
     log.info("shutdown sequence complete");
   }
 
@@ -295,9 +305,23 @@ export class DiscordBot {
       return;
     }
 
+    // /claw config <sub>
+    if (group === "config") {
+      if (sub === "show") {
+        return handleConfigShow(interaction, this.store);
+      }
+      if (sub === "model") {
+        return handleConfigModel(interaction, this.store);
+      }
+      if (sub === "effort") {
+        return handleConfigEffort(interaction, this.store);
+      }
+      return;
+    }
+
     // /claw clear
     if (sub === "clear") {
-      return handleClear(interaction, this.sessions);
+      return handleClear(interaction, this.store);
     }
   }
 
@@ -385,7 +409,11 @@ export class DiscordBot {
         return;
       }
 
-      const sessionId = this.sessions.get(channelId);
+      const [sessionId, model, effort] = await Promise.all([
+        this.store.getSession(channelId),
+        this.store.getModel(channelId),
+        this.store.getEffort(channelId),
+      ]);
 
       // 承認ボタンの送信先チャンネルを設定
       this.approvalManager.setChannel(channelId);
@@ -411,6 +439,8 @@ export class DiscordBot {
         config: this.config.claude,
         signal: AbortSignal.timeout(this.config.claude.timeout),
         appendSystemPrompt,
+        model,
+        effort,
       });
 
       // ストリーミング応答: text_delta をバッファに蓄積し、
@@ -479,7 +509,7 @@ export class DiscordBot {
           hasResult = true;
           resultEvent = event;
           // 非ゼロ終了でジェネレータがスローしてもセッションが残るよう即座に保存
-          this.sessions.set(channelId, event.session_id);
+          await this.store.setSession(channelId, event.session_id);
         } else if (event.type === "tool_progress") {
           await progress.report(event.tool_name, event.elapsed_time_seconds);
         }

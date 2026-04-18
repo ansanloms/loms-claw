@@ -35,6 +35,20 @@ export function buildHookSettings(apiPort: number): string {
 }
 
 /**
+ * `buildArgs` / `askClaude` のオプション。
+ */
+export interface ClaudeCallOptions {
+  /** `--resume` に渡すセッション ID。 */
+  sessionId?: string;
+  /** `--append-system-prompt` に渡す追加プロンプト。 */
+  appendSystemPrompt?: string;
+  /** `--model` に渡すモデル alias または full name。 */
+  model?: string;
+  /** `--effort` に渡す effort level (low / medium / high / xhigh / max)。 */
+  effort?: string;
+}
+
+/**
  * `claude -p` の引数を構築する。
  *
  * tool_progress 等のイベントを受け取るため `--verbose` を強制する。
@@ -42,8 +56,7 @@ export function buildHookSettings(apiPort: number): string {
 export function buildArgs(
   prompt: string,
   config: ClaudeConfig,
-  sessionId?: string,
-  appendSystemPrompt?: string,
+  opts: ClaudeCallOptions = {},
 ): string[] {
   const args = [
     "-p",
@@ -55,12 +68,20 @@ export function buildArgs(
     String(config.maxTurns),
   ];
 
-  if (sessionId) {
-    args.push("--resume", sessionId);
+  if (opts.sessionId) {
+    args.push("--resume", opts.sessionId);
   }
 
-  if (appendSystemPrompt) {
-    args.push("--append-system-prompt", appendSystemPrompt);
+  if (opts.appendSystemPrompt) {
+    args.push("--append-system-prompt", opts.appendSystemPrompt);
+  }
+
+  if (opts.model) {
+    args.push("--model", opts.model);
+  }
+
+  if (opts.effort) {
+    args.push("--effort", opts.effort);
   }
 
   args.push("--settings", buildHookSettings(config.apiPort));
@@ -161,22 +182,19 @@ export async function* parseNdjsonStream(
  */
 export async function* askClaude(
   prompt: string,
-  options: {
-    sessionId?: string;
+  options: ClaudeCallOptions & {
     config: ClaudeConfig;
     signal?: AbortSignal;
     spawner?: CommandSpawner;
-    appendSystemPrompt?: string;
   },
 ): AsyncGenerator<SDKMessage> {
   const {
     config,
-    sessionId,
     signal,
     spawner = defaultSpawner,
-    appendSystemPrompt,
+    ...callOpts
   } = options;
-  const args = buildArgs(prompt, config, sessionId, appendSystemPrompt);
+  const args = buildArgs(prompt, config, callOpts);
 
   log.debug("spawning claude:", args.join(" "));
 

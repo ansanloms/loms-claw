@@ -5,6 +5,8 @@
  * その他はデフォルト値が設定されている。
  */
 
+import { join } from "jsr:@std/path@^1/join";
+
 /**
  * Claude Code CLI 設定。
  */
@@ -58,6 +60,16 @@ export interface VoiceConfig {
 }
 
 /**
+ * Claude のグローバルデフォルト。チャンネル単位の上書きが無いときに使われる。
+ */
+export interface ClaudeDefaults {
+  /** デフォルトのモデル alias または full name。 */
+  model?: string;
+  /** デフォルトの effort level (low / medium / high / xhigh / max)。 */
+  effort?: string;
+}
+
+/**
  * バリデーション済みのアプリケーション設定。
  */
 export interface Config {
@@ -69,6 +81,10 @@ export interface Config {
   authorizedUserId: string;
   /** mention 不要で全メッセージに反応するチャンネル ID の配列。 */
   activeChannelIds: string[];
+  /** 永続化ストア (Deno KV / SQLite) のファイルパス。 */
+  storePath: string;
+  /** Claude のグローバルデフォルト (model / effort)。 */
+  defaults: ClaudeDefaults;
   /** Claude Code CLI 設定。 */
   claude: ClaudeConfig;
   /** ボイスチャンネル設定。 */
@@ -122,6 +138,12 @@ export function loadConfig(): Config {
     guildId: requireEnv("GUILD_ID"),
     authorizedUserId: requireEnv("AUTHORIZED_USER_ID"),
     activeChannelIds: parseCsv(Deno.env.get("ACTIVE_CHANNEL_IDS")),
+    storePath: Deno.env.get("STORE_PATH") ??
+      join(Deno.cwd(), ".claude", "loms-claw.kv"),
+    defaults: {
+      model: Deno.env.get("CLAUDE_DEFAULT_MODEL") || undefined,
+      effort: Deno.env.get("CLAUDE_DEFAULT_EFFORT") || undefined,
+    },
     claude: {
       maxTurns: Number(Deno.env.get("CLAUDE_MAX_TURNS") ?? "10"),
       verbose: (Deno.env.get("CLAUDE_VERBOSE") ?? "true") === "true",

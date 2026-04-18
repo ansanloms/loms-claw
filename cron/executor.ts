@@ -11,8 +11,8 @@
 import type { Client, GuildTextBasedChannel } from "discord.js";
 import type { SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
 import { askClaude, type CommandSpawner } from "../claude/mod.ts";
-import type { ClaudeConfig } from "../config.ts";
-import type { SessionStore } from "../session/mod.ts";
+import type { ClaudeConfig, ClaudeDefaults } from "../config.ts";
+import type { Store } from "../store/mod.ts";
 import type { ApprovalManager } from "../approval/manager.ts";
 import type { SystemPromptStore } from "../claude/system-prompt.ts";
 import { splitMessage } from "../bot/message.ts";
@@ -37,7 +37,8 @@ export class CronExecutor {
     private readonly client: Client,
     private readonly config: ClaudeConfig,
     private readonly guildId: string,
-    private readonly sessions: SessionStore,
+    private readonly store: Store,
+    private readonly defaults: ClaudeDefaults,
     private readonly approvalManager: ApprovalManager,
     private readonly systemPrompts: SystemPromptStore,
     private readonly spawner?: CommandSpawner,
@@ -128,8 +129,20 @@ export class CronExecutor {
 
       const sessionKey = `cron:${job.name}`;
       const sessionId = job.resumeSession
-        ? this.sessions.get(sessionKey)
+        ? await this.store.getSession(sessionKey)
         : undefined;
+
+      // model / effort 解決順: frontmatter > channel 設定 > defaults
+      const model = job.model ??
+        (job.channelId
+          ? await this.store.getModel(job.channelId)
+          : undefined) ??
+        this.defaults.model;
+      const effort = job.effort ??
+        (job.channelId
+          ? await this.store.getEffort(job.channelId)
+          : undefined) ??
+        this.defaults.effort;
 
       // テンプレート変数はギルドレベルのみ（cron にはユーザー/チャンネルコンテキストが無い）
       const guild = this.client.guilds.cache.get(this.guildId);
@@ -155,6 +168,8 @@ export class CronExecutor {
         config: jobConfig,
         signal: AbortSignal.timeout(timeout),
         appendSystemPrompt,
+        model,
+        effort,
         spawner: this.spawner,
       });
 
@@ -164,7 +179,7 @@ export class CronExecutor {
         if (event.type === "result") {
           resultEvent = event;
           if (job.resumeSession) {
-            this.sessions.set(sessionKey, event.session_id);
+            await this.store.setSession(sessionKey, event.session_id);
           }
         }
       }

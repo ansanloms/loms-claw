@@ -13,11 +13,27 @@ import {
   MessageFlags,
   SlashCommandBuilder,
 } from "discord.js";
-import type { SessionStore } from "../session/mod.ts";
+import type { Store } from "../store/mod.ts";
 import type { VoiceManager } from "../voice/mod.ts";
 import { createLogger } from "../logger.ts";
 
 const log = createLogger("commands");
+
+const MODEL_CHOICES = [
+  { name: "opus", value: "opus" },
+  { name: "sonnet", value: "sonnet" },
+  { name: "haiku", value: "haiku" },
+  { name: "reset", value: "reset" },
+] as const;
+
+const EFFORT_CHOICES = [
+  { name: "low", value: "low" },
+  { name: "medium", value: "medium" },
+  { name: "high", value: "high" },
+  { name: "xhigh", value: "xhigh" },
+  { name: "max", value: "max" },
+  { name: "reset", value: "reset" },
+] as const;
 
 /**
  * /claw コマンド定義。
@@ -44,16 +60,57 @@ export const command = new SlashCommandBuilder()
           .setName("leave")
           .setDescription("Leave the voice channel")
       )
+  )
+  .addSubcommandGroup((group) =>
+    group
+      .setName("config")
+      .setDescription("Per-channel model / effort configuration")
+      .addSubcommand((sub) =>
+        sub
+          .setName("show")
+          .setDescription("Show current channel config (with defaults)")
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName("model")
+          .setDescription("Set or reset model for this channel")
+          .addStringOption((opt) =>
+            opt
+              .setName("value")
+              .setDescription(
+                "Model alias (or 'reset' to fall back to default)",
+              )
+              .setRequired(true)
+              .addChoices(...MODEL_CHOICES)
+          )
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName("effort")
+          .setDescription("Set or reset effort level for this channel")
+          .addStringOption((opt) =>
+            opt
+              .setName("value")
+              .setDescription(
+                "Effort level (or 'reset' to fall back to default)",
+              )
+              .setRequired(true)
+              .addChoices(...EFFORT_CHOICES)
+          )
+      )
   );
 
 /**
  * /claw clear — 現在のチャンネルのセッションをクリアする。
+ *
+ * model / effort は触らず session のみ削除する。
+ * model / effort は `/claw config <kind> reset` で個別に削除する。
  */
 export async function handleClear(
   interaction: ChatInputCommandInteraction,
-  sessions: SessionStore,
+  store: Store,
 ): Promise<void> {
-  sessions.delete(interaction.channelId);
+  await store.deleteSession(interaction.channelId);
   await interaction.reply({
     content: "Session cleared.",
     flags: MessageFlags.Ephemeral,
@@ -108,4 +165,90 @@ export async function handleVcLeave(
 
   voiceManager.leave();
   await interaction.reply("Left VC.");
+}
+
+/**
+ * /claw config show — 現在のチャンネル設定を表示する。
+ */
+export async function handleConfigShow(
+  interaction: ChatInputCommandInteraction,
+  store: Store,
+): Promise<void> {
+  const settings = await store.getChannelSettings(interaction.channelId);
+  const lines: string[] = [`**Channel:** ${interaction.channelId}`];
+
+  if (settings.session) {
+    lines.push(`**Session:** \`${settings.session}\``);
+  } else {
+    lines.push("**Session:** (none)");
+  }
+
+  if (settings.model) {
+    const tag = settings.model.source === "channel" ? "channel" : "default";
+    lines.push(`**Model:** \`${settings.model.value}\` (${tag})`);
+  } else {
+    lines.push("**Model:** (unset; CLI default applies)");
+  }
+
+  if (settings.effort) {
+    const tag = settings.effort.source === "channel" ? "channel" : "default";
+    lines.push(`**Effort:** \`${settings.effort.value}\` (${tag})`);
+  } else {
+    lines.push("**Effort:** (unset; CLI default applies)");
+  }
+
+  await interaction.reply({
+    content: lines.join("\n"),
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+/**
+ * /claw config model — モデルを設定または reset する。
+ */
+export async function handleConfigModel(
+  interaction: ChatInputCommandInteraction,
+  store: Store,
+): Promise<void> {
+  const value = interaction.options.getString("value", true);
+  if (value === "reset") {
+    await store.deleteModel(interaction.channelId);
+    await interaction.reply({
+      content: "Model reset for this channel (default applies).",
+      flags: MessageFlags.Ephemeral,
+    });
+    log.info("model reset for channel:", interaction.channelId);
+    return;
+  }
+  await store.setModel(interaction.channelId, value);
+  await interaction.reply({
+    content: `Model set to \`${value}\` for this channel.`,
+    flags: MessageFlags.Ephemeral,
+  });
+  log.info(`model set for channel ${interaction.channelId}:`, value);
+}
+
+/**
+ * /claw config effort — effort level を設定または reset する。
+ */
+export async function handleConfigEffort(
+  interaction: ChatInputCommandInteraction,
+  store: Store,
+): Promise<void> {
+  const value = interaction.options.getString("value", true);
+  if (value === "reset") {
+    await store.deleteEffort(interaction.channelId);
+    await interaction.reply({
+      content: "Effort reset for this channel (default applies).",
+      flags: MessageFlags.Ephemeral,
+    });
+    log.info("effort reset for channel:", interaction.channelId);
+    return;
+  }
+  await store.setEffort(interaction.channelId, value);
+  await interaction.reply({
+    content: `Effort set to \`${value}\` for this channel.`,
+    flags: MessageFlags.Ephemeral,
+  });
+  log.info(`effort set for channel ${interaction.channelId}:`, value);
 }

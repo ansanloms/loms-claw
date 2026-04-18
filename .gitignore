@@ -8,3 +8,6 @@ docker/claude-workspace/*
 !docker/claude-workspace/memory
 !docker/claude-workspace/cron
 !**/.gitkeep
+*.kv
+*.kv-shm
+*.kv-wal

@@ -1,8 +1,13 @@
 import { assertEquals } from "@std/assert";
 import { CronExecutor } from "./executor.ts";
 import type { CronJobDef } from "./types.ts";
-import { SessionStore } from "../session/mod.ts";
+import { Store } from "../store/mod.ts";
 import type { SystemPromptStore } from "../claude/system-prompt.ts";
+
+async function newStore(): Promise<Store> {
+  const kv = await Deno.openKv(":memory:");
+  return new Store(kv, {});
+}
 
 /** 最小限のモック Client。 */
 function createMockClient(
@@ -106,11 +111,11 @@ const TEST_CONFIG = {
   apiPort: 3000,
 };
 
-Deno.test("CronExecutor", async (t) => {
+Deno.test("CronExecutor", { sanitizeResources: false }, async (t) => {
   await t.step("重複実行がスキップされること", async () => {
     const { channel, sent } = createMockChannel();
     const client = createMockClient(channel);
-    const sessions = new SessionStore();
+    const store = await newStore();
     const { manager } = createMockApprovalManager();
     const systemPrompts = createMockSystemPromptStore();
 
@@ -118,7 +123,8 @@ Deno.test("CronExecutor", async (t) => {
       client as never,
       TEST_CONFIG,
       "guild-1",
-      sessions,
+      store,
+      {},
       manager as never,
       systemPrompts,
       mockSpawner([]),
@@ -145,7 +151,7 @@ Deno.test("CronExecutor", async (t) => {
     "チャンネルが見つからない場合にエラー処理されること",
     async () => {
       const client = createMockClient(null);
-      const sessions = new SessionStore();
+      const store = await newStore();
       const { manager } = createMockApprovalManager();
       const systemPrompts = createMockSystemPromptStore();
 
@@ -153,7 +159,8 @@ Deno.test("CronExecutor", async (t) => {
         client as never,
         TEST_CONFIG,
         "guild-1",
-        sessions,
+        store,
+        {},
         manager as never,
         systemPrompts,
         mockSpawner([]),
@@ -177,7 +184,7 @@ Deno.test("CronExecutor", async (t) => {
   await t.step("承認先チャンネルが正しく設定されること", async () => {
     const { channel } = createMockChannel();
     const client = createMockClient(channel);
-    const sessions = new SessionStore();
+    const store = await newStore();
     const { manager, getChannelId } = createMockApprovalManager();
     const systemPrompts = createMockSystemPromptStore();
 
@@ -185,7 +192,8 @@ Deno.test("CronExecutor", async (t) => {
       client as never,
       TEST_CONFIG,
       "guild-1",
-      sessions,
+      store,
+      {},
       manager as never,
       systemPrompts,
       successSpawner(),
@@ -206,7 +214,7 @@ Deno.test("CronExecutor", async (t) => {
     "channelId なしで承認先チャンネルが設定されないこと",
     async () => {
       const client = createMockClient(null);
-      const sessions = new SessionStore();
+      const store = await newStore();
       const { manager, getChannelId } = createMockApprovalManager();
       const systemPrompts = createMockSystemPromptStore();
 
@@ -214,7 +222,8 @@ Deno.test("CronExecutor", async (t) => {
         client as never,
         TEST_CONFIG,
         "guild-1",
-        sessions,
+        store,
+        {},
         manager as never,
         systemPrompts,
         successSpawner(),
@@ -231,10 +240,10 @@ Deno.test("CronExecutor", async (t) => {
     },
   );
 
-  await t.step("start/stop でスケジューラが制御されること", () => {
+  await t.step("start/stop でスケジューラが制御されること", async () => {
     const { channel } = createMockChannel();
     const client = createMockClient(channel);
-    const sessions = new SessionStore();
+    const store = await newStore();
     const { manager } = createMockApprovalManager();
     const systemPrompts = createMockSystemPromptStore();
 
@@ -242,7 +251,8 @@ Deno.test("CronExecutor", async (t) => {
       client as never,
       TEST_CONFIG,
       "guild-1",
-      sessions,
+      store,
+      {},
       manager as never,
       systemPrompts,
       mockSpawner([]),
@@ -253,13 +263,13 @@ Deno.test("CronExecutor", async (t) => {
     ];
 
     executor.start(jobs);
-    executor.stop(); // エラーなく停止すること
+    executor.stop();
   });
 
-  await t.step("reload でジョブが差し替えられること", () => {
+  await t.step("reload でジョブが差し替えられること", async () => {
     const { channel } = createMockChannel();
     const client = createMockClient(channel);
-    const sessions = new SessionStore();
+    const store = await newStore();
     const { manager } = createMockApprovalManager();
     const systemPrompts = createMockSystemPromptStore();
 
@@ -267,7 +277,8 @@ Deno.test("CronExecutor", async (t) => {
       client as never,
       TEST_CONFIG,
       "guild-1",
-      sessions,
+      store,
+      {},
       manager as never,
       systemPrompts,
       mockSpawner([]),
@@ -284,17 +295,17 @@ Deno.test("CronExecutor", async (t) => {
     executor.stop();
   });
 
-  await t.step("セッションキーが cron:{name} 形式であること", () => {
-    const sessions = new SessionStore();
-    sessions.set("cron:my-job", "session-abc");
-    assertEquals(sessions.get("cron:my-job"), "session-abc");
+  await t.step("セッションキーが cron:{name} 形式であること", async () => {
+    const store = await newStore();
+    await store.setSession("cron:my-job", "session-abc");
+    assertEquals(await store.getSession("cron:my-job"), "session-abc");
   });
 
   await t.step(
     "once: true のジョブ実行後にコールバックが呼ばれること",
     async () => {
       const client = createMockClient(null);
-      const sessions = new SessionStore();
+      const store = await newStore();
       const { manager } = createMockApprovalManager();
       const systemPrompts = createMockSystemPromptStore();
 
@@ -302,7 +313,8 @@ Deno.test("CronExecutor", async (t) => {
         client as never,
         TEST_CONFIG,
         "guild-1",
-        sessions,
+        store,
+        {},
         manager as never,
         systemPrompts,
         successSpawner(),
@@ -330,7 +342,7 @@ Deno.test("CronExecutor", async (t) => {
     "once: false のジョブではコールバックが呼ばれないこと",
     async () => {
       const client = createMockClient(null);
-      const sessions = new SessionStore();
+      const store = await newStore();
       const { manager } = createMockApprovalManager();
       const systemPrompts = createMockSystemPromptStore();
 
@@ -338,7 +350,8 @@ Deno.test("CronExecutor", async (t) => {
         client as never,
         TEST_CONFIG,
         "guild-1",
-        sessions,
+        store,
+        {},
         manager as never,
         systemPrompts,
         successSpawner(),
@@ -362,10 +375,10 @@ Deno.test("CronExecutor", async (t) => {
     },
   );
 
-  await t.step("findJob / listJobs でジョブが取得できること", () => {
+  await t.step("findJob / listJobs でジョブが取得できること", async () => {
     const { channel } = createMockChannel();
     const client = createMockClient(channel);
-    const sessions = new SessionStore();
+    const store = await newStore();
     const { manager } = createMockApprovalManager();
     const systemPrompts = createMockSystemPromptStore();
 
@@ -373,7 +386,8 @@ Deno.test("CronExecutor", async (t) => {
       client as never,
       TEST_CONFIG,
       "guild-1",
-      sessions,
+      store,
+      {},
       manager as never,
       systemPrompts,
       mockSpawner([]),
@@ -398,7 +412,7 @@ Deno.test("CronExecutor", async (t) => {
     "once: true でコールバック未設定の場合にサイレントスキップされること",
     async () => {
       const client = createMockClient(null);
-      const sessions = new SessionStore();
+      const store = await newStore();
       const { manager } = createMockApprovalManager();
       const systemPrompts = createMockSystemPromptStore();
 
@@ -406,7 +420,8 @@ Deno.test("CronExecutor", async (t) => {
         client as never,
         TEST_CONFIG,
         "guild-1",
-        sessions,
+        store,
+        {},
         manager as never,
         systemPrompts,
         successSpawner(),
@@ -433,7 +448,7 @@ Deno.test("CronExecutor", async (t) => {
     "once ジョブ実行後に running がコールバック完了後にクリアされること",
     async () => {
       const client = createMockClient(null);
-      const sessions = new SessionStore();
+      const store = await newStore();
       const { manager } = createMockApprovalManager();
       const systemPrompts = createMockSystemPromptStore();
 
@@ -441,7 +456,8 @@ Deno.test("CronExecutor", async (t) => {
         client as never,
         TEST_CONFIG,
         "guild-1",
-        sessions,
+        store,
+        {},
         manager as never,
         systemPrompts,
         successSpawner(),

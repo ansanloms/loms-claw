@@ -180,6 +180,46 @@ Deno.test("validateCronJob", async (t) => {
       '"once" must be a boolean',
     );
   });
+
+  await t.step("model 指定でジョブに反映されること", () => {
+    const job = validateCronJob(
+      { schedule: "0 9 * * *", model: "opus" },
+      "prompt",
+      "test.md",
+    );
+    assertEquals(job.model, "opus");
+  });
+
+  await t.step("effort 指定でジョブに反映されること", () => {
+    const job = validateCronJob(
+      { schedule: "0 9 * * *", effort: "high" },
+      "prompt",
+      "test.md",
+    );
+    assertEquals(job.effort, "high");
+  });
+
+  await t.step("effort が enum 外の値の場合はエラーになること", () => {
+    assertThrows(
+      () =>
+        validateCronJob(
+          { schedule: "0 9 * * *", effort: "ultra" },
+          "prompt",
+          "test.md",
+        ),
+      Error,
+    );
+  });
+
+  await t.step("model / effort を未指定で undefined になること", () => {
+    const job = validateCronJob(
+      { schedule: "0 9 * * *" },
+      "prompt",
+      "test.md",
+    );
+    assertEquals(job.model, undefined);
+    assertEquals(job.effort, undefined);
+  });
 });
 
 Deno.test("loadCronJobsFromDir", async (t) => {
