@@ -91,23 +91,23 @@ export class DiscordBot {
     // ボイス機能の初期化。
     if (config.voice.enabled) {
       const stt = new WhisperStt({
-        baseUrl: config.voice.whisperUrl,
-        noSpeechProbThreshold: config.voice.noSpeechProbThreshold,
+        baseUrl: config.voice.whisper.url,
+        noSpeechProbThreshold: config.voice.whisper.noSpeechProbThreshold,
       });
       const tts = new OpenAiTts({
-        baseUrl: config.voice.ttsUrl,
-        apiKey: config.voice.ttsApiKey,
-        model: config.voice.ttsModel,
-        voice: config.voice.ttsSpeaker,
-        speed: config.voice.ttsSpeed,
+        baseUrl: config.voice.tts.url,
+        apiKey: config.voice.tts.apiKey,
+        model: config.voice.tts.model,
+        voice: config.voice.tts.speaker,
+        speed: config.voice.tts.speed,
       });
       const voicePlayer = new VoicePlayer(tts, config.voice.notificationTone);
 
       this.voiceManager = new VoiceManager(
         config.voice,
         config.claude,
-        config.guildId,
-        config.authorizedUserId,
+        config.discord.guildId,
+        config.discord.userId,
         this.client,
         stt,
         voicePlayer,
@@ -133,7 +133,7 @@ export class DiscordBot {
   async start(): Promise<void> {
     await this.systemPrompts.load();
 
-    await this.client.login(this.config.discordToken);
+    await this.client.login(this.config.discord.token);
 
     await new Promise<void>((resolve) => {
       this.client.once(Events.ClientReady, async (c) => {
@@ -144,9 +144,9 @@ export class DiscordBot {
         this.cronExecutor = new CronExecutor(
           this.client,
           this.config.claude,
-          this.config.guildId,
+          this.config.discord.guildId,
           this.store,
-          this.config.defaults,
+          this.config.claude.defaults,
           this.approvalManager,
           this.systemPrompts,
         );
@@ -187,7 +187,7 @@ export class DiscordBot {
         // 統合 API サーバーを起動する（承認フック + Discord REST API + cron）。
         const discordCtx = {
           client: this.client,
-          guildId: this.config.guildId,
+          guildId: this.config.discord.guildId,
         };
         const cronCtx: CronRouteContext = {
           reloadCronJobs: reloadJobs,
@@ -232,12 +232,12 @@ export class DiscordBot {
    * スラッシュコマンドを対象ギルドに登録する。
    */
   private async registerCommands(): Promise<void> {
-    const rest = new REST().setToken(this.config.discordToken);
+    const rest = new REST().setToken(this.config.discord.token);
 
     await rest.put(
       Routes.applicationGuildCommands(
         this.client.user!.id,
-        this.config.guildId,
+        this.config.discord.guildId,
       ),
       { body: [command.toJSON()] },
     );
@@ -311,7 +311,7 @@ export class DiscordBot {
       if (sub === "show") {
         return handleStatusShow(interaction, {
           store: this.store,
-          defaults: this.config.defaults,
+          defaults: this.config.claude.defaults,
           cronExecutor: this.cronExecutor,
           voiceManager: this.voiceManager,
           startedAt: this.startedAt,
@@ -356,7 +356,7 @@ export class DiscordBot {
     if (
       !shouldRespond(
         message.channelId,
-        this.config.activeChannelIds,
+        this.config.discord.activeChannelIds,
         message.channel.isThread(),
         message.channel.isThread() ? message.channel.parentId : null,
         isMentioned,
@@ -421,7 +421,7 @@ export class DiscordBot {
       this.approvalManager.setChannel(channelId);
 
       const templateVars: Record<string, string> = {
-        "discord.guild.id": this.config.guildId,
+        "discord.guild.id": this.config.discord.guildId,
         "discord.guild.name": message.guild?.name ?? "",
         "discord.channel.id": channelId,
         "discord.channel.name": "name" in channel ? channel.name ?? "" : "",

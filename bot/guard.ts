@@ -24,10 +24,10 @@ export function isAuthorized(
   if (isBot) {
     return false;
   }
-  if (guildId !== config.guildId) {
+  if (guildId !== config.discord.guildId) {
     return false;
   }
-  if (userId !== config.authorizedUserId) {
+  if (userId !== config.discord.userId) {
     return false;
   }
   return true;

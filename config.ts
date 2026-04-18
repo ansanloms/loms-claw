@@ -1,63 +1,14 @@
 /**
- * 環境変数からアプリケーション設定を読み込む。
+ * アプリケーション設定のロード。
  *
- * 必須変数: DISCORD_TOKEN, GUILD_ID, AUTHORIZED_USER_ID, CLAUDE_WORKSPACE。
- * その他はデフォルト値が設定されている。
+ * `config.json` を読み込み、ajv で JSON Schema 検証を掛けた後、
+ * プロセス固有の値（`claude.cwd`）を注入して {@link Config} を返す。
+ *
+ * パスは `LOMS_CLAW_CONFIG` 環境変数で上書き可能（デフォルト: `./config.json`）。
  */
 
-import { join } from "jsr:@std/path@^1/join";
-
-/**
- * Claude Code CLI 設定。
- */
-export interface ClaudeConfig {
-  /** `--max-turns` に渡す最大ターン数。 */
-  maxTurns: number;
-  /** `--verbose` フラグ。 */
-  verbose: boolean;
-  /** プロセスタイムアウト（ミリ秒）。 */
-  timeout: number;
-  /** `claude` プロセスの作業ディレクトリ。 */
-  cwd: string;
-  /** 内部 API サーバーのポート（承認 + Discord API）。 */
-  apiPort: number;
-}
-
-/**
- * ボイスチャンネル関連の設定。
- */
-export interface VoiceConfig {
-  /** VC 機能の有効/無効。 */
-  enabled: boolean;
-  /** whisper.cpp サーバーの URL。 */
-  whisperUrl: string;
-  /** TTS サーバーの URL（OpenAI 互換）。 */
-  ttsUrl: string;
-  /** TTS API キー。 */
-  ttsApiKey?: string;
-  /** TTS モデル名。 */
-  ttsModel: string;
-  /** TTS スピーカー/音声 ID。 */
-  ttsSpeaker: string;
-  /** TTS 再生速度。 */
-  ttsSpeed: number;
-  /** STT に送る最小発話時間（ミリ秒）。 */
-  minSpeechMs: number;
-  /** 発話とみなす最小 RMS 振幅。 */
-  speechRms: number;
-  /** AI 再生を中断する最小 RMS 振幅。 */
-  interruptRms: number;
-  /** 無人 VC からの自動退出タイムアウト（ミリ秒）。-1 で無効。 */
-  autoLeaveMs: number;
-  /** 発話デバウンス待機時間（ミリ秒）。 */
-  speechDebounceMs: number;
-  /** no_speech_prob 閾値。全セグメントがこの値以上なら無音と判定。 */
-  noSpeechProbThreshold: number;
-  /** 通知トーン（処理中・エラー）の有効/無効。 */
-  notificationTone: boolean;
-  /** auto-join: false=無効, true=全VC, string[]=指定VC IDのみ。 */
-  autoJoinVc: false | true | string[];
-}
+import type { LogLevel } from "./logger.ts";
+import { formatConfigErrors, validateConfigFile } from "./config.schema.ts";
 
 /**
  * Claude のグローバルデフォルト。チャンネル単位の上書きが無いときに使われる。
@@ -70,106 +21,160 @@ export interface ClaudeDefaults {
 }
 
 /**
- * バリデーション済みのアプリケーション設定。
+ * Claude Code CLI 設定。
  */
-export interface Config {
+export interface ClaudeConfig {
+  /** `--max-turns` に渡す最大ターン数。 */
+  maxTurns: number;
+  /** `--verbose` フラグ。 */
+  verbose: boolean;
+  /** プロセスタイムアウト（ミリ秒）。 */
+  timeout: number;
+  /** 内部 API サーバーのポート（承認 + Discord API）。 */
+  apiPort: number;
+  /** `claude` プロセスの作業ディレクトリ。実行時に `Deno.cwd()` が注入される。 */
+  cwd: string;
+  /** Claude のグローバルデフォルト (model / effort)。 */
+  defaults: ClaudeDefaults;
+}
+
+/**
+ * whisper.cpp (STT) 設定。
+ */
+export interface WhisperConfig {
+  /** whisper.cpp サーバーの URL。 */
+  url: string;
+  /** no_speech_prob 閾値。全セグメントがこの値以上なら無音と判定。 */
+  noSpeechProbThreshold: number;
+}
+
+/**
+ * TTS (OpenAI 互換) 設定。
+ */
+export interface TtsConfig {
+  /** TTS サーバーの URL（OpenAI 互換）。 */
+  url: string;
+  /** TTS API キー。 */
+  apiKey?: string;
+  /** TTS モデル名。 */
+  model: string;
+  /** TTS スピーカー/音声 ID。 */
+  speaker: string;
+  /** TTS 再生速度。 */
+  speed: number;
+}
+
+/**
+ * ボイスチャンネル関連の設定。
+ */
+export interface VoiceConfig {
+  /** VC 機能の有効/無効。 */
+  enabled: boolean;
+  /** whisper.cpp (STT) 設定。 */
+  whisper: WhisperConfig;
+  /** TTS 設定。 */
+  tts: TtsConfig;
+  /** STT に送る最小発話時間（ミリ秒）。 */
+  minSpeechMs: number;
+  /** 発話とみなす最小 RMS 振幅。 */
+  speechRms: number;
+  /** AI 再生を中断する最小 RMS 振幅。 */
+  interruptRms: number;
+  /** 無人 VC からの自動退出タイムアウト（ミリ秒）。-1 で無効。 */
+  autoLeaveMs: number;
+  /** 発話デバウンス待機時間（ミリ秒）。 */
+  speechDebounceMs: number;
+  /** 通知トーン（処理中・エラー）の有効/無効。 */
+  notificationTone: boolean;
+  /** auto-join: false=無効, true=全VC, string[]=指定VC IDのみ。 */
+  autoJoinVc: false | true | string[];
+}
+
+/**
+ * ロガー設定。
+ */
+export interface LogConfig {
+  /** 出力する最低ログレベル。 */
+  level: LogLevel;
+  /** メモリ上のリングバッファ容量。 */
+  bufferSize: number;
+}
+
+/**
+ * Discord 接続・認可関連の設定。
+ */
+export interface DiscordConfig {
   /** Discord bot トークン。 */
-  discordToken: string;
+  token: string;
   /** 対象 Discord ギルド ID。 */
   guildId: string;
   /** 操作を許可する唯一のユーザー ID。 */
-  authorizedUserId: string;
+  userId: string;
   /** mention 不要で全メッセージに反応するチャンネル ID の配列。 */
   activeChannelIds: string[];
+}
+
+/**
+ * バリデーション済みのアプリケーション設定。
+ */
+export interface Config {
+  /** Discord 接続・認可関連の設定。 */
+  discord: DiscordConfig;
   /** 永続化ストア (Deno KV / SQLite) のファイルパス。 */
   storePath: string;
-  /** Claude のグローバルデフォルト (model / effort)。 */
-  defaults: ClaudeDefaults;
   /** Claude Code CLI 設定。 */
   claude: ClaudeConfig;
   /** ボイスチャンネル設定。 */
   voice: VoiceConfig;
+  /** ロガー設定。 */
+  log: LogConfig;
 }
 
 /**
- * カンマ区切り文字列を配列にパースする。空文字列は除外。
+ * 設定ファイル（JSON）に書き込む shape。`claude.cwd` はプロセス由来なので
+ * JSON からは取得せず、{@link loadConfig} が実行時に注入する。
  */
-function parseCsv(raw: string | undefined): string[] {
-  if (!raw) {
-    return [];
-  }
-  return raw.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+export interface ConfigFile extends Omit<Config, "claude"> {
+  claude: Omit<ClaudeConfig, "cwd">;
 }
 
 /**
- * 必須環境変数を取得する。未設定の場合はエラーを投げる。
- */
-function requireEnv(name: string): string {
-  const value = Deno.env.get(name);
-  if (!value) {
-    throw new Error(`Required environment variable not set: ${name}`);
-  }
-  return value;
-}
-
-/**
- * AUTO_JOIN_VC 環境変数をパースする。
- * "false" → false, "true" → true, カンマ区切り → string[]。
- */
-function parseAutoJoinVc(raw: string | undefined): false | true | string[] {
-  if (!raw || raw === "false") {
-    return false;
-  }
-  if (raw === "true") {
-    return true;
-  }
-  return parseCsv(raw);
-}
-
-/**
- * 環境変数から設定を読み込む。
- * 必須変数が未設定の場合はエラーを投げる。
+ * 設定ファイルを読み込み、バリデーション後に `claude.cwd` を注入して返す。
+ *
+ * `LOMS_CLAW_CONFIG` 環境変数で任意のパスを指定できる（未指定なら `./config.json`）。
+ *
+ * @throws ファイルが存在しない、JSON パースに失敗、スキーマ検証に失敗した場合。
  */
 export function loadConfig(): Config {
-  const voiceEnabled = (Deno.env.get("VOICE_ENABLED") ?? "false") === "true";
+  const path = Deno.env.get("LOMS_CLAW_CONFIG") ?? "./config.json";
 
+  let text: string;
+  try {
+    text = Deno.readTextFileSync(path);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`failed to read config file (${path}): ${msg}`);
+  }
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`failed to parse config file (${path}): ${msg}`);
+  }
+
+  if (!validateConfigFile(raw)) {
+    const details = formatConfigErrors(validateConfigFile.errors);
+    throw new Error(`config validation failed (${path}):\n${details}`);
+  }
+
+  // $schema は IDE / tooling 用のメタデータなので、実行時 Config からは除外する。
+  const { $schema: _ignored, ...rest } = raw as ConfigFile & {
+    $schema?: string;
+  };
   return {
-    discordToken: requireEnv("DISCORD_TOKEN"),
-    guildId: requireEnv("GUILD_ID"),
-    authorizedUserId: requireEnv("AUTHORIZED_USER_ID"),
-    activeChannelIds: parseCsv(Deno.env.get("ACTIVE_CHANNEL_IDS")),
-    storePath: Deno.env.get("STORE_PATH") ??
-      join(Deno.cwd(), ".claude", "loms-claw.kv"),
-    defaults: {
-      model: Deno.env.get("CLAUDE_DEFAULT_MODEL") || undefined,
-      effort: Deno.env.get("CLAUDE_DEFAULT_EFFORT") || undefined,
-    },
-    claude: {
-      maxTurns: Number(Deno.env.get("CLAUDE_MAX_TURNS") ?? "10"),
-      verbose: (Deno.env.get("CLAUDE_VERBOSE") ?? "true") === "true",
-      timeout: Number(Deno.env.get("CLAUDE_TIMEOUT") ?? "300000"),
-      cwd: Deno.cwd(),
-      apiPort: Number(Deno.env.get("API_PORT") ?? "3000"),
-    },
-    voice: {
-      enabled: voiceEnabled,
-      whisperUrl: Deno.env.get("WHISPER_URL") ?? "http://localhost:8178",
-      ttsUrl: Deno.env.get("OPENAI_TTS_URL") ?? "http://localhost:8000",
-      ttsApiKey: Deno.env.get("OPENAI_TTS_API_KEY"),
-      ttsModel: Deno.env.get("OPENAI_TTS_MODEL") ?? "voicevox",
-      ttsSpeaker: Deno.env.get("OPENAI_TTS_SPEAKER") ?? "1",
-      ttsSpeed: Number(Deno.env.get("OPENAI_TTS_SPEED") ?? "1"),
-      minSpeechMs: Number(Deno.env.get("MIN_SPEECH_MS") ?? "500"),
-      speechRms: Number(Deno.env.get("SPEECH_RMS") ?? "200"),
-      interruptRms: Number(Deno.env.get("INTERRUPT_RMS") ?? "500"),
-      autoLeaveMs: Number(Deno.env.get("AUTO_LEAVE_MS") ?? "600000"),
-      speechDebounceMs: Number(Deno.env.get("SPEECH_DEBOUNCE_MS") ?? "500"),
-      noSpeechProbThreshold: Number(
-        Deno.env.get("NO_SPEECH_PROB_THRESHOLD") ?? "0.6",
-      ),
-      notificationTone:
-        (Deno.env.get("NOTIFICATION_TONE") ?? "true") === "true",
-      autoJoinVc: parseAutoJoinVc(Deno.env.get("AUTO_JOIN_VC")),
-    },
+    ...rest,
+    claude: { ...rest.claude, cwd: Deno.cwd() },
   };
 }

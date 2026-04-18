@@ -5,8 +5,6 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    env_file:
-      - ../.env
     working_dir: /workspace
     command: [
       "deno",
@@ -26,6 +24,9 @@ services:
       - type: bind
         source: ${CLAUDE_WORKSPACE:-./claude-workspace}
         target: /workspace
+      - type: bind
+        source: ${LOMS_CLAW_CONFIG:-../config.json}
+        target: /workspace/config.json
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped

@@ -121,6 +121,7 @@ const TEST_CONFIG = {
   timeout: 30000,
   cwd: "/tmp",
   apiPort: 3000,
+  defaults: {},
 };
 
 Deno.test("CronExecutor", async (t) => {

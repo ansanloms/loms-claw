@@ -3,34 +3,41 @@ import { isAuthorized, shouldRespond } from "./guard.ts";
 import type { Config } from "../config.ts";
 
 const baseConfig: Config = {
-  discordToken: "token",
-  guildId: "guild-1",
-  authorizedUserId: "user-1",
-  activeChannelIds: [],
+  discord: {
+    token: "token",
+    guildId: "guild-1",
+    userId: "user-1",
+    activeChannelIds: [],
+  },
   storePath: "/tmp/test-loms-claw.kv",
-  defaults: {},
   claude: {
     maxTurns: 10,
     verbose: false,
     timeout: 300000,
     cwd: "/tmp",
     apiPort: 3000,
+    defaults: {},
   },
   voice: {
     enabled: false,
-    whisperUrl: "http://localhost:8178",
-    ttsUrl: "http://localhost:8000",
-    ttsModel: "voicevox",
-    ttsSpeaker: "1",
-    ttsSpeed: 1,
+    whisper: { url: "http://localhost:8178", noSpeechProbThreshold: 0.6 },
+    tts: {
+      url: "http://localhost:8000",
+      model: "voicevox",
+      speaker: "1",
+      speed: 1,
+    },
     minSpeechMs: 500,
     speechRms: 200,
     interruptRms: 500,
     autoLeaveMs: 600000,
     speechDebounceMs: 500,
-    noSpeechProbThreshold: 0.6,
     notificationTone: true,
     autoJoinVc: false,
+  },
+  log: {
+    level: "INFO",
+    bufferSize: 1000,
   },
 };
 
