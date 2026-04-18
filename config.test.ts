@@ -54,6 +54,7 @@ Deno.test("loadConfig", async (t) => {
       assertEquals(config.claude.apiPort, 3000);
       assertEquals(config.voice.enabled, false);
       assertEquals(config.voice.whisper.url, "http://localhost:8178");
+      assertEquals(config.voice.whisper.noSpeechProbThreshold, 0.6);
       assertEquals(config.voice.tts.url, "http://localhost:8000");
       assertEquals(config.voice.tts.model, "voicevox");
       assertEquals(config.voice.tts.speaker, "1");
@@ -63,7 +64,6 @@ Deno.test("loadConfig", async (t) => {
       assertEquals(config.voice.interruptRms, 500);
       assertEquals(config.voice.autoLeaveMs, 600000);
       assertEquals(config.voice.speechDebounceMs, 500);
-      assertEquals(config.voice.noSpeechProbThreshold, 0.6);
       assertEquals(config.voice.notificationTone, true);
       assertEquals(config.voice.autoJoinVc, false);
       assertEquals(config.log.level, "INFO");
@@ -90,6 +90,49 @@ Deno.test("loadConfig", async (t) => {
       { discord: { ...requiredFields.discord, guildId: "" } },
       () => {
         assertThrows(() => loadConfig(), Error, "guildId");
+      },
+    );
+  });
+
+  await t.step("discord.token が空文字列でエラーになること", () => {
+    withTempConfig(
+      { discord: { ...requiredFields.discord, token: "" } },
+      () => {
+        assertThrows(() => loadConfig(), Error, "token");
+      },
+    );
+  });
+
+  await t.step("discord.userId 未設定でエラーになること", () => {
+    const { userId: _omit, ...rest } = requiredFields.discord;
+    withTempConfig({ discord: rest }, () => {
+      assertThrows(() => loadConfig(), Error, "userId");
+    });
+  });
+
+  await t.step("log.bufferSize が minimum 未満でエラーになること", () => {
+    withTempConfig(
+      { ...requiredFields, log: { level: "INFO", bufferSize: 0 } },
+      () => {
+        assertThrows(() => loadConfig(), Error, "bufferSize");
+      },
+    );
+  });
+
+  await t.step("log.bufferSize が maximum 超過でエラーになること", () => {
+    withTempConfig(
+      { ...requiredFields, log: { level: "INFO", bufferSize: 10001 } },
+      () => {
+        assertThrows(() => loadConfig(), Error, "bufferSize");
+      },
+    );
+  });
+
+  await t.step("claude.defaults.effort の enum 違反でエラーになること", () => {
+    withTempConfig(
+      { ...requiredFields, claude: { defaults: { effort: "invalid" } } },
+      () => {
+        assertThrows(() => loadConfig(), Error, "effort");
       },
     );
   });

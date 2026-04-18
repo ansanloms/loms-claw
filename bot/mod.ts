@@ -92,7 +92,7 @@ export class DiscordBot {
     if (config.voice.enabled) {
       const stt = new WhisperStt({
         baseUrl: config.voice.whisper.url,
-        noSpeechProbThreshold: config.voice.noSpeechProbThreshold,
+        noSpeechProbThreshold: config.voice.whisper.noSpeechProbThreshold,
       });
       const tts = new OpenAiTts({
         baseUrl: config.voice.tts.url,

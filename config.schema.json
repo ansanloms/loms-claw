@@ -79,14 +79,12 @@
           "properties": {
             "model": {
               "type": "string",
-              "nullable": true,
-              "description": "デフォルトモデル alias または full name（例: opus / sonnet / haiku / claude-sonnet-4-6）。"
+              "description": "デフォルトモデル alias または full name（例: opus / sonnet / haiku / claude-sonnet-4-6）。省略可。"
             },
             "effort": {
               "type": "string",
               "enum": ["low", "medium", "high", "xhigh", "max"],
-              "nullable": true,
-              "description": "デフォルト effort level。"
+              "description": "デフォルト effort level。省略可。"
             }
           }
         }
@@ -106,7 +104,6 @@
         "interruptRms",
         "autoLeaveMs",
         "speechDebounceMs",
-        "noSpeechProbThreshold",
         "notificationTone",
         "autoJoinVc"
       ],
@@ -121,12 +118,17 @@
           "description": "whisper.cpp（STT）サーバー設定。",
           "default": {},
           "additionalProperties": false,
-          "required": ["url"],
+          "required": ["url", "noSpeechProbThreshold"],
           "properties": {
             "url": {
               "type": "string",
               "default": "http://localhost:8178",
               "description": "whisper.cpp HTTP サーバーの URL。"
+            },
+            "noSpeechProbThreshold": {
+              "type": "number",
+              "default": 0.6,
+              "description": "whisper の no_speech_prob 閾値。全セグメントがこの値以上なら無音と判定し破棄する（ハルシネーション対策）。"
             }
           }
         },
@@ -144,8 +146,7 @@
             },
             "apiKey": {
               "type": "string",
-              "nullable": true,
-              "description": "TTS API キー（不要な場合は null または省略）。"
+              "description": "TTS API キー（不要な場合は省略）。"
             },
             "model": {
               "type": "string",
@@ -188,11 +189,6 @@
           "type": "number",
           "default": 500,
           "description": "発話デバウンス待機時間（ミリ秒）。同一ユーザーの連続発話をこの間マージする。"
-        },
-        "noSpeechProbThreshold": {
-          "type": "number",
-          "default": 0.6,
-          "description": "whisper の no_speech_prob 閾値。全セグメントがこの値以上なら無音と判定し破棄する（ハルシネーション対策）。"
         },
         "notificationTone": {
           "type": "boolean",

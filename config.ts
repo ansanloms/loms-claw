@@ -44,6 +44,8 @@ export interface ClaudeConfig {
 export interface WhisperConfig {
   /** whisper.cpp サーバーの URL。 */
   url: string;
+  /** no_speech_prob 閾値。全セグメントがこの値以上なら無音と判定。 */
+  noSpeechProbThreshold: number;
 }
 
 /**
@@ -82,8 +84,6 @@ export interface VoiceConfig {
   autoLeaveMs: number;
   /** 発話デバウンス待機時間（ミリ秒）。 */
   speechDebounceMs: number;
-  /** no_speech_prob 閾値。全セグメントがこの値以上なら無音と判定。 */
-  noSpeechProbThreshold: number;
   /** 通知トーン（処理中・エラー）の有効/無効。 */
   notificationTone: boolean;
   /** auto-join: false=無効, true=全VC, string[]=指定VC IDのみ。 */
@@ -169,8 +169,12 @@ export function loadConfig(): Config {
     throw new Error(`config validation failed (${path}):\n${details}`);
   }
 
+  // $schema は IDE / tooling 用のメタデータなので、実行時 Config からは除外する。
+  const { $schema: _ignored, ...rest } = raw as ConfigFile & {
+    $schema?: string;
+  };
   return {
-    ...raw,
-    claude: { ...raw.claude, cwd: Deno.cwd() },
+    ...rest,
+    claude: { ...rest.claude, cwd: Deno.cwd() },
   };
 }

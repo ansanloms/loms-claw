@@ -20,7 +20,7 @@ const baseConfig: Config = {
   },
   voice: {
     enabled: false,
-    whisper: { url: "http://localhost:8178" },
+    whisper: { url: "http://localhost:8178", noSpeechProbThreshold: 0.6 },
     tts: {
       url: "http://localhost:8000",
       model: "voicevox",
@@ -32,7 +32,6 @@ const baseConfig: Config = {
     interruptRms: 500,
     autoLeaveMs: 600000,
     speechDebounceMs: 500,
-    noSpeechProbThreshold: 0.6,
     notificationTone: true,
     autoJoinVc: false,
   },
