@@ -13,6 +13,8 @@ import {
   MessageFlags,
   SlashCommandBuilder,
 } from "discord.js";
+import type { ClaudeDefaults } from "../config.ts";
+import type { CronExecutor } from "../cron/executor.ts";
 import type { Store } from "../store/mod.ts";
 import type { VoiceManager } from "../voice/mod.ts";
 import { createLogger } from "../logger.ts";
@@ -41,6 +43,13 @@ const EFFORT_CHOICES = [
 export const command = new SlashCommandBuilder()
   .setName("claw")
   .setDescription("loms-claw bot commands")
+  .addSubcommand((sub) =>
+    sub
+      .setName("status")
+      .setDescription(
+        "Show bot status (channel config, defaults, cron, VC, uptime)",
+      )
+  )
   .addSubcommand((sub) =>
     sub
       .setName("clear")
@@ -251,4 +260,121 @@ export async function handleConfigEffort(
     flags: MessageFlags.Ephemeral,
   });
   log.info(`effort set for channel ${interaction.channelId}:`, value);
+}
+
+/**
+ * /claw status — bot 全体のステータスを表示する。
+ *
+ * 含む情報:
+ *   - 起動時刻 / uptime
+ *   - 現チャンネルの session / model / effort (source 付き)
+ *   - グローバルデフォルト (env)
+ *   - cron ジョブ数 + 名前一覧
+ *   - VC 接続状態 (有効時のみ)
+ */
+export async function handleStatus(
+  interaction: ChatInputCommandInteraction,
+  deps: {
+    store: Store;
+    defaults: ClaudeDefaults;
+    cronExecutor: CronExecutor | null;
+    voiceManager: VoiceManager | null;
+    startedAt: Date;
+  },
+): Promise<void> {
+  const settings = await deps.store.getChannelSettings(interaction.channelId);
+
+  const lines: string[] = ["**loms-claw status**"];
+
+  // uptime
+  const uptimeMs = Date.now() - deps.startedAt.getTime();
+  lines.push(
+    `**Uptime:** ${
+      formatDuration(uptimeMs)
+    } (started ${deps.startedAt.toISOString()})`,
+  );
+
+  // 現チャンネル
+  lines.push("");
+  lines.push(`**Channel:** ${interaction.channelId}`);
+  lines.push(
+    `- session: ${settings.session ? `\`${settings.session}\`` : "(none)"}`,
+  );
+  lines.push(`- model: ${formatSetting(settings.model)}`);
+  lines.push(`- effort: ${formatSetting(settings.effort)}`);
+
+  // グローバルデフォルト
+  lines.push("");
+  lines.push("**Defaults (env):**");
+  lines.push(
+    `- model: ${
+      deps.defaults.model ? `\`${deps.defaults.model}\`` : "(unset)"
+    }`,
+  );
+  lines.push(
+    `- effort: ${
+      deps.defaults.effort ? `\`${deps.defaults.effort}\`` : "(unset)"
+    }`,
+  );
+
+  // cron
+  lines.push("");
+  if (deps.cronExecutor) {
+    const jobs = deps.cronExecutor.listJobs();
+    if (jobs.length === 0) {
+      lines.push("**Cron:** no jobs loaded");
+    } else {
+      lines.push(`**Cron:** ${jobs.length} job(s)`);
+      for (const job of jobs) {
+        lines.push(`- \`${job.name}\` (${job.schedule})`);
+      }
+    }
+  } else {
+    lines.push("**Cron:** not initialized");
+  }
+
+  // VC
+  if (deps.voiceManager) {
+    lines.push("");
+    const vcChannelId = deps.voiceManager.getCurrentChannelId();
+    lines.push(
+      `**Voice:** ${
+        vcChannelId ? `connected to ${vcChannelId}` : "not connected"
+      }`,
+    );
+  }
+
+  await interaction.reply({
+    content: lines.join("\n"),
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+function formatSetting(
+  entry: { value: string; source: "channel" | "default" } | undefined,
+): string {
+  if (!entry) {
+    return "(unset; CLI default applies)";
+  }
+  return `\`${entry.value}\` (${entry.source})`;
+}
+
+function formatDuration(ms: number): string {
+  const sec = Math.floor(ms / 1000);
+  const days = Math.floor(sec / 86400);
+  const hours = Math.floor((sec % 86400) / 3600);
+  const minutes = Math.floor((sec % 3600) / 60);
+  const seconds = sec % 60;
+  const parts: string[] = [];
+  if (days > 0) {
+    parts.push(`${days}d`);
+  }
+  if (hours > 0) {
+    parts.push(`${hours}h`);
+  }
+  if (minutes > 0) {
+    parts.push(`${minutes}m`);
+  }
+  parts.push(`${seconds}s`);
+  return parts.join(" ");
 }

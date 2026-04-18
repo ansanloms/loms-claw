@@ -40,6 +40,7 @@ import {
   handleConfigEffort,
   handleConfigModel,
   handleConfigShow,
+  handleStatus,
   handleVcJoin,
   handleVcLeave,
 } from "./commands.ts";
@@ -66,6 +67,7 @@ export class DiscordBot {
   private voiceManager: VoiceManager | null = null;
   private cronExecutor: CronExecutor | null = null;
   private systemPrompts: SystemPromptStore;
+  private startedAt: Date = new Date();
 
   constructor(config: Config, store: Store) {
     this.config = config;
@@ -322,6 +324,17 @@ export class DiscordBot {
     // /claw clear
     if (sub === "clear") {
       return handleClear(interaction, this.store);
+    }
+
+    // /claw status
+    if (sub === "status") {
+      return handleStatus(interaction, {
+        store: this.store,
+        defaults: this.config.defaults,
+        cronExecutor: this.cronExecutor,
+        voiceManager: this.voiceManager,
+        startedAt: this.startedAt,
+      });
     }
   }
 
