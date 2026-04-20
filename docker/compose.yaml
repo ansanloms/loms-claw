@@ -5,6 +5,8 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+    environment:
+      TZ: ${TZ:-Asia/Tokyo}
     working_dir: /workspace
     command: [
       "deno",
