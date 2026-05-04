@@ -334,8 +334,11 @@ Deno.test("CronExecutor", async (t) => {
     "セッションキーが cron:{name} 形式であること",
     () =>
       withStore(async (store) => {
-        await store.setSession("cron:my-job", "session-abc");
-        assertEquals(await store.getSession("cron:my-job"), "session-abc");
+        await store.setSession({ channelId: "cron:my-job" }, "session-abc");
+        assertEquals(
+          await store.getSession({ channelId: "cron:my-job" }),
+          "session-abc",
+        );
       }),
   );
 

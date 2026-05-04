@@ -37,7 +37,7 @@ export function isAuthorized(
  * メッセージに反応すべきか判定する。
  *
  * - activeChannelIds に含まれるチャンネル → 原則全メッセージに反応
- *   - ただしスレッドは全て無視
+ *   - 親チャンネルが active なスレッドも同様に反応 (話題分離用途を想定)
  *   - bot へのメンションがなく他ユーザーへのメンションがある場合は無視
  * - それ以外 → bot mention 必須
  *
@@ -56,9 +56,6 @@ export function shouldRespond(
     (isThread && parentId !== null && activeChannelIds.includes(parentId));
 
   if (isActive) {
-    if (isThread) {
-      return false;
-    }
     if (!isMentioned && hasNonBotMentions) {
       return false;
     }

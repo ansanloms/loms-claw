@@ -469,10 +469,12 @@ export class VoiceManager {
 
       this.voicePlayer.startThinking();
 
+      // VC はスレッドを持たないので channel スコープのみ。
+      const scope = { channelId };
       const [sessionId, model, effort] = await Promise.all([
-        this.store.getSession(channelId),
-        this.store.getModel(channelId),
-        this.store.getEffort(channelId),
+        this.store.getSession(scope),
+        this.store.getModel(scope),
+        this.store.getEffort(scope),
       ]);
       const vcChannel = this.client.channels.cache.get(channelId);
       const templateVars: Record<string, string> = {
@@ -530,7 +532,7 @@ export class VoiceManager {
 
       // セッション ID を保存。
       if (newSessionId) {
-        await this.store.setSession(channelId, newSessionId);
+        await this.store.setSession(scope, newSessionId);
       }
     } catch (e: unknown) {
       log.error(`pipeline error for user ${userId}:`, e);
