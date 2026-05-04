@@ -2,13 +2,23 @@
  * コンテキスト別システムプロンプトの解決。
  *
  * ワークスペースの .claude/system-prompt/ 配下のファイルを起動時に読み込み、
- * コンテキスト（chat/vc）とチャンネル ID に応じて結合して返す。
+ * コンテキスト（chat/vc/cron）とスコープ (channelId / threadId) に応じて
+ * 結合して返す。
  *
  * ファイル構成:
  *   DEFAULT.md              — 常に読み込む
  *   CHAT.md                 — テキストチャット時に読み込む
  *   VC.md                   — VC 時に読み込む
- *   {{CHANNEL_ID}}.md       — 特定チャンネルで応答する際に読み込む
+ *   CRON.md                 — cron ジョブ時に読み込む
+ *   {{CHANNEL_ID}}.md       — 特定チャンネル / スレッドで応答する際に読み込む
+ *
+ * スコープ単位ファイルの解決順 (Store の model/effort と同じ動的フォールバック):
+ *   1. {threadId}.md  (スレッド固有プロンプト)
+ *   2. {channelId}.md (親チャンネルプロンプト)
+ *   3. なし
+ *
+ * thread と channel は Discord の同一 Snowflake 名前空間で衝突しないため、
+ * channelPrompts は単一の Map<id, string> で両方を保持する。
  */
 
 import { basename, join } from "jsr:@std/path@^1";
@@ -21,6 +31,15 @@ const log = createLogger("system-prompt");
  * システムプロンプトのコンテキスト種別。
  */
 export type PromptContext = "chat" | "vc" | "cron";
+
+/**
+ * システムプロンプトの解決スコープ。
+ * `Store` の StoreScope と同形式: thread → channel のフォールバックチェーンを表す。
+ */
+export interface PromptScope {
+  channelId: string;
+  threadId?: string;
+}
 
 /**
  * ファイルを読み込む。存在しなければ undefined を返す。
@@ -111,21 +130,24 @@ export class SystemPromptStore {
   }
 
   /**
-   * コンテキストに応じたシステムプロンプトをキャッシュから組み立てる。
+   * コンテキストとスコープに応じたシステムプロンプトをキャッシュから組み立てる。
    *
    * 読み込み順:
    * 1. DEFAULT.md — 常に含める
-   * 2. CHAT.md or VC.md — コンテキストに応じて含める
-   * 3. {channelId}.md — チャンネル固有の指示
+   * 2. CHAT.md / VC.md / CRON.md — コンテキストに応じて含める
+   * 3. スコープ別ファイル — thread → channel の動的フォールバックで 1 件のみ
+   *    - `{threadId}.md` があればそれ
+   *    - 無ければ `{channelId}.md`
+   *    - どちらも無ければスキップ
    *
-   * @param context - "chat" または "vc"。
-   * @param channelId - Discord チャンネル ID。
+   * @param context - "chat" / "vc" / "cron"。
+   * @param scope - 解決スコープ。`{ channelId, threadId? }`。
    * @param vars - テンプレート変数。`{{key}}` を値で置換する。
    * @returns 結合されたシステムプロンプト。全不在なら undefined。
    */
   resolve(
     context: PromptContext,
-    channelId: string,
+    scope: PromptScope,
     vars?: Record<string, string>,
   ): string | undefined {
     const parts: string[] = [];
@@ -143,9 +165,15 @@ export class SystemPromptStore {
       parts.push(contextPrompt);
     }
 
-    const channelPrompt = this.channelPrompts.get(channelId);
-    if (channelPrompt) {
-      parts.push(channelPrompt);
+    // thread → channel のフォールバックで 1 件のみ採用 (両方は重ねない)。
+    // 重ねないのは「スレッド固有指示で親チャンネル指示を上書きしたい」
+    // ケースを想定し、Store の model/effort 解決と挙動を揃えるため。
+    const scopePrompt =
+      (scope.threadId !== undefined
+        ? this.channelPrompts.get(scope.threadId)
+        : undefined) ?? this.channelPrompts.get(scope.channelId);
+    if (scopePrompt) {
+      parts.push(scopePrompt);
     }
 
     if (parts.length === 0) {

@@ -441,7 +441,7 @@ export class DiscordBot {
 
       const appendSystemPrompt = this.systemPrompts.resolve(
         "chat",
-        localId,
+        scope,
         templateVars,
       );
 
