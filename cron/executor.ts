@@ -154,7 +154,7 @@ export class CronExecutor {
 
       const appendSystemPrompt = this.systemPrompts.resolve(
         "cron",
-        job.channelId ?? "",
+        { channelId: job.channelId ?? "" },
         templateVars,
       );
 

@@ -490,7 +490,7 @@ export class VoiceManager {
       };
       const appendSystemPrompt = this.systemPrompts.resolve(
         "vc",
-        channelId,
+        scope,
         templateVars,
       );
 
