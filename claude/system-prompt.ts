@@ -125,6 +125,7 @@ export class SystemPromptStore {
     const count = (this.defaultPrompt ? 1 : 0) +
       (this.chatPrompt ? 1 : 0) +
       (this.vcPrompt ? 1 : 0) +
+      (this.cronPrompt ? 1 : 0) +
       this.channelPrompts.size;
     log.info(`loaded ${count} system prompt file(s) from ${this.dir}`);
   }

@@ -161,6 +161,8 @@ docker/compose.dev.yaml  開発用オーバーライド（ソース bind mount +
 
 これによりスレッド内でも親チャンネル用のシステムプロンプトが自動的に効く。スレッド固有の指示を上書きしたい場合のみ `{threadId}.md` を置けばよい。
 
+**重要: 上記は「置き換え」であって「積み上げ」ではない**。`{threadId}.md` が選ばれた時、`{channelId}.md` は読まれない。スレッドで親チャンネルの指示も併せて効かせたい場合は、`{threadId}.md` 内に親チャンネルの指示も改めて書く必要がある (Store の `model/effort` の挙動と一致)。
+
 ### テンプレート変数
 
 ファイル内で `{{key}}` 形式のプレースホルダーを使用できる。`resolve()` 呼び出し時に実際の値で置換される。未定義のキーはそのまま残る。
@@ -174,6 +176,8 @@ docker/compose.dev.yaml  開発用オーバーライド（ソース bind mount +
 | `{{discord.channel.type}}` | チャンネル種別（text / thread / voice） |
 | `{{discord.user.id}}`      | メッセージ送信者の ID                   |
 | `{{discord.user.name}}`    | メッセージ送信者の名前                  |
+
+注意: `{{discord.channel.id}}` / `{{discord.channel.name}}` は **発話があった場所** の ID / 名前を返す。スレッド内で発話されたメッセージでは thread の ID / 名前が入る (親チャンネルの値ではない)。`{channelId}.md` がスレッド内でフォールバック採用された場合も同様で、ファイル内の `{{discord.channel.id}}` はスレッド ID に展開される。Discord REST API で「親チャンネル」を操作したい場合は ID をハードコードするか、別途取得すること。
 
 使用例（`.claude/system-prompt/DEFAULT.md`）:
 

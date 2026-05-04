@@ -289,4 +289,43 @@ Deno.test("SystemPromptStore", async (t) => {
       });
     },
   );
+
+  await t.step(
+    "thread フォールバックで読まれた channel ファイル内のテンプレート変数も置換されること",
+    async () => {
+      await withTempDir(async (dir) => {
+        await writeFile(dir, "DEFAULT.md", "default");
+        await writeFile(
+          dir,
+          "ch-parent.md",
+          "Channel ID: {{discord.channel.id}}",
+        );
+        const store = new SystemPromptStore(dir);
+        await store.load();
+        // thread スコープで channel ファイルがフォールバック採用される際も
+        // vars が適用される (発話地点の ID = thread.id が入る)。
+        const result = store.resolve("chat", th("ch-parent", "thread-1"), {
+          "discord.channel.id": "thread-1",
+        });
+        assertEquals(result, "default\n\nChannel ID: thread-1");
+      });
+    },
+  );
+
+  await t.step(
+    "channelId が空文字なら channel ファイル検索に hit しないこと",
+    async () => {
+      await withTempDir(async (dir) => {
+        await writeFile(dir, "DEFAULT.md", "default");
+        await writeFile(dir, "CRON.md", "cron");
+        // 空文字をキーとした .md は存在しないので何も追加で乗らない
+        const store = new SystemPromptStore(dir);
+        await store.load();
+        assertEquals(
+          store.resolve("cron", ch("")),
+          "default\n\ncron",
+        );
+      });
+    },
+  );
 });
