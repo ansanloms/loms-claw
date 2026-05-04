@@ -38,10 +38,15 @@ interface ParsedThreadCreateBody {
 }
 
 /**
+ * Discord 側のスレッド名長さ制約 (1〜100 chars)。
+ */
+const THREAD_NAME_MAX_LENGTH = 100;
+
+/**
  * スレッド作成 API の request body を検証する。
  *
  * 共通仕様 (`channel.threads.create()` / `message.startThread()` 双方で使用):
- *   - name: required, non-empty string
+ *   - name: required, non-empty string (空白のみ不可、最大 100 chars)
  *   - auto_archive_duration: optional, 60 / 1440 / 4320 / 10080 のいずれか
  *   - reason: optional string (audit log 用)
  */
@@ -51,13 +56,19 @@ function parseThreadCreateBody(
   ok: false;
   error: string;
 } {
-  if (typeof body !== "object" || body === null) {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
     return { ok: false, error: "request body must be a JSON object" };
   }
   const b = body as Record<string, unknown>;
 
-  if (typeof b.name !== "string" || b.name.length === 0) {
+  if (typeof b.name !== "string" || b.name.trim().length === 0) {
     return { ok: false, error: "name is required (non-empty string)" };
+  }
+  if (b.name.length > THREAD_NAME_MAX_LENGTH) {
+    return {
+      ok: false,
+      error: `name must be ${THREAD_NAME_MAX_LENGTH} chars or less`,
+    };
   }
 
   let autoArchiveDuration: AutoArchiveDuration = DEFAULT_AUTO_ARCHIVE_DURATION;
@@ -365,6 +376,14 @@ export function createDiscordRoutes(ctx: ApiContext) {
     if (!("messages" in channel)) {
       return c.json(
         { error: `Channel ${channelId} does not support messages` },
+        400,
+      );
+    }
+    // 親が既にスレッドの場合は派生スレッドを作れない (Discord 仕様)。
+    // チャンネル直下版と挙動を揃えるため事前に弾く。
+    if (!("threads" in channel)) {
+      return c.json(
+        { error: `Channel ${channelId} does not support threads` },
         400,
       );
     }

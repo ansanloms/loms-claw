@@ -71,7 +71,9 @@ Content-Type: application/json
 }
 ```
 
-テキストチャンネル直下に新しい (Public) スレッドを作る。`name` 必須。`auto_archive_duration` は 60 / 1440 / 4320 / 10080 のいずれか (省略時 1440)。`reason` は audit log に出る任意の文字列。
+テキストチャンネル直下に新しい (Public) スレッドを作る。`name` 必須 (1〜100 文字、空白のみ不可)。`auto_archive_duration` は 60 / 1440 / 4320 / 10080 のいずれか (省略時 1440)。`reason` は audit log に出る任意の文字列。
+
+bot ロールに **Create Public Threads** 権限が必要。権限不足時は 500 が返る。
 
 レスポンス: `{"id": "...", "name": "...", "parent_id": "..."}`
 
@@ -92,7 +94,7 @@ Content-Type: application/json
 
 既存メッセージを starter とするスレッドを派生させる。Discord UI の「メッセージから派生」と同等で、対象メッセージが thread の発端として表示されるため文脈を残したまま分離できる。
 
-`name` 必須、その他のパラメータは「スレッド作成」と同じ。レスポンスも同じ形式。
+`name` 必須、その他のパラメータは「スレッド作成」と同じ。権限要件も同じ (**Create Public Threads**)。既にスレッドが付いているメッセージへ重ねて呼ぶと Discord API エラーが 500 で返る。レスポンスは「スレッド作成」と同じ形式。
 
 ### メンバー一覧/検索
 
