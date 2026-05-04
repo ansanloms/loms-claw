@@ -20,6 +20,78 @@ async function fetchGuild(ctx: ApiContext): Promise<Guild> {
 }
 
 /**
+ * Discord がスレッドの自動アーカイブで許可している分単位の値。
+ * ref: https://discord.com/developers/docs/resources/channel
+ */
+const ALLOWED_AUTO_ARCHIVE_DURATIONS = [60, 1440, 4320, 10080] as const;
+type AutoArchiveDuration = typeof ALLOWED_AUTO_ARCHIVE_DURATIONS[number];
+
+/**
+ * Discord UI と同じデフォルト (24h)。60 (1h) だと運用上短すぎるため。
+ */
+const DEFAULT_AUTO_ARCHIVE_DURATION: AutoArchiveDuration = 1440;
+
+interface ParsedThreadCreateBody {
+  name: string;
+  autoArchiveDuration: AutoArchiveDuration;
+  reason: string | undefined;
+}
+
+/**
+ * スレッド作成 API の request body を検証する。
+ *
+ * 共通仕様 (`channel.threads.create()` / `message.startThread()` 双方で使用):
+ *   - name: required, non-empty string
+ *   - auto_archive_duration: optional, 60 / 1440 / 4320 / 10080 のいずれか
+ *   - reason: optional string (audit log 用)
+ */
+function parseThreadCreateBody(
+  body: unknown,
+): { ok: true; value: ParsedThreadCreateBody } | {
+  ok: false;
+  error: string;
+} {
+  if (typeof body !== "object" || body === null) {
+    return { ok: false, error: "request body must be a JSON object" };
+  }
+  const b = body as Record<string, unknown>;
+
+  if (typeof b.name !== "string" || b.name.length === 0) {
+    return { ok: false, error: "name is required (non-empty string)" };
+  }
+
+  let autoArchiveDuration: AutoArchiveDuration = DEFAULT_AUTO_ARCHIVE_DURATION;
+  if (b.auto_archive_duration !== undefined) {
+    const dur = b.auto_archive_duration;
+    if (
+      typeof dur !== "number" ||
+      !ALLOWED_AUTO_ARCHIVE_DURATIONS.includes(dur as AutoArchiveDuration)
+    ) {
+      return {
+        ok: false,
+        error: `auto_archive_duration must be one of ${
+          ALLOWED_AUTO_ARCHIVE_DURATIONS.join(", ")
+        }`,
+      };
+    }
+    autoArchiveDuration = dur as AutoArchiveDuration;
+  }
+
+  let reason: string | undefined;
+  if (b.reason !== undefined) {
+    if (typeof b.reason !== "string") {
+      return { ok: false, error: "reason must be a string" };
+    }
+    reason = b.reason;
+  }
+
+  return {
+    ok: true,
+    value: { name: b.name, autoArchiveDuration, reason },
+  };
+}
+
+/**
  * チャンネルがギルド内に属することを検証し、テキストチャンネルを返す。
  */
 async function fetchGuildTextChannel(ctx: ApiContext, channelId: string) {
@@ -241,6 +313,74 @@ export function createDiscordRoutes(ctx: ApiContext) {
     await message.react(emoji);
 
     return c.json({ message_id: messageId, emoji });
+  });
+
+  // POST /channels/:id/threads
+  app.post("/channels/:id/threads", async (c) => {
+    const channelId = c.req.param("id");
+    const body = await c.req.json();
+    const parsed = parseThreadCreateBody(body);
+    if (!parsed.ok) {
+      return c.json({ error: parsed.error }, 400);
+    }
+
+    log.debug("createThread:", channelId, parsed.value.name);
+    const channel = await fetchGuildTextChannel(ctx, channelId);
+    if (!("threads" in channel)) {
+      return c.json(
+        { error: `Channel ${channelId} does not support threads` },
+        400,
+      );
+    }
+
+    const thread = await channel.threads.create({
+      name: parsed.value.name,
+      autoArchiveDuration: parsed.value.autoArchiveDuration,
+      reason: parsed.value.reason,
+    });
+
+    return c.json({
+      id: thread.id,
+      name: thread.name,
+      parent_id: thread.parentId,
+    });
+  });
+
+  // POST /channels/:cid/messages/:mid/threads
+  app.post("/channels/:cid/messages/:mid/threads", async (c) => {
+    const { cid: channelId, mid: messageId } = c.req.param();
+    const body = await c.req.json();
+    const parsed = parseThreadCreateBody(body);
+    if (!parsed.ok) {
+      return c.json({ error: parsed.error }, 400);
+    }
+
+    log.debug(
+      "startThreadFromMessage:",
+      channelId,
+      messageId,
+      parsed.value.name,
+    );
+    const channel = await fetchGuildTextChannel(ctx, channelId);
+    if (!("messages" in channel)) {
+      return c.json(
+        { error: `Channel ${channelId} does not support messages` },
+        400,
+      );
+    }
+
+    const message = await channel.messages.fetch(messageId);
+    const thread = await message.startThread({
+      name: parsed.value.name,
+      autoArchiveDuration: parsed.value.autoArchiveDuration,
+      reason: parsed.value.reason,
+    });
+
+    return c.json({
+      id: thread.id,
+      name: thread.name,
+      parent_id: thread.parentId,
+    });
   });
 
   // GET /members
