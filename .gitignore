@@ -8,6 +8,11 @@ docker/claude-workspace/*
 !docker/claude-workspace/CLAUDE.md
 !docker/claude-workspace/memory
 !docker/claude-workspace/cron
+!docker/claude-workspace/travel
+# travel 配下の .md は原則として個人履歴 (YYYYMMDD-*.md 等) なので git 管理しない
+docker/claude-workspace/travel/*.md
+# 例外: TEMPLATE.md は共有資産として管理する
+!docker/claude-workspace/travel/TEMPLATE.md
 !**/.gitkeep
 **/*.kv
 **/*.kv-shm
