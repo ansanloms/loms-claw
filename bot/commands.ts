@@ -15,7 +15,7 @@ import {
 } from "discord.js";
 import type { ClaudeDefaults } from "../config.ts";
 import type { CronExecutor } from "../cron/executor.ts";
-import type { Store } from "../store/mod.ts";
+import type { ScopeSettingEntry, Store, StoreScope } from "../store/mod.ts";
 import type { VoiceManager } from "../voice/mod.ts";
 import { createLogger } from "../logger.ts";
 
@@ -179,7 +179,8 @@ export async function handleStatusShow(
     startedAt: Temporal.Instant;
   },
 ): Promise<void> {
-  const settings = await deps.store.getChannelSettings(interaction.channelId);
+  const scope = scopeFromInteraction(interaction);
+  const settings = await deps.store.getScopeSettings(scope);
 
   const lines: string[] = ["**loms-claw status**"];
 
@@ -193,9 +194,13 @@ export async function handleStatusShow(
     } (started ${deps.startedAt.toString()})`,
   );
 
-  // 現チャンネル
+  // 現スコープ (channel + 必要なら thread)
   lines.push("");
-  lines.push(`**Channel:** ${interaction.channelId}`);
+  if (scope.threadId !== undefined) {
+    lines.push(`**Thread:** ${scope.threadId} (parent: ${scope.channelId})`);
+  } else {
+    lines.push(`**Channel:** ${scope.channelId}`);
+  }
   lines.push(
     `- session: ${settings.session ? `\`${settings.session}\`` : "(none)"}`,
   );
@@ -270,59 +275,68 @@ export async function handleStatusSet(
     return;
   }
 
+  const scope = scopeFromInteraction(interaction);
+  const scopeLabel = scope.threadId !== undefined ? "thread" : "channel";
+
   const updates: string[] = [];
   if (model) {
-    await store.setModel(interaction.channelId, model);
+    await store.setModel(scope, model);
     updates.push(`model = \`${model}\``);
   }
   if (effort) {
-    await store.setEffort(interaction.channelId, effort);
+    await store.setEffort(scope, effort);
     updates.push(`effort = \`${effort}\``);
   }
   await interaction.reply({
-    content: `Updated for this channel: ${updates.join(", ")}.`,
+    content: `Updated for this ${scopeLabel}: ${updates.join(", ")}.`,
     flags: MessageFlags.Ephemeral,
   });
   log.info(
-    `status set for channel ${interaction.channelId}:`,
+    `status set for ${scopeLabel} ${scope.threadId ?? scope.channelId}:`,
     updates.join(", "),
   );
 }
 
 /**
- * /claw status unset — チャンネル単位の設定を削除する。
+ * /claw status unset — チャンネル / スレッド単位の設定を削除する。
  *
- * target に指定したものをデフォルトに戻す:
- *   - "model"   → channel の model を削除 (env defaults にフォールバック)
- *   - "effort"  → channel の effort を削除 (env defaults にフォールバック)
- *   - "session" → 会話セッションを削除 (旧 /claw clear と同義)
+ * 実行スコープはコマンドを叩いた場所で決まる:
+ *   - スレッド内: そのスレッドの値のみ削除。親チャンネルの値は触らない。
+ *     model / effort は channel → defaults へフォールバック、session は新規開始。
+ *   - 通常チャンネル: そのチャンネルの値のみ削除。
+ *
+ * target:
+ *   - "model"   → スコープの model を削除 (フォールバック先が新たな解決値)
+ *   - "effort"  → スコープの effort を削除 (フォールバック先が新たな解決値)
+ *   - "session" → スコープの session を削除 (会話を再開で新規セッション)
  */
 export async function handleStatusUnset(
   interaction: ChatInputCommandInteraction,
   store: Store,
 ): Promise<void> {
   const target = interaction.options.getString("target", true);
-  const channelId = interaction.channelId;
+  const scope = scopeFromInteraction(interaction);
+  const scopeLabel = scope.threadId !== undefined ? "thread" : "channel";
 
   switch (target) {
     case "model":
-      await store.deleteModel(channelId);
+      await store.deleteModel(scope);
       await interaction.reply({
-        content: "Model unset for this channel (default applies).",
+        content: `Model unset for this ${scopeLabel} (fallback applies).`,
         flags: MessageFlags.Ephemeral,
       });
       break;
     case "effort":
-      await store.deleteEffort(channelId);
+      await store.deleteEffort(scope);
       await interaction.reply({
-        content: "Effort unset for this channel (default applies).",
+        content: `Effort unset for this ${scopeLabel} (fallback applies).`,
         flags: MessageFlags.Ephemeral,
       });
       break;
     case "session":
-      await store.deleteSession(channelId);
+      await store.deleteSession(scope);
       await interaction.reply({
-        content: "Session cleared for this channel.",
+        content: `Session cleared for this ${scopeLabel}.`,
         flags: MessageFlags.Ephemeral,
       });
       break;
@@ -333,16 +347,45 @@ export async function handleStatusUnset(
       });
       return;
   }
-  log.info(`status unset ${target} for channel ${channelId}`);
+  log.info(
+    `status unset ${target} for ${scopeLabel} ${
+      scope.threadId ?? scope.channelId
+    }`,
+  );
 }
 
 function formatSetting(
-  entry: { value: string; source: "channel" | "default" } | undefined,
+  entry: ScopeSettingEntry | undefined,
 ): string {
   if (!entry) {
     return "(unset; CLI default applies)";
   }
   return `\`${entry.value}\` (${entry.source})`;
+}
+
+/**
+ * インタラクションが起きた場所からスコープを抽出する。
+ *
+ * - スレッド内で実行: { channelId: parentId, threadId: thread.id }
+ * - 通常チャンネルで実行: { channelId: channel.id }
+ *
+ * thread の parentId が null のケース (フォーラム親が消えた等の異常系) は
+ * thread.id 自体を channelId にフォールバックさせ、Store の整合性を保つ。
+ *
+ * `channel?.isThread()` は `this is ThreadChannel` の TS type guard であり、
+ * 真偽値変数経由では型ナローイングが効かないので呼び出し式のまま条件に使う。
+ */
+function scopeFromInteraction(
+  interaction: ChatInputCommandInteraction,
+): StoreScope {
+  const channel = interaction.channel;
+  if (channel?.isThread()) {
+    return {
+      channelId: channel.parentId ?? interaction.channelId,
+      threadId: interaction.channelId,
+    };
+  }
+  return { channelId: interaction.channelId };
 }
 
 function formatDuration(ms: number): string {

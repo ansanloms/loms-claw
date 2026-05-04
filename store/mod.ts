@@ -1,11 +1,21 @@
 /**
- * チャンネル単位の永続化ストア。
+ * チャンネル / スレッド単位の永続化ストア。
  *
  * Deno KV (SQLite backend) に session_id / model / effort を保存する。
- * model / effort は KV の値を優先し、無ければコンストラクタで受け取った
- * グローバルデフォルトにフォールバックする。session にデフォルトはない。
  *
- * cron ジョブは `cron:<jobName>` を擬似 channelId として同じスキームに乗る。
+ * スコープは {channelId, threadId?} の組で表す。
+ *   - threadId 無し: 通常チャンネル (= スレッドではないテキストチャンネル) または
+ *     cron の擬似 channelId (`cron:{name}`) など。
+ *   - threadId あり: スレッド。フォールバック先として親チャンネルを参照する。
+ *
+ * model / effort は thread → channel → defaults の順に解決する。
+ * session は thread と channel で完全に独立し、互いにフォールバックしない。
+ *
+ * KV キー設計:
+ *   ["channel", id, "session" | "model" | "effort"] -> string
+ *   id は Discord Snowflake (channel / thread どちらも) または `cron:{name}`。
+ *   thread と channel は同一 Snowflake 名前空間で衝突しないため、id をそのまま
+ *   キーに使い分ける。
  *
  * @module
  */
@@ -16,7 +26,7 @@ const MODEL = "model";
 const EFFORT = "effort";
 
 /**
- * グローバルデフォルト値。チャンネル単位の上書きが無いときに使われる。
+ * グローバルデフォルト値。チャンネル / スレッド単位の上書きが無いときに使われる。
  */
 export interface StoreDefaults {
   model?: string;
@@ -24,27 +34,40 @@ export interface StoreDefaults {
 }
 
 /**
- * チャンネルの設定値とその出所を表すエントリ。
+ * 永続化スコープ。Discord のチャンネル、または親チャンネル + スレッドの組。
  */
-export interface ChannelSettingEntry {
+export interface StoreScope {
+  channelId: string;
+  threadId?: string;
+}
+
+/**
+ * スコープ設定値の出所。
+ *   - thread:  スレッド固有の設定値
+ *   - channel: 親チャンネルの設定値 (thread が未設定でフォールバック)
+ *   - default: グローバルデフォルト
+ */
+export type SettingSource = "thread" | "channel" | "default";
+
+/**
+ * スコープの設定値とその出所を表すエントリ。
+ */
+export interface ScopeSettingEntry {
   value: string;
-  source: "channel" | "default";
+  source: SettingSource;
 }
 
 /**
- * チャンネル単位の設定スナップショット。
+ * スコープ単位の設定スナップショット。
  */
-export interface ChannelSettings {
+export interface ScopeSettings {
   session?: string;
-  model?: ChannelSettingEntry;
-  effort?: ChannelSettingEntry;
+  model?: ScopeSettingEntry;
+  effort?: ScopeSettingEntry;
 }
 
 /**
- * Deno KV ベースのチャンネル設定ストア。
- *
- * キー設計:
- *   ["channel", channelId, "session" | "model" | "effort"] -> string
+ * Deno KV ベースのスコープ設定ストア。
  */
 export class Store {
   constructor(
@@ -53,63 +76,102 @@ export class Store {
   ) {}
 
   // ── session ─────────────────────────────────────────────
+  // session は thread と channel で独立。フォールバックしない。
 
-  async getSession(channelId: string): Promise<string | undefined> {
-    const entry = await this.kv.get<string>([NS, channelId, SESSION]);
+  async getSession(scope: StoreScope): Promise<string | undefined> {
+    const id = scope.threadId ?? scope.channelId;
+    const entry = await this.kv.get<string>([NS, id, SESSION]);
     return entry.value ?? undefined;
   }
 
-  async setSession(channelId: string, sessionId: string): Promise<void> {
-    await this.kv.set([NS, channelId, SESSION], sessionId);
+  async setSession(scope: StoreScope, sessionId: string): Promise<void> {
+    const id = scope.threadId ?? scope.channelId;
+    await this.kv.set([NS, id, SESSION], sessionId);
   }
 
-  async deleteSession(channelId: string): Promise<void> {
-    await this.kv.delete([NS, channelId, SESSION]);
+  async deleteSession(scope: StoreScope): Promise<void> {
+    const id = scope.threadId ?? scope.channelId;
+    await this.kv.delete([NS, id, SESSION]);
   }
 
   // ── model ───────────────────────────────────────────────
+  // thread → channel → defaults の順で解決。
 
-  async getModel(channelId: string): Promise<string | undefined> {
-    const entry = await this.kv.get<string>([NS, channelId, MODEL]);
-    return entry.value ?? this.defaults.model;
+  async getModel(scope: StoreScope): Promise<string | undefined> {
+    if (scope.threadId !== undefined) {
+      const threadEntry = await this.kv.get<string>([
+        NS,
+        scope.threadId,
+        MODEL,
+      ]);
+      if (threadEntry.value !== null) {
+        return threadEntry.value;
+      }
+    }
+    const channelEntry = await this.kv.get<string>([
+      NS,
+      scope.channelId,
+      MODEL,
+    ]);
+    return channelEntry.value ?? this.defaults.model;
   }
 
-  async setModel(channelId: string, model: string): Promise<void> {
-    await this.kv.set([NS, channelId, MODEL], model);
+  async setModel(scope: StoreScope, model: string): Promise<void> {
+    const id = scope.threadId ?? scope.channelId;
+    await this.kv.set([NS, id, MODEL], model);
   }
 
-  async deleteModel(channelId: string): Promise<void> {
-    await this.kv.delete([NS, channelId, MODEL]);
+  async deleteModel(scope: StoreScope): Promise<void> {
+    const id = scope.threadId ?? scope.channelId;
+    await this.kv.delete([NS, id, MODEL]);
   }
 
   // ── effort ──────────────────────────────────────────────
 
-  async getEffort(channelId: string): Promise<string | undefined> {
-    const entry = await this.kv.get<string>([NS, channelId, EFFORT]);
-    return entry.value ?? this.defaults.effort;
+  async getEffort(scope: StoreScope): Promise<string | undefined> {
+    if (scope.threadId !== undefined) {
+      const threadEntry = await this.kv.get<string>([
+        NS,
+        scope.threadId,
+        EFFORT,
+      ]);
+      if (threadEntry.value !== null) {
+        return threadEntry.value;
+      }
+    }
+    const channelEntry = await this.kv.get<string>([
+      NS,
+      scope.channelId,
+      EFFORT,
+    ]);
+    return channelEntry.value ?? this.defaults.effort;
   }
 
-  async setEffort(channelId: string, effort: string): Promise<void> {
-    await this.kv.set([NS, channelId, EFFORT], effort);
+  async setEffort(scope: StoreScope, effort: string): Promise<void> {
+    const id = scope.threadId ?? scope.channelId;
+    await this.kv.set([NS, id, EFFORT], effort);
   }
 
-  async deleteEffort(channelId: string): Promise<void> {
-    await this.kv.delete([NS, channelId, EFFORT]);
+  async deleteEffort(scope: StoreScope): Promise<void> {
+    const id = scope.threadId ?? scope.channelId;
+    await this.kv.delete([NS, id, EFFORT]);
   }
 
   // ── まとめ操作 ─────────────────────────────────────────
 
   /**
-   * 指定チャンネルの session / model / effort を全削除する。
-   * デフォルトは消えないため、削除後も getModel / getEffort は defaults を返す。
+   * 指定スコープの session / model / effort を全削除する。
+   * threadId 指定時は thread の設定のみ消し、親チャンネルの設定は残す。
+   * threadId 未指定時はチャンネルの設定のみ消す (配下のスレッド設定は残る)。
    *
    * delete を atomic で 1 コミットにまとめる。`kv.list` 自体は atomic では
    * ないが、取得済みキーの削除を 1 トランザクションに集約することで「複数
    * キーが中途半端に残る」状態を防ぐ。
    */
-  async clearChannel(channelId: string): Promise<void> {
+  async clearScope(scope: StoreScope): Promise<void> {
+    const id = scope.threadId ?? scope.channelId;
     const atomic = this.kv.atomic();
-    for await (const entry of this.kv.list({ prefix: [NS, channelId] })) {
+    for await (const entry of this.kv.list({ prefix: [NS, id] })) {
       atomic.delete(entry.key);
     }
     await atomic.commit();
@@ -117,22 +179,71 @@ export class Store {
 
   /**
    * 表示用に現在の設定を一括取得する。
-   * model / effort は KV にあれば source: "channel"、defaults にあれば "default"、
-   * いずれも無ければ undefined。
+   *
+   * model / effort の source:
+   *   - thread:  スレッド固有値が KV にある
+   *   - channel: 親チャンネル値が KV にある (thread には無い)
+   *   - default: defaults にある (thread / channel どちらも無い)
+   *   - undefined: defaults にも無い
+   *
+   * session は thread と channel で独立。threadId 指定時は thread の値、
+   * 未指定時は channel の値を返す。
    */
-  async getChannelSettings(channelId: string): Promise<ChannelSettings> {
-    const [sessionEntry, modelEntry, effortEntry] = await this.kv.getMany<
-      [string, string, string]
-    >([
-      [NS, channelId, SESSION],
-      [NS, channelId, MODEL],
-      [NS, channelId, EFFORT],
-    ]);
+  async getScopeSettings(scope: StoreScope): Promise<ScopeSettings> {
+    const channelKeys = [
+      [NS, scope.channelId, SESSION],
+      [NS, scope.channelId, MODEL],
+      [NS, scope.channelId, EFFORT],
+    ] as const;
+
+    if (scope.threadId === undefined) {
+      const [sessionEntry, modelEntry, effortEntry] = await this.kv.getMany<
+        [string, string, string]
+      >([...channelKeys]);
+      return {
+        session: sessionEntry.value ?? undefined,
+        model: resolveSetting(
+          null,
+          modelEntry.value,
+          this.defaults.model,
+        ),
+        effort: resolveSetting(
+          null,
+          effortEntry.value,
+          this.defaults.effort,
+        ),
+      };
+    }
+
+    const threadKeys = [
+      [NS, scope.threadId, SESSION],
+      [NS, scope.threadId, MODEL],
+      [NS, scope.threadId, EFFORT],
+    ] as const;
+    const [
+      threadSession,
+      threadModel,
+      threadEffort,
+      _channelSession,
+      channelModel,
+      channelEffort,
+    ] = await this.kv.getMany<
+      [string, string, string, string, string, string]
+    >([...threadKeys, ...channelKeys]);
 
     return {
-      session: sessionEntry.value ?? undefined,
-      model: resolveSetting(modelEntry.value, this.defaults.model),
-      effort: resolveSetting(effortEntry.value, this.defaults.effort),
+      // session は thread のみ参照、channel にはフォールバックしない
+      session: threadSession.value ?? undefined,
+      model: resolveSetting(
+        threadModel.value,
+        channelModel.value,
+        this.defaults.model,
+      ),
+      effort: resolveSetting(
+        threadEffort.value,
+        channelEffort.value,
+        this.defaults.effort,
+      ),
     };
   }
 
@@ -145,9 +256,13 @@ export class Store {
 }
 
 function resolveSetting(
+  threadValue: string | null,
   channelValue: string | null,
   defaultValue: string | undefined,
-): ChannelSettingEntry | undefined {
+): ScopeSettingEntry | undefined {
+  if (threadValue !== null) {
+    return { value: threadValue, source: "thread" };
+  }
   if (channelValue !== null) {
     return { value: channelValue, source: "channel" };
   }

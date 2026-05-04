@@ -20,7 +20,7 @@ import {
 import type { SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { Config } from "../config.ts";
 import { askClaude } from "../claude/mod.ts";
-import type { Store } from "../store/mod.ts";
+import type { Store, StoreScope } from "../store/mod.ts";
 import { ApprovalManager } from "../approval/manager.ts";
 import { command } from "./commands.ts";
 import { isAuthorized, shouldRespond } from "./guard.ts";
@@ -383,7 +383,16 @@ export class DiscordBot {
     }
 
     const channel = message.channel as GuildTextBasedChannel;
-    const channelId = message.channelId;
+    const isThread = message.channel.isThread();
+    const scope: StoreScope = {
+      channelId: isThread
+        ? (message.channel.parentId ?? message.channelId)
+        : message.channelId,
+      threadId: isThread ? message.channelId : undefined,
+    };
+    // 承認ボタン・systemPrompt 解決・テンプレート変数は「発話があった場所」を見せたい。
+    // スレッド内ならスレッド ID、通常チャンネルなら channel ID。
+    const localId = scope.threadId ?? scope.channelId;
 
     // typing インジケーター開始
     const typingController = new AbortController();
@@ -412,27 +421,27 @@ export class DiscordBot {
       }
 
       const [sessionId, model, effort] = await Promise.all([
-        this.store.getSession(channelId),
-        this.store.getModel(channelId),
-        this.store.getEffort(channelId),
+        this.store.getSession(scope),
+        this.store.getModel(scope),
+        this.store.getEffort(scope),
       ]);
 
-      // 承認ボタンの送信先チャンネルを設定
-      this.approvalManager.setChannel(channelId);
+      // 承認ボタンの送信先は発話があった場所 (スレッド優先)
+      this.approvalManager.setChannel(localId);
 
       const templateVars: Record<string, string> = {
         "discord.guild.id": this.config.discord.guildId,
         "discord.guild.name": message.guild?.name ?? "",
-        "discord.channel.id": channelId,
+        "discord.channel.id": localId,
         "discord.channel.name": "name" in channel ? channel.name ?? "" : "",
-        "discord.channel.type": "text",
+        "discord.channel.type": isThread ? "thread" : "text",
         "discord.user.id": message.author.id,
         "discord.user.name": message.author.displayName,
       };
 
       const appendSystemPrompt = this.systemPrompts.resolve(
         "chat",
-        channelId,
+        localId,
         templateVars,
       );
 
@@ -515,7 +524,7 @@ export class DiscordBot {
             );
           }
           // 非ゼロ終了でジェネレータがスローしてもセッションが残るよう即座に保存
-          await this.store.setSession(channelId, event.session_id);
+          await this.store.setSession(scope, event.session_id);
         } else if (event.type === "tool_progress") {
           await progress.report(event.tool_name, event.elapsed_time_seconds);
         }

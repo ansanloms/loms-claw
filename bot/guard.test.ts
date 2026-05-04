@@ -127,23 +127,26 @@ Deno.test("shouldRespond", async (t) => {
     },
   );
 
-  // active channel スレッド無視
-  await t.step("active channel のスレッドは無視すること", () => {
-    assertEquals(
-      shouldRespond(
-        "thread-1",
-        activeChannels,
+  // active channel 配下のスレッドも自動応答する (話題分離用途)
+  await t.step(
+    "active channel のスレッドは mention 無しでも反応すること",
+    () => {
+      assertEquals(
+        shouldRespond(
+          "thread-1",
+          activeChannels,
+          true,
+          "ch-active-1",
+          false,
+          false,
+        ),
         true,
-        "ch-active-1",
-        false,
-        false,
-      ),
-      false,
-    );
-  });
+      );
+    },
+  );
 
   await t.step(
-    "active channel のスレッドは mention ありでも無視すること",
+    "active channel のスレッドは mention ありでも反応すること",
     () => {
       assertEquals(
         shouldRespond(
@@ -154,7 +157,58 @@ Deno.test("shouldRespond", async (t) => {
           true,
           false,
         ),
+        true,
+      );
+    },
+  );
+
+  await t.step(
+    "active channel のスレッドで bot mention なし + 他ユーザーメンションありの場合は無視すること",
+    () => {
+      assertEquals(
+        shouldRespond(
+          "thread-1",
+          activeChannels,
+          true,
+          "ch-active-1",
+          false,
+          true,
+        ),
         false,
+      );
+    },
+  );
+
+  await t.step(
+    "親が非 active なスレッドは mention 必須であること",
+    () => {
+      assertEquals(
+        shouldRespond(
+          "thread-1",
+          activeChannels,
+          true,
+          "ch-other",
+          false,
+          false,
+        ),
+        false,
+      );
+    },
+  );
+
+  await t.step(
+    "スレッド ID 自体が activeChannelIds に含まれる場合は親が非 active でも反応すること",
+    () => {
+      assertEquals(
+        shouldRespond(
+          "thread-1",
+          ["thread-1"],
+          true,
+          "ch-other",
+          false,
+          false,
+        ),
+        true,
       );
     },
   );

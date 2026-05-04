@@ -129,18 +129,19 @@ export class CronExecutor {
 
       const sessionKey = `cron:${job.name}`;
       const sessionId = job.resumeSession
-        ? await this.store.getSession(sessionKey)
+        ? await this.store.getSession({ channelId: sessionKey })
         : undefined;
 
       // model / effort 解決順: frontmatter > channel 設定 > defaults
+      // (cron はスレッドを持たないので channel スコープのみ)
       const model = job.model ??
         (job.channelId
-          ? await this.store.getModel(job.channelId)
+          ? await this.store.getModel({ channelId: job.channelId })
           : undefined) ??
         this.defaults.model;
       const effort = job.effort ??
         (job.channelId
-          ? await this.store.getEffort(job.channelId)
+          ? await this.store.getEffort({ channelId: job.channelId })
           : undefined) ??
         this.defaults.effort;
 
@@ -185,7 +186,10 @@ export class CronExecutor {
             );
           }
           if (job.resumeSession) {
-            await this.store.setSession(sessionKey, event.session_id);
+            await this.store.setSession(
+              { channelId: sessionKey },
+              event.session_id,
+            );
           }
         }
       }
