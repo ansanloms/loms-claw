@@ -41,6 +41,11 @@ export function isAuthorized(
  *   - bot へのメンションがなく他ユーザーへのメンションがある場合は無視
  * - それ以外 → bot mention 必須
  *
+ * 注意: フォーラムチャンネル (GuildForum) の ID を activeChannelIds に入れると、
+ * 配下の全スレッド (= 全投稿) が mention 不要で自動応答対象になる。フォーラム
+ * 自体にはメッセージが投稿できないため実害は小さいが、想定外の挙動を避ける
+ * ため activeChannelIds には通常のテキストチャンネル ID のみを指定すること。
+ *
  * @param hasNonBotMentions - メッセージに bot 以外のユーザーメンションが含まれるか。
  *   @everyone や @role は対象外（discord.js の mentions.users にはユーザー個別メンションのみ含まれる）。
  */

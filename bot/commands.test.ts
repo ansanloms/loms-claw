@@ -27,13 +27,15 @@ const th = (channelId: string, threadId: string): StoreScope => ({
  * ChatInputCommandInteraction の最小モック。
  * handleStatusSet / handleStatusUnset が使うプロパティのみ実装する。
  *
- * threadParentId を渡すと thread コンテキストとしてふるまう
- * (interaction.channel.isThread() が true、parentId が渡した値)。
+ * threadParentId:
+ *   - undefined: 非 thread (interaction.channel.isThread() === false)
+ *   - string:    thread + 親 ID あり
+ *   - null:      thread だが parentId が null の異常系 (フォーラム親が消えた等)
  */
 function mockInteraction(
   channelId: string,
   options: Record<string, string>,
-  threadParentId?: string,
+  threadParentId?: string | null,
 ) {
   let replied = false;
   let replyContent = "";
@@ -145,6 +147,28 @@ Deno.test("handleStatusSet", async (t) => {
         );
         // 親チャンネルは無傷
         assertEquals(await store.getModel(ch("ch-parent")), "opus");
+      }),
+  );
+
+  await t.step(
+    "parentId が null の異常スレッドでは thread.id を channelId にもフォールバックして書き込めること",
+    () =>
+      withStore(async (store) => {
+        const interaction = mockInteraction(
+          "orphan-thread",
+          { model: "haiku" },
+          null,
+          // deno-lint-ignore no-explicit-any
+        ) as any;
+        await handleStatusSet(interaction, store);
+        // channelId === threadId === "orphan-thread" として保存される
+        assertEquals(
+          await store.getModel({
+            channelId: "orphan-thread",
+            threadId: "orphan-thread",
+          }),
+          "haiku",
+        );
       }),
   );
 });

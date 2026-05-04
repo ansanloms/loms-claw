@@ -371,13 +371,15 @@ function formatSetting(
  *
  * thread の parentId が null のケース (フォーラム親が消えた等の異常系) は
  * thread.id 自体を channelId にフォールバックさせ、Store の整合性を保つ。
+ *
+ * `channel?.isThread()` は `this is ThreadChannel` の TS type guard であり、
+ * 真偽値変数経由では型ナローイングが効かないので呼び出し式のまま条件に使う。
  */
 function scopeFromInteraction(
   interaction: ChatInputCommandInteraction,
 ): StoreScope {
   const channel = interaction.channel;
-  const isThread = channel?.isThread() ?? false;
-  if (isThread && channel?.isThread()) {
+  if (channel?.isThread()) {
     return {
       channelId: channel.parentId ?? interaction.channelId,
       threadId: interaction.channelId,

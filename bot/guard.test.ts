@@ -197,6 +197,23 @@ Deno.test("shouldRespond", async (t) => {
   );
 
   await t.step(
+    "スレッド ID 自体が activeChannelIds に含まれる場合は親が非 active でも反応すること",
+    () => {
+      assertEquals(
+        shouldRespond(
+          "thread-1",
+          ["thread-1"],
+          true,
+          "ch-other",
+          false,
+          false,
+        ),
+        true,
+      );
+    },
+  );
+
+  await t.step(
     "active channel で bot メンションのみの場合は反応すること",
     () => {
       assertEquals(
