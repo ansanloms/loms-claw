@@ -311,19 +311,21 @@ Bot プロセス内で HTTP サーバーを起動し、Discord 操作用の REST
 
 ### エンドポイント
 
-| メソッド | パス                                             | 説明              |
-| -------- | ------------------------------------------------ | ----------------- |
-| `GET`    | `/discord/channels`                              | チャンネル一覧    |
-| `GET`    | `/discord/channels/:id`                          | チャンネル情報    |
-| `GET`    | `/discord/channels/:id/messages`                 | メッセージ検索    |
-| `GET`    | `/discord/channels/:id/messages/:mid`            | メッセージ取得    |
-| `POST`   | `/discord/channels/:id/messages`                 | メッセージ送信    |
-| `POST`   | `/discord/channels/:cid/messages/:mid/reactions` | リアクション追加  |
-| `GET`    | `/discord/members`                               | メンバー一覧/検索 |
-| `GET`    | `/cron`                                          | cron ジョブ一覧   |
-| `POST`   | `/cron/run`                                      | cron 手動実行     |
-| `POST`   | `/cron/reload`                                   | cron リロード     |
-| `GET`    | `/logs`                                          | ログ取得          |
+| メソッド | パス                                             | 説明                       |
+| -------- | ------------------------------------------------ | -------------------------- |
+| `GET`    | `/discord/channels`                              | チャンネル一覧             |
+| `GET`    | `/discord/channels/:id`                          | チャンネル情報             |
+| `GET`    | `/discord/channels/:id/messages`                 | メッセージ検索             |
+| `GET`    | `/discord/channels/:id/messages/:mid`            | メッセージ取得             |
+| `POST`   | `/discord/channels/:id/messages`                 | メッセージ送信             |
+| `POST`   | `/discord/channels/:cid/messages/:mid/reactions` | リアクション追加           |
+| `POST`   | `/discord/channels/:id/threads`                  | スレッド作成               |
+| `POST`   | `/discord/channels/:cid/messages/:mid/threads`   | メッセージから派生スレッド |
+| `GET`    | `/discord/members`                               | メンバー一覧/検索          |
+| `GET`    | `/cron`                                          | cron ジョブ一覧            |
+| `POST`   | `/cron/run`                                      | cron 手動実行              |
+| `POST`   | `/cron/reload`                                   | cron リロード              |
+| `GET`    | `/logs`                                          | ログ取得                   |
 
 ### 前提条件
 
