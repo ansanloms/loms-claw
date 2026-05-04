@@ -8,6 +8,9 @@ docker/claude-workspace/*
 !docker/claude-workspace/CLAUDE.md
 !docker/claude-workspace/memory
 !docker/claude-workspace/cron
+!docker/claude-workspace/travel
+# travel 配下の個別ノート (YYYYMMDD- プレフィックス) は個人履歴なので git 管理しない
+docker/claude-workspace/travel/[0-9]*.md
 !**/.gitkeep
 **/*.kv
 **/*.kv-shm
