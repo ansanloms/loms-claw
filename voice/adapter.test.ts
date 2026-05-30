@@ -1,6 +1,7 @@
 import { assertEquals, assertRejects } from "@std/assert";
+import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { ClaudeConfig } from "../config.ts";
-import type { CommandSpawner } from "../claude/mod.ts";
+import type { QueryFn } from "../claude/mod.ts";
 import { askClaudeForVoice } from "./adapter.ts";
 
 const baseConfig: ClaudeConfig = {
@@ -13,44 +14,41 @@ const baseConfig: ClaudeConfig = {
 };
 
 /**
- * モック CommandSpawner を生成する。
+ * SDKMessage を順に yield するモック queryFn を生成する。
  */
-function mockSpawner(
-  lines: Record<string, unknown>[],
-  exitCode = 0,
-): CommandSpawner {
-  return () => ({
-    stdout: new ReadableStream<Uint8Array>({
-      start(controller) {
-        const encoder = new TextEncoder();
-        for (const line of lines) {
-          controller.enqueue(encoder.encode(JSON.stringify(line) + "\n"));
-        }
-        controller.close();
-      },
-    }),
-    stderr: Promise.resolve(""),
-    status: Promise.resolve({
-      success: exitCode === 0,
-      code: exitCode,
-      signal: null,
-    }),
-  });
+function mockQueryFn(messages: SDKMessage[]): QueryFn {
+  return (_params: Parameters<QueryFn>[0]) => {
+    async function* gen(): AsyncGenerator<SDKMessage> {
+      for (const m of messages) {
+        yield m;
+      }
+    }
+    return gen() as unknown as ReturnType<QueryFn>;
+  };
+}
+
+/**
+ * 呼び出し時に同期的に例外を投げるモック queryFn を生成する。
+ */
+function throwingQueryFn(message: string): QueryFn {
+  return (_params: Parameters<QueryFn>[0]): ReturnType<QueryFn> => {
+    throw new Error(message);
+  };
 }
 
 Deno.test("askClaudeForVoice", async (t) => {
   await t.step("結果テキストとセッション ID を返すこと", async () => {
     const result = await askClaudeForVoice("テスト", {
       config: baseConfig,
-      spawner: mockSpawner([
-        { type: "system", subtype: "init", session_id: "sess-1" },
+      queryFn: mockQueryFn([
+        { type: "system", subtype: "init", session_id: "sess-1" } as SDKMessage,
         {
           type: "result",
           subtype: "success",
           result: "応答テキスト",
           session_id: "sess-1",
           is_error: false,
-        },
+        } as SDKMessage,
       ]),
     });
 
@@ -63,8 +61,12 @@ Deno.test("askClaudeForVoice", async (t) => {
       () =>
         askClaudeForVoice("テスト", {
           config: baseConfig,
-          spawner: mockSpawner([
-            { type: "system", subtype: "init", session_id: "sess-1" },
+          queryFn: mockQueryFn([
+            {
+              type: "system",
+              subtype: "init",
+              session_id: "sess-1",
+            } as SDKMessage,
           ]),
         }),
       Error,
@@ -77,13 +79,13 @@ Deno.test("askClaudeForVoice", async (t) => {
       () =>
         askClaudeForVoice("テスト", {
           config: baseConfig,
-          spawner: mockSpawner([
+          queryFn: mockQueryFn([
             {
               type: "result",
               subtype: "error_max_turns",
               session_id: "sess-1",
               is_error: true,
-            },
+            } as SDKMessage,
           ]),
         }),
       Error,
@@ -91,15 +93,15 @@ Deno.test("askClaudeForVoice", async (t) => {
     );
   });
 
-  await t.step("非ゼロ終了コードでエラーになること", async () => {
+  await t.step("queryFn の例外時にエラーになること", async () => {
     await assertRejects(
       () =>
         askClaudeForVoice("テスト", {
           config: baseConfig,
-          spawner: mockSpawner([], 1),
+          queryFn: throwingQueryFn("boom"),
         }),
       Error,
-      "exited with code 1",
+      "claude query failed: boom",
     );
   });
 });
