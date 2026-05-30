@@ -21,7 +21,7 @@ import type { SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { Config } from "../config.ts";
 import { askClaude } from "../claude/mod.ts";
 import type { Store, StoreScope } from "../store/mod.ts";
-import { ApprovalManager } from "../approval/manager.ts";
+import { ApprovalManager, createCanUseTool } from "../approval/manager.ts";
 import { command } from "./commands.ts";
 import { isAuthorized, shouldRespond } from "./guard.ts";
 import {
@@ -195,7 +195,6 @@ export class DiscordBot {
           listJobs: () => this.cronExecutor!.listJobs(),
         };
         this.apiServer = startApiServer(
-          this.approvalManager,
           discordCtx,
           this.config.claude.apiPort,
           cronCtx,
@@ -452,6 +451,7 @@ export class DiscordBot {
         appendSystemPrompt,
         model,
         effort,
+        canUseTool: createCanUseTool(this.approvalManager, localId),
       });
 
       // ストリーミング応答: text_delta をバッファに蓄積し、

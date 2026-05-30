@@ -1,7 +1,7 @@
 /**
  * Discord ボタンによるツール承認マネージャー。
  *
- * Claude Code の PreToolUse フックからツール情報を受け取り、
+ * Agent SDK の `canUseTool` コールバックからツール情報を受け取り、
  * Discord にボタン付きメッセージを送信してユーザーの承認/拒否を待つ。
  */
 
@@ -15,8 +15,8 @@ import {
   MessageFlags,
 } from "discord.js";
 import type {
+  CanUseTool,
   PermissionBehavior,
-  PreToolUseHookInput,
 } from "@anthropic-ai/claude-agent-sdk";
 import { addToSettingsAllowList, isInAllowList } from "./settings.ts";
 import { createLogger } from "../logger.ts";
@@ -61,15 +61,15 @@ export class ApprovalManager {
   /**
    * ツール使用の承認をリクエストする。
    *
-   * @param input - PreToolUse フックからのツール情報。
+   * @param toolName - 対象ツール名。
+   * @param toolInput - ツールへの入力。承認ボタンの詳細表示に使う。
    * @param channelId - 承認ボタンの送信先チャンネル ID。省略時は setChannel() で設定された値を使う。
    */
   async requestApproval(
-    input: PreToolUseHookInput,
+    toolName: string,
+    toolInput: Record<string, unknown>,
     channelId?: string,
   ): Promise<ApprovalResult> {
-    const toolName = input.tool_name;
-
     // allow list に含まれるツールは即座に許可する。
     if (await isInAllowList(this.settingsPath, toolName)) {
       log.info("approval resolved:", toolName, "Already Allowed");
@@ -105,7 +105,6 @@ export class ApprovalManager {
         .setStyle(ButtonStyle.Danger),
     );
 
-    const toolInput = (input.tool_input ?? {}) as Record<string, unknown>;
     const description = (toolInput.description as string) ?? "";
     const inputDump = JSON.stringify(toolInput, null, 2);
     const truncated = inputDump.length > 1500
@@ -195,4 +194,23 @@ export class ApprovalManager {
     log.info("approval resolved:", requestId, label);
     return true;
   }
+}
+
+/**
+ * ApprovalManager と channelId から SDK の `canUseTool` コールバックを生成する。
+ *
+ * `requestApproval` の結果 (`ApprovalResult`) を SDK の `PermissionResult` に
+ * 変換する。allow 時は入力をそのまま echo back し、deny 時は理由を message に載せる。
+ */
+export function createCanUseTool(
+  manager: ApprovalManager,
+  channelId?: string,
+): CanUseTool {
+  return async (toolName, input) => {
+    const result = await manager.requestApproval(toolName, input, channelId);
+    if (result.decision === "allow") {
+      return { behavior: "allow", updatedInput: input };
+    }
+    return { behavior: "deny", message: result.reason ?? "Denied" };
+  };
 }

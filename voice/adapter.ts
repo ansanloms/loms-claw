@@ -12,7 +12,7 @@ import type { SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
 import {
   askClaude,
   type ClaudeCallOptions,
-  type CommandSpawner,
+  type QueryFn,
 } from "../claude/mod.ts";
 import type { ClaudeConfig } from "../config.ts";
 import { createLogger } from "../logger.ts";
@@ -53,7 +53,7 @@ export async function askClaudeForVoice(
   options: ClaudeCallOptions & {
     config: ClaudeConfig;
     signal?: AbortSignal;
-    spawner?: CommandSpawner;
+    queryFn?: QueryFn;
   },
 ): Promise<VoiceResult> {
   const stream = askClaude(prompt, options);
@@ -111,7 +111,7 @@ export async function* streamClaudeForVoice(
   options: ClaudeCallOptions & {
     config: ClaudeConfig;
     signal?: AbortSignal;
-    spawner?: CommandSpawner;
+    queryFn?: QueryFn;
   },
 ): AsyncGenerator<VoiceStreamEvent> {
   const stream = askClaude(prompt, options);

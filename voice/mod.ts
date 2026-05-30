@@ -18,7 +18,7 @@ import {
 import type { VoiceConnection } from "@discordjs/voice";
 import type { ClaudeConfig, VoiceConfig } from "../config.ts";
 import type { Store } from "../store/mod.ts";
-import type { ApprovalManager } from "../approval/manager.ts";
+import { type ApprovalManager, createCanUseTool } from "../approval/manager.ts";
 import { createLogger } from "../logger.ts";
 import type { SystemPromptStore } from "../claude/system-prompt.ts";
 import { calcRms, concatBytes, createOpusDecoder } from "./codec.ts";
@@ -502,6 +502,7 @@ export class VoiceManager {
         appendSystemPrompt,
         model,
         effort,
+        canUseTool: createCanUseTool(this.approvalManager, channelId),
       });
 
       const player = this.voicePlayer;

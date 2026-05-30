@@ -10,10 +10,10 @@
 
 import type { Client, GuildTextBasedChannel } from "discord.js";
 import type { SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
-import { askClaude, type CommandSpawner } from "../claude/mod.ts";
+import { askClaude, type QueryFn } from "../claude/mod.ts";
 import type { ClaudeConfig, ClaudeDefaults } from "../config.ts";
 import type { Store } from "../store/mod.ts";
-import type { ApprovalManager } from "../approval/manager.ts";
+import { type ApprovalManager, createCanUseTool } from "../approval/manager.ts";
 import type { SystemPromptStore } from "../claude/system-prompt.ts";
 import { splitMessage } from "../bot/message.ts";
 import { createLogger } from "../logger.ts";
@@ -41,7 +41,7 @@ export class CronExecutor {
     private readonly defaults: ClaudeDefaults,
     private readonly approvalManager: ApprovalManager,
     private readonly systemPrompts: SystemPromptStore,
-    private readonly spawner?: CommandSpawner,
+    private readonly queryFn?: QueryFn,
   ) {
     this.scheduler = new CronScheduler((job) => this.runJob(job));
   }
@@ -171,7 +171,8 @@ export class CronExecutor {
         appendSystemPrompt,
         model,
         effort,
-        spawner: this.spawner,
+        canUseTool: createCanUseTool(this.approvalManager, job.channelId),
+        queryFn: this.queryFn,
       });
 
       let resultEvent: SDKResultMessage | undefined;
