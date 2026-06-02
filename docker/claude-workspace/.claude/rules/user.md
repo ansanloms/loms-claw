@@ -4,7 +4,7 @@ AI が応答するユーザのプロフィール。
 
 ## プロフィール
 
-- 名前: loms
+- 名前: loms / ansanloms
 - 呼び方: ろむす
 - タイムゾーン: Asia/Tokyo
 
