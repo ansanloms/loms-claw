@@ -38,6 +38,15 @@ dependencies:
   deployed_files:
   - .claude/skills/yamareco
   content_hash: sha256:acb3541b4c6214c923930eb1285e867974612a7a0b3084b3afb613d42a849ccf
+- repo_url: ansanloms/skills
+  host: github.com
+  resolved_commit: 2234262f31a65d7e07a6b598ea5facda7105fdb6
+  virtual_path: news-digest
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .claude/skills/news-digest
+  content_hash: sha256:879e189c5c976bf15f6b26fcb93d5d1a40fa20395669b5585364df43db29ba74
 - repo_url: mizchi/skills
   host: github.com
   resolved_commit: 89c1b34018ba0d85a770c065ba22f83a8d004d34

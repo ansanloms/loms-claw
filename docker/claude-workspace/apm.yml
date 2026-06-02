@@ -8,6 +8,7 @@ dependencies:
   - ansanloms/skills/yamareco
   - ansanloms/skills/jartic-traffic
   - ansanloms/skills/bluesky
+  - ansanloms/skills/news-digest
   mcp: []
 devDependencies:
   apm:
