@@ -1,0 +1,16 @@
+name: claude-workspace
+version: 1.0.0
+description: APM project for claude-workspace
+author: ansanloms
+dependencies:
+  apm:
+  - ansanloms/skills/library-docs
+  - ansanloms/skills/yamareco
+  - ansanloms/skills/jartic-traffic
+  - ansanloms/skills/bluesky
+  mcp: []
+devDependencies:
+  apm:
+  - mizchi/skills/meta/empirical-prompt-tuning#89c1b340
+includes: auto
+scripts: {}
