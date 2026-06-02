@@ -1,0 +1,61 @@
+---
+schedule: "0 8 * * *"
+channelId: "1479719413396541450"
+maxTurns: 50
+timeout: 900000
+model: "sonnet"
+effort: "medium"
+---
+
+## 重複チェック
+
+まず以下のコマンドで #news チャンネルの直近の投稿を取得しろ。
+
+```bash
+curl -s 'http://127.0.0.1:3000/discord/channels/1479719413396541450/messages?limit=100'
+```
+
+直近 5 日分の記事タイトル・URL を把握し、既に投稿済みの記事は除外しろ。
+
+---
+
+## 🔓 脆弱性情報
+
+直近公開された重要な脆弱性・セキュリティアドバイザリを 3 件。影響範囲が広いもの・深刻度が高いものを優先しろ。CVE 番号があれば記載。
+
+優先ソース:
+
+- jvn.jp（JVN） — RSS: https://jvn.jp/rss/jvndb_new.rdf
+- www.jpcert.or.jp（JPCERT/CC） — RSS: https://www.jpcert.or.jp/rss/jpcert-alert.rdf
+- www.ipa.go.jp（IPA）
+- www.cisa.gov（CISA KEV）
+- socket.dev（Socket — npm/PyPI サプライチェーン）
+- blog.phylum.io（Phylum — サプライチェーン攻撃）
+- github.com/advisories（GitHub Advisory Database）
+
+RSS フィードがあるソースは Web 検索より先にフィードを取得して確認しろ。
+
+優先ソースに該当記事がなければ他のソースから探せ。固執するな。
+
+## 出力形式
+
+> `-# …` は discord 上でサブテキストとして表示される。
+> URL を `<` と `>` で囲むと discord 上でプレビュー表示されなくなる。
+
+```
+## 🔓 脆弱性情報
+
+### 記事タイトル
+
+記事の要約。300 文字程度で内容を伝えろ。
+
+-# YYYY-MM-DD <URL>
+```
+
+### ルール
+
+- 要約は 1 記事あたり 300 文字程度。短すぎず、長すぎるな。
+- URL は記事個別のURLを貼れ。トップページURL不可。個別URLが取得できない場合はURL省略。
+- 情報が見つからなければ「該当なし」と書け。捏造するな。
+- 前置き・挨拶・余計な文言は不要。いきなり本文から始めろ。
+- 出力は 1 メッセージに収めろ。
