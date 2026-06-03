@@ -1,8 +1,8 @@
-FROM docker.io/denoland/deno:debian-2.7.14
+FROM docker.io/denoland/deno:debian-2.8.1
 
 RUN <<EOF
 apt-get update
-apt-get install -y --no-install-recommends ca-certificates curl git bubblewrap socat ffmpeg tzdata
+apt-get install -y --no-install-recommends ca-certificates curl git jq bubblewrap socat ffmpeg tzdata
 rm -rf /var/lib/apt/lists/*
 EOF
 
