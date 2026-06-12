@@ -29,8 +29,8 @@ const TICK_INTERVAL_MS = 60_000;
  */
 export class CronScheduler {
   private jobs = new Map<string, CronJobDef>();
-  private timerId: number | null = null;
-  private alignTimerId: number | null = null;
+  private timerId: ReturnType<typeof setInterval> | null = null;
+  private alignTimerId: ReturnType<typeof setTimeout> | null = null;
   private lastTickMinute = -1;
   private callback: (job: CronJobDef) => void;
 
