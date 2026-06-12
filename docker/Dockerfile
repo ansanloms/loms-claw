@@ -6,16 +6,23 @@ RUN <<EOF
 	rm -rf /var/lib/apt/lists/*
 EOF
 
-# Claude Code CLI をインストール
-# ~/.local/bin/claude にインストールされる
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-RUN curl -fsSL https://claude.ai/install.sh | bash
-ENV PATH="/root/.local/bin:${PATH}"
-
 WORKDIR /app
 
 COPY deno.json deno.lock ./
-RUN deno install
+
+# Agent SDK が同梱する Claude Code バイナリを PATH に出す
+# (実行時は SDK が自動解決する。symlink は初回認証 `claude auth login` 等の手動操作用)
+RUN <<EOF
+	set -e
+	deno install
+	case "$(dpkg --print-architecture)" in
+		amd64) sdk_arch="x64" ;;
+		arm64) sdk_arch="arm64" ;;
+		*) echo "unsupported architecture" >&2; exit 1 ;;
+	esac
+	ln -sf "${DENO_DIR%/}"/npm/registry.npmjs.org/@anthropic-ai/claude-agent-sdk-linux-${sdk_arch}/*/claude /usr/local/bin/claude
+	claude --version
+EOF
 
 COPY . .
 
