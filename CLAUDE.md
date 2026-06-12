@@ -81,6 +81,9 @@ docker compose logs -f
 docker compose down
 ```
 
+コンテナ内の `claude` コマンドは Agent SDK が同梱する Claude Code バイナリへの symlink（ビルド時に作成）。
+Claude Code CLI を別途インストールはしない。実行時の `query()` も同じ同梱バイナリを SDK が自動解決して使う。
+
 ### ボリューム
 
 | 変数               | コンテナ内パス  | デフォルト                | 用途                                     |
@@ -100,9 +103,10 @@ config.schema.ts       config.schema.json を ajv に渡すコンパイルロジ
 logger.ts              名前空間付き軽量ロガー。`initLogger({ level, bufferSize })` で設定。リングバッファで直近ログをメモリ保持。
 bot/mod.ts             DiscordBot クラス。messageCreate ハンドラ、start/shutdown。
 bot/commands.ts        スラッシュコマンド定義とハンドラ（/claw status show|set|unset, /claw vc join|leave）。
-bot/guard.ts           isAuthorized(): ギルド ID + ユーザー ID + bot 除外の認可チェック。
+bot/guard.ts           isAuthorized(): ギルド ID + ユーザー ID + bot 除外の認可チェック。shouldRespond(): active channel / mention / スレッドによる反応判定。
 bot/message.ts         splitMessage(): 2000 文字分割。keepTyping(): typing インジケーター維持。ProgressReporter: ツール進捗表示。
 claude/mod.ts          askClaude(): Agent SDK の query() を呼び出し SDKMessage ストリームを逐次 yield。buildQueryOptions() / normalizeEffort()。テストは queryFn DI でモック。
+claude/system-prompt.ts  SystemPromptStore: .claude/system-prompt/ 配下を起動時に読み込み、コンテキスト (chat/vc/cron) とスコープ (channelId/threadId) に応じて結合。
 claude/template.ts     replaceTemplateVariables(): システムプロンプトの {{key}} 置換。
 store/mod.ts           Store: Deno KV (SQLite backend) によるスコープ単位の session_id / model / effort 永続化。スコープは {channelId, threadId?} の組。model / effort は thread → channel → グローバルデフォルト (config.json `defaults`) の動的フォールバック。session は thread と channel で独立。
 approval/manager.ts    ApprovalManager: Discord ボタンによるツール承認/拒否。createCanUseTool(): ApprovalResult を SDK の PermissionResult に変換する canUseTool コールバックを生成。
@@ -124,9 +128,8 @@ cron/match.ts          cron 式パーサー + マッチャー。Temporal API で
 cron/loader.ts         frontmatter パーサー + cron/ ディレクトリスキャン。
 cron/scheduler.ts      CronScheduler: setInterval ベースのカスタムスケジューラ。
 cron/executor.ts       CronExecutor: スケジューラ連携 + askClaude() → Discord 送信。
-Dockerfile             Deno + Claude Code CLI のコンテナイメージ。
+docker/Dockerfile      Deno コンテナイメージ。Claude Code は Agent SDK 同梱バイナリを使用（CLI の個別インストール無し）。
 docker/compose.yaml    本番サービス定義。
-docker/compose.dev.yaml  開発用オーバーライド（ソース bind mount + watch モード）。
 ```
 
 ## システムプロンプト
@@ -370,20 +373,20 @@ LOMS_CLAW_CONFIG=/path/to/config.json deno task start
 
 ### Docker 運用
 
-`config.json` は `CLAUDE_WORKSPACE` にマウントされるワークスペース側に配置する。コンテナ内ではこのファイルが `/workspace/config.json` として見える。
+`config.json` はデフォルトでリポジトリルートのものが `/workspace/config.json` として bind mount される（compose.yaml の `${LOMS_CLAW_CONFIG:-../config.json}`）。別の場所に置く場合は `.env` の `LOMS_CLAW_CONFIG` に host 側のパスを指定する。
 
 ```bash
-cp config.json.example docker/claude-workspace/config.json
+cp config.json.example config.json
 # 編集
 cd docker && docker compose up -d
 ```
 
 ## テスト方針
 
-- 純粋関数（`isAuthorized`, `shouldRespond`, `splitMessage`, `buildArgs`, `parseResultEvent`, `parseNdjsonStream` 等）は単体テストでカバー
-- `askClaude()` は `CommandSpawner` の DI でモック（`ReadableStream` を返す）を注入してテスト
+- 純粋関数（`isAuthorized`, `shouldRespond`, `splitMessage`, `buildQueryOptions`, `normalizeEffort` 等）は単体テストでカバー
+- `askClaude()` は `queryFn` の DI でモック（`AsyncGenerator<SDKMessage>` を返す）を注入してテスト
 - discord.js 依存コード（`bot/mod.ts`, `approval/manager.ts`）はモック化コストが高いため、ロジックを外部関数に抽出してテストする方針
-- `defaultSpawner` は実プロセスが必要なためインテグレーションテスト領域
+- 実際の `query()` 実行（SDK 同梱 CLI の spawn）はインテグレーションテスト領域
 - テスト実行: `deno task test`（カバレッジレポート付き）
 
 ### テスト命名規約
