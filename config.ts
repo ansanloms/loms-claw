@@ -21,18 +21,18 @@ export interface ClaudeDefaults {
 }
 
 /**
- * Claude Code CLI 設定。
+ * Claude 呼び出し (Agent SDK `query()`) 設定。
  */
 export interface ClaudeConfig {
-  /** `--max-turns` に渡す最大ターン数。 */
+  /** `query()` の `maxTurns` に渡す最大ターン数。 */
   maxTurns: number;
-  /** `--verbose` フラグ。 */
+  /** 現在未使用。後方互換のため保持。 */
   verbose: boolean;
-  /** プロセスタイムアウト（ミリ秒）。 */
+  /** Claude 呼び出しのタイムアウト（ミリ秒）。`query()` の abort に使う。 */
   timeout: number;
-  /** 内部 API サーバーのポート（承認 + Discord API）。 */
+  /** 内部 API サーバーのポート（Discord REST API + cron + ログ）。 */
   apiPort: number;
-  /** `claude` プロセスの作業ディレクトリ。実行時に `Deno.cwd()` が注入される。 */
+  /** `query()` の作業ディレクトリ。実行時に `Deno.cwd()` が注入される。 */
   cwd: string;
   /** Claude のグローバルデフォルト (model / effort)。 */
   defaults: ClaudeDefaults;

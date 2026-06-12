@@ -48,8 +48,8 @@ export interface ClaudeCallOptions {
   /** `model` に渡すモデル alias または full name。 */
   model?: string;
   /**
-   * effort level。`low` / `medium` / `high` / `max` 以外の値
-   * (旧 `xhigh` 等) は未指定扱いにフォールバックする。
+   * effort level。`low` / `medium` / `high` / `xhigh` / `max` 以外の値は
+   * 未指定扱いにフォールバックする。
    */
   effort?: string;
   /** ツール承認コールバック。省略時は SDK の既定 (default permission mode)。 */
@@ -59,7 +59,7 @@ export interface ClaudeCallOptions {
 /**
  * effort 値を検証し、SDK 対応の値のみ返す。
  *
- * 非対応の値 (旧 `xhigh` 等) は警告ログを出して `undefined` を返す。
+ * 非対応の値は警告ログを出して `undefined` を返す。
  */
 export function normalizeEffort(effort?: string): EffortLevel | undefined {
   if (!effort) {
@@ -159,7 +159,7 @@ export async function* askClaude(
   log.debug("starting query:", {
     sessionId: callOpts.sessionId,
     model: callOpts.model,
-    effort: normalizeEffort(callOpts.effort),
+    effort: queryOptions.effort,
   });
 
   // エラー時の診断のため、受信したイベント type 列と最後のイベントを保持する。

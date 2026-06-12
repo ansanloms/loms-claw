@@ -2,7 +2,7 @@
  * ログ取得 API ルート。
  *
  * メモリ上のリングバッファからログエントリを取得する。
- * `claude -p` から `curl http://127.0.0.1:{port}/logs` で参照可能。
+ * Claude (Agent SDK) の Bash ツールから `curl http://127.0.0.1:{port}/logs` で参照可能。
  */
 
 import { Hono } from "hono";
