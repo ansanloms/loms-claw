@@ -16,6 +16,7 @@ import {
 } from "@anthropic-ai/claude-agent-sdk";
 import type { ClaudeConfig } from "../config.ts";
 import { createLogger } from "../logger.ts";
+import { getErrorMessage } from "../errors.ts";
 
 const log = createLogger("claude");
 
@@ -173,7 +174,7 @@ export async function* askClaude(
       yield message;
     }
   } catch (error: unknown) {
-    const reason = error instanceof Error ? error.message : String(error);
+    const reason = getErrorMessage(error);
     const parts: string[] = [
       `claude query failed: ${reason}`,
       eventTypes.length > 0

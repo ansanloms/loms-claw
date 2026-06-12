@@ -124,6 +124,7 @@ config.ts              config.json → Config 型。ajv で検証、`claude.cwd`
 config.schema.json     JSON Schema 本体 (外出し)。`config.json` 側で `$schema` として参照すれば IDE 補完が効く。
 config.schema.ts       config.schema.json を ajv に渡すコンパイルロジックとエラー整形。`useDefaults: true` で既定値補完。
 logger.ts              名前空間付き軽量ロガー。`initLogger({ level, bufferSize })` で設定。リングバッファで直近ログをメモリ保持。
+errors.ts              getErrorMessage(): unknown なエラー値からメッセージを取り出す共通ユーティリティ。
 bot/mod.ts             DiscordBot クラス。messageCreate ハンドラ、start/shutdown。
 bot/commands.ts        スラッシュコマンド定義とハンドラ（/claw status show|set|unset, /claw vc join|leave）。
 bot/guard.ts           isAuthorized(): ギルド ID + ユーザー ID + bot 除外の認可チェック。shouldRespond(): active channel / mention / スレッドによる反応判定。

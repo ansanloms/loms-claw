@@ -51,6 +51,7 @@ import { startApiServer } from "../api/server.ts";
 import type { CronRouteContext } from "../api/routes/cron.ts";
 import { CronExecutor } from "../cron/executor.ts";
 import { loadCronJobsFromDir } from "../cron/loader.ts";
+import { getErrorMessage } from "../errors.ts";
 
 const log = createLogger("bot");
 
@@ -253,7 +254,7 @@ export class DiscordBot {
       try {
         await this.approvalManager.handleButton(interaction);
       } catch (error: unknown) {
-        const msg = error instanceof Error ? error.message : String(error);
+        const msg = getErrorMessage(error);
         log.error("button interaction error:", msg);
         if (!interaction.replied && !interaction.deferred) {
           await interaction.reply({
@@ -554,7 +555,7 @@ export class DiscordBot {
     } catch (error: unknown) {
       // logger は Error の stack を自動で展開する。
       log.error("failed to process message:", error);
-      const errMsg = error instanceof Error ? error.message : String(error);
+      const errMsg = getErrorMessage(error);
       await channel.send(`Error: ${errMsg}`).catch(() => {});
     } finally {
       if (downloadedImages.length > 0) {

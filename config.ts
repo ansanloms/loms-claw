@@ -9,6 +9,7 @@
 
 import type { LogLevel } from "./logger.ts";
 import { formatConfigErrors, validateConfigFile } from "./config.schema.ts";
+import { getErrorMessage } from "./errors.ts";
 
 /**
  * Claude のグローバルデフォルト。チャンネル単位の上書きが無いときに使われる。
@@ -152,7 +153,7 @@ export function loadConfig(): Config {
   try {
     text = Deno.readTextFileSync(path);
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = getErrorMessage(e);
     throw new Error(`failed to read config file (${path}): ${msg}`);
   }
 
@@ -160,7 +161,7 @@ export function loadConfig(): Config {
   try {
     raw = JSON.parse(text);
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = getErrorMessage(e);
     throw new Error(`failed to parse config file (${path}): ${msg}`);
   }
 

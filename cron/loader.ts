@@ -14,6 +14,7 @@ import type { ErrorObject, ValidateFunction } from "ajv";
 import { createLogger } from "../logger.ts";
 import { parseCronExpression } from "./match.ts";
 import type { CronJobDef } from "./types.ts";
+import { getErrorMessage } from "../errors.ts";
 
 const log = createLogger("cron-loader");
 
@@ -48,9 +49,7 @@ const cronExpressionValidate = Object.assign(
         keyword: "cronExpression",
         instancePath: "",
         schemaPath: "#/cronExpression",
-        message: `invalid cron expression: ${
-          e instanceof Error ? e.message : String(e)
-        }`,
+        message: `invalid cron expression: ${getErrorMessage(e)}`,
         params: { value: data },
       }];
       return false;
@@ -189,7 +188,7 @@ export async function loadCronJobsFromDir(
       } catch (e) {
         log.error(
           `failed to load cron job ${entry.name}:`,
-          e instanceof Error ? e.message : String(e),
+          getErrorMessage(e),
         );
       }
     }

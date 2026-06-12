@@ -1,5 +1,5 @@
 /**
- * Claude Code CLI と音声パイプラインのアダプタ。
+ * Claude (Agent SDK) と音声パイプラインのアダプタ。
  *
  * askClaude() が返す SDKMessage ストリームから結果テキストを抽出し、
  * 音声パイプラインが消費しやすい形で返す。
@@ -37,14 +37,14 @@ export interface VoiceResult {
 }
 
 /**
- * Claude Code CLI を呼び出し、結果テキストとセッション ID を返す。
+ * askClaude() を呼び出し、結果テキストとセッション ID を返す。
  *
  * askClaude() の SDKMessage ストリームを走査し、result イベントから
  * テキストを抽出する。ストリーミングチャンクではなく最終結果を
  * 一括で返すため、呼び出し側は結果全体を VoicePlayer.speak() に渡す。
  *
  * @param prompt - ユーザーの発話テキスト。
- * @param options - Claude CLI オプション。
+ * @param options - Claude 呼び出しオプション。
  * @returns テキストとセッション ID。
  * @throws 結果イベントが無い場合、またはエラーイベントの場合。
  */
@@ -92,7 +92,7 @@ export async function askClaudeForVoice(
 }
 
 /**
- * Claude Code CLI をストリーミングモードで呼び出し、
+ * askClaude() をストリーミングモードで呼び出し、
  * テキストを文単位で逐次 yield する。
  *
  * stream_event の text_delta を蓄積し、文境界（。、改行）を検出したら
@@ -102,7 +102,7 @@ export async function askClaudeForVoice(
  * サブエージェント（parent_tool_use_id !== null）のテキストは除外する。
  *
  * @param prompt - ユーザーの発話テキスト。
- * @param options - Claude CLI オプション。
+ * @param options - Claude 呼び出しオプション。
  * @yields テキストチャンク（文単位）と終了イベント。
  * @throws 結果イベントが無い場合、またはエラーイベントの場合。
  */

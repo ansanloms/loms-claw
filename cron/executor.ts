@@ -19,6 +19,7 @@ import { splitMessage } from "../bot/message.ts";
 import { createLogger } from "../logger.ts";
 import { CronScheduler } from "./scheduler.ts";
 import type { CronJobDef } from "./types.ts";
+import { getErrorMessage } from "../errors.ts";
 
 const log = createLogger("cron");
 
@@ -218,7 +219,7 @@ export class CronExecutor {
     } catch (error: unknown) {
       // logger は Error の stack を自動で展開する。
       log.error(`cron job "${job.name}" failed:`, error);
-      const errMsg = error instanceof Error ? error.message : String(error);
+      const errMsg = getErrorMessage(error);
 
       // channelId 指定時かつチャンネル取得済みならエラーを通知
       if (textChannel) {

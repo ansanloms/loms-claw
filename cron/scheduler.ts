@@ -13,6 +13,7 @@
 import { matchesCron } from "./match.ts";
 import type { CronJobDef } from "./types.ts";
 import { createLogger } from "../logger.ts";
+import { getErrorMessage } from "../errors.ts";
 
 const log = createLogger("cron-scheduler");
 
@@ -133,7 +134,7 @@ export class CronScheduler {
       } catch (e) {
         log.error(
           `cron match error for "${job.name}":`,
-          e instanceof Error ? e.message : String(e),
+          getErrorMessage(e),
         );
       }
     }

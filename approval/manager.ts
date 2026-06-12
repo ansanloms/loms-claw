@@ -20,6 +20,7 @@ import type {
 } from "@anthropic-ai/claude-agent-sdk";
 import { addToSettingsAllowList, isInAllowList } from "./settings.ts";
 import { createLogger } from "../logger.ts";
+import { getErrorMessage } from "../errors.ts";
 
 const log = createLogger("approval");
 
@@ -168,7 +169,7 @@ export class ApprovalManager {
         try {
           await addToSettingsAllowList(this.settingsPath, alwaysToolName);
         } catch (error: unknown) {
-          const msg = error instanceof Error ? error.message : String(error);
+          const msg = getErrorMessage(error);
           log.warn("failed to persist allow list:", msg);
         }
       }

@@ -14,6 +14,7 @@ import { createCronRoutes, type CronRouteContext } from "./routes/cron.ts";
 import { createDiscordRoutes } from "./routes/discord.ts";
 import { createLogsRoutes } from "./routes/logs.ts";
 import { createLogger } from "../logger.ts";
+import { getErrorMessage } from "../errors.ts";
 
 const log = createLogger("api-server");
 
@@ -48,7 +49,7 @@ export function startApiServer(
 
   // 共通エラーハンドラ
   app.onError((err, c) => {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = getErrorMessage(err);
     log.error(`${c.req.method} ${c.req.path} error:`, msg);
     return c.json({ error: msg }, 500);
   });
