@@ -5,18 +5,24 @@
     "jsr:@hono/hono@4.12.24": "4.12.24",
     "jsr:@openai/openai@6.42.0": "6.42.0",
     "jsr:@std/assert@1.0.19": "1.0.19",
+    "jsr:@std/bytes@^1.0.6": "1.0.6",
+    "jsr:@std/collections@^1.1.3": "1.2.0",
+    "jsr:@std/dotenv@0.225.7": "0.225.7",
     "jsr:@std/front-matter@1.0.9": "1.0.9",
     "jsr:@std/internal@^1.0.12": "1.0.14",
     "jsr:@std/internal@^1.0.14": "1.0.14",
     "jsr:@std/path@1": "1.1.5",
     "jsr:@std/path@1.1.5": "1.1.5",
+    "jsr:@std/streams@1.1.1": "1.1.1",
+    "jsr:@std/toml@^1.0.3": "1.0.11",
     "jsr:@std/yaml@^1.0.5": "1.1.1",
-    "npm:@anthropic-ai/claude-agent-sdk@0.3.173": "0.3.173_@anthropic-ai+sdk@0.104.1__zod@4.4.3_@modelcontextprotocol+sdk@1.29.0__zod@4.4.3_zod@4.4.3",
+    "npm:@anthropic-ai/claude-agent-sdk@0.3.175": "0.3.175_@anthropic-ai+sdk@0.104.1__zod@4.4.3_@modelcontextprotocol+sdk@1.29.0__zod@4.4.3_zod@4.4.3",
     "npm:@discordjs/voice@0.19.2": "0.19.2_@emnapi+core@1.11.0_@emnapi+runtime@1.11.0_opusscript@0.1.1",
     "npm:@snazzah/davey@0.1.11": "0.1.11_@emnapi+core@1.11.0_@emnapi+runtime@1.11.0",
     "npm:ajv@8.20.0": "8.20.0",
     "npm:discord.js@14.26.4": "14.26.4",
-    "npm:opusscript@0.1.1": "0.1.1"
+    "npm:opusscript@0.1.1": "0.1.1",
+    "npm:zod@3": "3.25.76"
   },
   "jsr": {
     "@aireone/deno-lint-curly@0.2.0": {
@@ -26,7 +32,10 @@
       "integrity": "a74a40f06ae6704ddd0e8e576f6da9d34666c3e1e0f5412a2c1ff800ffd092f4"
     },
     "@openai/openai@6.42.0": {
-      "integrity": "9c1b51ea00bd6bc5279e7b7f9252c7819f136f02f3a98a3bf15764ae5dd5a3cc"
+      "integrity": "9c1b51ea00bd6bc5279e7b7f9252c7819f136f02f3a98a3bf15764ae5dd5a3cc",
+      "dependencies": [
+        "npm:zod"
+      ]
     },
     "@std/assert@1.0.19": {
       "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
@@ -34,9 +43,19 @@
         "jsr:@std/internal@^1.0.12"
       ]
     },
+    "@std/bytes@1.0.6": {
+      "integrity": "f6ac6adbd8ccd99314045f5703e23af0a68d7f7e58364b47d2c7f408aeb5820a"
+    },
+    "@std/collections@1.2.0": {
+      "integrity": "47627a21d3a13138b77fd0e4d790ba9d2e603c3510b686cde6b132fe9aa98a88"
+    },
+    "@std/dotenv@0.225.7": {
+      "integrity": "11d8db03ca4ad5aba9eba809f2e8058b2a4f320b7b09fea4b360e162928329e3"
+    },
     "@std/front-matter@1.0.9": {
       "integrity": "ee6201d06674cbef137dda2252f62477450b48249e7d8d9ab57a30f85ff6f051",
       "dependencies": [
+        "jsr:@std/toml",
         "jsr:@std/yaml"
       ]
     },
@@ -49,57 +68,69 @@
         "jsr:@std/internal@^1.0.14"
       ]
     },
+    "@std/streams@1.1.1": {
+      "integrity": "92556d350e537e9dce527a6d08f6f15be3ff65e656079dea69d15252187c7613",
+      "dependencies": [
+        "jsr:@std/bytes"
+      ]
+    },
+    "@std/toml@1.0.11": {
+      "integrity": "e084988b872ca4bad6aedfb7350f6eeed0e8ba88e9ee5e1590621c5b5bb8f715",
+      "dependencies": [
+        "jsr:@std/collections"
+      ]
+    },
     "@std/yaml@1.1.1": {
       "integrity": "a57665ecf3d17b926380593a56625d8a10cc7281802f1e993b5ebc94a48e71f8"
     }
   },
   "npm": {
-    "@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.173": {
-      "integrity": "sha512-McW1toJ4Qdo/i7bHnsiFMm2AtyCiK/5V90WgL7M9ZO9llrJr3riGRdBlRGHvWnS7rKuv5ttj4/SuBkLoL9o75A==",
+    "@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.175": {
+      "integrity": "sha512-ud/25HB7esWldzXwGaa+gK8/+A1dZf6yJ5HCKCJN7BMFFJdbCe28pwCwoh9zE+5imNSuXtlqSRDMuxa2fPsYGw==",
       "os": ["darwin"],
       "cpu": ["arm64"]
     },
-    "@anthropic-ai/claude-agent-sdk-darwin-x64@0.3.173": {
-      "integrity": "sha512-m2Oh1pQ69IUg6DSH6n1nAAAtRq+G7J2B/CKTbTfDAEmg5t0lzakZV9l28GZrlP21xl+PIg71dkiJ5u94KYgpRw==",
+    "@anthropic-ai/claude-agent-sdk-darwin-x64@0.3.175": {
+      "integrity": "sha512-QLd1FCTtLb0peWqIIf/FTNQI/pSn/kFdy+SuxFbodPaHB0gehDhoFZ6ADm2HLS83tWxqGQAa0G5cHstkiuDzNQ==",
       "os": ["darwin"],
       "cpu": ["x64"]
     },
-    "@anthropic-ai/claude-agent-sdk-linux-arm64-musl@0.3.173": {
-      "integrity": "sha512-uu8MnPwFBc9ayFg5c94aHaqJVLS51oHNVxHwud4nK27GliP5WoME3F7pmm1N/Jyy2ry2E2CLNnsAm5l3zemfYA==",
+    "@anthropic-ai/claude-agent-sdk-linux-arm64-musl@0.3.175": {
+      "integrity": "sha512-2FKNFy6JxIgYXitZ7ARO5wxQWHdDhmw3O+RkuohshPQ+10n5Zf0CpX7Lx2Vq2vz0DFRCiY9cYiPHf8hAI7ZWWg==",
       "os": ["linux"],
       "cpu": ["arm64"]
     },
-    "@anthropic-ai/claude-agent-sdk-linux-arm64@0.3.173": {
-      "integrity": "sha512-Vb64WJOD2D9tKn/i0ErmLbO6I1187xTwL/kxEANjg4L1FGQnvdYBnZ6J6jU6+x8UgcuIi82imHROQp80gbPW2w==",
+    "@anthropic-ai/claude-agent-sdk-linux-arm64@0.3.175": {
+      "integrity": "sha512-mvCJ37aecg2dfzS8XZbwOfcmA45RFXUZwN84nXiKMnZFazZ6hn7daMmHlCXSp9zV0NpxbizLIb6SmmHgjefHzg==",
       "os": ["linux"],
       "cpu": ["arm64"]
     },
-    "@anthropic-ai/claude-agent-sdk-linux-x64-musl@0.3.173": {
-      "integrity": "sha512-ofKxyp/N8+LLSrClt+dJo0laCHDzmBgmN8+Q+zabJ54Jqc1KXee68UsziE7kLCqGbOSY7rsIK9d22T1uQyZkUw==",
+    "@anthropic-ai/claude-agent-sdk-linux-x64-musl@0.3.175": {
+      "integrity": "sha512-4YUpjcLbDqTYIuvb7gLWVRM3J9CiTisuiEMnckv8lrBWhj5AN0ULLG5pWTOxw4Pzsbja5pAdf9UMqzsKFiukUw==",
       "os": ["linux"],
       "cpu": ["x64"]
     },
-    "@anthropic-ai/claude-agent-sdk-linux-x64@0.3.173": {
-      "integrity": "sha512-0l9L5O+Uiw8gq9mu2NqGSYcSmX8RJMAh9GkGacTJqJbkfHCiFxqZmWBWODOt6HP7PTFCV+yMzQK/xJQjnag/jw==",
+    "@anthropic-ai/claude-agent-sdk-linux-x64@0.3.175": {
+      "integrity": "sha512-vymQcmn39+BQ8JYwUrafPqgxbpMFBGLfV7PPIxQSsi3z4iBwciW4csb7KwpRaehODa3sD69HruAFpOUkJfMkzA==",
       "os": ["linux"],
       "cpu": ["x64"]
     },
-    "@anthropic-ai/claude-agent-sdk-win32-arm64@0.3.173": {
-      "integrity": "sha512-aulIrBYjFDm+S5kl4CxC8A3KUiTDKLHoKV46Mat64E+skGEyBkC7WzZAGbpGKB2y8KZo1WbrwJTGefgyHMpDhw==",
+    "@anthropic-ai/claude-agent-sdk-win32-arm64@0.3.175": {
+      "integrity": "sha512-PwiduMKtisfEQRH8KP6bQ7T+XTC1yNFutrN3v1wQS7BuNTm2bPdXFkW97++OcjW5H4RgdVibIzQZ1V12Hcy4EA==",
       "os": ["win32"],
       "cpu": ["arm64"]
     },
-    "@anthropic-ai/claude-agent-sdk-win32-x64@0.3.173": {
-      "integrity": "sha512-HjGkfDlNLI3Kh9NIUfevJ3SZY8Xv3td4zx5Cz3YE0VPrrjIkRvdEv9K6WTjT94tlS0TUXQS/kFT+NCmoGXuvZQ==",
+    "@anthropic-ai/claude-agent-sdk-win32-x64@0.3.175": {
+      "integrity": "sha512-II4yfIrKCrscig918R6hEOvqEejX56nH8+NI9KvGY47g0rZnPgGgXZCQrRC5ZgRihqNiwF1i6faJxvmmOEx5Rw==",
       "os": ["win32"],
       "cpu": ["x64"]
     },
-    "@anthropic-ai/claude-agent-sdk@0.3.173_@anthropic-ai+sdk@0.104.1__zod@4.4.3_@modelcontextprotocol+sdk@1.29.0__zod@4.4.3_zod@4.4.3": {
-      "integrity": "sha512-BsdL223y7vCUJA9uBW9osSrhufvwIT+J94IBkh83v+wjyjoBIwLXREdacFabair70bGNdtkw6cWCaYNThSQg7A==",
+    "@anthropic-ai/claude-agent-sdk@0.3.175_@anthropic-ai+sdk@0.104.1__zod@4.4.3_@modelcontextprotocol+sdk@1.29.0__zod@4.4.3_zod@4.4.3": {
+      "integrity": "sha512-RAuqHadT+JJqkUC0DsOHIivxTbe1+5Zu02SfIeJoxF1fNS/wazDCVGCmIMPQIRZ+d6HedV047tH7oYhRc2D1bQ==",
       "dependencies": [
         "@anthropic-ai/sdk",
         "@modelcontextprotocol/sdk",
-        "zod"
+        "zod@4.4.3"
       ],
       "optionalDependencies": [
         "@anthropic-ai/claude-agent-sdk-darwin-arm64",
@@ -117,10 +148,10 @@
       "dependencies": [
         "json-schema-to-ts",
         "standardwebhooks",
-        "zod"
+        "zod@4.4.3"
       ],
       "optionalPeers": [
-        "zod"
+        "zod@4.4.3"
       ],
       "bin": true
     },
@@ -239,7 +270,7 @@
         "json-schema-typed",
         "pkce-challenge",
         "raw-body",
-        "zod",
+        "zod@4.4.3",
         "zod-to-json-schema"
       ]
     },
@@ -367,8 +398,8 @@
         "tslib"
       ]
     },
-    "@types/node@25.9.2": {
-      "integrity": "sha512-G05zqtJhcDLb8uslf5EjCxXg9G1KQxiV8OS0R26IC//Eoyitzqe8z37I7cqvnZlrlSfgocQRfSn/AHBZJJFyGw==",
+    "@types/node@25.9.3": {
+      "integrity": "sha512-603BddQMv3pUcr4U2dhujk83N2tTDVr/34wII2B6bJy6g+8WD6yUb11jszNs0gdi4PesVWl7ABt8nYMVpnLUcg==",
       "dependencies": [
         "undici-types"
       ]
@@ -939,8 +970,11 @@
     "zod-to-json-schema@3.25.2_zod@4.4.3": {
       "integrity": "sha512-O/PgfnpT1xKSDeQYSCfRI5Gy3hPf91mKVDuYLUHZJMiDFptvP41MSnWofm8dnCm0256ZNfZIM7DSzuSMAFnjHA==",
       "dependencies": [
-        "zod"
+        "zod@4.4.3"
       ]
+    },
+    "zod@3.25.76": {
+      "integrity": "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="
     },
     "zod@4.4.3": {
       "integrity": "sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ=="
@@ -955,7 +989,7 @@
       "jsr:@std/front-matter@1.0.9",
       "jsr:@std/path@1.1.5",
       "jsr:@std/streams@1.1.1",
-      "npm:@anthropic-ai/claude-agent-sdk@0.3.173",
+      "npm:@anthropic-ai/claude-agent-sdk@0.3.175",
       "npm:@discordjs/voice@0.19.2",
       "npm:@snazzah/davey@0.1.11",
       "npm:ajv@8.20.0",
