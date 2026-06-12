@@ -1,10 +1,11 @@
 FROM docker.io/denoland/deno:debian-2.8.3
 
+# 実行時データは host の ./data を /data に bind mount する (compose.yaml)。
+
 # Claude Code の設定・認証情報の置き場所 (既定の ~/.claude を置き換える)。
-# 実行時に ./data/home を bind mount する。
 ENV CLAUDE_CONFIG_DIR=/data/home
 
-# アプリが読む設定ファイルのパス。実行時に ./data/config.json を bind mount する。
+# アプリが読む設定ファイルのパス。
 ENV LOMS_CLAW_CONFIG=/data/config.json
 
 RUN <<EOF

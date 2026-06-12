@@ -81,14 +81,14 @@ Claude Code CLI を別途インストールはしない。実行時の `query()`
 
 ### データディレクトリ
 
-実行時データは host の `data/` に集約し、コンテナ内の同じ構造（`/data`）へ bind mount する。
-パスは compose.yaml に固定で書かれている。変えたい場合は `compose.override.yaml` を使う。
+実行時データは host の `data/` に集約し、丸ごとコンテナの `/data` へ bind mount する（マウントはこの 1 つだけ）。
+場所を変えたい場合は `compose.override.yaml` を使う。
 
-| host 側              | コンテナ内パス      | 用途                                     |
-| -------------------- | ------------------- | ---------------------------------------- |
-| `./data/home`        | `/data/home`        | Claude の設定・認証情報の永続化          |
-| `./data/workspace`   | `/data/workspace`   | ワークスペース（.claude/, CLAUDE.md 等） |
-| `./data/config.json` | `/data/config.json` | アプリ設定（読み取り専用）               |
+| パス（host / コンテナ共通） | 用途                                     |
+| --------------------------- | ---------------------------------------- |
+| `data/home`                 | Claude の設定・認証情報の永続化          |
+| `data/workspace`            | ワークスペース（.claude/, CLAUDE.md 等） |
+| `data/config.json`          | アプリ設定（要作成）                     |
 
 ### 環境変数
 
@@ -137,7 +137,7 @@ cron/loader.ts         frontmatter パーサー + cron/ ディレクトリスキ
 cron/scheduler.ts      CronScheduler: setInterval ベースのカスタムスケジューラ。
 cron/executor.ts       CronExecutor: スケジューラ連携 + askClaude() → Discord 送信。
 Dockerfile             Deno コンテナイメージ。Claude Code は Agent SDK 同梱バイナリを使用（CLI の個別インストール無し）。CLAUDE_CONFIG_DIR / LOMS_CLAW_CONFIG を ENV で宣言。
-compose.yaml           本番サービス定義。./data 配下をコンテナの /data に bind mount。
+compose.yaml           本番サービス定義。./data をコンテナの /data に bind mount（マウントはこれ 1 つ）。
 data/                  実行時データ置き場。home（Claude 設定・認証情報）/ workspace（ワークスペース）/ config.json（アプリ設定、要作成）。
 ```
 
@@ -384,7 +384,7 @@ LOMS_CLAW_CONFIG=/path/to/config.json deno task start
 
 ### Docker 運用
 
-`data/config.json` が `/data/config.json` として読み取り専用で bind mount される。
+`data/` ごと `/data` にマウントされるため、`data/config.json` がそのまま `/data/config.json` として見える。
 
 ```bash
 cp data/config.json.example data/config.json

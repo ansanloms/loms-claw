@@ -20,15 +20,8 @@ services:
     ]
     volumes:
       - type: bind
-        source: ./data/home
-        target: /data/home
-      - type: bind
-        source: ./data/workspace
-        target: /data/workspace
-      - type: bind
-        source: ./data/config.json
-        target: /data/config.json
-        read_only: true
+        source: ./data
+        target: /data
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped

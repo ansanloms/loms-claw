@@ -1,7 +1,9 @@
 .env
-config.json
 coverage/
 .claude/settings.local.json
+
+# 実行時データ (data/ 配下)。ワークスペースの共有資産のみ追跡する
+data/config.json
 data/home/*
 data/workspace/*
 !data/workspace/.claude
@@ -14,6 +16,8 @@ data/workspace/travel/*.md
 # 例外: TEMPLATE.md は共有資産として管理する
 !data/workspace/travel/TEMPLATE.md
 !**/.gitkeep
+
+# Deno KV。ローカル実行ではリポジトリ直下の .claude/ にも作られる (storePath 既定値が cwd 基準のため)
 **/*.kv
 **/*.kv-shm
 **/*.kv-wal

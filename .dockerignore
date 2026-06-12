@@ -1,14 +1,8 @@
-# 機密情報 (イメージに焼き込まない)
-.env
-config.json
-
-# データディレクトリ (実行時に bind mount される)
+# 実行時データ (機密含む)。実行時に /data へ bind mount される
 data
 
-# 開発関連
+# 機密・開発関連
+.env
 .git
 .claude
 coverage
-*.kv
-*.kv-shm
-*.kv-wal
