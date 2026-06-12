@@ -4,7 +4,7 @@
  * `config.json` を読み込み、ajv で JSON Schema 検証を掛けた後、
  * プロセス固有の値（`claude.cwd`）を注入して {@link Config} を返す。
  *
- * パスは `LOMS_CLAW_CONFIG` 環境変数で上書き可能（デフォルト: `./config.json`）。
+ * パスは `LOMS_CLAW_CONFIG` 環境変数で上書き可能（デフォルト: `./data/config.json`）。
  */
 
 import type { LogLevel } from "./logger.ts";
@@ -122,7 +122,7 @@ export interface Config {
   discord: DiscordConfig;
   /** 永続化ストア (Deno KV / SQLite) のファイルパス。 */
   storePath: string;
-  /** Claude Code CLI 設定。 */
+  /** Claude 呼び出し (Agent SDK query()) 設定。 */
   claude: ClaudeConfig;
   /** ボイスチャンネル設定。 */
   voice: VoiceConfig;
@@ -141,12 +141,12 @@ export interface ConfigFile extends Omit<Config, "claude"> {
 /**
  * 設定ファイルを読み込み、バリデーション後に `claude.cwd` を注入して返す。
  *
- * `LOMS_CLAW_CONFIG` 環境変数で任意のパスを指定できる（未指定なら `./config.json`）。
+ * `LOMS_CLAW_CONFIG` 環境変数で任意のパスを指定できる（未指定なら `./data/config.json`）。
  *
  * @throws ファイルが存在しない、JSON パースに失敗、スキーマ検証に失敗した場合。
  */
 export function loadConfig(): Config {
-  const path = Deno.env.get("LOMS_CLAW_CONFIG") ?? "./config.json";
+  const path = Deno.env.get("LOMS_CLAW_CONFIG") ?? "./data/config.json";
 
   let text: string;
   try {

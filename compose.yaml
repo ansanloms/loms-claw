@@ -5,9 +5,7 @@ services:
     build: .
     environment:
       TZ: ${TZ:-Asia/Tokyo}
-      # アプリが読む設定ファイルのパス (コンテナ内パス)。
-      LOMS_CLAW_CONFIG: /workspace/config.json
-    working_dir: /workspace
+    working_dir: /data/workspace
     command: [
       "deno",
       "run",
@@ -22,14 +20,14 @@ services:
     ]
     volumes:
       - type: bind
-        source: ./docker/claude-home
-        target: /root/.claude
+        source: ./data/home
+        target: /data/home
       - type: bind
-        source: ./docker/claude-workspace
-        target: /workspace
+        source: ./data/workspace
+        target: /data/workspace
       - type: bind
-        source: ./config.json
-        target: /workspace/config.json
+        source: ./data/config.json
+        target: /data/config.json
         read_only: true
     extra_hosts:
       - "host.docker.internal:host-gateway"

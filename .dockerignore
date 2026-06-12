@@ -3,7 +3,7 @@
 config.json
 
 # データディレクトリ (実行時に bind mount される)
-docker
+data
 
 # 開発関連
 .git

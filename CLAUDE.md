@@ -79,24 +79,27 @@ docker compose logs -f
 コンテナ内の `claude` コマンドは Agent SDK が同梱する Claude Code バイナリへの symlink（ビルド時に作成）。
 Claude Code CLI を別途インストールはしない。実行時の `query()` も同じ同梱バイナリを SDK が自動解決して使う。
 
-### ボリューム
+### データディレクトリ
 
-bind mount のパスは compose.yaml に固定で書かれている。変えたい場合は `compose.override.yaml` を使う。
+実行時データは host の `data/` に集約し、コンテナ内の同じ構造（`/data`）へ bind mount する。
+パスは compose.yaml に固定で書かれている。変えたい場合は `compose.override.yaml` を使う。
 
-| host 側                     | コンテナ内パス           | 用途                                     |
-| --------------------------- | ------------------------ | ---------------------------------------- |
-| `./docker/claude-home`      | `/root/.claude`          | 認証情報の永続化                         |
-| `./docker/claude-workspace` | `/workspace`             | ワークスペース（.claude/, CLAUDE.md 等） |
-| `./config.json`             | `/workspace/config.json` | アプリ設定（読み取り専用）               |
+| host 側              | コンテナ内パス      | 用途                                     |
+| -------------------- | ------------------- | ---------------------------------------- |
+| `./data/home`        | `/data/home`        | Claude の設定・認証情報の永続化          |
+| `./data/workspace`   | `/data/workspace`   | ワークスペース（.claude/, CLAUDE.md 等） |
+| `./data/config.json` | `/data/config.json` | アプリ設定（読み取り専用）               |
 
 ### 環境変数
 
-コンテナに渡る env は実際に消費されるものだけ:
+コンテナ内の置き場所は Dockerfile の `ENV` で宣言する（denoland/deno イメージの `DENO_DIR` と同じ流儀）:
 
-| 変数               | 値                                 | 消費者                                      |
-| ------------------ | ---------------------------------- | ------------------------------------------- |
-| `TZ`               | `.env` で指定（既定 `Asia/Tokyo`） | コンテナ全体（cron のローカルタイム評価等） |
-| `LOMS_CLAW_CONFIG` | `/workspace/config.json`（固定）   | `config.ts` の設定ファイル解決              |
+| 変数                | 値（イメージに焼き込み） | 消費者                                         |
+| ------------------- | ------------------------ | ---------------------------------------------- |
+| `CLAUDE_CONFIG_DIR` | `/data/home`             | Claude Code（既定の `~/.claude` を置き換える） |
+| `LOMS_CLAW_CONFIG`  | `/data/config.json`      | `config.ts` の設定ファイル解決                 |
+
+`TZ` のみ host の `.env` から compose 経由で渡す（既定 `Asia/Tokyo`）。
 
 ## ファイル構成
 
@@ -133,9 +136,9 @@ cron/match.ts          cron 式パーサー + マッチャー。Temporal API で
 cron/loader.ts         frontmatter パーサー + cron/ ディレクトリスキャン。
 cron/scheduler.ts      CronScheduler: setInterval ベースのカスタムスケジューラ。
 cron/executor.ts       CronExecutor: スケジューラ連携 + askClaude() → Discord 送信。
-Dockerfile             Deno コンテナイメージ。Claude Code は Agent SDK 同梱バイナリを使用（CLI の個別インストール無し）。
-compose.yaml           本番サービス定義。bind mount は固定パス、コンテナ env は LOMS_CLAW_CONFIG / TZ のみ。
-docker/                claude-home（認証情報）/ claude-workspace（ワークスペース）のデータ置き場。
+Dockerfile             Deno コンテナイメージ。Claude Code は Agent SDK 同梱バイナリを使用（CLI の個別インストール無し）。CLAUDE_CONFIG_DIR / LOMS_CLAW_CONFIG を ENV で宣言。
+compose.yaml           本番サービス定義。./data 配下をコンテナの /data に bind mount。
+data/                  実行時データ置き場。home（Claude 設定・認証情報）/ workspace（ワークスペース）/ config.json（アプリ設定、要作成）。
 ```
 
 ## システムプロンプト
@@ -348,10 +351,10 @@ Discord API は Bot 起動時に常に有効化される。
 
 ## 設定ファイル
 
-設定は `config.json` に一元化されている。`config.json.example` をコピーして必須項目を埋める。
+設定は `data/config.json` に一元化されている。`data/config.json.example` をコピーして必須項目を埋める。
 
 ```bash
-cp config.json.example config.json
+cp data/config.json.example data/config.json
 # エディタで discordToken / guildId / authorizedUserId を入力
 ```
 
@@ -363,11 +366,11 @@ cp config.json.example config.json
 
 その他のフィールドは省略可。ajv の `useDefaults: true` により schema (`config.schema.json`) の `default` が自動で補完される。未知プロパティは `additionalProperties: false` で拒否されるため typo で気付く。
 
-`config.json` の先頭に `"$schema": "./config.schema.json"` を書くと VS Code 等の IDE が補完・検証に使う (`config.json.example` にも入っている)。
+`config.json` の先頭に `"$schema": "../config.schema.json"` を書くと VS Code 等の IDE が補完・検証に使う (`data/config.json.example` にも入っている)。
 
 ### パス指定
 
-デフォルトは `./config.json`。別パスを読ませる場合は環境変数 `LOMS_CLAW_CONFIG` で上書きする。
+デフォルトは `./data/config.json`。別パスを読ませる場合は環境変数 `LOMS_CLAW_CONFIG` で上書きする。
 
 ```bash
 LOMS_CLAW_CONFIG=/path/to/config.json deno task start
@@ -377,14 +380,14 @@ LOMS_CLAW_CONFIG=/path/to/config.json deno task start
 
 `.env` は docker compose が **host 側で** 参照する変数（現状 `TZ` のみ）を持つ。アプリ自体は `.env` を読まない。`.env.example` 参照。
 
-`LOMS_CLAW_CONFIG` はアプリが読む **コンテナ / プロセス側の env**。Docker では compose.yaml が `/workspace/config.json` を固定で渡す。ローカル実行で別パスを使う場合はシェルから直接渡す。
+`LOMS_CLAW_CONFIG` はアプリが読む **コンテナ / プロセス側の env**。Docker ではイメージの `ENV` が `/data/config.json` を指す。ローカル実行で別パスを使う場合はシェルから直接渡す。
 
 ### Docker 運用
 
-リポジトリルートの `config.json` が `/workspace/config.json` として読み取り専用で bind mount される。
+`data/config.json` が `/data/config.json` として読み取り専用で bind mount される。
 
 ```bash
-cp config.json.example config.json
+cp data/config.json.example data/config.json
 # 編集
 docker compose up -d
 ```

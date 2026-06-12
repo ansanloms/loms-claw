@@ -1,8 +1,16 @@
-FROM docker.io/denoland/deno:debian-2.8.2
+FROM docker.io/denoland/deno:debian-2.8.3
+
+# Claude Code の設定・認証情報の置き場所 (既定の ~/.claude を置き換える)。
+# 実行時に ./data/home を bind mount する。
+ENV CLAUDE_CONFIG_DIR=/data/home
+
+# アプリが読む設定ファイルのパス。実行時に ./data/config.json を bind mount する。
+ENV LOMS_CLAW_CONFIG=/data/config.json
 
 RUN <<EOF
 	apt-get update
 	apt-get install -y --no-install-recommends ca-certificates curl git bubblewrap socat ffmpeg tzdata
+	apt-get clean
 	rm -rf /var/lib/apt/lists/*
 EOF
 
