@@ -31,6 +31,10 @@ RUN <<EOF
 	esac
 	ln -sf "${DENO_DIR%/}"/npm/registry.npmjs.org/@anthropic-ai/claude-agent-sdk-linux-${sdk_arch}/*/claude /usr/local/bin/claude
 	claude --version
+	# glibc イメージでは musl 用バイナリ (約 230MB) は使われないため削除する。
+	# パッケージディレクトリ自体を消すと deno が起動時に再ダウンロードするため、
+	# バイナリファイルのみ削除する (パッケージの存在チェックはディレクトリ単位)。
+	rm -f "${DENO_DIR%/}"/npm/registry.npmjs.org/@anthropic-ai/claude-agent-sdk-linux-*-musl/*/claude
 EOF
 
 COPY . .
