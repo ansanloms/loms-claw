@@ -90,6 +90,21 @@ Claude Code CLI を別途インストールはしない。実行時の `query()`
 | `data/workspace`            | ワークスペース（.claude/, CLAUDE.md 等） |
 | `data/config.json`          | アプリ設定（要作成）                     |
 
+### 開発（devcontainer）
+
+開発は `.devcontainer/` の定義でコンテナ内で行う。本番と同じイメージ・compose 定義に、ソースツリーを `/app` へ重ねる bind mount を追加しただけの構成。
+
+```bash
+# エディタ / devcontainer CLI でコンテナを開き、ターミナルで:
+deno task dev   # --watch 付き起動。/app のソース編集で自動再起動
+```
+
+注意点:
+
+- 設定は本番と同じ `/data/config.json`（イメージの `ENV LOMS_CLAW_CONFIG`）を読む。
+- `deno task` は deno.json のあるディレクトリ（`/app`）を cwd に実行されるため、開発時のエージェントワークスペースはソースリポジトリ自身になる（本番は `/data/workspace`）。
+- 本番と同じ compose プロジェクト・サービスを使うため、devcontainer を起動すると本番の bot コンテナは置き換えられる（同一トークンの二重ログインは起きない）。開発を終えたら `docker compose up -d` で本番構成に戻す。
+
 ### 環境変数
 
 コンテナ内の置き場所は Dockerfile の `ENV` で宣言する（denoland/deno イメージの `DENO_DIR` と同じ流儀）:
@@ -138,6 +153,7 @@ cron/scheduler.ts      CronScheduler: setInterval ベースのカスタムスケ
 cron/executor.ts       CronExecutor: スケジューラ連携 + askClaude() → Discord 送信。
 Dockerfile             Deno コンテナイメージ。Claude Code は Agent SDK 同梱バイナリを使用（CLI の個別インストール無し）。CLAUDE_CONFIG_DIR / LOMS_CLAW_CONFIG を ENV で宣言。
 compose.yaml           本番サービス定義。./data をコンテナの /data に bind mount（マウントはこれ 1 つ）。
+.devcontainer/         開発コンテナ定義。compose.yaml にソースの /app bind mount を重ねる。
 data/                  実行時データ置き場。home（Claude 設定・認証情報）/ workspace（ワークスペース）/ config.json（アプリ設定、要作成）。
 ```
 
