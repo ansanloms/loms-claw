@@ -35,4 +35,9 @@ EOF
 
 COPY . .
 
-CMD ["deno", "task", "start"]
+# 実行時の cwd はエージェントワークスペース (/data/workspace) にする。
+# コードはイメージ焼き込みの /app を絶対パスで参照する。
+# 権限フラグは deno.json の start タスクと揃えること
+# (deno task は deno.json のあるディレクトリを cwd にするためここでは使えない)。
+WORKDIR /data/workspace
+CMD ["deno", "run", "--allow-env", "--allow-sys", "--allow-ffi", "--allow-read", "--allow-write", "--allow-net", "--allow-run", "/app/main.ts"]

@@ -5,19 +5,6 @@ services:
     build: .
     environment:
       TZ: ${TZ:-Asia/Tokyo}
-    working_dir: /data/workspace
-    command: [
-      "deno",
-      "run",
-      "--allow-env",
-      "--allow-sys",
-      "--allow-ffi",
-      "--allow-read",
-      "--allow-write",
-      "--allow-net",
-      "--allow-run",
-      "/app/main.ts",
-    ]
     volumes:
       - type: bind
         source: ./data
