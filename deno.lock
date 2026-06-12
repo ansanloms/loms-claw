@@ -1,9 +1,12 @@
 {
   "version": "5",
   "specifiers": {
+    "jsr:@aireone/deno-lint-curly@*": "0.2.0",
     "jsr:@hono/hono@4.12.24": "4.12.24",
     "jsr:@openai/openai@6.42.0": "6.42.0",
+    "jsr:@std/assert@1.0.19": "1.0.19",
     "jsr:@std/front-matter@1.0.9": "1.0.9",
+    "jsr:@std/internal@^1.0.12": "1.0.14",
     "jsr:@std/internal@^1.0.14": "1.0.14",
     "jsr:@std/path@1": "1.1.5",
     "jsr:@std/path@1.1.5": "1.1.5",
@@ -16,11 +19,20 @@
     "npm:opusscript@0.1.1": "0.1.1"
   },
   "jsr": {
+    "@aireone/deno-lint-curly@0.2.0": {
+      "integrity": "c182ea5d2ed999c06ffa88a21aac2aed3cf0d14a1128d7fad3034337f7822b48"
+    },
     "@hono/hono@4.12.24": {
       "integrity": "a74a40f06ae6704ddd0e8e576f6da9d34666c3e1e0f5412a2c1ff800ffd092f4"
     },
     "@openai/openai@6.42.0": {
       "integrity": "9c1b51ea00bd6bc5279e7b7f9252c7819f136f02f3a98a3bf15764ae5dd5a3cc"
+    },
+    "@std/assert@1.0.19": {
+      "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
+      "dependencies": [
+        "jsr:@std/internal@^1.0.12"
+      ]
     },
     "@std/front-matter@1.0.9": {
       "integrity": "ee6201d06674cbef137dda2252f62477450b48249e7d8d9ab57a30f85ff6f051",
@@ -34,7 +46,7 @@
     "@std/path@1.1.5": {
       "integrity": "ccea00982ea28c36becaf6e62f855406c76a8c32d462f66f415bbb7d83a271bc",
       "dependencies": [
-        "jsr:@std/internal"
+        "jsr:@std/internal@^1.0.14"
       ]
     },
     "@std/yaml@1.1.1": {
