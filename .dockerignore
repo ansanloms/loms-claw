@@ -1,3 +1,14 @@
+# 機密情報 (イメージに焼き込まない)
 .env
-.git
+config.json
+
+# データディレクトリ (実行時に bind mount される)
 docker
+
+# 開発関連
+.git
+.claude
+coverage
+*.kv
+*.kv-shm
+*.kv-wal

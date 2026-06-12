@@ -2,33 +2,35 @@ name: loms-claw
 
 services:
   bot:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
+    build: .
     environment:
       TZ: ${TZ:-Asia/Tokyo}
+      # アプリが読む設定ファイルのパス (コンテナ内パス)。
+      LOMS_CLAW_CONFIG: /workspace/config.json
     working_dir: /workspace
     command: [
       "deno",
       "run",
       "--allow-env",
+      "--allow-sys",
       "--allow-ffi",
       "--allow-read",
       "--allow-write",
       "--allow-net",
       "--allow-run",
-      "/app/main.ts"
+      "/app/main.ts",
     ]
     volumes:
       - type: bind
-        source: ${CLAUDE_HOME:-./claude-home}
+        source: ./docker/claude-home
         target: /root/.claude
       - type: bind
-        source: ${CLAUDE_WORKSPACE:-./claude-workspace}
+        source: ./docker/claude-workspace
         target: /workspace
       - type: bind
-        source: ${LOMS_CLAW_CONFIG:-../config.json}
+        source: ./config.json
         target: /workspace/config.json
+        read_only: true
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped

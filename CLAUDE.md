@@ -56,11 +56,9 @@ deno task fix     # lint 自動修正 + format
 
 ## Docker
 
-以下のコマンドは全て `docker/` ディレクトリで実行する。
+`Dockerfile` / `compose.yaml` はリポジトリルートに置く。コマンドは全てリポジトリルートで実行する。
 
 ```bash
-cd docker
-
 # ビルド
 docker compose build
 
@@ -76,9 +74,6 @@ docker compose down
 
 # ログ確認
 docker compose logs -f
-
-# 停止
-docker compose down
 ```
 
 コンテナ内の `claude` コマンドは Agent SDK が同梱する Claude Code バイナリへの symlink（ビルド時に作成）。
@@ -86,12 +81,22 @@ Claude Code CLI を別途インストールはしない。実行時の `query()`
 
 ### ボリューム
 
-| 変数               | コンテナ内パス  | デフォルト                | 用途                                     |
-| ------------------ | --------------- | ------------------------- | ---------------------------------------- |
-| `CLAUDE_HOME`      | `/root/.claude` | `docker/claude-home`      | 認証情報の永続化                         |
-| `CLAUDE_WORKSPACE` | `/workspace`    | `docker/claude-workspace` | ワークスペース（.claude/, CLAUDE.md 等） |
+bind mount のパスは compose.yaml に固定で書かれている。変えたい場合は `compose.override.yaml` を使う。
 
-`CLAUDE_HOME` と `CLAUDE_WORKSPACE` は compose.yaml の bind mount 用。コンテナ内のパスは固定。
+| host 側                     | コンテナ内パス           | 用途                                     |
+| --------------------------- | ------------------------ | ---------------------------------------- |
+| `./docker/claude-home`      | `/root/.claude`          | 認証情報の永続化                         |
+| `./docker/claude-workspace` | `/workspace`             | ワークスペース（.claude/, CLAUDE.md 等） |
+| `./config.json`             | `/workspace/config.json` | アプリ設定（読み取り専用）               |
+
+### 環境変数
+
+コンテナに渡る env は実際に消費されるものだけ:
+
+| 変数               | 値                                 | 消費者                                      |
+| ------------------ | ---------------------------------- | ------------------------------------------- |
+| `TZ`               | `.env` で指定（既定 `Asia/Tokyo`） | コンテナ全体（cron のローカルタイム評価等） |
+| `LOMS_CLAW_CONFIG` | `/workspace/config.json`（固定）   | `config.ts` の設定ファイル解決              |
 
 ## ファイル構成
 
@@ -128,8 +133,9 @@ cron/match.ts          cron 式パーサー + マッチャー。Temporal API で
 cron/loader.ts         frontmatter パーサー + cron/ ディレクトリスキャン。
 cron/scheduler.ts      CronScheduler: setInterval ベースのカスタムスケジューラ。
 cron/executor.ts       CronExecutor: スケジューラ連携 + askClaude() → Discord 送信。
-docker/Dockerfile      Deno コンテナイメージ。Claude Code は Agent SDK 同梱バイナリを使用（CLI の個別インストール無し）。
-docker/compose.yaml    本番サービス定義。
+Dockerfile             Deno コンテナイメージ。Claude Code は Agent SDK 同梱バイナリを使用（CLI の個別インストール無し）。
+compose.yaml           本番サービス定義。bind mount は固定パス、コンテナ env は LOMS_CLAW_CONFIG / TZ のみ。
+docker/                claude-home（認証情報）/ claude-workspace（ワークスペース）のデータ置き場。
 ```
 
 ## システムプロンプト
@@ -369,16 +375,18 @@ LOMS_CLAW_CONFIG=/path/to/config.json deno task start
 
 ### `.env` の役割
 
-`.env` は docker compose が **host 側で** 参照する Docker 関連変数（`CLAUDE_HOME` / `CLAUDE_WORKSPACE` / `TZ`）と、必要なら `LOMS_CLAW_CONFIG` のみを持つ。`.env.example` 参照。
+`.env` は docker compose が **host 側で** 参照する変数（現状 `TZ` のみ）を持つ。アプリ自体は `.env` を読まない。`.env.example` 参照。
+
+`LOMS_CLAW_CONFIG` はアプリが読む **コンテナ / プロセス側の env**。Docker では compose.yaml が `/workspace/config.json` を固定で渡す。ローカル実行で別パスを使う場合はシェルから直接渡す。
 
 ### Docker 運用
 
-`config.json` はデフォルトでリポジトリルートのものが `/workspace/config.json` として bind mount される（compose.yaml の `${LOMS_CLAW_CONFIG:-../config.json}`）。別の場所に置く場合は `.env` の `LOMS_CLAW_CONFIG` に host 側のパスを指定する。
+リポジトリルートの `config.json` が `/workspace/config.json` として読み取り専用で bind mount される。
 
 ```bash
 cp config.json.example config.json
 # 編集
-cd docker && docker compose up -d
+docker compose up -d
 ```
 
 ## テスト方針
