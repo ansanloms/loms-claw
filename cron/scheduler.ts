@@ -13,6 +13,7 @@
 import { matchesCron } from "./match.ts";
 import type { CronJobDef } from "./types.ts";
 import { createLogger } from "../logger.ts";
+import { getErrorMessage } from "../errors.ts";
 
 const log = createLogger("cron-scheduler");
 
@@ -29,8 +30,8 @@ const TICK_INTERVAL_MS = 60_000;
  */
 export class CronScheduler {
   private jobs = new Map<string, CronJobDef>();
-  private timerId: number | null = null;
-  private alignTimerId: number | null = null;
+  private timerId: ReturnType<typeof setInterval> | null = null;
+  private alignTimerId: ReturnType<typeof setTimeout> | null = null;
   private lastTickMinute = -1;
   private callback: (job: CronJobDef) => void;
 
@@ -133,7 +134,7 @@ export class CronScheduler {
       } catch (e) {
         log.error(
           `cron match error for "${job.name}":`,
-          e instanceof Error ? e.message : String(e),
+          getErrorMessage(e),
         );
       }
     }

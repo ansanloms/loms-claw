@@ -1,18 +1,15 @@
 /**
- * Claude Code CLI と音声パイプラインのアダプタ。
+ * Claude (Agent SDK) と音声パイプラインのアダプタ。
  *
- * askClaude() が返す SDKMessage ストリームから結果テキストを抽出し、
- * 音声パイプラインが消費しやすい形で返す。
- *
- * streamClaudeForVoice() はストリーミング対応版で、text_delta を
- * 文単位で逐次 yield し、TTS の体感遅延を最小化する。
+ * streamClaudeForVoice() は askClaude() の SDKMessage ストリームから
+ * text_delta を文単位で逐次 yield し、TTS の体感遅延を最小化する。
  */
 
-import type { SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
 import {
   askClaude,
   type ClaudeCallOptions,
-  type CommandSpawner,
+  extractTopLevelTextDelta,
+  type QueryFn,
 } from "../claude/mod.ts";
 import type { ClaudeConfig } from "../config.ts";
 import { createLogger } from "../logger.ts";
@@ -27,72 +24,7 @@ export type VoiceStreamEvent =
   | { type: "end"; sessionId: string };
 
 /**
- * askClaudeForVoice の戻り値。
- */
-export interface VoiceResult {
-  /** Claude の応答テキスト。 */
-  text: string;
-  /** セッション ID（SessionStore に保存する）。 */
-  sessionId: string;
-}
-
-/**
- * Claude Code CLI を呼び出し、結果テキストとセッション ID を返す。
- *
- * askClaude() の SDKMessage ストリームを走査し、result イベントから
- * テキストを抽出する。ストリーミングチャンクではなく最終結果を
- * 一括で返すため、呼び出し側は結果全体を VoicePlayer.speak() に渡す。
- *
- * @param prompt - ユーザーの発話テキスト。
- * @param options - Claude CLI オプション。
- * @returns テキストとセッション ID。
- * @throws 結果イベントが無い場合、またはエラーイベントの場合。
- */
-export async function askClaudeForVoice(
-  prompt: string,
-  options: ClaudeCallOptions & {
-    config: ClaudeConfig;
-    signal?: AbortSignal;
-    spawner?: CommandSpawner;
-  },
-): Promise<VoiceResult> {
-  const stream = askClaude(prompt, options);
-  let resultEvent: SDKResultMessage | undefined;
-
-  for await (const event of stream) {
-    if (event.type === "result") {
-      resultEvent = event;
-    }
-  }
-
-  if (!resultEvent) {
-    throw new Error("claude stream ended without result event");
-  }
-
-  if ("result" in resultEvent && typeof resultEvent.result === "string") {
-    log.info(
-      `claude response: ${resultEvent.result.slice(0, 100)}${
-        resultEvent.result.length > 100 ? "..." : ""
-      }`,
-    );
-    return {
-      text: resultEvent.result,
-      sessionId: resultEvent.session_id,
-    };
-  }
-
-  const errors = "errors" in resultEvent
-    ? JSON.stringify(resultEvent.errors)
-    : resultEvent.subtype ?? "unknown error";
-  log.error(
-    `claude returned non-success subtype "${resultEvent.subtype}":`,
-    JSON.stringify(resultEvent),
-  );
-  throw new Error(`claude returned error: ${errors}`);
-}
-
-/**
- * Claude Code CLI をストリーミングモードで呼び出し、
+ * askClaude() をストリーミングモードで呼び出し、
  * テキストを文単位で逐次 yield する。
  *
  * stream_event の text_delta を蓄積し、文境界（。、改行）を検出したら
@@ -102,7 +34,7 @@ export async function askClaudeForVoice(
  * サブエージェント（parent_tool_use_id !== null）のテキストは除外する。
  *
  * @param prompt - ユーザーの発話テキスト。
- * @param options - Claude CLI オプション。
+ * @param options - Claude 呼び出しオプション。
  * @yields テキストチャンク（文単位）と終了イベント。
  * @throws 結果イベントが無い場合、またはエラーイベントの場合。
  */
@@ -111,7 +43,7 @@ export async function* streamClaudeForVoice(
   options: ClaudeCallOptions & {
     config: ClaudeConfig;
     signal?: AbortSignal;
-    spawner?: CommandSpawner;
+    queryFn?: QueryFn;
   },
 ): AsyncGenerator<VoiceStreamEvent> {
   const stream = askClaude(prompt, options);
@@ -122,32 +54,22 @@ export async function* streamClaudeForVoice(
   let resultText = "";
 
   for await (const event of stream) {
-    // ストリーミングテキストチャンクの処理。
-    // parent_tool_use_id が falsy（null / undefined / 未設定）ならトップレベル。
-    if (
-      event.type === "stream_event" &&
-      !event.parent_tool_use_id
-    ) {
-      const e = event.event;
-      if (
-        e.type === "content_block_delta" &&
-        "text" in e.delta &&
-        e.delta.type === "text_delta"
-      ) {
-        buffer += e.delta.text;
-        // 文境界（。、改行）で分割し、完成した文を即座に yield。
-        const parts = buffer.split(/(?<=[。\n])/);
-        if (parts.length > 1) {
-          for (let i = 0; i < parts.length - 1; i++) {
-            const s = parts[i].trim();
-            if (s) {
-              hasStreamedText = true;
-              log.debug(`streaming chunk: "${s}"`);
-              yield { type: "text", text: s };
-            }
+    // ストリーミングテキストチャンク (トップレベルの text_delta) の処理。
+    const delta = extractTopLevelTextDelta(event);
+    if (delta !== undefined) {
+      buffer += delta;
+      // 文境界（。、改行）で分割し、完成した文を即座に yield。
+      const parts = buffer.split(/(?<=[。\n])/);
+      if (parts.length > 1) {
+        for (let i = 0; i < parts.length - 1; i++) {
+          const s = parts[i].trim();
+          if (s) {
+            hasStreamedText = true;
+            log.debug(`streaming chunk: "${s}"`);
+            yield { type: "text", text: s };
           }
-          buffer = parts[parts.length - 1];
         }
+        buffer = parts[parts.length - 1];
       }
     }
 
@@ -160,8 +82,7 @@ export async function* streamClaudeForVoice(
       const subtype: string = event.subtype;
 
       // result フィールドがあればテキストとして採用する。
-      // error_max_turns 等でも result が含まれていればそれを使う
-      // （元の askClaudeForVoice と同じ挙動）。
+      // error_max_turns 等でも result が含まれていればそれを使う。
       if ("result" in event && typeof event.result === "string") {
         sessionId = event.session_id;
         if (subtype !== "success") {

@@ -14,6 +14,8 @@ import type { ErrorObject, ValidateFunction } from "ajv";
 import { createLogger } from "../logger.ts";
 import { parseCronExpression } from "./match.ts";
 import type { CronJobDef } from "./types.ts";
+import { EFFORT_LEVELS, type EffortLevel } from "../claude/mod.ts";
+import { getErrorMessage } from "../errors.ts";
 
 const log = createLogger("cron-loader");
 
@@ -31,7 +33,7 @@ interface CronFrontMatter {
   resumeSession?: boolean;
   once?: boolean;
   model?: string;
-  effort?: "low" | "medium" | "high" | "xhigh" | "max";
+  effort?: EffortLevel;
 }
 
 // deno の npm 互換レイヤーでは CJS default export のコンストラクタ型が解決できない
@@ -48,9 +50,7 @@ const cronExpressionValidate = Object.assign(
         keyword: "cronExpression",
         instancePath: "",
         schemaPath: "#/cronExpression",
-        message: `invalid cron expression: ${
-          e instanceof Error ? e.message : String(e)
-        }`,
+        message: `invalid cron expression: ${getErrorMessage(e)}`,
         params: { value: data },
       }];
       return false;
@@ -80,7 +80,7 @@ const validateFrontMatter: ValidateFunction<CronFrontMatter> = ajv.compile<
     model: { type: "string" },
     effort: {
       type: "string",
-      enum: ["low", "medium", "high", "xhigh", "max"],
+      enum: [...EFFORT_LEVELS],
     },
   },
   required: ["schedule"],
@@ -189,7 +189,7 @@ export async function loadCronJobsFromDir(
       } catch (e) {
         log.error(
           `failed to load cron job ${entry.name}:`,
-          e instanceof Error ? e.message : String(e),
+          getErrorMessage(e),
         );
       }
     }

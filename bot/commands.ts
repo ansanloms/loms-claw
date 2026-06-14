@@ -18,6 +18,7 @@ import type { CronExecutor } from "../cron/executor.ts";
 import type { ScopeSettingEntry, Store, StoreScope } from "../store/mod.ts";
 import type { VoiceManager } from "../voice/mod.ts";
 import { createLogger } from "../logger.ts";
+import { getErrorMessage } from "../errors.ts";
 
 const log = createLogger("commands");
 
@@ -130,7 +131,7 @@ export async function handleVcJoin(
     await voiceManager.join(interaction.channelId);
     await interaction.editReply("Joined VC.");
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = getErrorMessage(e);
     log.error("failed to join VC:", msg);
     await interaction.editReply(`Failed to join VC: ${msg}`);
   }

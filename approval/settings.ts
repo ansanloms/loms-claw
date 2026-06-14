@@ -2,7 +2,7 @@
  * Claude Code の .claude/settings.json への永続化。
  *
  * 「Allow Always」で承認されたツールを permissions.allow に追記し、
- * 次回の claude -p 起動時から PreToolUse フック自体をスキップさせる。
+ * 次回の query() から SDK 側で事前許可させる（canUseTool の確認をスキップ）。
  */
 
 import { dirname } from "@std/path/dirname";

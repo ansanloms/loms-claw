@@ -46,7 +46,7 @@
     },
     "claude": {
       "type": "object",
-      "description": "Claude Code CLI (`claude -p`) の挙動とグローバルデフォルト。",
+      "description": "Claude 呼び出し (Agent SDK query()) の挙動とグローバルデフォルト。",
       "default": {},
       "additionalProperties": false,
       "required": ["maxTurns", "verbose", "timeout", "apiPort", "defaults"],
@@ -54,22 +54,22 @@
         "maxTurns": {
           "type": "number",
           "default": 10,
-          "description": "エージェントの最大ターン数（`--max-turns` に渡される）。"
+          "description": "エージェントの最大ターン数（query() の maxTurns に渡される）。"
         },
         "verbose": {
           "type": "boolean",
           "default": true,
-          "description": "verbose ログの有効/無効（`--verbose` フラグ）。"
+          "description": "（現在未使用。後方互換のため保持。）"
         },
         "timeout": {
           "type": "number",
           "default": 300000,
-          "description": "`claude` プロセスのタイムアウト（ミリ秒）。"
+          "description": "Claude 呼び出しのタイムアウト（ミリ秒）。query() の abortController に渡される。"
         },
         "apiPort": {
           "type": "number",
           "default": 3000,
-          "description": "内部 API サーバーのポート（承認フック + Discord REST API）。"
+          "description": "内部 API サーバーのポート（Discord REST API + cron + ログ）。"
         },
         "defaults": {
           "type": "object",

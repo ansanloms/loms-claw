@@ -4,11 +4,12 @@
  * `config.json` を読み込み、ajv で JSON Schema 検証を掛けた後、
  * プロセス固有の値（`claude.cwd`）を注入して {@link Config} を返す。
  *
- * パスは `LOMS_CLAW_CONFIG` 環境変数で上書き可能（デフォルト: `./config.json`）。
+ * パスは `LOMS_CLAW_CONFIG` 環境変数で上書き可能（デフォルト: `./data/config.json`）。
  */
 
 import type { LogLevel } from "./logger.ts";
 import { formatConfigErrors, validateConfigFile } from "./config.schema.ts";
+import { getErrorMessage } from "./errors.ts";
 
 /**
  * Claude のグローバルデフォルト。チャンネル単位の上書きが無いときに使われる。
@@ -21,18 +22,18 @@ export interface ClaudeDefaults {
 }
 
 /**
- * Claude Code CLI 設定。
+ * Claude 呼び出し (Agent SDK `query()`) 設定。
  */
 export interface ClaudeConfig {
-  /** `--max-turns` に渡す最大ターン数。 */
+  /** `query()` の `maxTurns` に渡す最大ターン数。 */
   maxTurns: number;
-  /** `--verbose` フラグ。 */
+  /** 現在未使用。後方互換のため保持。 */
   verbose: boolean;
-  /** プロセスタイムアウト（ミリ秒）。 */
+  /** Claude 呼び出しのタイムアウト（ミリ秒）。`query()` の abort に使う。 */
   timeout: number;
-  /** 内部 API サーバーのポート（承認 + Discord API）。 */
+  /** 内部 API サーバーのポート（Discord REST API + cron + ログ）。 */
   apiPort: number;
-  /** `claude` プロセスの作業ディレクトリ。実行時に `Deno.cwd()` が注入される。 */
+  /** `query()` の作業ディレクトリ。実行時に `Deno.cwd()` が注入される。 */
   cwd: string;
   /** Claude のグローバルデフォルト (model / effort)。 */
   defaults: ClaudeDefaults;
@@ -122,7 +123,7 @@ export interface Config {
   discord: DiscordConfig;
   /** 永続化ストア (Deno KV / SQLite) のファイルパス。 */
   storePath: string;
-  /** Claude Code CLI 設定。 */
+  /** Claude 呼び出し (Agent SDK query()) 設定。 */
   claude: ClaudeConfig;
   /** ボイスチャンネル設定。 */
   voice: VoiceConfig;
@@ -141,18 +142,18 @@ export interface ConfigFile extends Omit<Config, "claude"> {
 /**
  * 設定ファイルを読み込み、バリデーション後に `claude.cwd` を注入して返す。
  *
- * `LOMS_CLAW_CONFIG` 環境変数で任意のパスを指定できる（未指定なら `./config.json`）。
+ * `LOMS_CLAW_CONFIG` 環境変数で任意のパスを指定できる（未指定なら `./data/config.json`）。
  *
  * @throws ファイルが存在しない、JSON パースに失敗、スキーマ検証に失敗した場合。
  */
 export function loadConfig(): Config {
-  const path = Deno.env.get("LOMS_CLAW_CONFIG") ?? "./config.json";
+  const path = Deno.env.get("LOMS_CLAW_CONFIG") ?? "./data/config.json";
 
   let text: string;
   try {
     text = Deno.readTextFileSync(path);
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = getErrorMessage(e);
     throw new Error(`failed to read config file (${path}): ${msg}`);
   }
 
@@ -160,7 +161,7 @@ export function loadConfig(): Config {
   try {
     raw = JSON.parse(text);
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = getErrorMessage(e);
     throw new Error(`failed to parse config file (${path}): ${msg}`);
   }
 

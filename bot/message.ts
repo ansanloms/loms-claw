@@ -214,7 +214,7 @@ export async function cleanupImageFiles(
 /**
  * プロンプトに画像ファイル参照を付加する。
  *
- * claude -p の @ 構文で画像を参照できる形式にする。
+ * Claude のプロンプト @ 構文で画像を参照できる形式にする。
  */
 export function appendImageReferences(
   prompt: string,

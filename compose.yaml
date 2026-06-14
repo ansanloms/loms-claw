@@ -1,0 +1,14 @@
+name: loms-claw
+
+services:
+  bot:
+    build: .
+    environment:
+      TZ: ${TZ:-Asia/Tokyo}
+    volumes:
+      - type: bind
+        source: ./data
+        target: /data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

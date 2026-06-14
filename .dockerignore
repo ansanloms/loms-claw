@@ -1,3 +1,8 @@
+# 実行時データ (機密含む)。実行時に /data へ bind mount される
+data
+
+# 機密・開発関連
 .env
 .git
-docker
+.claude
+coverage

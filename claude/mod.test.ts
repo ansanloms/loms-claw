@@ -1,12 +1,16 @@
-import { assertEquals, assertRejects } from "@std/assert";
-import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+import { assertEquals, assertRejects, assertThrows } from "@std/assert";
+import type {
+  SDKMessage,
+  SDKResultMessage,
+} from "@anthropic-ai/claude-agent-sdk";
 import type { ClaudeConfig } from "../config.ts";
 import {
   askClaude,
-  buildArgs,
-  buildHookSettings,
-  type CommandSpawner,
-  parseNdjsonStream,
+  buildQueryOptions,
+  extractResultText,
+  extractTopLevelTextDelta,
+  normalizeEffort,
+  type QueryFn,
 } from "./mod.ts";
 
 const baseConfig: ClaudeConfig = {
@@ -18,118 +22,160 @@ const baseConfig: ClaudeConfig = {
   defaults: {},
 };
 
-Deno.test("buildArgs", async (t) => {
-  await t.step("stream-json を出力フォーマットに指定すること", () => {
-    const args = buildArgs("hello", baseConfig);
-    const idx = args.indexOf("--output-format");
-    assertEquals(idx >= 0, true);
-    assertEquals(args[idx + 1], "stream-json");
+/**
+ * SDKMessage を順に yield するモック queryFn を生成する。
+ *
+ * params (prompt / options) を capture できるよう、capture コールバックを受け取る。
+ * 単体テストでは iterate のみ行うため、Query の付随メソッドは省略している。
+ */
+function mockQueryFn(
+  messages: SDKMessage[],
+  capture?: (params: Parameters<QueryFn>[0]) => void,
+): QueryFn {
+  return (params: Parameters<QueryFn>[0]) => {
+    capture?.(params);
+    async function* gen(): AsyncGenerator<SDKMessage> {
+      for (const m of messages) {
+        yield m;
+      }
+    }
+    return gen() as unknown as ReturnType<QueryFn>;
+  };
+}
+
+/**
+ * 呼び出し時に同期的に例外を投げるモック queryFn を生成する。
+ */
+function throwingQueryFn(message: string): QueryFn {
+  return (_params: Parameters<QueryFn>[0]): ReturnType<QueryFn> => {
+    throw new Error(message);
+  };
+}
+
+Deno.test("normalizeEffort", async (t) => {
+  await t.step("対応する effort をそのまま返すこと", () => {
+    assertEquals(normalizeEffort("low"), "low");
+    assertEquals(normalizeEffort("high"), "high");
+    assertEquals(normalizeEffort("xhigh"), "xhigh");
+    assertEquals(normalizeEffort("max"), "max");
   });
 
-  await t.step("--verbose を常に含むこと", () => {
-    const args = buildArgs("hello", { ...baseConfig, verbose: false });
-    assertEquals(args.includes("--verbose"), true);
+  await t.step("非対応の値は undefined になること", () => {
+    assertEquals(normalizeEffort("ultra"), undefined);
   });
 
-  await t.step("--max-turns を含むこと", () => {
-    const args = buildArgs("hello", baseConfig);
-    assertEquals(args.includes("--max-turns"), true);
-    assertEquals(args.includes("10"), true);
-  });
-
-  await t.step("セッション ID 指定時に --resume を含むこと", () => {
-    const args = buildArgs("hello", baseConfig, { sessionId: "session-123" });
-    const idx = args.indexOf("--resume");
-    assertEquals(idx >= 0, true);
-    assertEquals(args[idx + 1], "session-123");
-  });
-
-  await t.step("--settings にフック設定を含むこと", () => {
-    const args = buildArgs("hello", baseConfig);
-    assertEquals(args.includes("--settings"), true);
-  });
-
-  await t.step(
-    "appendSystemPrompt 指定時に --append-system-prompt を含むこと",
-    () => {
-      const args = buildArgs("hello", baseConfig, {
-        appendSystemPrompt: "extra prompt",
-      });
-      const idx = args.indexOf("--append-system-prompt");
-      assertEquals(idx >= 0, true);
-      assertEquals(args[idx + 1], "extra prompt");
-    },
-  );
-
-  await t.step(
-    "appendSystemPrompt 未指定時は --append-system-prompt を含まないこと",
-    () => {
-      const args = buildArgs("hello", baseConfig);
-      assertEquals(args.includes("--append-system-prompt"), false);
-    },
-  );
-
-  await t.step("model 指定時に --model を含むこと", () => {
-    const args = buildArgs("hello", baseConfig, { model: "opus" });
-    const idx = args.indexOf("--model");
-    assertEquals(idx >= 0, true);
-    assertEquals(args[idx + 1], "opus");
-  });
-
-  await t.step("model 未指定時は --model を含まないこと", () => {
-    const args = buildArgs("hello", baseConfig);
-    assertEquals(args.includes("--model"), false);
-  });
-
-  await t.step("effort 指定時に --effort を含むこと", () => {
-    const args = buildArgs("hello", baseConfig, { effort: "high" });
-    const idx = args.indexOf("--effort");
-    assertEquals(idx >= 0, true);
-    assertEquals(args[idx + 1], "high");
-  });
-
-  await t.step("effort 未指定時は --effort を含まないこと", () => {
-    const args = buildArgs("hello", baseConfig);
-    assertEquals(args.includes("--effort"), false);
+  await t.step("未指定は undefined になること", () => {
+    assertEquals(normalizeEffort(undefined), undefined);
+    assertEquals(normalizeEffort(""), undefined);
   });
 });
 
-Deno.test("buildHookSettings", async (t) => {
-  await t.step("正しい URL とタイムアウトの JSON を生成すること", () => {
-    const json = buildHookSettings(4000);
-    const parsed = JSON.parse(json);
-    assertEquals(
-      parsed.hooks.PreToolUse[0].hooks[0].url,
-      "http://127.0.0.1:4000/approval",
+Deno.test("buildQueryOptions", async (t) => {
+  const ac = new AbortController();
+
+  await t.step("settingSources に user / project を含むこと", () => {
+    const opts = buildQueryOptions(baseConfig, {}, ac);
+    assertEquals(opts.settingSources, ["user", "project"]);
+  });
+
+  await t.step("includePartialMessages が true であること", () => {
+    const opts = buildQueryOptions(baseConfig, {}, ac);
+    assertEquals(opts.includePartialMessages, true);
+  });
+
+  await t.step("cwd / maxTurns が config から設定されること", () => {
+    const opts = buildQueryOptions(baseConfig, {}, ac);
+    assertEquals(opts.cwd, "/workspace");
+    assertEquals(opts.maxTurns, 10);
+  });
+
+  await t.step("systemPrompt が claude_code preset であること", () => {
+    const sp = buildQueryOptions(baseConfig, {}, ac).systemPrompt;
+    if (typeof sp !== "object" || Array.isArray(sp)) {
+      throw new Error("systemPrompt is not a preset object");
+    }
+    assertEquals(sp.preset, "claude_code");
+    assertEquals(sp.append, undefined);
+  });
+
+  await t.step("appendSystemPrompt 指定時に append されること", () => {
+    const sp = buildQueryOptions(
+      baseConfig,
+      { appendSystemPrompt: "extra prompt" },
+      ac,
+    ).systemPrompt;
+    if (typeof sp !== "object" || Array.isArray(sp)) {
+      throw new Error("systemPrompt is not a preset object");
+    }
+    assertEquals(sp.append, "extra prompt");
+  });
+
+  await t.step("sessionId 指定時に resume が設定されること", () => {
+    const opts = buildQueryOptions(
+      baseConfig,
+      { sessionId: "session-123" },
+      ac,
     );
-    assertEquals(parsed.hooks.PreToolUse[0].hooks[0].type, "http");
-    assertEquals(parsed.hooks.PreToolUse[0].hooks[0].timeout, 300);
+    assertEquals(opts.resume, "session-123");
+  });
+
+  await t.step("sessionId 未指定時は resume を含まないこと", () => {
+    const opts = buildQueryOptions(baseConfig, {}, ac);
+    assertEquals(opts.resume, undefined);
+  });
+
+  await t.step("model / effort が設定されること", () => {
+    const opts = buildQueryOptions(
+      baseConfig,
+      { model: "opus", effort: "high" },
+      ac,
+    );
+    assertEquals(opts.model, "opus");
+    assertEquals(opts.effort, "high");
+  });
+
+  await t.step("非対応の effort は設定されないこと", () => {
+    const opts = buildQueryOptions(baseConfig, { effort: "ultra" }, ac);
+    assertEquals(opts.effort, undefined);
+  });
+
+  await t.step("canUseTool 指定時に設定されること", () => {
+    const opts = buildQueryOptions(
+      baseConfig,
+      {
+        canUseTool: () =>
+          Promise.resolve({ behavior: "allow", updatedInput: {} }),
+      },
+      ac,
+    );
+    assertEquals(typeof opts.canUseTool, "function");
   });
 });
 
-Deno.test("parseNdjsonStream", async (t) => {
-  await t.step("NDJSON 行を SDKMessage に変換すること", async () => {
-    const messages = [
-      { type: "system", subtype: "init", session_id: "sess-1" },
+Deno.test("askClaude", async (t) => {
+  await t.step("全イベントを yield すること", async () => {
+    const messages: SDKMessage[] = [
+      {
+        type: "system",
+        subtype: "init",
+        session_id: "sess-1",
+      } as SDKMessage,
       {
         type: "result",
         subtype: "success",
         result: "done",
         session_id: "sess-1",
         is_error: false,
-      },
+      } as SDKMessage,
     ];
 
-    const ndjson = messages.map((m) => JSON.stringify(m)).join("\n") + "\n";
-    const stream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(new TextEncoder().encode(ndjson));
-        controller.close();
-      },
-    });
-
     const collected: SDKMessage[] = [];
-    for await (const event of parseNdjsonStream(stream)) {
+    for await (
+      const event of askClaude("hello", {
+        config: baseConfig,
+        queryFn: mockQueryFn(messages),
+      })
+    ) {
       collected.push(event);
     }
 
@@ -138,284 +184,148 @@ Deno.test("parseNdjsonStream", async (t) => {
     assertEquals(collected[1].type, "result");
   });
 
-  await t.step("空行をスキップすること", async () => {
-    const line = JSON.stringify({
-      type: "result",
-      result: "ok",
-      session_id: "s",
-      is_error: false,
-    });
-    const ndjson = "\n" + line + "\n\n";
-    const stream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(new TextEncoder().encode(ndjson));
-        controller.close();
-      },
-    });
-
-    const collected: SDKMessage[] = [];
-    for await (const event of parseNdjsonStream(stream)) {
-      collected.push(event);
-    }
-
-    assertEquals(collected.length, 1);
-  });
-
-  await t.step("不正な JSON 行をスキップすること", async () => {
-    const valid = JSON.stringify({
-      type: "result",
-      result: "ok",
-      session_id: "s",
-      is_error: false,
-    });
-    const ndjson = "not json\n" + valid + "\n";
-    const stream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(new TextEncoder().encode(ndjson));
-        controller.close();
-      },
-    });
-
-    const collected: SDKMessage[] = [];
-    for await (const event of parseNdjsonStream(stream)) {
-      collected.push(event);
-    }
-
-    assertEquals(collected.length, 1);
-    assertEquals(collected[0].type, "result");
-  });
-});
-
-/**
- * モック CommandSpawner を生成する。
- */
-function mockSpawner(
-  lines: Record<string, unknown>[],
-  exitCode = 0,
-): CommandSpawner {
-  return () => ({
-    stdout: new ReadableStream<Uint8Array>({
-      start(controller) {
-        const encoder = new TextEncoder();
-        for (const line of lines) {
-          controller.enqueue(encoder.encode(JSON.stringify(line) + "\n"));
-        }
-        controller.close();
-      },
-    }),
-    stderr: Promise.resolve(""),
-    status: Promise.resolve({
-      success: exitCode === 0,
-      code: exitCode,
-      signal: null,
-    }),
-  });
-}
-
-Deno.test("askClaude", async (t) => {
-  await t.step("全イベントを yield すること", async () => {
-    const messages = [
-      { type: "system", subtype: "init", session_id: "sess-1" },
-      {
-        type: "tool_progress",
-        tool_use_id: "tu-1",
-        tool_name: "Bash",
-        parent_tool_use_id: null,
-        elapsed_time_seconds: 5,
-        session_id: "sess-1",
-      },
-      {
+  await t.step("queryFn に prompt と options が渡されること", async () => {
+    let capturedPrompt: unknown;
+    let capturedResume: string | undefined;
+    const queryFn = mockQueryFn(
+      [{
         type: "result",
         subtype: "success",
-        result: "done",
-        session_id: "sess-1",
+        result: "ok",
+        session_id: "s",
         is_error: false,
+      } as SDKMessage],
+      (params) => {
+        capturedPrompt = params.prompt;
+        capturedResume = params.options?.resume;
       },
-    ];
+    );
 
-    const collected: SDKMessage[] = [];
     for await (
-      const event of askClaude("hello", {
+      const _ of askClaude("hello", {
         config: baseConfig,
-        spawner: mockSpawner(messages),
+        sessionId: "prev-session",
+        queryFn,
       })
     ) {
-      collected.push(event);
+      void _;
     }
 
-    assertEquals(collected.length, 3);
-    assertEquals(collected[0].type, "system");
-    assertEquals(collected[1].type, "tool_progress");
-    assertEquals(collected[2].type, "result");
+    assertEquals(capturedPrompt, "hello");
+    assertEquals(capturedResume, "prev-session");
   });
 
-  await t.step("非ゼロ終了コードでエラーになること", async () => {
+  await t.step("queryFn の例外を診断付きで再 throw すること", async () => {
     await assertRejects(
       async () => {
         for await (
           const _ of askClaude("hello", {
             config: baseConfig,
-            spawner: mockSpawner([], 1),
+            queryFn: throwingQueryFn("boom"),
           })
         ) {
           void _;
         }
       },
       Error,
-      "exited with code 1",
+      "claude query failed: boom",
     );
   });
+});
 
-  await t.step(
-    "イベント未受信の非ゼロ終了で 'no output' ヒントが含まれること",
-    async () => {
-      await assertRejects(
-        async () => {
-          for await (
-            const _ of askClaude("hello", {
-              config: baseConfig,
-              spawner: mockSpawner([], 1),
-            })
-          ) {
-            void _;
-          }
-        },
-        Error,
-        "no output",
-      );
-    },
-  );
-
-  await t.step(
-    "result subtype がエラーの場合 reason に subtype が含まれること",
-    async () => {
-      await assertRejects(
-        async () => {
-          for await (
-            const _ of askClaude("hello", {
-              config: baseConfig,
-              spawner: mockSpawner(
-                [{
-                  type: "result",
-                  subtype: "error_max_turns",
-                  session_id: "s",
-                  is_error: true,
-                }],
-                1,
-              ),
-            })
-          ) {
-            void _;
-          }
-        },
-        Error,
-        "result subtype=error_max_turns",
-      );
-    },
-  );
-
-  await t.step("セッション ID が引数に渡されること", async () => {
-    let capturedArgs: string[] = [];
-    const inner = mockSpawner([
-      {
-        type: "result",
-        subtype: "success",
-        result: "ok",
-        session_id: "s",
-        is_error: false,
-      },
-    ]);
-    const spawner: CommandSpawner = (args, cwd, signal) => {
-      capturedArgs = args;
-      return inner(args, cwd, signal);
-    };
-
-    for await (
-      const _ of askClaude("hello", {
-        config: baseConfig,
-        sessionId: "prev-session",
-        spawner,
-      })
-    ) {
-      void _;
-    }
-
-    assertEquals(capturedArgs.includes("--resume"), true);
+Deno.test("extractResultText", async (t) => {
+  await t.step("result が文字列なら subtype を問わず返すこと", () => {
     assertEquals(
-      capturedArgs[capturedArgs.indexOf("--resume") + 1],
-      "prev-session",
+      extractResultText(
+        {
+          type: "result",
+          subtype: "success",
+          result: "応答テキスト",
+          session_id: "sess-1",
+          is_error: false,
+        } as unknown as SDKResultMessage,
+      ),
+      "応答テキスト",
+    );
+    // non-success でも result があれば採用する。
+    assertEquals(
+      extractResultText(
+        {
+          type: "result",
+          subtype: "error_max_turns",
+          result: "途中まで",
+          session_id: "sess-1",
+          is_error: true,
+        } as unknown as SDKResultMessage,
+      ),
+      "途中まで",
     );
   });
 
   await t.step(
-    "appendSystemPrompt が --append-system-prompt として渡されること",
-    async () => {
-      let capturedArgs: string[] = [];
-      const inner = mockSpawner([
-        {
-          type: "result",
-          subtype: "success",
-          result: "ok",
-          session_id: "s",
-          is_error: false,
-        },
-      ]);
-      const spawner: CommandSpawner = (args, cwd, signal) => {
-        capturedArgs = args;
-        return inner(args, cwd, signal);
-      };
-
-      for await (
-        const _ of askClaude("hello", {
-          config: baseConfig,
-          appendSystemPrompt: "extra prompt",
-          spawner,
-        })
-      ) {
-        void _;
-      }
-
-      const idx = capturedArgs.indexOf("--append-system-prompt");
-      assertEquals(idx >= 0, true);
-      assertEquals(capturedArgs[idx + 1], "extra prompt");
+    "result が無い場合は errors / subtype 付きで throw すること",
+    () => {
+      assertThrows(
+        () =>
+          extractResultText(
+            {
+              type: "result",
+              subtype: "error_max_turns",
+              session_id: "sess-1",
+              is_error: true,
+            } as unknown as SDKResultMessage,
+          ),
+        Error,
+        "claude returned error: error_max_turns",
+      );
     },
   );
+});
+
+Deno.test("extractTopLevelTextDelta", async (t) => {
+  await t.step("トップレベルの text_delta は差分テキストを返すこと", () => {
+    assertEquals(
+      extractTopLevelTextDelta(
+        {
+          type: "stream_event",
+          parent_tool_use_id: null,
+          event: {
+            type: "content_block_delta",
+            index: 0,
+            delta: { type: "text_delta", text: "あ" },
+          },
+        } as unknown as SDKMessage,
+      ),
+      "あ",
+    );
+  });
 
   await t.step(
-    "model / effort が --model / --effort として渡されること",
-    async () => {
-      let capturedArgs: string[] = [];
-      const inner = mockSpawner([
-        {
-          type: "result",
-          subtype: "success",
-          result: "ok",
-          session_id: "s",
-          is_error: false,
-        },
-      ]);
-      const spawner: CommandSpawner = (args, cwd, signal) => {
-        capturedArgs = args;
-        return inner(args, cwd, signal);
-      };
-
-      for await (
-        const _ of askClaude("hello", {
-          config: baseConfig,
-          model: "opus",
-          effort: "high",
-          spawner,
-        })
-      ) {
-        void _;
-      }
-
-      const m = capturedArgs.indexOf("--model");
-      assertEquals(m >= 0, true);
-      assertEquals(capturedArgs[m + 1], "opus");
-      const e = capturedArgs.indexOf("--effort");
-      assertEquals(e >= 0, true);
-      assertEquals(capturedArgs[e + 1], "high");
+    "サブエージェント (parent_tool_use_id あり) は undefined になること",
+    () => {
+      assertEquals(
+        extractTopLevelTextDelta(
+          {
+            type: "stream_event",
+            parent_tool_use_id: "tool-1",
+            event: {
+              type: "content_block_delta",
+              index: 0,
+              delta: { type: "text_delta", text: "あ" },
+            },
+          } as unknown as SDKMessage,
+        ),
+        undefined,
+      );
     },
   );
+
+  await t.step("text_delta 以外のイベントは undefined になること", () => {
+    assertEquals(
+      extractTopLevelTextDelta(
+        { type: "result", subtype: "success" } as unknown as SDKMessage,
+      ),
+      undefined,
+    );
+  });
 });

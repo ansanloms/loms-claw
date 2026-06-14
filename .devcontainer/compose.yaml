@@ -1,0 +1,12 @@
+# devcontainer 用オーバーライド。compose.yaml に重ねて使う。
+services:
+  bot:
+    # ソースツリーをイメージ焼き込み (/app) の上に重ねる。
+    # 編集が即コンテナに反映され、`deno task dev` の --watch が拾う。
+    # 相対パスは最初に指定した compose ファイルの場所 (リポジトリルート) 基準。
+    volumes:
+      - type: bind
+        source: .
+        target: /app
+    # 起動・停止は devcontainer が管理する (本番の自動再起動を無効化)。
+    restart: "no"

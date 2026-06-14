@@ -1,7 +1,9 @@
 import { assertEquals } from "@std/assert";
+import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { CronExecutor } from "./executor.ts";
 import type { CronJobDef } from "./types.ts";
 import { Store } from "../store/mod.ts";
+import type { QueryFn } from "../claude/mod.ts";
 import type { SystemPromptStore } from "../claude/system-prompt.ts";
 
 /**
@@ -79,34 +81,24 @@ function createMockSystemPromptStore(): SystemPromptStore {
   } as unknown as SystemPromptStore;
 }
 
-/** NDJSON ストリームを返すモック CommandSpawner。 */
-function mockSpawner(
-  lines: Record<string, unknown>[],
-  exitCode = 0,
-) {
-  return () => ({
-    stdout: new ReadableStream<Uint8Array>({
-      start(controller) {
-        const ndjson = lines.map((l) => JSON.stringify(l)).join("\n") + "\n";
-        controller.enqueue(new TextEncoder().encode(ndjson));
-        controller.close();
-      },
-    }),
-    stderr: Promise.resolve(""),
-    status: Promise.resolve({
-      success: exitCode === 0,
-      code: exitCode,
-      signal: null,
-    }),
-  });
+/** SDKMessage を順に yield するモック queryFn。 */
+function mockQueryFn(lines: Record<string, unknown>[]): QueryFn {
+  return (_params: Parameters<QueryFn>[0]) => {
+    async function* gen(): AsyncGenerator<SDKMessage> {
+      for (const line of lines) {
+        yield line as unknown as SDKMessage;
+      }
+    }
+    return gen() as unknown as ReturnType<QueryFn>;
+  };
 }
 
-/** askClaude が成功レスポンスを返す mockSpawner。 */
-function successSpawner(
+/** askClaude が成功レスポンスを返す mockQueryFn。 */
+function successQueryFn(
   result = "test result",
   sessionId = "test-session",
 ) {
-  return mockSpawner([{
+  return mockQueryFn([{
     type: "result",
     subtype: "success",
     result,
@@ -142,7 +134,7 @@ Deno.test("CronExecutor", async (t) => {
           {},
           manager as never,
           systemPrompts,
-          mockSpawner([]),
+          mockQueryFn([]),
         );
 
         const job: CronJobDef = {
@@ -179,7 +171,7 @@ Deno.test("CronExecutor", async (t) => {
           {},
           manager as never,
           systemPrompts,
-          mockSpawner([]),
+          mockQueryFn([]),
         );
 
         const job: CronJobDef = {
@@ -214,7 +206,7 @@ Deno.test("CronExecutor", async (t) => {
           {},
           manager as never,
           systemPrompts,
-          successSpawner(),
+          successQueryFn(),
         );
 
         const job: CronJobDef = {
@@ -245,7 +237,7 @@ Deno.test("CronExecutor", async (t) => {
           {},
           manager as never,
           systemPrompts,
-          successSpawner(),
+          successQueryFn(),
         );
 
         const job: CronJobDef = {
@@ -276,7 +268,7 @@ Deno.test("CronExecutor", async (t) => {
           {},
           manager as never,
           systemPrompts,
-          mockSpawner([]),
+          mockQueryFn([]),
         );
 
         const jobs: CronJobDef[] = [
@@ -305,7 +297,7 @@ Deno.test("CronExecutor", async (t) => {
           {},
           manager as never,
           systemPrompts,
-          mockSpawner([]),
+          mockQueryFn([]),
         );
 
         executor.start([
@@ -358,7 +350,7 @@ Deno.test("CronExecutor", async (t) => {
           {},
           manager as never,
           systemPrompts,
-          successSpawner(),
+          successQueryFn(),
         );
 
         const calledWith: string[] = [];
@@ -395,7 +387,7 @@ Deno.test("CronExecutor", async (t) => {
           {},
           manager as never,
           systemPrompts,
-          successSpawner(),
+          successQueryFn(),
         );
 
         const calledWith: string[] = [];
@@ -433,7 +425,7 @@ Deno.test("CronExecutor", async (t) => {
           {},
           manager as never,
           systemPrompts,
-          mockSpawner([]),
+          mockQueryFn([]),
         );
 
         const jobs: CronJobDef[] = [
@@ -468,7 +460,7 @@ Deno.test("CronExecutor", async (t) => {
           {},
           manager as never,
           systemPrompts,
-          successSpawner(),
+          successQueryFn(),
         );
 
         // setOnceCallback を呼ばない
@@ -504,7 +496,7 @@ Deno.test("CronExecutor", async (t) => {
           {},
           manager as never,
           systemPrompts,
-          successSpawner(),
+          successQueryFn(),
         );
 
         let runningDuringCallback = false;

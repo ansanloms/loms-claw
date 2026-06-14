@@ -1,32 +1,32 @@
 /**
  * 統合 HTTP サーバー。
  *
- * 承認フック（PreToolUse）、cron リロード、Discord REST API を
+ * cron リロード、Discord REST API、ログ取得を
  * Hono アプリケーションとして単一の Deno.serve() で提供する。
+ *
+ * ツール承認は SDK の `canUseTool` コールバックで in-process に処理するため、
+ * HTTP エンドポイントは持たない。
  */
 
 import { Hono } from "hono";
-import type { ApprovalManager } from "../approval/manager.ts";
 import type { ApiContext } from "./types.ts";
-import { createApprovalRoutes } from "./routes/approval.ts";
 import { createCronRoutes, type CronRouteContext } from "./routes/cron.ts";
 import { createDiscordRoutes } from "./routes/discord.ts";
 import { createLogsRoutes } from "./routes/logs.ts";
 import { createLogger } from "../logger.ts";
+import { getErrorMessage } from "../errors.ts";
 
 const log = createLogger("api-server");
 
 /**
  * 統合 HTTP サーバーを起動する。
  *
- * @param manager - 承認マネージャー。
  * @param discordCtx - Discord API コンテキスト。
  * @param port - リッスンポート。
  * @param cronCtx - cron ルートの依存関係コンテキスト。
  * @returns Deno.HttpServer インスタンス（shutdown() で停止可能）。
  */
 export function startApiServer(
-  manager: ApprovalManager,
   discordCtx: ApiContext,
   port: number,
   cronCtx?: CronRouteContext,
@@ -40,7 +40,6 @@ export function startApiServer(
   });
 
   // サブルートをマウント
-  app.route("/approval", createApprovalRoutes(manager));
   app.route("/cron", createCronRoutes(cronCtx));
   app.route("/discord", createDiscordRoutes(discordCtx));
   app.route("/logs", createLogsRoutes());
@@ -50,7 +49,7 @@ export function startApiServer(
 
   // 共通エラーハンドラ
   app.onError((err, c) => {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = getErrorMessage(err);
     log.error(`${c.req.method} ${c.req.path} error:`, msg);
     return c.json({ error: msg }, 500);
   });

@@ -1,0 +1,15 @@
+{
+  "name": "loms-claw",
+  "dockerComposeFile": ["../compose.yaml", "./compose.yaml"],
+  "service": "bot",
+  "workspaceFolder": "/app",
+  "overrideCommand": true,
+  "customizations": {
+    "vscode": {
+      "extensions": ["denoland.vscode-deno"],
+      "settings": {
+        "deno.enable": true
+      }
+    }
+  }
+}

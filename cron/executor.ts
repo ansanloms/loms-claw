@@ -10,15 +10,16 @@
 
 import type { Client, GuildTextBasedChannel } from "discord.js";
 import type { SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
-import { askClaude, type CommandSpawner } from "../claude/mod.ts";
+import { askClaude, extractResultText, type QueryFn } from "../claude/mod.ts";
 import type { ClaudeConfig, ClaudeDefaults } from "../config.ts";
 import type { Store } from "../store/mod.ts";
-import type { ApprovalManager } from "../approval/manager.ts";
+import { type ApprovalManager, createCanUseTool } from "../approval/manager.ts";
 import type { SystemPromptStore } from "../claude/system-prompt.ts";
 import { splitMessage } from "../bot/message.ts";
 import { createLogger } from "../logger.ts";
 import { CronScheduler } from "./scheduler.ts";
 import type { CronJobDef } from "./types.ts";
+import { getErrorMessage } from "../errors.ts";
 
 const log = createLogger("cron");
 
@@ -41,7 +42,7 @@ export class CronExecutor {
     private readonly defaults: ClaudeDefaults,
     private readonly approvalManager: ApprovalManager,
     private readonly systemPrompts: SystemPromptStore,
-    private readonly spawner?: CommandSpawner,
+    private readonly queryFn?: QueryFn,
   ) {
     this.scheduler = new CronScheduler((job) => this.runJob(job));
   }
@@ -128,22 +129,24 @@ export class CronExecutor {
       }
 
       const sessionKey = `cron:${job.name}`;
-      const sessionId = job.resumeSession
-        ? await this.store.getSession({ channelId: sessionKey })
-        : undefined;
 
-      // model / effort 解決順: frontmatter > channel 設定 > defaults
+      // session / model / effort は独立した KV 読みなので並列で取得する。
       // (cron はスレッドを持たないので channel スコープのみ)
-      const model = job.model ??
-        (job.channelId
-          ? await this.store.getModel({ channelId: job.channelId })
-          : undefined) ??
-        this.defaults.model;
-      const effort = job.effort ??
-        (job.channelId
-          ? await this.store.getEffort({ channelId: job.channelId })
-          : undefined) ??
-        this.defaults.effort;
+      const [sessionId, channelModel, channelEffort] = await Promise.all([
+        job.resumeSession
+          ? this.store.getSession({ channelId: sessionKey })
+          : Promise.resolve(undefined),
+        job.channelId
+          ? this.store.getModel({ channelId: job.channelId })
+          : Promise.resolve(undefined),
+        job.channelId
+          ? this.store.getEffort({ channelId: job.channelId })
+          : Promise.resolve(undefined),
+      ]);
+
+      // 解決順: frontmatter > channel 設定 > defaults
+      const model = job.model ?? channelModel ?? this.defaults.model;
+      const effort = job.effort ?? channelEffort ?? this.defaults.effort;
 
       // テンプレート変数はギルドレベルのみ（cron にはユーザー/チャンネルコンテキストが無い）
       const guild = this.client.guilds.cache.get(this.guildId);
@@ -171,7 +174,8 @@ export class CronExecutor {
         appendSystemPrompt,
         model,
         effort,
-        spawner: this.spawner,
+        canUseTool: createCanUseTool(this.approvalManager, job.channelId),
+        queryFn: this.queryFn,
       });
 
       let resultEvent: SDKResultMessage | undefined;
@@ -198,26 +202,19 @@ export class CronExecutor {
         throw new Error("claude stream ended without result event");
       }
 
-      if ("result" in resultEvent && typeof resultEvent.result === "string") {
-        // channelId 指定時のみ executor が投稿する
-        if (textChannel) {
-          const chunks = splitMessage(resultEvent.result);
-          for (const chunk of chunks) {
-            await textChannel.send(chunk);
-          }
+      const resultText = extractResultText(resultEvent);
+      // channelId 指定時のみ executor が投稿する
+      if (textChannel) {
+        for (const chunk of splitMessage(resultText)) {
+          await textChannel.send(chunk);
         }
-      } else {
-        const errors = "errors" in resultEvent
-          ? JSON.stringify(resultEvent.errors)
-          : resultEvent.subtype ?? "unknown error";
-        throw new Error(`claude returned error: ${errors}`);
       }
 
       log.info(`cron job "${job.name}" completed`);
     } catch (error: unknown) {
       // logger は Error の stack を自動で展開する。
       log.error(`cron job "${job.name}" failed:`, error);
-      const errMsg = error instanceof Error ? error.message : String(error);
+      const errMsg = getErrorMessage(error);
 
       // channelId 指定時かつチャンネル取得済みならエラーを通知
       if (textChannel) {
