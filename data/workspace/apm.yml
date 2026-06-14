@@ -4,14 +4,12 @@ description: APM project for claude-workspace
 author: ansanloms
 dependencies:
   apm:
-  - ansanloms/skills/library-docs
+  - ansanloms/skills/find-docs
   - ansanloms/skills/yamareco
+  - ansanloms/skills/discord
   - ansanloms/skills/jartic-traffic
   - ansanloms/skills/bluesky
   - ansanloms/skills/news-digest
   mcp: []
-devDependencies:
-  apm:
-  - mizchi/skills/meta/empirical-prompt-tuning#89c1b340
 includes: auto
 scripts: {}

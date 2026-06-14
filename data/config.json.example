@@ -6,7 +6,7 @@
     "userId": "",
     "activeChannelIds": []
   },
-  "storePath": ".claude/loms-claw.kv",
+  "storePath": "loms-claw.kv",
   "claude": {
     "maxTurns": 10,
     "verbose": true,
