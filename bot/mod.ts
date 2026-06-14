@@ -19,7 +19,11 @@ import {
 } from "discord.js";
 import type { SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { Config } from "../config.ts";
-import { askClaude } from "../claude/mod.ts";
+import {
+  askClaude,
+  extractResultText,
+  extractTopLevelTextDelta,
+} from "../claude/mod.ts";
 import type { Store, StoreScope } from "../store/mod.ts";
 import { ApprovalManager, createCanUseTool } from "../approval/manager.ts";
 import { command } from "./commands.ts";
@@ -500,20 +504,11 @@ export class DiscordBot {
       };
 
       for await (const event of stream) {
-        if (
-          event.type === "stream_event" &&
-          !event.parent_tool_use_id
-        ) {
-          const e = event.event;
-          if (
-            e.type === "content_block_delta" &&
-            "text" in e.delta &&
-            e.delta.type === "text_delta"
-          ) {
-            textBuffer += e.delta.text;
-            if (textBuffer.length >= FLUSH_THRESHOLD) {
-              await flushBuffer(false);
-            }
+        const delta = extractTopLevelTextDelta(event);
+        if (delta !== undefined) {
+          textBuffer += delta;
+          if (textBuffer.length >= FLUSH_THRESHOLD) {
+            await flushBuffer(false);
           }
         } else if (event.type === "result") {
           resultEvent = event;
@@ -539,17 +534,8 @@ export class DiscordBot {
         if (!resultEvent) {
           throw new Error("claude stream ended without result event");
         }
-        if (
-          "result" in resultEvent && typeof resultEvent.result === "string"
-        ) {
-          for (const chunk of splitMessage(resultEvent.result)) {
-            await channel.send(chunk);
-          }
-        } else {
-          const errorDetail = "errors" in resultEvent
-            ? JSON.stringify(resultEvent.errors)
-            : resultEvent.subtype ?? "unknown error";
-          throw new Error(`claude returned error: ${errorDetail}`);
+        for (const chunk of splitMessage(extractResultText(resultEvent))) {
+          await channel.send(chunk);
         }
       }
     } catch (error: unknown) {

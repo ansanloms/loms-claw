@@ -1,9 +1,14 @@
-import { assertEquals, assertRejects } from "@std/assert";
-import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+import { assertEquals, assertRejects, assertThrows } from "@std/assert";
+import type {
+  SDKMessage,
+  SDKResultMessage,
+} from "@anthropic-ai/claude-agent-sdk";
 import type { ClaudeConfig } from "../config.ts";
 import {
   askClaude,
   buildQueryOptions,
+  extractResultText,
+  extractTopLevelTextDelta,
   normalizeEffort,
   type QueryFn,
 } from "./mod.ts";
@@ -224,6 +229,103 @@ Deno.test("askClaude", async (t) => {
       },
       Error,
       "claude query failed: boom",
+    );
+  });
+});
+
+Deno.test("extractResultText", async (t) => {
+  await t.step("result が文字列なら subtype を問わず返すこと", () => {
+    assertEquals(
+      extractResultText(
+        {
+          type: "result",
+          subtype: "success",
+          result: "応答テキスト",
+          session_id: "sess-1",
+          is_error: false,
+        } as unknown as SDKResultMessage,
+      ),
+      "応答テキスト",
+    );
+    // non-success でも result があれば採用する。
+    assertEquals(
+      extractResultText(
+        {
+          type: "result",
+          subtype: "error_max_turns",
+          result: "途中まで",
+          session_id: "sess-1",
+          is_error: true,
+        } as unknown as SDKResultMessage,
+      ),
+      "途中まで",
+    );
+  });
+
+  await t.step(
+    "result が無い場合は errors / subtype 付きで throw すること",
+    () => {
+      assertThrows(
+        () =>
+          extractResultText(
+            {
+              type: "result",
+              subtype: "error_max_turns",
+              session_id: "sess-1",
+              is_error: true,
+            } as unknown as SDKResultMessage,
+          ),
+        Error,
+        "claude returned error: error_max_turns",
+      );
+    },
+  );
+});
+
+Deno.test("extractTopLevelTextDelta", async (t) => {
+  await t.step("トップレベルの text_delta は差分テキストを返すこと", () => {
+    assertEquals(
+      extractTopLevelTextDelta(
+        {
+          type: "stream_event",
+          parent_tool_use_id: null,
+          event: {
+            type: "content_block_delta",
+            index: 0,
+            delta: { type: "text_delta", text: "あ" },
+          },
+        } as unknown as SDKMessage,
+      ),
+      "あ",
+    );
+  });
+
+  await t.step(
+    "サブエージェント (parent_tool_use_id あり) は undefined になること",
+    () => {
+      assertEquals(
+        extractTopLevelTextDelta(
+          {
+            type: "stream_event",
+            parent_tool_use_id: "tool-1",
+            event: {
+              type: "content_block_delta",
+              index: 0,
+              delta: { type: "text_delta", text: "あ" },
+            },
+          } as unknown as SDKMessage,
+        ),
+        undefined,
+      );
+    },
+  );
+
+  await t.step("text_delta 以外のイベントは undefined になること", () => {
+    assertEquals(
+      extractTopLevelTextDelta(
+        { type: "result", subtype: "success" } as unknown as SDKMessage,
+      ),
+      undefined,
     );
   });
 });

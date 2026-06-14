@@ -141,7 +141,7 @@ api/routes/discord.ts      Discord REST API ルート + ハンドラ。discord.j
 api/routes/logs.ts         ログ取得ルート（GET /logs）。リングバッファからフィルタ付きで取得。
 api/types.ts               API 共通型（ApiContext）。
 voice/mod.ts           VoiceManager: VC 接続管理、STT→Agent SDK→TTS パイプライン、auto-join/leave。
-voice/adapter.ts       askClaudeForVoice(): askClaude() の SDKMessage ストリームからテキストを抽出するアダプタ。
+voice/adapter.ts       streamClaudeForVoice(): askClaude() の SDKMessage ストリームから text_delta を文単位で逐次 yield するアダプタ。
 voice/codec.ts         Opus デコード、PCM→WAV 変換、RMS 計算。
 voice/player.ts        VoicePlayer: TTS 合成キュー + AudioPlayer。文単位並列合成で体感遅延を最小化。
 voice/tones.ts         処理中・エラー通知トーンの PCM 生成（マリンバ風倍音合成）。
@@ -293,7 +293,7 @@ cron ジョブ用のシステムプロンプトは `.claude/system-prompt/CRON.m
 4. `message.cleanContent` からプロンプト抽出（bot mention を除去）
 5. `keepTyping()` で typing 開始
 6. `askClaude()` で Agent SDK の query() を実行し、`tool_progress` イベントで進捗表示
-7. `Store` にスコープ単位で session ID を保存（次回 `--resume` で継続。thread と channel の session は独立）
+7. `Store` にスコープ単位で session ID を保存（次回 `query()` の `options.resume` で継続。thread と channel の session は独立）
 8. `splitMessage()` で応答を分割送信
 
 ### スコープと設定の解決
@@ -319,7 +319,7 @@ cron ジョブ用のシステムプロンプトは `.claude/system-prompt/CRON.m
 4. thinking tone 開始
 5. `WhisperStt.transcribe()` で PCM → テキスト（whisper.cpp HTTP）
 6. 発話デバウンス（同一ユーザーの連続発話をマージ）
-7. `askClaudeForVoice()` で Agent SDK の query() を呼び出し、結果テキストを取得
+7. `streamClaudeForVoice()` で Agent SDK の query() を呼び出し、結果テキストを文単位で取得
 8. `SessionStore` にセッション ID 保存
 9. `VoicePlayer.speak()` でテキストを文単位に TTS 合成 → 音声再生
 10. ツール承認が必要な場合は VC テキストチャットに承認ボタンを表示（既存の ApprovalManager を利用）

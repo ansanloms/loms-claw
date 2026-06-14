@@ -10,7 +10,7 @@
 
 import type { Client, GuildTextBasedChannel } from "discord.js";
 import type { SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
-import { askClaude, type QueryFn } from "../claude/mod.ts";
+import { askClaude, extractResultText, type QueryFn } from "../claude/mod.ts";
 import type { ClaudeConfig, ClaudeDefaults } from "../config.ts";
 import type { Store } from "../store/mod.ts";
 import { type ApprovalManager, createCanUseTool } from "../approval/manager.ts";
@@ -129,22 +129,24 @@ export class CronExecutor {
       }
 
       const sessionKey = `cron:${job.name}`;
-      const sessionId = job.resumeSession
-        ? await this.store.getSession({ channelId: sessionKey })
-        : undefined;
 
-      // model / effort 解決順: frontmatter > channel 設定 > defaults
+      // session / model / effort は独立した KV 読みなので並列で取得する。
       // (cron はスレッドを持たないので channel スコープのみ)
-      const model = job.model ??
-        (job.channelId
-          ? await this.store.getModel({ channelId: job.channelId })
-          : undefined) ??
-        this.defaults.model;
-      const effort = job.effort ??
-        (job.channelId
-          ? await this.store.getEffort({ channelId: job.channelId })
-          : undefined) ??
-        this.defaults.effort;
+      const [sessionId, channelModel, channelEffort] = await Promise.all([
+        job.resumeSession
+          ? this.store.getSession({ channelId: sessionKey })
+          : Promise.resolve(undefined),
+        job.channelId
+          ? this.store.getModel({ channelId: job.channelId })
+          : Promise.resolve(undefined),
+        job.channelId
+          ? this.store.getEffort({ channelId: job.channelId })
+          : Promise.resolve(undefined),
+      ]);
+
+      // 解決順: frontmatter > channel 設定 > defaults
+      const model = job.model ?? channelModel ?? this.defaults.model;
+      const effort = job.effort ?? channelEffort ?? this.defaults.effort;
 
       // テンプレート変数はギルドレベルのみ（cron にはユーザー/チャンネルコンテキストが無い）
       const guild = this.client.guilds.cache.get(this.guildId);
@@ -200,19 +202,12 @@ export class CronExecutor {
         throw new Error("claude stream ended without result event");
       }
 
-      if ("result" in resultEvent && typeof resultEvent.result === "string") {
-        // channelId 指定時のみ executor が投稿する
-        if (textChannel) {
-          const chunks = splitMessage(resultEvent.result);
-          for (const chunk of chunks) {
-            await textChannel.send(chunk);
-          }
+      const resultText = extractResultText(resultEvent);
+      // channelId 指定時のみ executor が投稿する
+      if (textChannel) {
+        for (const chunk of splitMessage(resultText)) {
+          await textChannel.send(chunk);
         }
-      } else {
-        const errors = "errors" in resultEvent
-          ? JSON.stringify(resultEvent.errors)
-          : resultEvent.subtype ?? "unknown error";
-        throw new Error(`claude returned error: ${errors}`);
       }
 
       log.info(`cron job "${job.name}" completed`);

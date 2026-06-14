@@ -13,6 +13,7 @@ import {
   type Options,
   query,
   type SDKMessage,
+  type SDKResultMessage,
 } from "@anthropic-ai/claude-agent-sdk";
 import type { ClaudeConfig } from "../config.ts";
 import { createLogger } from "../logger.ts";
@@ -22,16 +23,18 @@ const log = createLogger("claude");
 
 /**
  * Agent SDK が対応する effort level。
+ *
+ * 値の一覧は {@link EFFORT_LEVELS} を単一ソースとし、型はそこから導出する。
  */
-export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max";
-
-const EFFORT_LEVELS: readonly EffortLevel[] = [
+export const EFFORT_LEVELS = [
   "low",
   "medium",
   "high",
   "xhigh",
   "max",
-];
+] as const;
+
+export type EffortLevel = (typeof EFFORT_LEVELS)[number];
 
 /**
  * `query()` 関数の型。テスト時のモック注入用。
@@ -70,6 +73,49 @@ export function normalizeEffort(effort?: string): EffortLevel | undefined {
     return effort as EffortLevel;
   }
   log.warn(`unsupported effort level ignored: ${effort}`);
+  return undefined;
+}
+
+/**
+ * result イベントから応答テキストを取り出す。
+ *
+ * `subtype` を問わず `result` フィールドが文字列として含まれていればそれを返す
+ * (`error_max_turns` 等でも result があれば採用する)。result が無い場合は
+ * `errors` または `subtype` から詳細を組み立てて throw する。
+ *
+ * 消費側 (chat / cron) で重複していた抽出ロジックを 1 箇所に集約する。
+ */
+export function extractResultText(event: SDKResultMessage): string {
+  if ("result" in event && typeof event.result === "string") {
+    return event.result;
+  }
+  const detail = "errors" in event
+    ? JSON.stringify(event.errors)
+    : event.subtype ?? "unknown error";
+  throw new Error(`claude returned error: ${detail}`);
+}
+
+/**
+ * SDKMessage がトップレベル (サブエージェント以外) の text_delta なら、
+ * その差分テキストを返す。それ以外のイベントは `undefined` を返す。
+ *
+ * `parent_tool_use_id` が falsy (null / undefined / 未設定) ならトップレベル。
+ * chat / voice のストリーミング処理で重複していた抽出ガードを共通化する。
+ */
+export function extractTopLevelTextDelta(
+  event: SDKMessage,
+): string | undefined {
+  if (event.type !== "stream_event" || event.parent_tool_use_id) {
+    return undefined;
+  }
+  const e = event.event;
+  if (
+    e.type === "content_block_delta" &&
+    "text" in e.delta &&
+    e.delta.type === "text_delta"
+  ) {
+    return e.delta.text;
+  }
   return undefined;
 }
 
