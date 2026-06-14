@@ -7,7 +7,10 @@
 
 import { Hono } from "hono";
 import { ChannelType, type Guild } from "discord.js";
+import type { FromSchema } from "json-schema-to-ts";
 import type { ApiContext } from "../types.ts";
+import { internalSchemas } from "../internal-schemas.ts";
+import { matchesSchema, schemaErrorOf } from "../validate.ts";
 import { createLogger } from "../../logger.ts";
 
 const log = createLogger("api-discord");
@@ -20,35 +23,46 @@ async function fetchGuild(ctx: ApiContext): Promise<Guild> {
 }
 
 /**
- * Discord がスレッドの自動アーカイブで許可している分単位の値。
- * ref: https://discord.com/developers/docs/resources/channel
+ * Discord UI と同じデフォルト (24h)。60 (1h) だと運用上短すぎるため、
+ * auto_archive_duration 省略時に補う。
  */
-const ALLOWED_AUTO_ARCHIVE_DURATIONS = [60, 1440, 4320, 10080] as const;
-type AutoArchiveDuration = typeof ALLOWED_AUTO_ARCHIVE_DURATIONS[number];
+const DEFAULT_AUTO_ARCHIVE_DURATION = 1440;
 
-/**
- * Discord UI と同じデフォルト (24h)。60 (1h) だと運用上短すぎるため。
- */
-const DEFAULT_AUTO_ARCHIVE_DURATION: AutoArchiveDuration = 1440;
+type ThreadCreateBody = FromSchema<typeof internalSchemas["RequestPostThread"]>;
 
 interface ParsedThreadCreateBody {
   name: string;
-  autoArchiveDuration: AutoArchiveDuration;
+  autoArchiveDuration: NonNullable<ThreadCreateBody["auto_archive_duration"]>;
   reason: string | undefined;
 }
 
-/**
- * Discord 側のスレッド名長さ制約 (1〜100 chars)。
- */
-const THREAD_NAME_MAX_LENGTH = 100;
+/** request body が RequestPostMessage スキーマに適合するかの型ガード。 */
+function isPostMessageBody(
+  value: unknown,
+): value is FromSchema<typeof internalSchemas["RequestPostMessage"]> {
+  return matchesSchema("RequestPostMessage", value);
+}
+
+/** request body が RequestPostReaction スキーマに適合するかの型ガード。 */
+function isPostReactionBody(
+  value: unknown,
+): value is FromSchema<typeof internalSchemas["RequestPostReaction"]> {
+  return matchesSchema("RequestPostReaction", value);
+}
+
+/** request body が RequestPostThread スキーマに適合するかの型ガード。 */
+function isThreadCreateBody(value: unknown): value is ThreadCreateBody {
+  return matchesSchema("RequestPostThread", value);
+}
 
 /**
- * スレッド作成 API の request body を検証する。
+ * スレッド作成 API の request body を docs/api の OpenAPI スキーマ
+ * (RequestPostThread) で構造検証し、正規化する。
+ * `channel.threads.create()` / `message.startThread()` 双方で使用する。
  *
- * 共通仕様 (`channel.threads.create()` / `message.startThread()` 双方で使用):
- *   - name: required, non-empty string (空白のみ不可、最大 100 chars)
- *   - auto_archive_duration: optional, 60 / 1440 / 4320 / 10080 のいずれか
- *   - reason: optional string (audit log 用)
+ * 型・長さ (1〜100)・auto_archive_duration の enum・余剰フィールド拒否は
+ * スキーマ検証が担う。空白のみの name 拒否と auto_archive_duration の既定値
+ * 補完は OpenAPI に表現できないためここに残す。
  */
 function parseThreadCreateBody(
   body: unknown,
@@ -56,49 +70,21 @@ function parseThreadCreateBody(
   ok: false;
   error: string;
 } {
-  if (typeof body !== "object" || body === null || Array.isArray(body)) {
-    return { ok: false, error: "request body must be a JSON object" };
+  if (!isThreadCreateBody(body)) {
+    return { ok: false, error: schemaErrorOf("RequestPostThread", body) };
   }
-  const b = body as Record<string, unknown>;
-
-  if (typeof b.name !== "string" || b.name.trim().length === 0) {
-    return { ok: false, error: "name is required (non-empty string)" };
-  }
-  if (b.name.length > THREAD_NAME_MAX_LENGTH) {
-    return {
-      ok: false,
-      error: `name must be ${THREAD_NAME_MAX_LENGTH} chars or less`,
-    };
-  }
-
-  let autoArchiveDuration: AutoArchiveDuration = DEFAULT_AUTO_ARCHIVE_DURATION;
-  if (b.auto_archive_duration !== undefined) {
-    const dur = b.auto_archive_duration;
-    if (
-      typeof dur !== "number" ||
-      !ALLOWED_AUTO_ARCHIVE_DURATIONS.includes(dur as AutoArchiveDuration)
-    ) {
-      return {
-        ok: false,
-        error: `auto_archive_duration must be one of ${
-          ALLOWED_AUTO_ARCHIVE_DURATIONS.join(", ")
-        }`,
-      };
-    }
-    autoArchiveDuration = dur as AutoArchiveDuration;
-  }
-
-  let reason: string | undefined;
-  if (b.reason !== undefined) {
-    if (typeof b.reason !== "string") {
-      return { ok: false, error: "reason must be a string" };
-    }
-    reason = b.reason;
+  if (body.name.trim().length === 0) {
+    return { ok: false, error: "name must not be blank" };
   }
 
   return {
     ok: true,
-    value: { name: b.name, autoArchiveDuration, reason },
+    value: {
+      name: body.name,
+      autoArchiveDuration: body.auto_archive_duration ??
+        DEFAULT_AUTO_ARCHIVE_DURATION,
+      reason: body.reason,
+    },
   };
 }
 
@@ -248,11 +234,11 @@ export function createDiscordRoutes(ctx: ApiContext) {
   app.post("/channels/:id/messages", async (c) => {
     const channelId = c.req.param("id");
     const body = await c.req.json();
-    const content = body?.content;
 
-    if (!content || typeof content !== "string") {
-      return c.json({ error: "content is required" }, 400);
+    if (!isPostMessageBody(body)) {
+      return c.json({ error: schemaErrorOf("RequestPostMessage", body) }, 400);
     }
+    const { content } = body;
 
     log.debug("sendMessage:", channelId, content.slice(0, 50));
     const channel = await fetchGuildTextChannel(ctx, channelId);
@@ -305,11 +291,11 @@ export function createDiscordRoutes(ctx: ApiContext) {
   app.post("/channels/:cid/messages/:mid/reactions", async (c) => {
     const { cid: channelId, mid: messageId } = c.req.param();
     const body = await c.req.json();
-    const emoji = body?.emoji;
 
-    if (!emoji || typeof emoji !== "string") {
-      return c.json({ error: "emoji is required" }, 400);
+    if (!isPostReactionBody(body)) {
+      return c.json({ error: schemaErrorOf("RequestPostReaction", body) }, 400);
     }
+    const { emoji } = body;
 
     log.debug("addReaction:", channelId, messageId, emoji);
     const channel = await fetchGuildTextChannel(ctx, channelId);

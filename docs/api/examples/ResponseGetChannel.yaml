@@ -1,0 +1,6 @@
+id: "1234567890123456789"
+type: GuildText
+name: general
+topic: 雑談用チャンネル
+parent_id: "1234567890123456000"
+nsfw: false

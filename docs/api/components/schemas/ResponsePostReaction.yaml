@@ -1,0 +1,12 @@
+type: object
+description: リアクション追加結果。
+required:
+  - message_id
+  - emoji
+properties:
+  message_id:
+    type: string
+    description: 対象メッセージ ID。
+  emoji:
+    type: string
+    description: 追加した絵文字。

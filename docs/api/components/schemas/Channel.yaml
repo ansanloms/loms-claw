@@ -1,0 +1,23 @@
+type: object
+description: Discord チャンネルの概要。
+required:
+  - id
+  - name
+  - type
+  - parent_id
+properties:
+  id:
+    type: string
+    description: チャンネル ID。
+  name:
+    type: string
+    description: チャンネル名。
+  type:
+    type: string
+    description: チャンネル種別。discord.js ChannelType のキー名。
+    example: GuildText
+  parent_id:
+    type:
+      - string
+      - "null"
+    description: 親カテゴリまたは親チャンネルの ID。無い場合は null。

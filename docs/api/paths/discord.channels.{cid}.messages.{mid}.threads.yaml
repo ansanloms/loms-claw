@@ -1,0 +1,60 @@
+post:
+  operationId: postDiscordMessageThread
+  summary: メッセージからの派生スレッド作成。
+  tags:
+    - discord
+  description: 指定したメッセージを起点に派生スレッドを作成する。親が既にスレッドの場合は作成できない。
+  parameters:
+    - in: path
+      name: cid
+      required: true
+      description: チャンネル ID。
+      schema:
+        type: string
+    - in: path
+      name: mid
+      required: true
+      description: 起点となるメッセージ ID。
+      schema:
+        type: string
+  requestBody:
+    description: スレッド情報。
+    content:
+      application/json:
+        schema:
+          $ref: ../components/schemas/RequestPostThread.yaml
+        examples:
+          normal:
+            value:
+              $ref: ../examples/RequestPostThread.yaml
+  responses:
+    200:
+      description: 処理成功時。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponsePostThread.yaml
+          examples:
+            succeeded:
+              value:
+                $ref: ../examples/ResponsePostThread.yaml
+    400:
+      description: name が不正、またはチャンネルがメッセージ・スレッドをサポートしない場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            badRequest:
+              value:
+                $ref: ../examples/ResponseError.yaml
+    500:
+      description: 処理失敗時。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            processingFailed:
+              value:
+                $ref: ../examples/ResponseError.yaml

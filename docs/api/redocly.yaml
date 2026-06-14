@@ -1,0 +1,17 @@
+extends:
+  - recommended-strict
+
+apis:
+  loms-claw:
+    root: ./api.yaml
+plugins:
+  - "./redocly/plugins/index.ts"
+rules:
+  info-license: off
+  no-invalid-media-type-examples: off
+  operation-2xx-response: off
+  operation-4xx-response: off
+  # 内部 API は 127.0.0.1 バインドの in-process 専用で認証機構を持たないため無効化する。
+  security-defined: off
+preprocessors:
+  ansanloms/inline-examples: on

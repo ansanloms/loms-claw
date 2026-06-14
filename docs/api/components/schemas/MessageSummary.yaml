@@ -1,0 +1,35 @@
+type: object
+description: メッセージ検索結果の 1 件。
+required:
+  - id
+  - author
+  - content
+  - created_at
+properties:
+  id:
+    type: string
+    description: メッセージ ID。
+  author:
+    type: object
+    description: 投稿者。
+    required:
+      - id
+      - username
+      - display_name
+    properties:
+      id:
+        type: string
+        description: 投稿者のユーザ ID。
+      username:
+        type: string
+        description: ユーザ名。
+      display_name:
+        type: string
+        description: 表示名。
+  content:
+    type: string
+    description: メッセージ本文。
+  created_at:
+    type: string
+    format: date-time
+    description: 投稿日時。ISO 8601 形式。

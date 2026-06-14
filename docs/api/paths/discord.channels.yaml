@@ -1,0 +1,42 @@
+get:
+  operationId: getDiscordChannels
+  summary: チャンネル一覧の取得。
+  tags:
+    - discord
+  description: ギルド内のチャンネル一覧を取得する。
+  parameters:
+    - in: query
+      name: type
+      required: false
+      description: チャンネル種別での絞り込み。既定は all。
+      schema:
+        type: string
+        enum:
+          - all
+          - text
+          - voice
+          - category
+        default: all
+  responses:
+    200:
+      description: 処理成功時。
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: ../components/schemas/Channel.yaml
+          examples:
+            succeeded:
+              value:
+                $ref: ../examples/ResponseGetChannels.yaml
+    500:
+      description: 処理失敗時。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            processingFailed:
+              value:
+                $ref: ../examples/ResponseError.yaml

@@ -1,0 +1,79 @@
+openapi: 3.1.0
+info:
+  version: 0.0.1
+  title: loms-claw Internal API
+  description:
+    $ref: ./README.md
+servers:
+  - url: http://127.0.0.1:3000
+    description: ローカルの in-process API サーバ (apiPort 既定値 3000)。
+tags:
+  - name: discord
+    description: discord.js Client 経由の Discord 操作 API。
+  - name: cron
+    description: cron ジョブの一覧取得・手動実行・再読み込み API。
+  - name: logs
+    description: メモリ上のリングバッファからのログ取得 API。
+paths:
+  /cron:
+    $ref: ./paths/cron.yaml
+  /cron/reload:
+    $ref: ./paths/cron.reload.yaml
+  /cron/run:
+    $ref: ./paths/cron.run.yaml
+  /discord/channels:
+    $ref: ./paths/discord.channels.yaml
+  /discord/channels/{cid}/messages/{mid}/reactions:
+    $ref: ./paths/discord.channels.{cid}.messages.{mid}.reactions.yaml
+  /discord/channels/{cid}/messages/{mid}/threads:
+    $ref: ./paths/discord.channels.{cid}.messages.{mid}.threads.yaml
+  /discord/channels/{id}:
+    $ref: ./paths/discord.channels.{id}.yaml
+  /discord/channels/{id}/messages:
+    $ref: ./paths/discord.channels.{id}.messages.yaml
+  /discord/channels/{id}/messages/{mid}:
+    $ref: ./paths/discord.channels.{id}.messages.{mid}.yaml
+  /discord/channels/{id}/threads:
+    $ref: ./paths/discord.channels.{id}.threads.yaml
+  /discord/members:
+    $ref: ./paths/discord.members.yaml
+  /logs:
+    $ref: ./paths/logs.yaml
+components:
+  schemas:
+    Channel:
+      $ref: ./components/schemas/Channel.yaml
+    ChannelDetail:
+      $ref: ./components/schemas/ChannelDetail.yaml
+    CronJob:
+      $ref: ./components/schemas/CronJob.yaml
+    LogEntry:
+      $ref: ./components/schemas/LogEntry.yaml
+    Member:
+      $ref: ./components/schemas/Member.yaml
+    Message:
+      $ref: ./components/schemas/Message.yaml
+    MessageSummary:
+      $ref: ./components/schemas/MessageSummary.yaml
+    RequestPostCronRun:
+      $ref: ./components/schemas/RequestPostCronRun.yaml
+    RequestPostMessage:
+      $ref: ./components/schemas/RequestPostMessage.yaml
+    RequestPostReaction:
+      $ref: ./components/schemas/RequestPostReaction.yaml
+    RequestPostThread:
+      $ref: ./components/schemas/RequestPostThread.yaml
+    ResponseError:
+      $ref: ./components/schemas/ResponseError.yaml
+    ResponseGetCron:
+      $ref: ./components/schemas/ResponseGetCron.yaml
+    ResponsePostCronReload:
+      $ref: ./components/schemas/ResponsePostCronReload.yaml
+    ResponsePostCronRun:
+      $ref: ./components/schemas/ResponsePostCronRun.yaml
+    ResponsePostMessage:
+      $ref: ./components/schemas/ResponsePostMessage.yaml
+    ResponsePostReaction:
+      $ref: ./components/schemas/ResponsePostReaction.yaml
+    ResponsePostThread:
+      $ref: ./components/schemas/ResponsePostThread.yaml

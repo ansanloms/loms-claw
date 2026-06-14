@@ -1,0 +1,63 @@
+get:
+  operationId: getLogs
+  summary: ログ取得。
+  tags:
+    - logs
+  description: メモリ上のリングバッファからログエントリを時系列順で取得する。
+  parameters:
+    - in: query
+      name: level
+      required: false
+      description: この重要度以上のエントリのみ返す。大文字小文字を区別しない。
+      schema:
+        type: string
+        enum:
+          - DEBUG
+          - INFO
+          - WARN
+          - ERROR
+    - in: query
+      name: namespace
+      required: false
+      description: 名前空間の前方一致フィルタ。
+      schema:
+        type: string
+    - in: query
+      name: since
+      required: false
+      description: この ISO 8601 タイムスタンプ以降のエントリのみ返す。
+      schema:
+        type: string
+        format: date-time
+    - in: query
+      name: limit
+      required: false
+      description: 最大取得件数。1 以上 1000 以下。既定は 100。
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 1000
+        default: 100
+  responses:
+    200:
+      description: 処理成功時。
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: ../components/schemas/LogEntry.yaml
+          examples:
+            succeeded:
+              value:
+                $ref: ../examples/ResponseGetLogs.yaml
+    400:
+      description: level / since / limit のいずれかが不正な場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            badRequest:
+              value:
+                $ref: ../examples/ResponseError.yaml

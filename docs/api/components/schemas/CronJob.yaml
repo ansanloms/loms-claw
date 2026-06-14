@@ -1,0 +1,19 @@
+type: object
+description: 登録済み cron ジョブ。
+required:
+  - name
+  - schedule
+properties:
+  name:
+    type: string
+    description: ジョブ名。ファイル名から決定する。
+  schedule:
+    type: string
+    description: cron 式。5 フィールド、TZ 環境変数に依存する。
+    example: 0 9 * * *
+  channelId:
+    type: string
+    description: 結果の自動投稿先チャンネル ID。未指定のジョブでは省略される。
+  once:
+    type: boolean
+    description: 1 回実行後にジョブファイルを自動削除するか。

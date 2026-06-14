@@ -1,0 +1,27 @@
+get:
+  operationId: getCron
+  summary: cron ジョブ一覧の取得。
+  tags:
+    - cron
+  description: 登録済みの cron ジョブ一覧を取得する。
+  responses:
+    200:
+      description: 処理成功時。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseGetCron.yaml
+          examples:
+            succeeded:
+              value:
+                $ref: ../examples/ResponseGetCron.yaml
+    503:
+      description: cron 機能が無効な場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            unavailable:
+              value:
+                $ref: ../examples/ResponseError.yaml

@@ -1,0 +1,67 @@
+post:
+  operationId: postCronRun
+  summary: cron ジョブの手動実行。
+  tags:
+    - cron
+  description: 名前を指定して登録済みジョブを即座に実行する。
+  requestBody:
+    description: 実行対象のジョブ名。
+    content:
+      application/json:
+        schema:
+          $ref: ../components/schemas/RequestPostCronRun.yaml
+        examples:
+          normal:
+            value:
+              $ref: ../examples/RequestPostCronRun.yaml
+  responses:
+    200:
+      description: 処理成功時。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponsePostCronRun.yaml
+          examples:
+            succeeded:
+              value:
+                $ref: ../examples/ResponsePostCronRun.yaml
+    400:
+      description: name が指定されていない場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            badRequest:
+              value:
+                $ref: ../examples/ResponseError.yaml
+    404:
+      description: 指定したジョブが存在しない場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            notFound:
+              value:
+                $ref: ../examples/ResponseError.yaml
+    500:
+      description: 処理失敗時。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            processingFailed:
+              value:
+                $ref: ../examples/ResponseError.yaml
+    503:
+      description: cron 機能が無効な場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            unavailable:
+              value:
+                $ref: ../examples/ResponseError.yaml

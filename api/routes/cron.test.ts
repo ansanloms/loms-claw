@@ -146,7 +146,10 @@ Deno.test("createCronRoutes", async (t) => {
 
     assertEquals(res.status, 400);
     const json = await res.json();
-    assertEquals(json.error, "name is required");
+    assertEquals(
+      json.error,
+      'Instance does not have required property "name".',
+    );
   });
 
   await t.step(

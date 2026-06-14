@@ -1,0 +1,54 @@
+post:
+  operationId: postDiscordChannelThread
+  summary: スレッド作成。
+  tags:
+    - discord
+  description: チャンネル直下にスレッドを作成する。
+  parameters:
+    - in: path
+      name: id
+      required: true
+      description: チャンネル ID。
+      schema:
+        type: string
+  requestBody:
+    description: スレッド情報。
+    content:
+      application/json:
+        schema:
+          $ref: ../components/schemas/RequestPostThread.yaml
+        examples:
+          normal:
+            value:
+              $ref: ../examples/RequestPostThread.yaml
+  responses:
+    200:
+      description: 処理成功時。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponsePostThread.yaml
+          examples:
+            succeeded:
+              value:
+                $ref: ../examples/ResponsePostThread.yaml
+    400:
+      description: name が不正、またはチャンネルがスレッドをサポートしない場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            badRequest:
+              value:
+                $ref: ../examples/ResponseError.yaml
+    500:
+      description: 処理失敗時。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            processingFailed:
+              value:
+                $ref: ../examples/ResponseError.yaml

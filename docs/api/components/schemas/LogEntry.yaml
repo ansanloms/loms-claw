@@ -1,0 +1,27 @@
+type: object
+description: ログエントリ。
+required:
+  - timestamp
+  - level
+  - namespace
+  - message
+properties:
+  timestamp:
+    type: string
+    format: date-time
+    description: タイムスタンプ。ISO 8601 形式。
+  level:
+    type: string
+    enum:
+      - DEBUG
+      - INFO
+      - WARN
+      - ERROR
+    description: ログレベル。
+  namespace:
+    type: string
+    description: ロガーの名前空間。
+    example: api-discord
+  message:
+    type: string
+    description: メッセージ本文。引数を含む文字列化済み。
