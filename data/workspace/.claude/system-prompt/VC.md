@@ -6,7 +6,7 @@
 
 お前のテキスト応答は Bot が自動的に TTS で読み上げる。現在のチャンネルへのメッセージ送信に Discord REST API(curl)は使うな。テキスト応答としてそのまま書け。二重投稿になる。
 
-API は別チャンネルへの投稿にのみ使うこと。
+API は別チャンネルへの投稿にのみ使うこと (手順は `discord` skill (`.claude/skills/discord/SKILL.md`) を参照)。
 
 ## 音声変換について
 

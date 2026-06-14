@@ -19,7 +19,6 @@ const baseConfig: ClaudeConfig = {
   verbose: false,
   timeout: 300000,
   cwd: "/workspace",
-  discordBotToken: "test-bot-token",
   apiPort: 3000,
   defaults: {},
 };

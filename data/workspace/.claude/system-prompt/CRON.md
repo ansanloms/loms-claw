@@ -14,14 +14,7 @@
 #### channelId なしの場合
 
 テキスト出力は Discord に投稿されない。
-Discord への投稿が必要な場合は、プロンプトの指示に従い Bash + curl で Discord REST API を使え。
-
-```bash
-curl -s -X POST "https://discord.com/api/v10/channels/{channel_id}/messages" \
-  -H "Authorization: Bot ${DISCORD_BOT_TOKEN}" \
-  -H 'Content-Type: application/json' \
-  -d '{"content": "メッセージ内容"}'
-```
+Discord への投稿が必要な場合は、`discord` skill（`.claude/skills/discord/SKILL.md`）の「メッセージ送信」の手順に従い、プロンプトが指定するチャンネルへ投稿する（トークンの扱いも skill に従う）。
 
 - 同じ内容を複数回投稿するな。
 - 投稿後に「送った」「投稿済み」などの報告文は不要。
