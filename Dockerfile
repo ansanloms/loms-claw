@@ -10,7 +10,7 @@ ENV LOMS_CLAW_CONFIG=/data/config.json
 
 RUN <<EOF
 	apt-get update
-	apt-get install -y --no-install-recommends ca-certificates curl git bubblewrap socat ffmpeg tzdata
+	apt-get install -y --no-install-recommends ca-certificates curl git jq bubblewrap socat ffmpeg tzdata
 	apt-get clean
 	rm -rf /var/lib/apt/lists/*
 EOF

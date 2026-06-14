@@ -19,7 +19,9 @@
       "Skill",
       "WebFetch",
       "Agent",
-      "Grep"
+      "Grep",
+      "mcp__claude_ai_Google_Calendar__create_event",
+      "mcp__claude_ai_Google_Calendar__update_event"
     ]
   }
 }

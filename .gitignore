@@ -1,6 +1,6 @@
 .env
 coverage/
-.claude/settings.local.json
+**/.claude/settings.local.json
 
 # 実行時データ (data/ 配下)。ワークスペースの共有資産のみ追跡する
 data/config.json

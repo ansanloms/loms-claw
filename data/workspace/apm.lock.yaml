@@ -1,0 +1,59 @@
+lockfile_version: '1'
+generated_at: '2026-06-02T15:53:57.459608+00:00'
+apm_version: 0.16.0
+dependencies:
+- repo_url: ansanloms/skills
+  host: github.com
+  resolved_commit: 644652644ddb8e2c4f50c0bc62c099fdfaa34963
+  virtual_path: bluesky
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .claude/skills/bluesky
+  content_hash: sha256:14c0240f28133dabac0aab5b0afc9009195f4e5bf3d45d05202c7ccd3ac70cb6
+- repo_url: ansanloms/skills
+  host: github.com
+  resolved_commit: 644652644ddb8e2c4f50c0bc62c099fdfaa34963
+  virtual_path: jartic-traffic
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .claude/skills/jartic-traffic
+  content_hash: sha256:909af724432709f23c38525e8360affc37290eab6082018f8701f655320d1c11
+- repo_url: ansanloms/skills
+  host: github.com
+  resolved_commit: 644652644ddb8e2c4f50c0bc62c099fdfaa34963
+  virtual_path: library-docs
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .claude/skills/library-docs
+  content_hash: sha256:78e82ec1be59c8c6b3f407b1f4c1deb77f7163623248c4a6ebd22332ed161d1a
+- repo_url: ansanloms/skills
+  host: github.com
+  resolved_commit: 644652644ddb8e2c4f50c0bc62c099fdfaa34963
+  virtual_path: yamareco
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .claude/skills/yamareco
+  content_hash: sha256:acb3541b4c6214c923930eb1285e867974612a7a0b3084b3afb613d42a849ccf
+- repo_url: ansanloms/skills
+  host: github.com
+  resolved_commit: 2234262f31a65d7e07a6b598ea5facda7105fdb6
+  virtual_path: news-digest
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .claude/skills/news-digest
+  content_hash: sha256:879e189c5c976bf15f6b26fcb93d5d1a40fa20395669b5585364df43db29ba74
+- repo_url: mizchi/skills
+  host: github.com
+  resolved_commit: 89c1b34018ba0d85a770c065ba22f83a8d004d34
+  resolved_ref: 89c1b340
+  virtual_path: meta/empirical-prompt-tuning
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .claude/skills/empirical-prompt-tuning
+  content_hash: sha256:0caa36857ba4e1f7193fa9ee3e22cac38d7e9787eda95e1726d4a39e40fb9479

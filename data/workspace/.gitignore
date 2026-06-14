@@ -1,0 +1,8 @@
+MEMORY.md
+TODO.md
+memory/*
+travel/*
+!TEMPLATE.md
+
+# APM dependencies
+apm_modules/
