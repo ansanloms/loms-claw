@@ -31,10 +31,16 @@ export interface ClaudeConfig {
   verbose: boolean;
   /** Claude 呼び出しのタイムアウト（ミリ秒）。`query()` の abort に使う。 */
   timeout: number;
-  /** 内部 API サーバーのポート（Discord REST API + cron + ログ）。 */
+  /** 内部 API サーバーのポート（cron + ログ）。 */
   apiPort: number;
   /** `query()` の作業ディレクトリ。実行時に `Deno.cwd()` が注入される。 */
   cwd: string;
+  /**
+   * Discord 公式 REST API を curl で直接叩くツール実行のため、bot トークンを
+   * `query()` の env (`DISCORD_BOT_TOKEN`) として渡す。実行時に `discord.token`
+   * が注入される。
+   */
+  discordBotToken: string;
   /** Claude のグローバルデフォルト (model / effort)。 */
   defaults: ClaudeDefaults;
 }
@@ -132,11 +138,12 @@ export interface Config {
 }
 
 /**
- * 設定ファイル（JSON）に書き込む shape。`claude.cwd` はプロセス由来なので
- * JSON からは取得せず、{@link loadConfig} が実行時に注入する。
+ * 設定ファイル（JSON）に書き込む shape。`claude.cwd` / `claude.discordBotToken`
+ * はプロセス由来・他セクション由来なので JSON の `claude` からは取得せず、
+ * {@link loadConfig} が実行時に注入する。
  */
 export interface ConfigFile extends Omit<Config, "claude"> {
-  claude: Omit<ClaudeConfig, "cwd">;
+  claude: Omit<ClaudeConfig, "cwd" | "discordBotToken">;
 }
 
 /**
@@ -176,6 +183,10 @@ export function loadConfig(): Config {
   };
   return {
     ...rest,
-    claude: { ...rest.claude, cwd: Deno.cwd() },
+    claude: {
+      ...rest.claude,
+      cwd: Deno.cwd(),
+      discordBotToken: rest.discord.token,
+    },
   };
 }

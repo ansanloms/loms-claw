@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/denoland/deno/refs/heads/main/cli/schemas/config-file.v1.json",
   "unstable": ["temporal", "kv"],
-  "exclude": ["data/", "coverage/"],
+  "exclude": ["data/", "coverage/", "docs/api", "api/internal-schemas.ts"],
   "fmt": {
     "proseWrap": "preserve"
   },
@@ -20,13 +20,17 @@
     "opusscript": "npm:opusscript@0.1.1",
     "@std/assert": "jsr:@std/assert@1.0.19",
     "ajv": "npm:ajv@8.20.0",
-    "@std/path": "jsr:@std/path@1.1.5"
+    "@std/path": "jsr:@std/path@1.1.5",
+    "@cfworker/json-schema": "npm:@cfworker/json-schema@4.1.1",
+    "json-schema-to-ts": "npm:json-schema-to-ts@3.1.1"
   },
   "tasks": {
     "start": "deno run --allow-env --allow-sys --allow-ffi --allow-read --allow-write --allow-net --allow-run main.ts",
     "dev": "deno run --allow-env --allow-sys --allow-ffi --allow-read --allow-write --allow-net --allow-run --watch main.ts",
     "test": "deno test --allow-env --allow-sys --allow-ffi --allow-read --allow-write --allow-net --allow-run --parallel --coverage=coverage && deno coverage coverage",
-    "check": "deno check **/*.ts",
+    "check": "deno check",
+    "generate": "deno task generate:internal",
+    "generate:internal": "deno task --cwd ./docs/api bundle:json && deno task --cwd ./docs/api emit-server-schemas ../../api/internal-schemas.ts",
     "lint": "deno lint && deno fmt --check",
     "fix": "deno lint --fix && deno fmt"
   }

@@ -1,0 +1,27 @@
+post:
+  operationId: postCronReload
+  summary: cron 定義の再読み込み。
+  tags:
+    - cron
+  description: cron ジョブ定義ファイルを再読み込みする。ジョブ定義の変更を反映する際に使う。
+  responses:
+    200:
+      description: 処理成功時。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponsePostCronReload.yaml
+          examples:
+            succeeded:
+              value:
+                $ref: ../examples/ResponsePostCronReload.yaml
+    503:
+      description: cron 再読み込み機能が無効な場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            unavailable:
+              value:
+                $ref: ../examples/ResponseError.yaml

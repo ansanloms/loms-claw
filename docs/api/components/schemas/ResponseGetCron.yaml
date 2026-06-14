@@ -1,0 +1,10 @@
+type: object
+description: 登録済み cron ジョブ一覧。
+required:
+  - jobs
+properties:
+  jobs:
+    type: array
+    description: ジョブ一覧。
+    items:
+      $ref: ./CronJob.yaml

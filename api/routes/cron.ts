@@ -5,7 +5,10 @@
  */
 
 import { Hono } from "hono";
+import type { FromSchema } from "json-schema-to-ts";
 import type { CronJobDef } from "../../cron/types.ts";
+import { internalSchemas } from "../internal-schemas.ts";
+import { matchesSchema, schemaErrorOf } from "../validate.ts";
 import { createLogger } from "../../logger.ts";
 
 const log = createLogger("api-cron");
@@ -20,6 +23,13 @@ export interface CronRouteContext {
   runJob?: (name: string) => Promise<void>;
   /** 登録済みジョブ一覧を返す。 */
   listJobs?: () => CronJobDef[];
+}
+
+/** request body が RequestPostCronRun スキーマに適合するかの型ガード。 */
+function isCronRunBody(
+  value: unknown,
+): value is FromSchema<typeof internalSchemas["RequestPostCronRun"]> {
+  return matchesSchema("RequestPostCronRun", value);
 }
 
 /**
@@ -48,10 +58,10 @@ export function createCronRoutes(ctx: CronRouteContext = {}) {
       return c.json({ error: "cron not available" }, 503);
     }
     const body = await c.req.json();
-    const name = body?.name;
-    if (!name || typeof name !== "string") {
-      return c.json({ error: "name is required" }, 400);
+    if (!isCronRunBody(body)) {
+      return c.json({ error: schemaErrorOf("RequestPostCronRun", body) }, 400);
     }
+    const { name } = body;
     try {
       log.debug(`manual run: ${name}`);
       await ctx.runJob(name);

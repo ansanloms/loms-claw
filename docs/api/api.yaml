@@ -1,0 +1,39 @@
+openapi: 3.1.0
+info:
+  version: 0.0.1
+  title: loms-claw Internal API
+  description:
+    $ref: ./README.md
+servers:
+  - url: http://127.0.0.1:3000
+    description: ローカルの in-process API サーバ (apiPort 既定値 3000)。
+tags:
+  - name: cron
+    description: cron ジョブの一覧取得・手動実行・再読み込み API。
+  - name: logs
+    description: メモリ上のリングバッファからのログ取得 API。
+paths:
+  /cron:
+    $ref: ./paths/cron.yaml
+  /cron/reload:
+    $ref: ./paths/cron.reload.yaml
+  /cron/run:
+    $ref: ./paths/cron.run.yaml
+  /logs:
+    $ref: ./paths/logs.yaml
+components:
+  schemas:
+    CronJob:
+      $ref: ./components/schemas/CronJob.yaml
+    LogEntry:
+      $ref: ./components/schemas/LogEntry.yaml
+    RequestPostCronRun:
+      $ref: ./components/schemas/RequestPostCronRun.yaml
+    ResponseError:
+      $ref: ./components/schemas/ResponseError.yaml
+    ResponseGetCron:
+      $ref: ./components/schemas/ResponseGetCron.yaml
+    ResponsePostCronReload:
+      $ref: ./components/schemas/ResponsePostCronReload.yaml
+    ResponsePostCronRun:
+      $ref: ./components/schemas/ResponsePostCronRun.yaml

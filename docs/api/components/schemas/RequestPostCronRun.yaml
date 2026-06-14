@@ -1,0 +1,10 @@
+type: object
+description: cron ジョブ手動実行リクエスト。
+additionalProperties: false
+required:
+  - name
+properties:
+  name:
+    type: string
+    minLength: 1
+    description: 実行するジョブ名。

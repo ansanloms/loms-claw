@@ -1,0 +1,8 @@
+type: object
+description: エラー応答。Hono の onError および各ハンドラが application/json で返す。
+required:
+  - error
+properties:
+  error:
+    type: string
+    description: エラーメッセージ。

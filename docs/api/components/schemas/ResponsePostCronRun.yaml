@@ -1,0 +1,12 @@
+type: object
+description: cron ジョブ手動実行結果。
+required:
+  - ok
+  - name
+properties:
+  ok:
+    type: boolean
+    description: 実行を受け付けたか。
+  name:
+    type: string
+    description: 実行したジョブ名。

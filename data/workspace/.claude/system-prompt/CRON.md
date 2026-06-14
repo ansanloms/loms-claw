@@ -17,7 +17,8 @@
 Discord への投稿が必要な場合は、プロンプトの指示に従い Bash + curl で Discord REST API を使え。
 
 ```bash
-curl -s -X POST http://127.0.0.1:3000/discord/channels/{channel_id}/messages \
+curl -s -X POST "https://discord.com/api/v10/channels/{channel_id}/messages" \
+  -H "Authorization: Bot ${DISCORD_BOT_TOKEN}" \
   -H 'Content-Type: application/json' \
   -d '{"content": "メッセージ内容"}'
 ```

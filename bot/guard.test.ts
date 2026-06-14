@@ -15,6 +15,7 @@ const baseConfig: Config = {
     verbose: false,
     timeout: 300000,
     cwd: "/tmp",
+    discordBotToken: "test-bot-token",
     apiPort: 3000,
     defaults: {},
   },
