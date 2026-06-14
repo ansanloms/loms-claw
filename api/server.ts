@@ -1,17 +1,16 @@
 /**
  * 統合 HTTP サーバー。
  *
- * cron リロード、Discord REST API、ログ取得を
- * Hono アプリケーションとして単一の Deno.serve() で提供する。
+ * cron リロードとログ取得を Hono アプリケーションとして
+ * 単一の Deno.serve() で提供する。
  *
- * ツール承認は SDK の `canUseTool` コールバックで in-process に処理するため、
- * HTTP エンドポイントは持たない。
+ * Discord の操作は Claude が公式 REST API を curl で直接叩くため、
+ * このサーバーは Discord 用のエンドポイントを持たない。
+ * ツール承認は SDK の `canUseTool` コールバックで in-process に処理する。
  */
 
 import { Hono } from "hono";
-import type { ApiContext } from "./types.ts";
 import { createCronRoutes, type CronRouteContext } from "./routes/cron.ts";
-import { createDiscordRoutes } from "./routes/discord.ts";
 import { createLogsRoutes } from "./routes/logs.ts";
 import { createLogger } from "../logger.ts";
 import { getErrorMessage } from "../errors.ts";
@@ -21,13 +20,11 @@ const log = createLogger("api-server");
 /**
  * 統合 HTTP サーバーを起動する。
  *
- * @param discordCtx - Discord API コンテキスト。
  * @param port - リッスンポート。
  * @param cronCtx - cron ルートの依存関係コンテキスト。
  * @returns Deno.HttpServer インスタンス（shutdown() で停止可能）。
  */
 export function startApiServer(
-  discordCtx: ApiContext,
   port: number,
   cronCtx?: CronRouteContext,
 ): Deno.HttpServer {
@@ -41,7 +38,6 @@ export function startApiServer(
 
   // サブルートをマウント
   app.route("/cron", createCronRoutes(cronCtx));
-  app.route("/discord", createDiscordRoutes(discordCtx));
   app.route("/logs", createLogsRoutes());
 
   // 未定義パスへのアクセス

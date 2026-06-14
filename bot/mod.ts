@@ -189,18 +189,15 @@ export class DiscordBot {
           await this.cronExecutor!.runJob(job);
         };
 
-        // 統合 API サーバーを起動する（承認フック + Discord REST API + cron）。
-        const discordCtx = {
-          client: this.client,
-          guildId: this.config.discord.guildId,
-        };
+        // 統合 API サーバーを起動する（cron リロード + ログ取得）。
+        // Discord 操作は Claude が公式 REST API を curl で直接叩くため、
+        // ここでは Discord 用ルートを提供しない。
         const cronCtx: CronRouteContext = {
           reloadCronJobs: reloadJobs,
           runJob: runJobByName,
           listJobs: () => this.cronExecutor!.listJobs(),
         };
         this.apiServer = startApiServer(
-          discordCtx,
           this.config.claude.apiPort,
           cronCtx,
         );

@@ -143,6 +143,10 @@ export function buildQueryOptions(
     settingSources: ["user", "project"],
     // 消費側が stream_event (text_delta) を受け取るために必要。
     includePartialMessages: true,
+    // Discord 公式 REST API を curl で直接叩くツール実行のため、bot トークンを
+    // env (DISCORD_BOT_TOKEN) として渡す。SDK は env を指定すると process.env を
+    // 継承しない (CLAUDE_CONFIG_DIR 等が失われる) ため、既存 env を spread する。
+    env: { ...Deno.env.toObject(), DISCORD_BOT_TOKEN: config.discordBotToken },
     systemPrompt: {
       type: "preset",
       preset: "claude_code",
