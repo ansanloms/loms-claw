@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/denoland/deno/refs/heads/main/cli/schemas/config-file.v1.json",
   "unstable": ["temporal", "kv"],
-  "exclude": ["data/", "coverage/", "docs/", "api/internal-schemas.ts"],
+  "exclude": ["data/", "coverage/", "docs/api", "api/internal-schemas.ts"],
   "fmt": {
     "proseWrap": "preserve"
   },
@@ -28,7 +28,7 @@
     "start": "deno run --allow-env --allow-sys --allow-ffi --allow-read --allow-write --allow-net --allow-run main.ts",
     "dev": "deno run --allow-env --allow-sys --allow-ffi --allow-read --allow-write --allow-net --allow-run --watch main.ts",
     "test": "deno test --allow-env --allow-sys --allow-ffi --allow-read --allow-write --allow-net --allow-run --parallel --coverage=coverage && deno coverage coverage",
-    "check": "deno check **/*.ts",
+    "check": "deno check",
     "generate": "deno task generate:internal",
     "generate:internal": "deno task --cwd ./docs/api bundle:json && deno task --cwd ./docs/api emit-server-schemas ../../api/internal-schemas.ts",
     "lint": "deno lint && deno fmt --check",
