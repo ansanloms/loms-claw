@@ -405,6 +405,20 @@ export class DiscordBot {
     const progress = createProgressReporter(channel);
     let downloadedImages: DownloadedImage[] = [];
 
+    // 応答は発言者宛にする: 最初の 1 通だけ先頭にメンションを付け、以降の
+    // チャンクは通常送信する（毎チャンクで発言者に通知が飛ぶのを防ぐ）。
+    // メンションは分割前のテキスト先頭に付けてから splitMessage に渡す。
+    // 先頭チャンクが上限ぎりぎりでもメンション分が溢れないようにするため。
+    const mention = `<@${message.author.id}> `;
+    let mentioned = false;
+    const sendChunks = async (text: string): Promise<void> => {
+      const body = mentioned ? text : mention + text;
+      mentioned = true;
+      for (const chunk of splitMessage(body)) {
+        await channel.send(chunk);
+      }
+    };
+
     try {
       // 画像添付をダウンロード（画像フィルタは downloadImageAttachments 内で行う）
       if (hasAttachments) {
@@ -473,9 +487,7 @@ export class DiscordBot {
           textBuffer = "";
           if (text) {
             hasStreamedText = true;
-            for (const chunk of splitMessage(text)) {
-              await channel.send(chunk);
-            }
+            await sendChunks(text);
           }
           return;
         }
@@ -498,9 +510,7 @@ export class DiscordBot {
           return;
         }
         hasStreamedText = true;
-        for (const chunk of splitMessage(send)) {
-          await channel.send(chunk);
-        }
+        await sendChunks(send);
       };
 
       for await (const event of stream) {
@@ -534,15 +544,14 @@ export class DiscordBot {
         if (!resultEvent) {
           throw new Error("claude stream ended without result event");
         }
-        for (const chunk of splitMessage(extractResultText(resultEvent))) {
-          await channel.send(chunk);
-        }
+        await sendChunks(extractResultText(resultEvent));
       }
     } catch (error: unknown) {
       // logger は Error の stack を自動で展開する。
       log.error("failed to process message:", error);
       const errMsg = getErrorMessage(error);
-      await channel.send(`Error: ${errMsg}`).catch(() => {});
+      // エラーもまだ何も送っていなければ発言者宛にする（content 送出済みなら継続扱い）。
+      await sendChunks(`Error: ${errMsg}`).catch(() => {});
     } finally {
       if (downloadedImages.length > 0) {
         await cleanupImageFiles(downloadedImages);
