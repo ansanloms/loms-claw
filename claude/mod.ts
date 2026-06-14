@@ -61,6 +61,20 @@ export interface ClaudeCallOptions {
 }
 
 /**
+ * エラーメッセージが「resume 先のセッションが存在しない」ことを示すか判定する。
+ *
+ * `resume` に渡した session ID が Claude 側の会話履歴に無い場合、SDK は
+ * `No conversation found with session ID: <uuid>` というメッセージで throw する。
+ * KV に古い session ID が残ったまま該当セッションが消えている状況で発生する。
+ *
+ * この判定が真のとき、{@link askClaude} は resume を外して新規セッションで
+ * 一度だけやり直す。
+ */
+export function isSessionNotFoundError(message: string): boolean {
+  return message.includes("No conversation found with session ID");
+}
+
+/**
  * effort 値を検証し、SDK 対応の値のみ返す。
  *
  * 非対応の値は警告ログを出して `undefined` を返す。
@@ -201,26 +215,65 @@ export async function* askClaude(
     }
   }
 
-  const queryOptions = buildQueryOptions(config, callOpts, abortController);
+  // resume 先のセッションが存在しない場合、resume を外して新規セッションで
+  // 一度だけやり直す。stale な session ID が KV に残ったまま Claude 側の会話が
+  // 消えているケースを救済する (新しい session_id は呼び出し元が result イベント
+  // から保存し直す)。
+  let sessionId = callOpts.sessionId;
+  let retriedWithoutSession = false;
 
-  log.debug("starting query:", {
-    sessionId: callOpts.sessionId,
-    model: callOpts.model,
-    effort: queryOptions.effort,
-  });
+  while (true) {
+    const queryOptions = buildQueryOptions(
+      config,
+      { ...callOpts, sessionId },
+      abortController,
+    );
 
-  // エラー時の診断のため、受信したイベント type 列と最後のイベントを保持する。
-  const eventTypes: string[] = [];
-  let lastEvent: SDKMessage | undefined;
+    log.debug("starting query:", {
+      sessionId,
+      model: callOpts.model,
+      effort: queryOptions.effort,
+    });
 
-  try {
-    for await (const message of queryFn({ prompt, options: queryOptions })) {
-      eventTypes.push(message.type);
-      lastEvent = message;
-      yield message;
+    // エラー時の診断のため、受信したイベント type 列と最後のイベントを保持する。
+    const eventTypes: string[] = [];
+    let lastEvent: SDKMessage | undefined;
+    let caught: unknown;
+
+    try {
+      for await (const message of queryFn({ prompt, options: queryOptions })) {
+        eventTypes.push(message.type);
+        lastEvent = message;
+        yield message;
+      }
+    } catch (error: unknown) {
+      caught = error;
     }
-  } catch (error: unknown) {
-    const reason = getErrorMessage(error);
+
+    if (caught === undefined) {
+      log.info("claude stream completed");
+      return;
+    }
+
+    const reason = getErrorMessage(caught);
+
+    // resume 先のセッションが見つからない場合のみ、新規セッションで再試行する。
+    // このエラーは query 起動時 (まだ何も yield していない時点) に発生するため、
+    // 既に何か yield 済みなら再試行しない (下流の二重出力を防ぐ)。
+    if (
+      sessionId !== undefined &&
+      !retriedWithoutSession &&
+      eventTypes.length === 0 &&
+      isSessionNotFoundError(reason)
+    ) {
+      log.warn(
+        `session ${sessionId} not found, retrying with a new session`,
+      );
+      sessionId = undefined;
+      retriedWithoutSession = true;
+      continue;
+    }
+
     const parts: string[] = [
       `claude query failed: ${reason}`,
       eventTypes.length > 0
@@ -233,6 +286,4 @@ export async function* askClaude(
     log.error(parts.join("\n"));
     throw new Error(`claude query failed: ${reason}`);
   }
-
-  log.info("claude stream completed");
 }

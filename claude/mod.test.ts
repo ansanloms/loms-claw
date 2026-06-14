@@ -9,6 +9,7 @@ import {
   buildQueryOptions,
   extractResultText,
   extractTopLevelTextDelta,
+  isSessionNotFoundError,
   normalizeEffort,
   type QueryFn,
 } from "./mod.ts";
@@ -50,6 +51,55 @@ function throwingQueryFn(message: string): QueryFn {
   return (_params: Parameters<QueryFn>[0]): ReturnType<QueryFn> => {
     throw new Error(message);
   };
+}
+
+/**
+ * 呼び出し毎に挙動を切り替えるモック queryFn を生成する。
+ *
+ * 各呼び出しの `behavior` は以下のいずれか:
+ *   - `{ throw }`            : 起動時に同期 throw (何も yield しない)
+ *   - `{ messages }`         : messages を順に yield
+ *   - `{ messages, throw }`  : messages を yield した後に throw
+ *
+ * 各呼び出しの `resume` を `captureResume` で記録できる。再試行時に resume が
+ * 外れていることの検証に使う。
+ */
+function sequencedQueryFn(
+  behaviors: Array<{ messages?: SDKMessage[]; throw?: string }>,
+  captureResume?: (resume: string | undefined, callIndex: number) => void,
+): QueryFn {
+  let call = 0;
+  return (params: Parameters<QueryFn>[0]): ReturnType<QueryFn> => {
+    const idx = call++;
+    captureResume?.(params.options?.resume, idx);
+    const behavior = behaviors[idx];
+    if (behavior === undefined) {
+      throw new Error(`unexpected query call #${idx}`);
+    }
+    const { messages = [], throw: throwMessage } = behavior;
+    async function* gen(): AsyncGenerator<SDKMessage> {
+      for (const m of messages) {
+        yield m;
+      }
+      if (throwMessage !== undefined) {
+        throw new Error(throwMessage);
+      }
+    }
+    return gen() as unknown as ReturnType<QueryFn>;
+  };
+}
+
+const SESSION_NOT_FOUND =
+  "Claude Code returned an error result: No conversation found with session ID: stale-session";
+
+function resultMessage(sessionId: string): SDKMessage {
+  return {
+    type: "result",
+    subtype: "success",
+    result: "ok",
+    session_id: sessionId,
+    is_error: false,
+  } as SDKMessage;
 }
 
 Deno.test("normalizeEffort", async (t) => {
@@ -230,6 +280,152 @@ Deno.test("askClaude", async (t) => {
       Error,
       "claude query failed: boom",
     );
+  });
+
+  await t.step(
+    "resume 先セッションが存在しない場合は resume を外して新規セッションで再試行すること",
+    async () => {
+      const resumes: Array<string | undefined> = [];
+      const queryFn = sequencedQueryFn(
+        [
+          { throw: SESSION_NOT_FOUND },
+          { messages: [resultMessage("new-session")] },
+        ],
+        (resume) => resumes.push(resume),
+      );
+
+      const collected: SDKMessage[] = [];
+      for await (
+        const event of askClaude("hello", {
+          config: baseConfig,
+          sessionId: "stale-session",
+          queryFn,
+        })
+      ) {
+        collected.push(event);
+      }
+
+      // 1 回目は resume あり、2 回目 (再試行) は resume 無し
+      assertEquals(resumes, ["stale-session", undefined]);
+      // 再試行側の result イベントが yield されること
+      assertEquals(collected.length, 1);
+      assertEquals(collected[0].type, "result");
+    },
+  );
+
+  await t.step(
+    "再試行は 1 回限りで、再び失敗すれば throw すること",
+    async () => {
+      let calls = 0;
+      const queryFn = sequencedQueryFn(
+        [
+          { throw: SESSION_NOT_FOUND },
+          { throw: SESSION_NOT_FOUND },
+        ],
+        () => calls++,
+      );
+
+      await assertRejects(
+        async () => {
+          for await (
+            const _ of askClaude("hello", {
+              config: baseConfig,
+              sessionId: "stale-session",
+              queryFn,
+            })
+          ) {
+            void _;
+          }
+        },
+        Error,
+        "claude query failed:",
+      );
+      // 初回 + 再試行の 2 回で打ち切られること
+      assertEquals(calls, 2);
+    },
+  );
+
+  await t.step(
+    "session-not-found 以外のエラーでは再試行しないこと",
+    async () => {
+      let calls = 0;
+      const queryFn = sequencedQueryFn([{ throw: "boom" }], () => calls++);
+
+      await assertRejects(
+        async () => {
+          for await (
+            const _ of askClaude("hello", {
+              config: baseConfig,
+              sessionId: "stale-session",
+              queryFn,
+            })
+          ) {
+            void _;
+          }
+        },
+        Error,
+        "claude query failed: boom",
+      );
+      assertEquals(calls, 1);
+    },
+  );
+
+  await t.step(
+    "既に yield 済みなら session-not-found でも再試行しないこと",
+    async () => {
+      let calls = 0;
+      const queryFn = sequencedQueryFn(
+        [
+          {
+            messages: [
+              {
+                type: "system",
+                subtype: "init",
+                session_id: "s",
+              } as SDKMessage,
+            ],
+            throw: SESSION_NOT_FOUND,
+          },
+        ],
+        () => calls++,
+      );
+
+      const collected: SDKMessage[] = [];
+      await assertRejects(
+        async () => {
+          for await (
+            const event of askClaude("hello", {
+              config: baseConfig,
+              sessionId: "stale-session",
+              queryFn,
+            })
+          ) {
+            collected.push(event);
+          }
+        },
+        Error,
+        "claude query failed:",
+      );
+      // yield 済みのイベントは消費側に届いた上で throw、再試行はしない
+      assertEquals(collected.length, 1);
+      assertEquals(calls, 1);
+    },
+  );
+});
+
+Deno.test("isSessionNotFoundError", async (t) => {
+  await t.step("session 不在メッセージを検出すること", () => {
+    assertEquals(
+      isSessionNotFoundError(
+        "Claude Code returned an error result: No conversation found with session ID: abc",
+      ),
+      true,
+    );
+  });
+
+  await t.step("無関係なエラーは false になること", () => {
+    assertEquals(isSessionNotFoundError("boom"), false);
+    assertEquals(isSessionNotFoundError("rate limit exceeded"), false);
   });
 });
 
