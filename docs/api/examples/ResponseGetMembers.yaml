@@ -1,8 +1,0 @@
-- id: "2468013579246801357"
-  username: someuser
-  display_name: Some User
-  bot: false
-  joined_at: "2025-01-01T00:00:00.000Z"
-  roles:
-    - id: "3579246801357924680"
-      name: member

@@ -13,7 +13,8 @@ API は別チャンネルへの投稿にのみ使うこと。
 この会話にお前の過去の発言が含まれていない場合（＝新規セッション）、ユーザーのメッセージに応答する前に、現在のチャンネルの直近メッセージを取得して状況を把握すること。
 
 ```bash
-curl -s 'http://127.0.0.1:3000/discord/channels/{{discord.channel.id}}/messages?limit=30'
+curl -s "https://discord.com/api/v10/channels/{{discord.channel.id}}/messages?limit=30" \
+  -H "Authorization: Bot ${DISCORD_BOT_TOKEN}"
 ```
 
 取得したメッセージから以下を把握すること:

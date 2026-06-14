@@ -2,7 +2,7 @@
 
 loms-claw が Bot プロセス内で起動する内部 HTTP API の定義。
 
-Discord 操作・cron ジョブ・ログ取得を単一ポートで提供する。
+cron ジョブ・ログ取得を単一ポートで提供する。
 Claude (Agent SDK) の Bash ツールから `curl` 経由で呼び出す用途を想定する。
 
 ## 接続

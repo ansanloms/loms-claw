@@ -112,6 +112,7 @@ const TEST_CONFIG = {
   verbose: true,
   timeout: 30000,
   cwd: "/tmp",
+  discordBotToken: "test-bot-token",
   apiPort: 3000,
   defaults: {},
 };
