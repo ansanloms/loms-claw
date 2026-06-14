@@ -10,12 +10,7 @@ API は別チャンネルへの投稿にのみ使うこと。
 
 ## セッション開始時の状況確認
 
-この会話にお前の過去の発言が含まれていない場合（＝新規セッション）、ユーザーのメッセージに応答する前に、現在のチャンネルの直近メッセージを取得して状況を把握すること。
-
-```bash
-curl -s "https://discord.com/api/v10/channels/{{discord.channel.id}}/messages?limit=30" \
-  -H "Authorization: Bot ${DISCORD_BOT_TOKEN}"
-```
+この会話にお前の過去の発言が含まれていない場合（＝新規セッション）、ユーザーのメッセージに応答する前に、現在のチャンネル（`{{discord.channel.id}}`）の直近メッセージ（30 件程度）を取得して状況を把握すること。取得手順は `discord` skill（`.claude/skills/discord/SKILL.md`）の「メッセージ取得 (履歴)」に従う（トークンの扱いも skill に従う）。
 
 取得したメッセージから以下を把握すること:
 

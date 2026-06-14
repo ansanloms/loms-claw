@@ -327,7 +327,7 @@ cron ジョブ用のシステムプロンプトは `.claude/system-prompt/CRON.m
 ## Discord 操作
 
 Discord の情報取得・操作は Claude が公式 REST API（`https://discord.com/api/v10`）を Bash + curl で直接叩く。
-bot トークンは `askClaude()` が `query()` の env（`DISCORD_BOT_TOKEN`）として渡す（`config.discord.token` を実行時注入）。
+bot トークンは Claude が config.json の `discord.token` を直接読んで使う（`jq -r '.discord.token' "${LOMS_CLAW_CONFIG:-./data/config.json}"`）。curl の発行手順・トークン取得は `discord` skill に集約し、システムプロンプト等はその skill を参照する。`askClaude()` は後方互換のため `DISCORD_BOT_TOKEN` env も引き続き `query()` に注入する（`config.discord.token` を実行時注入）が、skill の curl は env に依存せず config.json から取得する。
 サーバー（ギルド）ID・チャンネル ID はシステムプロンプトの「Discord コンテキスト」（テンプレート変数）から得る。
 操作手順は `discord` skill（`.claude/skills/discord/SKILL.md`）に記載。
 
