@@ -444,11 +444,10 @@ export class DiscordBot {
       };
 
       // thinking (推論) を引用形式で投稿する。回答ではないのでメンションは付けず、
-      // Discord の `-# ` 小文字 + `> ` 引用で回答と視覚的に分離する。
-      const showThinking = this.config.claude.showThinking;
+      // Discord の `> ` 引用で回答と視覚的に分離する。
       const sendThinking = async (text: string): Promise<void> => {
         const quoted = text.split("\n").map((line) => `> ${line}`).join("\n");
-        for (const chunk of splitMessage(`-# 思考\n${quoted}`)) {
+        for (const chunk of splitMessage(quoted)) {
           await channel.send(chunk);
         }
       };
@@ -472,10 +471,11 @@ export class DiscordBot {
           return;
         }
 
-        const [sessionId, model, effort] = await Promise.all([
+        const [sessionId, model, effort, showThinking] = await Promise.all([
           this.store.getSession(scope),
           this.store.getModel(scope),
           this.store.getEffort(scope),
+          this.store.getShowThinking(scope),
         ]);
 
         // 承認ボタンの送信先は発話があった場所 (スレッド優先)

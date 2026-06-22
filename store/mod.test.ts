@@ -246,6 +246,74 @@ Deno.test("Store - effort", async (t) => {
   );
 });
 
+Deno.test("Store - showThinking", async (t) => {
+  await t.step(
+    "未登録 + defaults 無しで false を返すこと",
+    async () => {
+      await withStore({}, async (store) => {
+        assertEquals(await store.getShowThinking(ch("ch-1")), false);
+      });
+    },
+  );
+
+  await t.step(
+    "defaults が true なら true を返すこと",
+    async () => {
+      await withStore({ showThinking: true }, async (store) => {
+        assertEquals(await store.getShowThinking(ch("ch-1")), true);
+      });
+    },
+  );
+
+  await t.step(
+    "channel 上書きが defaults より優先されること",
+    async () => {
+      await withStore({ showThinking: true }, async (store) => {
+        await store.setShowThinking(ch("ch-1"), false);
+        assertEquals(await store.getShowThinking(ch("ch-1")), false);
+      });
+    },
+  );
+
+  await t.step("delete 後は defaults に戻ること", async () => {
+    await withStore({ showThinking: true }, async (store) => {
+      await store.setShowThinking(ch("ch-1"), false);
+      await store.deleteShowThinking(ch("ch-1"));
+      assertEquals(await store.getShowThinking(ch("ch-1")), true);
+    });
+  });
+
+  await t.step(
+    "thread 値が channel / defaults より優先されること",
+    async () => {
+      await withStore({ showThinking: false }, async (store) => {
+        await store.setShowThinking(ch("ch-1"), false);
+        await store.setShowThinking(th("ch-1", "th-1"), true);
+        assertEquals(await store.getShowThinking(th("ch-1", "th-1")), true);
+      });
+    },
+  );
+
+  await t.step(
+    "thread 未設定なら channel 値にフォールバックすること",
+    async () => {
+      await withStore({ showThinking: false }, async (store) => {
+        await store.setShowThinking(ch("ch-1"), true);
+        assertEquals(await store.getShowThinking(th("ch-1", "th-1")), true);
+      });
+    },
+  );
+
+  await t.step(
+    "thread / channel 共に未設定なら defaults に戻ること",
+    async () => {
+      await withStore({ showThinking: true }, async (store) => {
+        assertEquals(await store.getShowThinking(th("ch-1", "th-1")), true);
+      });
+    },
+  );
+});
+
 Deno.test("Store - clearScope", async (t) => {
   await t.step(
     "channel スコープで session / model / effort が同時に削除され、defaults は残ること",
@@ -391,6 +459,27 @@ Deno.test("Store - getScopeSettings", async (t) => {
         await store.setSession(ch("ch-1"), "session-channel");
         const s = await store.getScopeSettings(th("ch-1", "th-1"));
         assertEquals(s.session, undefined);
+      });
+    },
+  );
+
+  await t.step(
+    "showThinking は未設定でも false (source: default) で返ること",
+    async () => {
+      await withStore({}, async (store) => {
+        const s = await store.getScopeSettings(ch("ch-1"));
+        assertEquals(s.showThinking, { value: false, source: "default" });
+      });
+    },
+  );
+
+  await t.step(
+    "showThinking の channel 上書きが source 'channel' で返ること",
+    async () => {
+      await withStore({ showThinking: false }, async (store) => {
+        await store.setShowThinking(ch("ch-1"), true);
+        const s = await store.getScopeSettings(ch("ch-1"));
+        assertEquals(s.showThinking, { value: true, source: "channel" });
       });
     },
   );

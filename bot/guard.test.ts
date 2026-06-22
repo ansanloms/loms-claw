@@ -16,7 +16,6 @@ const baseConfig: Config = {
     timeout: 300000,
     cwd: "/tmp",
     apiPort: 3000,
-    showThinking: false,
     defaults: {},
   },
   voice: {
