@@ -34,7 +34,7 @@ const th = (channelId: string, threadId: string): StoreScope => ({
  */
 function mockInteraction(
   channelId: string,
-  options: Record<string, string>,
+  options: Record<string, string | boolean>,
   threadParentId?: string | null,
 ) {
   let replied = false;
@@ -56,7 +56,12 @@ function mockInteraction(
     channel,
     options: {
       getString(name: string, _required?: boolean) {
-        return options[name] ?? null;
+        const v = options[name];
+        return typeof v === "string" ? v : null;
+      },
+      getBoolean(name: string, _required?: boolean) {
+        const v = options[name];
+        return typeof v === "boolean" ? v : null;
       },
     },
     get replied() {
@@ -124,8 +129,37 @@ Deno.test("handleStatusSet", async (t) => {
         assertEquals(await store.getEffort(ch("ch-1")), undefined);
         assertEquals(
           interaction.getReplyContent(),
-          "Specify at least one of `model` or `effort`.",
+          "Specify at least one of `model` / `effort` / `show_thinking`.",
         );
+      }),
+  );
+
+  await t.step(
+    "show_thinking のみ指定で設定されること",
+    () =>
+      withStore(async (store) => {
+        const interaction = mockInteraction("ch-1", {
+          show_thinking: true,
+          // deno-lint-ignore no-explicit-any
+        }) as any;
+        await handleStatusSet(interaction, store);
+        assertEquals(await store.getShowThinking(ch("ch-1")), true);
+        assertEquals(await store.getModel(ch("ch-1")), undefined);
+      }),
+  );
+
+  await t.step(
+    "show_thinking = false も明示指定として保存されること",
+    () =>
+      withStore(async (store) => {
+        // defaults true でも channel に false を明示できる
+        await store.setShowThinking(ch("ch-1"), true);
+        const interaction = mockInteraction("ch-1", {
+          show_thinking: false,
+          // deno-lint-ignore no-explicit-any
+        }) as any;
+        await handleStatusSet(interaction, store);
+        assertEquals(await store.getShowThinking(ch("ch-1")), false);
       }),
   );
 
@@ -208,6 +242,25 @@ Deno.test("handleStatusUnset", async (t) => {
         await handleStatusUnset(interaction, store);
 
         assertEquals(await store.getEffort(ch("ch-1")), undefined);
+        assertEquals(await store.getModel(ch("ch-1")), "opus");
+      }),
+  );
+
+  await t.step(
+    "target=show_thinking でチャンネルの showThinking のみ削除されること",
+    () =>
+      withStore(async (store) => {
+        await store.setShowThinking(ch("ch-1"), true);
+        await store.setModel(ch("ch-1"), "opus");
+
+        const interaction = mockInteraction("ch-1", {
+          target: "show_thinking",
+          // deno-lint-ignore no-explicit-any
+        }) as any;
+        await handleStatusUnset(interaction, store);
+
+        // 削除後は defaults (= false) へフォールバック
+        assertEquals(await store.getShowThinking(ch("ch-1")), false);
         assertEquals(await store.getModel(ch("ch-1")), "opus");
       }),
   );

@@ -1,18 +1,18 @@
 /**
  * チャンネル / スレッド単位の永続化ストア。
  *
- * Deno KV (SQLite backend) に session_id / model / effort を保存する。
+ * Deno KV (SQLite backend) に session_id / model / effort / showThinking を保存する。
  *
  * スコープは {channelId, threadId?} の組で表す。
  *   - threadId 無し: 通常チャンネル (= スレッドではないテキストチャンネル) または
  *     cron の擬似 channelId (`cron:{name}`) など。
  *   - threadId あり: スレッド。フォールバック先として親チャンネルを参照する。
  *
- * model / effort は thread → channel → defaults の順に解決する。
+ * model / effort / showThinking は thread → channel → defaults の順に解決する。
  * session は thread と channel で完全に独立し、互いにフォールバックしない。
  *
  * KV キー設計:
- *   ["channel", id, "session" | "model" | "effort"] -> string
+ *   ["channel", id, "session" | "model" | "effort" | "showThinking"] -> string
  *   id は Discord Snowflake (channel / thread どちらも) または `cron:{name}`。
  *   thread と channel は同一 Snowflake 名前空間で衝突しないため、id をそのまま
  *   キーに使い分ける。
@@ -24,6 +24,7 @@ const NS = "channel";
 const SESSION = "session";
 const MODEL = "model";
 const EFFORT = "effort";
+const SHOW_THINKING = "showThinking";
 
 /**
  * グローバルデフォルト値。チャンネル / スレッド単位の上書きが無いときに使われる。
@@ -31,6 +32,7 @@ const EFFORT = "effort";
 export interface StoreDefaults {
   model?: string;
   effort?: string;
+  showThinking?: boolean;
 }
 
 /**
@@ -58,12 +60,22 @@ export interface ScopeSettingEntry {
 }
 
 /**
+ * boolean 設定値とその出所を表すエントリ。
+ */
+export interface BoolScopeSettingEntry {
+  value: boolean;
+  source: SettingSource;
+}
+
+/**
  * スコープ単位の設定スナップショット。
  */
 export interface ScopeSettings {
   session?: string;
   model?: ScopeSettingEntry;
   effort?: ScopeSettingEntry;
+  /** showThinking は未設定でも false (source: default) として常に解決する。 */
+  showThinking: BoolScopeSettingEntry;
 }
 
 /**
@@ -157,6 +169,42 @@ export class Store {
     await this.kv.delete([NS, id, EFFORT]);
   }
 
+  // ── showThinking ────────────────────────────────────────
+  // thread → channel → defaults の順で解決。boolean は KV に "true" / "false"
+  // の文字列で格納する (KV 値を文字列で統一するため)。未設定なら false。
+
+  async getShowThinking(scope: StoreScope): Promise<boolean> {
+    if (scope.threadId !== undefined) {
+      const threadEntry = await this.kv.get<string>([
+        NS,
+        scope.threadId,
+        SHOW_THINKING,
+      ]);
+      if (threadEntry.value !== null) {
+        return threadEntry.value === "true";
+      }
+    }
+    const channelEntry = await this.kv.get<string>([
+      NS,
+      scope.channelId,
+      SHOW_THINKING,
+    ]);
+    if (channelEntry.value !== null) {
+      return channelEntry.value === "true";
+    }
+    return this.defaults.showThinking ?? false;
+  }
+
+  async setShowThinking(scope: StoreScope, value: boolean): Promise<void> {
+    const id = scope.threadId ?? scope.channelId;
+    await this.kv.set([NS, id, SHOW_THINKING], String(value));
+  }
+
+  async deleteShowThinking(scope: StoreScope): Promise<void> {
+    const id = scope.threadId ?? scope.channelId;
+    await this.kv.delete([NS, id, SHOW_THINKING]);
+  }
+
   // ── まとめ操作 ─────────────────────────────────────────
 
   /**
@@ -194,12 +242,14 @@ export class Store {
       [NS, scope.channelId, SESSION],
       [NS, scope.channelId, MODEL],
       [NS, scope.channelId, EFFORT],
+      [NS, scope.channelId, SHOW_THINKING],
     ] as const;
 
     if (scope.threadId === undefined) {
-      const [sessionEntry, modelEntry, effortEntry] = await this.kv.getMany<
-        [string, string, string]
-      >([...channelKeys]);
+      const [sessionEntry, modelEntry, effortEntry, showThinkingEntry] =
+        await this.kv.getMany<
+          [string, string, string, string]
+        >([...channelKeys]);
       return {
         session: sessionEntry.value ?? undefined,
         model: resolveSetting(
@@ -212,6 +262,11 @@ export class Store {
           effortEntry.value,
           this.defaults.effort,
         ),
+        showThinking: resolveBoolSetting(
+          null,
+          showThinkingEntry.value,
+          this.defaults.showThinking,
+        ),
       };
     }
 
@@ -219,16 +274,19 @@ export class Store {
       [NS, scope.threadId, SESSION],
       [NS, scope.threadId, MODEL],
       [NS, scope.threadId, EFFORT],
+      [NS, scope.threadId, SHOW_THINKING],
     ] as const;
     const [
       threadSession,
       threadModel,
       threadEffort,
+      threadShowThinking,
       _channelSession,
       channelModel,
       channelEffort,
+      channelShowThinking,
     ] = await this.kv.getMany<
-      [string, string, string, string, string, string]
+      [string, string, string, string, string, string, string, string]
     >([...threadKeys, ...channelKeys]);
 
     return {
@@ -243,6 +301,11 @@ export class Store {
         threadEffort.value,
         channelEffort.value,
         this.defaults.effort,
+      ),
+      showThinking: resolveBoolSetting(
+        threadShowThinking.value,
+        channelShowThinking.value,
+        this.defaults.showThinking,
       ),
     };
   }
@@ -270,4 +333,25 @@ function resolveSetting(
     return { value: defaultValue, source: "default" };
   }
   return undefined;
+}
+
+/**
+ * boolean 設定値を thread → channel → default の順で解決する。
+ *
+ * KV には "true" / "false" の文字列で格納されている。model / effort と違い、
+ * boolean は「未設定 = false」という確定した既定値があるため、どこにも値が
+ * 無いときも `{ value: false, source: "default" }` を返す (undefined にしない)。
+ */
+function resolveBoolSetting(
+  threadValue: string | null,
+  channelValue: string | null,
+  defaultValue: boolean | undefined,
+): BoolScopeSettingEntry {
+  if (threadValue !== null) {
+    return { value: threadValue === "true", source: "thread" };
+  }
+  if (channelValue !== null) {
+    return { value: channelValue === "true", source: "channel" };
+  }
+  return { value: defaultValue ?? false, source: "default" };
 }

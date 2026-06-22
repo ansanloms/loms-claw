@@ -39,6 +39,7 @@ const EFFORT_CHOICES = [
 const UNSET_TARGET_CHOICES = [
   { name: "model", value: "model" },
   { name: "effort", value: "effort" },
+  { name: "show_thinking", value: "show_thinking" },
   { name: "session", value: "session" },
 ] as const;
 
@@ -63,7 +64,7 @@ export const command = new SlashCommandBuilder()
         sub
           .setName("set")
           .setDescription(
-            "Set channel-level model / effort (specify at least one)",
+            "Set channel-level model / effort / show_thinking (specify at least one)",
           )
           .addStringOption((opt) =>
             opt
@@ -79,12 +80,18 @@ export const command = new SlashCommandBuilder()
               .setRequired(false)
               .addChoices(...EFFORT_CHOICES)
           )
+          .addBooleanOption((opt) =>
+            opt
+              .setName("show_thinking")
+              .setDescription("Show thinking (reasoning) in this channel")
+              .setRequired(false)
+          )
       )
       .addSubcommand((sub) =>
         sub
           .setName("unset")
           .setDescription(
-            "Clear channel-level setting (model / effort / session)",
+            "Clear channel-level setting (model / effort / show_thinking / session)",
           )
           .addStringOption((opt) =>
             opt
@@ -207,6 +214,9 @@ export async function handleStatusShow(
   );
   lines.push(`- model: ${formatSetting(settings.model)}`);
   lines.push(`- effort: ${formatSetting(settings.effort)}`);
+  lines.push(
+    `- show_thinking: \`${settings.showThinking.value}\` (${settings.showThinking.source})`,
+  );
 
   // グローバルデフォルト
   lines.push("");
@@ -221,6 +231,7 @@ export async function handleStatusShow(
       deps.defaults.effort ? `\`${deps.defaults.effort}\`` : "(unset)"
     }`,
   );
+  lines.push(`- show_thinking: \`${deps.defaults.showThinking ?? false}\``);
 
   // cron
   lines.push("");
@@ -267,10 +278,11 @@ export async function handleStatusSet(
 ): Promise<void> {
   const model = interaction.options.getString("model");
   const effort = interaction.options.getString("effort");
+  const showThinking = interaction.options.getBoolean("show_thinking");
 
-  if (!model && !effort) {
+  if (!model && !effort && showThinking === null) {
     await interaction.reply({
-      content: "Specify at least one of `model` or `effort`.",
+      content: "Specify at least one of `model` / `effort` / `show_thinking`.",
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -287,6 +299,10 @@ export async function handleStatusSet(
   if (effort) {
     await store.setEffort(scope, effort);
     updates.push(`effort = \`${effort}\``);
+  }
+  if (showThinking !== null) {
+    await store.setShowThinking(scope, showThinking);
+    updates.push(`show_thinking = \`${showThinking}\``);
   }
   await interaction.reply({
     content: `Updated for this ${scopeLabel}: ${updates.join(", ")}.`,
@@ -331,6 +347,14 @@ export async function handleStatusUnset(
       await store.deleteEffort(scope);
       await interaction.reply({
         content: `Effort unset for this ${scopeLabel} (fallback applies).`,
+        flags: MessageFlags.Ephemeral,
+      });
+      break;
+    case "show_thinking":
+      await store.deleteShowThinking(scope);
+      await interaction.reply({
+        content:
+          `Show_thinking unset for this ${scopeLabel} (fallback applies).`,
         flags: MessageFlags.Ephemeral,
       });
       break;
