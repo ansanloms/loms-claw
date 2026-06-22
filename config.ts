@@ -1,14 +1,18 @@
 /**
  * アプリケーション設定のロード。
  *
- * `config.json` を読み込み、ajv で JSON Schema 検証を掛けた後、
+ * `config.json` を読み込み、@cfworker/json-schema で JSON Schema 検証を掛けた後、
  * プロセス固有の値（`claude.cwd`）を注入して {@link Config} を返す。
  *
  * パスは `LOMS_CLAW_CONFIG` 環境変数で上書き可能（デフォルト: `./data/config.json`）。
  */
 
 import type { LogLevel } from "./logger.ts";
-import { formatConfigErrors, validateConfigFile } from "./config.schema.ts";
+import {
+  applyConfigDefaults,
+  formatConfigErrors,
+  validateConfigFile,
+} from "./config.schema.ts";
 import { getErrorMessage } from "./errors.ts";
 
 /**
@@ -165,8 +169,12 @@ export function loadConfig(): Config {
     throw new Error(`failed to parse config file (${path}): ${msg}`);
   }
 
-  if (!validateConfigFile(raw)) {
-    const details = formatConfigErrors(validateConfigFile.errors);
+  // ajv の useDefaults 相当: 検証前に schema の default を補完する（破壊的変更）。
+  applyConfigDefaults(raw);
+
+  const { valid, errors } = validateConfigFile(raw);
+  if (!valid) {
+    const details = formatConfigErrors(errors);
     throw new Error(`config validation failed (${path}):\n${details}`);
   }
 
