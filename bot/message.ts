@@ -230,7 +230,7 @@ export function appendImageReferences(
 /**
  * Discord のメッセージ文字数上限。
  */
-const DISCORD_MESSAGE_LIMIT = 2000;
+export const DISCORD_MESSAGE_LIMIT = 2000;
 
 /**
  * テキストを Discord の文字数制限に収まるように分割する。

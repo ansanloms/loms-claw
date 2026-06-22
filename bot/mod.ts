@@ -32,6 +32,7 @@ import {
   appendImageReferences,
   cleanupImageFiles,
   createProgressReporter,
+  DISCORD_MESSAGE_LIMIT,
   type DownloadedImage,
   downloadImageAttachments,
   keepTyping,
@@ -400,17 +401,14 @@ export class DiscordBot {
     const progress = createProgressReporter(channel);
     let downloadedImages: DownloadedImage[] = [];
 
-    // 応答は発言者宛にする: 最初の 1 通だけ先頭にメンションを付け、以降の
-    // チャンクは通常送信する（毎チャンクで発言者に通知が飛ぶのを防ぐ）。
-    // メンションは分割前のテキスト先頭に付けてから splitMessage に渡す。
-    // 先頭チャンクが上限ぎりぎりでもメンション分が溢れないようにするため。
+    // 応答は発言者宛にする: 分割後のすべての投稿の先頭にメンションを付ける。
+    // メンション分を引いた上限で分割してから各チャンク先頭に付与することで、
+    // どのチャンクでも上限ぎりぎりでメンション分が溢れない（2000 字超過しない）。
     const mention = `<@${message.author.id}> `;
-    let mentioned = false;
     const sendChunks = async (text: string): Promise<void> => {
-      const body = mentioned ? text : mention + text;
-      mentioned = true;
-      for (const chunk of splitMessage(body)) {
-        await channel.send(chunk);
+      const chunks = splitMessage(text, DISCORD_MESSAGE_LIMIT - mention.length);
+      for (const chunk of chunks) {
+        await channel.send(mention + chunk);
       }
     };
 
