@@ -49,24 +49,12 @@
       "description": "Claude 呼び出し (Agent SDK query()) の挙動とグローバルデフォルト。",
       "default": {},
       "additionalProperties": false,
-      "required": [
-        "maxTurns",
-        "verbose",
-        "timeout",
-        "apiPort",
-        "showThinking",
-        "defaults"
-      ],
+      "required": ["maxTurns", "verbose", "timeout", "apiPort", "defaults"],
       "properties": {
         "maxTurns": {
           "type": "number",
           "default": 10,
           "description": "エージェントの最大ターン数（query() の maxTurns に渡される）。"
-        },
-        "showThinking": {
-          "type": "boolean",
-          "default": false,
-          "description": "thinking（推論）を Discord に表示するか。true のとき、ストリームに流れてきた thinking ブロックを引用形式で投稿する。thinking が流れるかは model / effort 依存（effort: low 等では出ないことがある）。"
         },
         "verbose": {
           "type": "boolean",
@@ -97,6 +85,11 @@
               "type": "string",
               "enum": ["low", "medium", "high", "xhigh", "max"],
               "description": "デフォルト effort level。省略可。"
+            },
+            "showThinking": {
+              "type": "boolean",
+              "default": false,
+              "description": "thinking（推論）を Discord に表示するか。チャンネル / スレッド単位の上書きが無いときに使われるグローバルデフォルト。/claw status set show_thinking で per-scope に上書きできる。true のとき、ストリームに流れてきた thinking ブロックを引用形式で投稿する。thinking が流れるかは model / effort 依存（effort: low 等では出ないことがある）。"
             }
           }
         }

@@ -126,14 +126,14 @@ config.schema.ts       config.schema.json を @cfworker/json-schema の Validato
 logger.ts              名前空間付き軽量ロガー。`initLogger({ level, bufferSize })` で設定。リングバッファで直近ログをメモリ保持。
 errors.ts              getErrorMessage(): unknown なエラー値からメッセージを取り出す共通ユーティリティ。
 bot/mod.ts             DiscordBot クラス。messageCreate ハンドラ、start/shutdown。
-bot/commands.ts        スラッシュコマンド定義とハンドラ（/claw status show|set|unset, /claw vc join|leave）。
+bot/commands.ts        スラッシュコマンド定義とハンドラ（/claw status show|set|unset で model/effort/show_thinking/session を操作, /claw vc join|leave）。
 bot/guard.ts           isAuthorized(): ギルド ID + ユーザー ID + bot 除外の認可チェック。shouldRespond(): active channel / mention / スレッドによる反応判定。
 bot/queue.ts           ScopeQueue: scope (localId) 単位でメッセージ処理を直列化するキュー。応答中の scope に届いた次のメッセージを現在のターン終了後に処理する (並行 query と session 競合の防止)。
 bot/message.ts         splitMessage(): 2000 文字分割。keepTyping(): typing インジケーター維持。ProgressReporter: ツール進捗表示。
 claude/mod.ts          askClaude(): Agent SDK の query() を呼び出し SDKMessage ストリームを逐次 yield。buildQueryOptions() / normalizeEffort()。テストは queryFn DI でモック。
 claude/system-prompt.ts  SystemPromptStore: .claude/system-prompt/ 配下を起動時に読み込み、コンテキスト (chat/vc/cron) とスコープ (channelId/threadId) に応じて結合。
 claude/template.ts     replaceTemplateVariables(): システムプロンプトの {{key}} 置換。
-store/mod.ts           Store: Deno KV (SQLite backend) によるスコープ単位の session_id / model / effort 永続化。スコープは {channelId, threadId?} の組。model / effort は thread → channel → グローバルデフォルト (config.json `defaults`) の動的フォールバック。session は thread と channel で独立。
+store/mod.ts           Store: Deno KV (SQLite backend) によるスコープ単位の session_id / model / effort / showThinking 永続化。スコープは {channelId, threadId?} の組。model / effort / showThinking は thread → channel → グローバルデフォルト (config.json `claude.defaults`) の動的フォールバック (showThinking は最終的に false)。session は thread と channel で独立。
 approval/manager.ts    ApprovalManager: Discord ボタンによるツール承認/拒否。createCanUseTool(): ApprovalResult を SDK の PermissionResult に変換する canUseTool コールバックを生成。
 approval/settings.ts   isInAllowList() / addToSettingsAllowList(): .claude/settings.json の permissions.allow 読み書き。
 api/server.ts              統合 HTTP サーバー。Hono アプリ作成、サブルート（cron / logs）マウント、共通エラーハンドラ。承認は in-process のため HTTP では扱わない。Discord 操作は Claude が公式 REST API を直接叩くため提供しない。
@@ -295,21 +295,21 @@ cron ジョブ用のシステムプロンプトは `.claude/system-prompt/CRON.m
 5. `message.cleanContent` からプロンプト抽出（bot mention を除去）
 6. `keepTyping()` で typing 開始
 7. `askClaude()` で Agent SDK の query() を実行し、`tool_progress` イベントで進捗表示
-8. `config.claude.showThinking` が `true` のとき、`thinking_delta`（推論）を `-# 思考` + `>` 引用形式で投稿（メンション無し）。thinking が流れるかは model / effort 依存
+8. Store から解決した `showThinking` が `true` のとき、`thinking_delta`（推論）を `>` 引用形式で投稿（メンション無し）。thinking が流れるかは model / effort 依存
 9. `Store` にスコープ単位で session ID を保存（次回 `query()` の `options.resume` で継続。thread と channel の session は独立）
 10. `splitMessage()` で応答を分割送信
 
 ### スコープと設定の解決
 
-各メッセージは `StoreScope` 単位で `session / model / effort` を持つ。
+各メッセージは `StoreScope` 単位で `session / model / effort / showThinking` を持つ。
 
 - **スレッド外** のメッセージ: `{ channelId }` スコープ
 - **スレッド内** のメッセージ: `{ channelId: parentId, threadId }` スコープ
 - **cron ジョブ**: `{ channelId: "cron:{name}" }` スコープ（thread 無し）
 - **ボイスチャンネル**: `{ channelId }` スコープ（VC はスレッドを持たない）
 
-`model / effort` の解決順は **thread → channel → グローバルデフォルト** の動的フォールバック。
-スレッドで `/claw status set model=...` を叩くと thread のみに保存され、親チャンネルの設定には影響しない。
+`model / effort / showThinking` の解決順は **thread → channel → グローバルデフォルト** の動的フォールバック。グローバルデフォルトは `config.json` の `claude.defaults`（`showThinking` は未設定時 false）。
+スレッドで `/claw status set model=...` を叩くと thread のみに保存され、親チャンネルの設定には影響しない。`showThinking` も同様に `/claw status set show_thinking=...` で per-scope に上書きでき、`/claw status unset show_thinking` でフォールバックへ戻せる。
 逆にスレッドで未設定なら親チャンネルの設定が即時に反映される。
 
 `session` は thread と channel で完全に独立する。スレッドを切ると新規セッションとして始まり、親チャンネル側のセッションは触らない。`/claw status unset session` をスレッド内で実行するとスレッドのセッションのみ削除する。

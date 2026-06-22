@@ -23,6 +23,8 @@ export interface ClaudeDefaults {
   model?: string;
   /** デフォルトの effort level (low / medium / high / xhigh / max)。 */
   effort?: string;
+  /** thinking（推論）を Discord に表示するか。省略時は false 扱い。 */
+  showThinking?: boolean;
 }
 
 /**
@@ -37,8 +39,6 @@ export interface ClaudeConfig {
   timeout: number;
   /** 内部 API サーバーのポート（cron + ログ）。 */
   apiPort: number;
-  /** thinking（推論）を Discord に表示するか。 */
-  showThinking: boolean;
   /** `query()` の作業ディレクトリ。実行時に `Deno.cwd()` が注入される。 */
   cwd: string;
   /** Claude のグローバルデフォルト (model / effort)。 */
