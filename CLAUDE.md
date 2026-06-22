@@ -128,6 +128,7 @@ errors.ts              getErrorMessage(): unknown なエラー値からメッセ
 bot/mod.ts             DiscordBot クラス。messageCreate ハンドラ、start/shutdown。
 bot/commands.ts        スラッシュコマンド定義とハンドラ（/claw status show|set|unset, /claw vc join|leave）。
 bot/guard.ts           isAuthorized(): ギルド ID + ユーザー ID + bot 除外の認可チェック。shouldRespond(): active channel / mention / スレッドによる反応判定。
+bot/queue.ts           ScopeQueue: scope (localId) 単位でメッセージ処理を直列化するキュー。応答中の scope に届いた次のメッセージを現在のターン終了後に処理する (並行 query と session 競合の防止)。
 bot/message.ts         splitMessage(): 2000 文字分割。keepTyping(): typing インジケーター維持。ProgressReporter: ツール進捗表示。
 claude/mod.ts          askClaude(): Agent SDK の query() を呼び出し SDKMessage ストリームを逐次 yield。buildQueryOptions() / normalizeEffort()。テストは queryFn DI でモック。
 claude/system-prompt.ts  SystemPromptStore: .claude/system-prompt/ 配下を起動時に読み込み、コンテキスト (chat/vc/cron) とスコープ (channelId/threadId) に応じて結合。
@@ -290,11 +291,13 @@ cron ジョブ用のシステムプロンプトは `.claude/system-prompt/CRON.m
 1. `messageCreate` → `isAuthorized()` で認可チェック
 2. `shouldRespond()` で反応判定（active channel / mention / 親が active channel のスレッド）
 3. `message.channel.isThread()` から `StoreScope { channelId, threadId? }` を抽出（thread の場合 `parentId` を `channelId`、`message.channelId` を `threadId` に入れる）
-4. `message.cleanContent` からプロンプト抽出（bot mention を除去）
-5. `keepTyping()` で typing 開始
-6. `askClaude()` で Agent SDK の query() を実行し、`tool_progress` イベントで進捗表示
-7. `Store` にスコープ単位で session ID を保存（次回 `query()` の `options.resume` で継続。thread と channel の session は独立）
-8. `splitMessage()` で応答を分割送信
+4. `ScopeQueue.enqueue(localId)` で以降の処理を **scope 単位で直列化**。応答中の scope に届いた次のメッセージは現在のターン終了後に処理される（Claude Code が応答生成中の入力をキューに積むのと同じ挙動）。待機に入ったメッセージには ⏳ リアクションを付け、自分のターン開始時に外す。これにより同一セッションへの並行 query と session 競合を防ぐ
+5. `message.cleanContent` からプロンプト抽出（bot mention を除去）
+6. `keepTyping()` で typing 開始
+7. `askClaude()` で Agent SDK の query() を実行し、`tool_progress` イベントで進捗表示
+8. `config.claude.showThinking` が `true` のとき、`thinking_delta`（推論）を `-# 思考` + `>` 引用形式で投稿（メンション無し）。thinking が流れるかは model / effort 依存
+9. `Store` にスコープ単位で session ID を保存（次回 `query()` の `options.resume` で継続。thread と channel の session は独立）
+10. `splitMessage()` で応答を分割送信
 
 ### スコープと設定の解決
 

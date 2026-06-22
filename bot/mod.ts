@@ -23,11 +23,13 @@ import {
   askClaude,
   extractResultText,
   extractTopLevelTextDelta,
+  extractTopLevelThinkingDelta,
 } from "../claude/mod.ts";
 import type { Store, StoreScope } from "../store/mod.ts";
 import { ApprovalManager, createCanUseTool } from "../approval/manager.ts";
 import { command } from "./commands.ts";
 import { isAuthorized, shouldRespond } from "./guard.ts";
+import { ScopeQueue } from "./queue.ts";
 import {
   appendImageReferences,
   cleanupImageFiles,
@@ -73,6 +75,8 @@ export class DiscordBot {
   private cronExecutor: CronExecutor | null = null;
   private systemPrompts: SystemPromptStore;
   private startedAt: Temporal.Instant = Temporal.Now.instant();
+  /** scope (channel / thread) 単位でメッセージ処理を直列化するキュー。 */
+  private chatQueue = new ScopeQueue();
 
   constructor(config: Config, store: Store) {
     this.config = config;
@@ -396,170 +400,251 @@ export class DiscordBot {
     // スレッド内ならスレッド ID、通常チャンネルなら channel ID。
     const localId = scope.threadId ?? scope.channelId;
 
-    // typing インジケーター開始
-    const typingController = new AbortController();
-    keepTyping(channel, typingController.signal);
+    // bot が応答中の scope に届いたメッセージは直列キューに積み、現在のターンが
+    // 終わってから同一セッションで処理する (Claude Code が応答生成中の入力を
+    // キューに積み、ターン終了後に処理するのと同じ挙動)。これにより同一 scope
+    // への並行 query を防ぎ、session_id の競合を構造的に無くす。
+    //
+    // isBusy 判定と enqueue 登録の間に await を挟まないこと。挟むと連投時に後続
+    // メッセージの enqueue が先に登録されて順序が入れ替わりうる。react は
+    // fire-and-forget にして await しない。
+    const wasQueued = this.chatQueue.isBusy(localId);
+    if (wasQueued) {
+      // 待機に入ったことを発言者へ可視化する。失敗は致命的でないので握り潰す。
+      message.react("⏳").catch(() => {});
+    }
 
-    const progress = createProgressReporter(channel);
-    let downloadedImages: DownloadedImage[] = [];
-
-    // 応答は発言者宛にする: 分割後のすべての投稿の先頭にメンションを付ける。
-    // メンション分を引いた上限で分割してから各チャンク先頭に付与することで、
-    // どのチャンクでも上限ぎりぎりでメンション分が溢れない（2000 字超過しない）。
-    const mention = `<@${message.author.id}> `;
-    const sendChunks = async (text: string): Promise<void> => {
-      const chunks = splitMessage(text, DISCORD_MESSAGE_LIMIT - mention.length);
-      for (const chunk of chunks) {
-        await channel.send(mention + chunk);
+    await this.chatQueue.enqueue(localId, async () => {
+      // 自分のターンが始まったら待機マーカー (⏳) を外す。
+      if (wasQueued && this.client.user) {
+        await message.reactions.cache.get("⏳")?.users
+          .remove(this.client.user.id)
+          .catch(() => {});
       }
-    };
 
-    try {
-      // 画像添付をダウンロード（画像フィルタは downloadImageAttachments 内で行う）
-      if (hasAttachments) {
-        downloadedImages = await downloadImageAttachments(
-          message.attachments.values(),
+      // typing インジケーター開始
+      const typingController = new AbortController();
+      keepTyping(channel, typingController.signal);
+
+      const progress = createProgressReporter(channel);
+      let downloadedImages: DownloadedImage[] = [];
+
+      // 応答は発言者宛にする: 分割後のすべての投稿の先頭にメンションを付ける。
+      // メンション分を引いた上限で分割してから各チャンク先頭に付与することで、
+      // どのチャンクでも上限ぎりぎりでメンション分が溢れない（2000 字超過しない）。
+      const mention = `<@${message.author.id}> `;
+      const sendChunks = async (text: string): Promise<void> => {
+        const chunks = splitMessage(
+          text,
+          DISCORD_MESSAGE_LIMIT - mention.length,
         );
-        if (downloadedImages.length > 0) {
-          prompt = appendImageReferences(
-            prompt || "この画像について説明して",
-            downloadedImages,
+        for (const chunk of chunks) {
+          await channel.send(mention + chunk);
+        }
+      };
+
+      // thinking (推論) を引用形式で投稿する。回答ではないのでメンションは付けず、
+      // Discord の `-# ` 小文字 + `> ` 引用で回答と視覚的に分離する。
+      const showThinking = this.config.claude.showThinking;
+      const sendThinking = async (text: string): Promise<void> => {
+        const quoted = text.split("\n").map((line) => `> ${line}`).join("\n");
+        for (const chunk of splitMessage(`-# 思考\n${quoted}`)) {
+          await channel.send(chunk);
+        }
+      };
+
+      try {
+        // 画像添付をダウンロード（画像フィルタは downloadImageAttachments 内で行う）
+        if (hasAttachments) {
+          downloadedImages = await downloadImageAttachments(
+            message.attachments.values(),
           );
-        }
-      }
-
-      // 画像ダウンロード後もプロンプトが空なら終了
-      if (!prompt) {
-        return;
-      }
-
-      const [sessionId, model, effort] = await Promise.all([
-        this.store.getSession(scope),
-        this.store.getModel(scope),
-        this.store.getEffort(scope),
-      ]);
-
-      // 承認ボタンの送信先は発話があった場所 (スレッド優先)
-      this.approvalManager.setChannel(localId);
-
-      const templateVars: Record<string, string> = {
-        "discord.guild.id": this.config.discord.guildId,
-        "discord.guild.name": message.guild?.name ?? "",
-        "discord.channel.id": localId,
-        "discord.channel.name": "name" in channel ? channel.name ?? "" : "",
-        "discord.channel.type": isThread ? "thread" : "text",
-        "discord.user.id": message.author.id,
-        "discord.user.name": message.author.displayName,
-      };
-
-      const appendSystemPrompt = this.systemPrompts.resolve(
-        "chat",
-        scope,
-        templateVars,
-      );
-
-      const stream = askClaude(prompt, {
-        sessionId,
-        config: this.config.claude,
-        discordToken: this.config.discord.token,
-        signal: AbortSignal.timeout(this.config.claude.timeout),
-        appendSystemPrompt,
-        model,
-        effort,
-        canUseTool: createCanUseTool(this.approvalManager, localId),
-      });
-
-      // ストリーミング応答: text_delta をバッファに蓄積し、
-      // 閾値を超えたら文境界で区切って中間投稿する。
-      const FLUSH_THRESHOLD = 800;
-      let textBuffer = "";
-      let hasStreamedText = false;
-      let resultEvent: SDKResultMessage | undefined;
-
-      const flushBuffer = async (force: boolean) => {
-        if (force) {
-          // 残り全部を投稿。
-          const text = textBuffer.trim();
-          textBuffer = "";
-          if (text) {
-            hasStreamedText = true;
-            await sendChunks(text);
-          }
-          return;
-        }
-        // 最後の文境界（。、改行）で区切って投稿。
-        const lastBoundary = Math.max(
-          textBuffer.lastIndexOf("。"),
-          textBuffer.lastIndexOf("\n"),
-        );
-        if (lastBoundary < 0) {
-          // 境界が見つからないが閾値の 2 倍を超えたら強制フラッシュ。
-          // コードブロック・英語テキスト・URL 等が連続するケースへの対策。
-          if (textBuffer.length >= FLUSH_THRESHOLD * 2) {
-            await flushBuffer(true);
-          }
-          return;
-        }
-        const send = textBuffer.slice(0, lastBoundary + 1).trim();
-        textBuffer = textBuffer.slice(lastBoundary + 1);
-        if (!send) {
-          return;
-        }
-        hasStreamedText = true;
-        await sendChunks(send);
-      };
-
-      for await (const event of stream) {
-        const delta = extractTopLevelTextDelta(event);
-        if (delta !== undefined) {
-          textBuffer += delta;
-          if (textBuffer.length >= FLUSH_THRESHOLD) {
-            await flushBuffer(false);
-          }
-        } else if (event.type === "assistant" && !event.parent_tool_use_id) {
-          // トップレベルの assistant メッセージ 1 件が完成した時点で強制フラッシュ。
-          // Claude が「テキスト → ツール実行 → テキスト」と複数の応答に分かれて
-          // 喋る場合、各応答を別々の Discord 投稿として区切るため。閾値による
-          // 途中フラッシュ (上の delta 分岐) は応答内のストリーミング体感のために残す。
-          await flushBuffer(true);
-        } else if (event.type === "result") {
-          resultEvent = event;
-          // 非 success の subtype (error_max_turns 等) は Docker logs から原因を追えるよう詳細を残す。
-          if (event.subtype !== "success") {
-            log.warn(
-              `claude returned non-success subtype "${event.subtype}":`,
-              JSON.stringify(event),
+          if (downloadedImages.length > 0) {
+            prompt = appendImageReferences(
+              prompt || "この画像について説明して",
+              downloadedImages,
             );
           }
-          // 非ゼロ終了でジェネレータがスローしてもセッションが残るよう即座に保存
-          await this.store.setSession(scope, event.session_id);
-        } else if (event.type === "tool_progress") {
-          await progress.report(event.tool_name, event.elapsed_time_seconds);
         }
-      }
 
-      // バッファに残ったテキストを投稿。
-      await flushBuffer(true);
-
-      // stream_event がなかった場合は result.result からフォールバック。
-      if (!hasStreamedText) {
-        if (!resultEvent) {
-          throw new Error("claude stream ended without result event");
+        // 画像ダウンロード後もプロンプトが空なら終了
+        if (!prompt) {
+          return;
         }
-        await sendChunks(extractResultText(resultEvent));
+
+        const [sessionId, model, effort] = await Promise.all([
+          this.store.getSession(scope),
+          this.store.getModel(scope),
+          this.store.getEffort(scope),
+        ]);
+
+        // 承認ボタンの送信先は発話があった場所 (スレッド優先)
+        this.approvalManager.setChannel(localId);
+
+        const templateVars: Record<string, string> = {
+          "discord.guild.id": this.config.discord.guildId,
+          "discord.guild.name": message.guild?.name ?? "",
+          "discord.channel.id": localId,
+          "discord.channel.name": "name" in channel ? channel.name ?? "" : "",
+          "discord.channel.type": isThread ? "thread" : "text",
+          "discord.user.id": message.author.id,
+          "discord.user.name": message.author.displayName,
+        };
+
+        const appendSystemPrompt = this.systemPrompts.resolve(
+          "chat",
+          scope,
+          templateVars,
+        );
+
+        const stream = askClaude(prompt, {
+          sessionId,
+          config: this.config.claude,
+          discordToken: this.config.discord.token,
+          signal: AbortSignal.timeout(this.config.claude.timeout),
+          appendSystemPrompt,
+          model,
+          effort,
+          canUseTool: createCanUseTool(this.approvalManager, localId),
+        });
+
+        // ストリーミング応答: text_delta をバッファに蓄積し、
+        // 閾値を超えたら文境界で区切って中間投稿する。
+        const FLUSH_THRESHOLD = 800;
+        let textBuffer = "";
+        let hasStreamedText = false;
+        let resultEvent: SDKResultMessage | undefined;
+
+        const flushBuffer = async (force: boolean) => {
+          if (force) {
+            // 残り全部を投稿。
+            const text = textBuffer.trim();
+            textBuffer = "";
+            if (text) {
+              hasStreamedText = true;
+              await sendChunks(text);
+            }
+            return;
+          }
+          // 最後の文境界（。、改行）で区切って投稿。
+          const lastBoundary = Math.max(
+            textBuffer.lastIndexOf("。"),
+            textBuffer.lastIndexOf("\n"),
+          );
+          if (lastBoundary < 0) {
+            // 境界が見つからないが閾値の 2 倍を超えたら強制フラッシュ。
+            // コードブロック・英語テキスト・URL 等が連続するケースへの対策。
+            if (textBuffer.length >= FLUSH_THRESHOLD * 2) {
+              await flushBuffer(true);
+            }
+            return;
+          }
+          const send = textBuffer.slice(0, lastBoundary + 1).trim();
+          textBuffer = textBuffer.slice(lastBoundary + 1);
+          if (!send) {
+            return;
+          }
+          hasStreamedText = true;
+          await sendChunks(send);
+        };
+
+        // thinking 用バッファ。回答テキストとは独立に文境界でフラッシュする。
+        // 回答より閾値を高めにして、推論の中間投稿で本文が埋もれないようにする。
+        const THINKING_FLUSH_THRESHOLD = 1500;
+        let thinkingBuffer = "";
+
+        const flushThinking = async (force: boolean) => {
+          if (force) {
+            const text = thinkingBuffer.trim();
+            thinkingBuffer = "";
+            if (text) {
+              await sendThinking(text);
+            }
+            return;
+          }
+          const lastBoundary = Math.max(
+            thinkingBuffer.lastIndexOf("。"),
+            thinkingBuffer.lastIndexOf("\n"),
+          );
+          if (lastBoundary < 0) {
+            if (thinkingBuffer.length >= THINKING_FLUSH_THRESHOLD * 2) {
+              await flushThinking(true);
+            }
+            return;
+          }
+          const send = thinkingBuffer.slice(0, lastBoundary + 1).trim();
+          thinkingBuffer = thinkingBuffer.slice(lastBoundary + 1);
+          if (send) {
+            await sendThinking(send);
+          }
+        };
+
+        for await (const event of stream) {
+          const delta = extractTopLevelTextDelta(event);
+          const thinkingDelta = showThinking
+            ? extractTopLevelThinkingDelta(event)
+            : undefined;
+          if (delta !== undefined) {
+            // 回答テキストが来たら、未送出の thinking を先に出して順序を保つ。
+            if (thinkingBuffer) {
+              await flushThinking(true);
+            }
+            textBuffer += delta;
+            if (textBuffer.length >= FLUSH_THRESHOLD) {
+              await flushBuffer(false);
+            }
+          } else if (thinkingDelta !== undefined) {
+            thinkingBuffer += thinkingDelta;
+            if (thinkingBuffer.length >= THINKING_FLUSH_THRESHOLD) {
+              await flushThinking(false);
+            }
+          } else if (event.type === "assistant" && !event.parent_tool_use_id) {
+            // トップレベルの assistant メッセージ 1 件が完成した時点で強制フラッシュ。
+            // Claude が「テキスト → ツール実行 → テキスト」と複数の応答に分かれて
+            // 喋る場合、各応答を別々の Discord 投稿として区切るため。閾値による
+            // 途中フラッシュ (上の delta 分岐) は応答内のストリーミング体感のために残す。
+            await flushThinking(true);
+            await flushBuffer(true);
+          } else if (event.type === "result") {
+            resultEvent = event;
+            // 非 success の subtype (error_max_turns 等) は Docker logs から原因を追えるよう詳細を残す。
+            if (event.subtype !== "success") {
+              log.warn(
+                `claude returned non-success subtype "${event.subtype}":`,
+                JSON.stringify(event),
+              );
+            }
+            // 非ゼロ終了でジェネレータがスローしてもセッションが残るよう即座に保存
+            await this.store.setSession(scope, event.session_id);
+          } else if (event.type === "tool_progress") {
+            await progress.report(event.tool_name, event.elapsed_time_seconds);
+          }
+        }
+
+        // バッファに残った thinking / テキストを投稿。
+        await flushThinking(true);
+        await flushBuffer(true);
+
+        // stream_event がなかった場合は result.result からフォールバック。
+        if (!hasStreamedText) {
+          if (!resultEvent) {
+            throw new Error("claude stream ended without result event");
+          }
+          await sendChunks(extractResultText(resultEvent));
+        }
+      } catch (error: unknown) {
+        // logger は Error の stack を自動で展開する。
+        log.error("failed to process message:", error);
+        const errMsg = getErrorMessage(error);
+        // エラーもまだ何も送っていなければ発言者宛にする（content 送出済みなら継続扱い）。
+        await sendChunks(`Error: ${errMsg}`).catch(() => {});
+      } finally {
+        if (downloadedImages.length > 0) {
+          await cleanupImageFiles(downloadedImages);
+        }
+        await progress.cleanup();
+        typingController.abort();
       }
-    } catch (error: unknown) {
-      // logger は Error の stack を自動で展開する。
-      log.error("failed to process message:", error);
-      const errMsg = getErrorMessage(error);
-      // エラーもまだ何も送っていなければ発言者宛にする（content 送出済みなら継続扱い）。
-      await sendChunks(`Error: ${errMsg}`).catch(() => {});
-    } finally {
-      if (downloadedImages.length > 0) {
-        await cleanupImageFiles(downloadedImages);
-      }
-      await progress.cleanup();
-      typingController.abort();
-    }
+    });
   }
 }

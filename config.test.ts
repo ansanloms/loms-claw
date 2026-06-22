@@ -52,6 +52,7 @@ Deno.test("loadConfig", async (t) => {
       assertEquals(config.claude.verbose, true);
       assertEquals(config.claude.timeout, 300000);
       assertEquals(config.claude.apiPort, 3000);
+      assertEquals(config.claude.showThinking, false);
       assertEquals(config.voice.enabled, false);
       assertEquals(config.voice.whisper.url, "http://localhost:8178");
       assertEquals(config.voice.whisper.noSpeechProbThreshold, 0.6);
