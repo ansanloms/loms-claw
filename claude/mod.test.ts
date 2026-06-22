@@ -200,6 +200,26 @@ Deno.test("buildQueryOptions", async (t) => {
     );
     assertEquals(typeof opts.canUseTool, "function");
   });
+
+  await t.step(
+    "discordToken 指定時に env へ DISCORD_BOT_TOKEN が注入されること",
+    () => {
+      const opts = buildQueryOptions(
+        baseConfig,
+        { discordToken: "bot-token-xyz" },
+        ac,
+      );
+      assertEquals(opts.env?.DISCORD_BOT_TOKEN, "bot-token-xyz");
+    },
+  );
+
+  await t.step(
+    "discordToken 未指定時は env に DISCORD_BOT_TOKEN を含まないこと",
+    () => {
+      const opts = buildQueryOptions(baseConfig, {}, ac);
+      assertEquals(opts.env?.DISCORD_BOT_TOKEN, undefined);
+    },
+  );
 });
 
 Deno.test("askClaude", async (t) => {

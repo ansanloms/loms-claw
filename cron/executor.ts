@@ -38,6 +38,8 @@ export class CronExecutor {
     private readonly client: Client,
     private readonly config: ClaudeConfig,
     private readonly guildId: string,
+    /** discord skill の curl に渡す bot トークン (query() env へ注入)。 */
+    private readonly discordToken: string,
     private readonly store: Store,
     private readonly defaults: ClaudeDefaults,
     private readonly approvalManager: ApprovalManager,
@@ -170,6 +172,7 @@ export class CronExecutor {
       const stream = askClaude(job.prompt, {
         sessionId,
         config: jobConfig,
+        discordToken: this.discordToken,
         signal: AbortSignal.timeout(timeout),
         appendSystemPrompt,
         model,

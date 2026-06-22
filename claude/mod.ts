@@ -58,6 +58,12 @@ export interface ClaudeCallOptions {
   effort?: string;
   /** ツール承認コールバック。省略時は SDK の既定 (default permission mode)。 */
   canUseTool?: CanUseTool;
+  /**
+   * Discord bot トークン。指定すると `query()` の env に `DISCORD_BOT_TOKEN`
+   * として注入する。discord skill の curl がこの env からトークンを取る
+   * (skill 側は config.json を直読みしない)。
+   */
+  discordToken?: string;
 }
 
 /**
@@ -159,8 +165,12 @@ export function buildQueryOptions(
     includePartialMessages: true,
     // process.env を明示的に渡す。SDK は env を指定すると process.env を継承しない
     // ため、CLAUDE_CONFIG_DIR 等 (SDK 同梱バイナリが読む) を失わないよう spread する。
-    // Discord トークンは skill が config.json (.discord.token) を直読みするため注入しない。
-    env: { ...Deno.env.toObject() },
+    // discord skill は curl の Authorization ヘッダに ${DISCORD_BOT_TOKEN} を使うため、
+    // トークンが渡されていれば query() の env に注入する (skill 外から供給する)。
+    env: {
+      ...Deno.env.toObject(),
+      ...(opts.discordToken ? { DISCORD_BOT_TOKEN: opts.discordToken } : {}),
+    },
     systemPrompt: {
       type: "preset",
       preset: "claude_code",
