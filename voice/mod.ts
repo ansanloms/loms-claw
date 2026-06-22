@@ -57,6 +57,8 @@ export class VoiceManager {
     private readonly voiceConfig: VoiceConfig,
     private readonly claudeConfig: ClaudeConfig,
     private readonly guildId: string,
+    /** discord skill の curl に渡す bot トークン (query() env へ注入)。 */
+    private readonly discordToken: string,
     private readonly authorizedUserId: string,
     private readonly client: Client,
     private readonly stt: SpeechToText,
@@ -498,6 +500,7 @@ export class VoiceManager {
       const voiceStream = streamClaudeForVoice(mergedText, {
         sessionId,
         config: this.claudeConfig,
+        discordToken: this.discordToken,
         signal: AbortSignal.timeout(this.claudeConfig.timeout),
         appendSystemPrompt,
         model,

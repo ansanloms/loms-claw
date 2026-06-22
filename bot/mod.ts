@@ -113,6 +113,7 @@ export class DiscordBot {
         config.voice,
         config.claude,
         config.discord.guildId,
+        config.discord.token,
         config.discord.userId,
         this.client,
         stt,
@@ -151,6 +152,7 @@ export class DiscordBot {
           this.client,
           this.config.claude,
           this.config.discord.guildId,
+          this.config.discord.token,
           this.store,
           this.config.claude.defaults,
           this.approvalManager,
@@ -459,6 +461,7 @@ export class DiscordBot {
       const stream = askClaude(prompt, {
         sessionId,
         config: this.config.claude,
+        discordToken: this.config.discord.token,
         signal: AbortSignal.timeout(this.config.claude.timeout),
         appendSystemPrompt,
         model,
