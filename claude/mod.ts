@@ -140,6 +140,32 @@ export function extractTopLevelTextDelta(
 }
 
 /**
+ * SDKMessage がトップレベル (サブエージェント以外) の thinking_delta なら、
+ * その差分テキストを返す。それ以外のイベントは `undefined` を返す。
+ *
+ * thinking (推論) ブロックは text と同じ `content_block_delta` ストリームに
+ * 流れるが `delta.type === "thinking_delta"`、フィールドは `delta.thinking`。
+ * thinking が流れるかは model / effort に依存する (effort: low 等では出ない
+ * ことがある)。{@link extractTopLevelTextDelta} の thinking 版。
+ */
+export function extractTopLevelThinkingDelta(
+  event: SDKMessage,
+): string | undefined {
+  if (event.type !== "stream_event" || event.parent_tool_use_id) {
+    return undefined;
+  }
+  const e = event.event;
+  if (
+    e.type === "content_block_delta" &&
+    "thinking" in e.delta &&
+    e.delta.type === "thinking_delta"
+  ) {
+    return e.delta.thinking;
+  }
+  return undefined;
+}
+
+/**
  * `ClaudeCallOptions` と `ClaudeConfig` から `query()` の options を構築する。
  *
  * `settingSources: ["user", "project"]` を指定して CLAUDE.md / skills /

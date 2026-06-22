@@ -10,6 +10,7 @@ const baseConfig: ClaudeConfig = {
   timeout: 300000,
   cwd: "/workspace",
   apiPort: 3000,
+  showThinking: false,
   defaults: {},
 };
 

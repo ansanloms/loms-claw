@@ -37,6 +37,8 @@ export interface ClaudeConfig {
   timeout: number;
   /** 内部 API サーバーのポート（cron + ログ）。 */
   apiPort: number;
+  /** thinking（推論）を Discord に表示するか。 */
+  showThinking: boolean;
   /** `query()` の作業ディレクトリ。実行時に `Deno.cwd()` が注入される。 */
   cwd: string;
   /** Claude のグローバルデフォルト (model / effort)。 */
