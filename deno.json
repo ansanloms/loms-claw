@@ -10,11 +10,11 @@
     "plugins": ["jsr:@aireone/deno-lint-curly"]
   },
   "imports": {
-    "@anthropic-ai/claude-agent-sdk": "npm:@anthropic-ai/claude-agent-sdk@0.3.175",
+    "@anthropic-ai/claude-agent-sdk": "npm:@anthropic-ai/claude-agent-sdk@0.3.185",
     "@discordjs/voice": "npm:@discordjs/voice@0.19.2",
-    "hono": "jsr:@hono/hono@4.12.24",
-    "@openai/openai": "jsr:@openai/openai@6.42.0",
-    "@snazzah/davey": "npm:@snazzah/davey@0.1.11",
+    "hono": "jsr:@hono/hono@4.12.26",
+    "@openai/openai": "jsr:@openai/openai@6.44.0",
+    "@snazzah/davey": "npm:@snazzah/davey@0.1.12",
     "@std/front-matter": "jsr:@std/front-matter@1.0.9",
     "discord.js": "npm:discord.js@14.26.4",
     "opusscript": "npm:opusscript@0.1.1",
