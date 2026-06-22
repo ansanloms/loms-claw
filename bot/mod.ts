@@ -515,6 +515,12 @@ export class DiscordBot {
           if (textBuffer.length >= FLUSH_THRESHOLD) {
             await flushBuffer(false);
           }
+        } else if (event.type === "assistant" && !event.parent_tool_use_id) {
+          // トップレベルの assistant メッセージ 1 件が完成した時点で強制フラッシュ。
+          // Claude が「テキスト → ツール実行 → テキスト」と複数の応答に分かれて
+          // 喋る場合、各応答を別々の Discord 投稿として区切るため。閾値による
+          // 途中フラッシュ (上の delta 分岐) は応答内のストリーミング体感のために残す。
+          await flushBuffer(true);
         } else if (event.type === "result") {
           resultEvent = event;
           // 非 success の subtype (error_max_turns 等) は Docker logs から原因を追えるよう詳細を残す。
