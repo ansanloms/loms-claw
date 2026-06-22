@@ -19,7 +19,6 @@
     "discord.js": "npm:discord.js@14.26.4",
     "opusscript": "npm:opusscript@0.1.1",
     "@std/assert": "jsr:@std/assert@1.0.19",
-    "ajv": "npm:ajv@8.20.0",
     "@std/path": "jsr:@std/path@1.1.5",
     "@cfworker/json-schema": "npm:@cfworker/json-schema@4.1.1",
     "json-schema-to-ts": "npm:json-schema-to-ts@3.1.1"

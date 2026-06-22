@@ -9,8 +9,7 @@
 
 import { join } from "jsr:@std/path@^1/join";
 import { extract } from "@std/front-matter/yaml";
-import Ajv from "ajv";
-import type { ErrorObject, ValidateFunction } from "ajv";
+import { type Schema, Validator } from "@cfworker/json-schema";
 import { createLogger } from "../logger.ts";
 import { parseCronExpression } from "./match.ts";
 import type { CronJobDef } from "./types.ts";
@@ -20,10 +19,10 @@ import { getErrorMessage } from "../errors.ts";
 const log = createLogger("cron-loader");
 
 /**
- * フロントマター用 JSON Schema。
+ * フロントマター用 JSON Schema が表す型。
  *
- * ajv の `compile()` で型ガード関数を生成し、
- * バリデーション通過後は `as` キャスト不要で型安全にアクセスできる。
+ * {@link matchesFrontMatter} の型ガードを通過すると、`as` キャスト不要で
+ * 型安全にアクセスできる。
  */
 interface CronFrontMatter {
   schedule: string;
@@ -36,42 +35,12 @@ interface CronFrontMatter {
   effort?: EffortLevel;
 }
 
-// deno の npm 互換レイヤーでは CJS default export のコンストラクタ型が解決できない
-// @ts-expect-error: Ajv CJS default export
-const ajv = new Ajv({ allErrors: true });
-
-const cronExpressionValidate = Object.assign(
-  (_schema: boolean, data: string): boolean => {
-    try {
-      parseCronExpression(data);
-      return true;
-    } catch (e) {
-      cronExpressionValidate.errors = [{
-        keyword: "cronExpression",
-        instancePath: "",
-        schemaPath: "#/cronExpression",
-        message: `invalid cron expression: ${getErrorMessage(e)}`,
-        params: { value: data },
-      }];
-      return false;
-    }
-  },
-  { errors: [] as ErrorObject[] },
-);
-
-ajv.addKeyword({
-  keyword: "cronExpression",
-  type: "string",
-  validate: cronExpressionValidate,
-  errors: true,
-});
-
-const validateFrontMatter: ValidateFunction<CronFrontMatter> = ajv.compile<
-  CronFrontMatter
->({
+// フロントマターの構造検証スキーマ。cron 式の妥当性は @cfworker の拡張点が無いため
+// schema には含めず、構造検証通過後に parseCronExpression で別途チェックする。
+const frontMatterSchema: Schema = {
   type: "object",
   properties: {
-    schedule: { type: "string", minLength: 1, cronExpression: true },
+    schedule: { type: "string", minLength: 1 },
     channelId: { oneOf: [{ type: "string" }, { type: "number" }] },
     maxTurns: { type: "number" },
     timeout: { type: "number" },
@@ -85,7 +54,19 @@ const validateFrontMatter: ValidateFunction<CronFrontMatter> = ajv.compile<
   },
   required: ["schedule"],
   additionalProperties: true,
-});
+};
+
+// shortCircuit を false にして全エラーを収集する（ajv の allErrors: true 相当）。
+const frontMatterValidator = new Validator(frontMatterSchema, "2020-12", false);
+
+/**
+ * meta がフロントマタースキーマに構造適合するかの型ガード。
+ */
+function matchesFrontMatter(
+  meta: Record<string, unknown>,
+): meta is Record<string, unknown> & CronFrontMatter {
+  return frontMatterValidator.validate(meta).valid;
+}
 
 /**
  * パース済みのフロントマターと本文を CronJobDef にバリデーションする。
@@ -102,10 +83,23 @@ export function validateCronJob(
 ): CronJobDef {
   const name = filename.replace(/\.md$/, "");
 
-  if (validateFrontMatter(meta)) {
-    // 型ガード通過: meta は CronFrontMatter に narrowing 済み
+  if (matchesFrontMatter(meta)) {
+    // 型ガード通過: meta は CronFrontMatter に narrowing 済み。
+    // 構造は妥当なので、cron 式の妥当性と本文を別途検証する。
+    const errors: string[] = [];
+
+    try {
+      parseCronExpression(meta.schedule);
+    } catch (e) {
+      errors.push(`invalid cron expression: ${getErrorMessage(e)}`);
+    }
+
     if (!body) {
-      throw new Error(`${filename}: prompt body is empty`);
+      errors.push("prompt body is empty");
+    }
+
+    if (errors.length > 0) {
+      throw new Error(`${filename}: ${errors.join("; ")}`);
     }
 
     return {
@@ -122,32 +116,31 @@ export function validateCronJob(
     };
   }
 
-  // バリデーション失敗: エラーメッセージを収集
+  // 構造検証に失敗: @cfworker のエラーを人間向けメッセージへマッピングする。
   const errors: string[] = [];
 
-  for (const err of validateFrontMatter.errors ?? []) {
-    if (err.keyword === "cronExpression") {
-      errors.push(err.message ?? "invalid cron expression");
-    } else if (err.keyword === "required") {
-      errors.push(
-        `"${err.params.missingProperty}" is required and must be a non-empty string`,
-      );
-    } else if (
-      err.keyword === "minLength" && err.instancePath === "/schedule"
-    ) {
+  for (const err of frontMatterValidator.validate(meta).errors) {
+    const field = err.instanceLocation.replace(/^#\/?/, "");
+
+    if (err.keyword === "required") {
+      const prop = /required property "([^"]+)"/.exec(err.error)?.[1] ??
+        "schedule";
+      errors.push(`"${prop}" is required and must be a non-empty string`);
+    } else if (err.keyword === "minLength" && field === "schedule") {
       errors.push('"schedule" is required and must be a non-empty string');
     } else if (err.keyword === "type") {
-      const field = err.instancePath.slice(1);
       // oneOf 配下の type エラーは親の oneOf エラーで処理するためスキップ
       if (field === "channelId") {
         continue;
       }
-      const expected = err.params.type;
+      const expected = /Expected "([^"]+)"/.exec(err.error)?.[1] ?? "value";
       errors.push(`"${field}" must be a ${expected}`);
-    } else if (err.keyword === "oneOf" && err.instancePath === "/channelId") {
+    } else if (err.keyword === "oneOf" && field === "channelId") {
       errors.push('"channelId" must be a string or number');
+    } else if (err.keyword === "enum") {
+      errors.push(`"${field}" must be one of the allowed values`);
     } else {
-      errors.push(err.message ?? "validation error");
+      errors.push(err.error);
     }
   }
 
