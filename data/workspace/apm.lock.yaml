@@ -1,76 +1,58 @@
 lockfile_version: '1'
-generated_at: '2026-06-14T11:05:34.783326+00:00'
-apm_version: 0.20.0
+generated_at: '2026-06-22T06:05:20.517828+00:00'
+apm_version: 0.18.0
 dependencies:
 - repo_url: ansanloms/skills
   host: github.com
-  resolved_commit: fdb7dc278ad827b6674f8018e46524ccbdf0818a
+  resolved_commit: 4d3a10da3e546858766941b40d566ab91039ebae
   virtual_path: bluesky
   is_virtual: true
   package_type: claude_skill
   deployed_files:
   - .claude/skills/bluesky
-  - .claude/skills/bluesky/SKILL.md
-  deployed_file_hashes:
-    .claude/skills/bluesky/SKILL.md: sha256:4b1bf9fdff308480472308e73cb8359a49b195b8638df5e01db7d4985047d921
   content_hash: sha256:14c0240f28133dabac0aab5b0afc9009195f4e5bf3d45d05202c7ccd3ac70cb6
 - repo_url: ansanloms/skills
   host: github.com
-  resolved_commit: fdb7dc278ad827b6674f8018e46524ccbdf0818a
+  resolved_commit: 4d3a10da3e546858766941b40d566ab91039ebae
   virtual_path: discord
   is_virtual: true
   package_type: claude_skill
   deployed_files:
   - .claude/skills/discord
-  - .claude/skills/discord/SKILL.md
-  deployed_file_hashes:
-    .claude/skills/discord/SKILL.md: sha256:b25989602c09cb19231179065ae048ddc1786e85086cd72f4d52614955d50f8a
   content_hash: sha256:f733710ce685049ac25ab63c0f679cc10a6dff0f920146cddb8a7eec1bc92896
 - repo_url: ansanloms/skills
   host: github.com
-  resolved_commit: fdb7dc278ad827b6674f8018e46524ccbdf0818a
+  resolved_commit: 4d3a10da3e546858766941b40d566ab91039ebae
   virtual_path: find-docs
   is_virtual: true
   package_type: claude_skill
   deployed_files:
   - .claude/skills/find-docs
-  - .claude/skills/find-docs/SKILL.md
-  deployed_file_hashes:
-    .claude/skills/find-docs/SKILL.md: sha256:bc2723051c39480a9fb63c587bfec01d65f1f650a2be64a76efb9ebf9b118042
   content_hash: sha256:2dc66974f2c064cb04595c0db3cd9ccd2e67453a2fa2287a64c69ffa539a668a
 - repo_url: ansanloms/skills
   host: github.com
-  resolved_commit: fdb7dc278ad827b6674f8018e46524ccbdf0818a
+  resolved_commit: 4d3a10da3e546858766941b40d566ab91039ebae
   virtual_path: jartic-traffic
   is_virtual: true
   package_type: claude_skill
   deployed_files:
   - .claude/skills/jartic-traffic
-  - .claude/skills/jartic-traffic/SKILL.md
-  deployed_file_hashes:
-    .claude/skills/jartic-traffic/SKILL.md: sha256:543e483a7649edb21ad5cbde7c9bfca2bd8a1674b619d81879a707cbd6652de1
   content_hash: sha256:909af724432709f23c38525e8360affc37290eab6082018f8701f655320d1c11
 - repo_url: ansanloms/skills
   host: github.com
-  resolved_commit: fdb7dc278ad827b6674f8018e46524ccbdf0818a
+  resolved_commit: 4d3a10da3e546858766941b40d566ab91039ebae
   virtual_path: news-digest
   is_virtual: true
   package_type: claude_skill
   deployed_files:
   - .claude/skills/news-digest
-  - .claude/skills/news-digest/SKILL.md
-  deployed_file_hashes:
-    .claude/skills/news-digest/SKILL.md: sha256:22460d135fb1e93d1e105c67872bc07bdd32904ab110b202718904cc0fe67df0
   content_hash: sha256:879e189c5c976bf15f6b26fcb93d5d1a40fa20395669b5585364df43db29ba74
 - repo_url: ansanloms/skills
   host: github.com
-  resolved_commit: fdb7dc278ad827b6674f8018e46524ccbdf0818a
+  resolved_commit: 4d3a10da3e546858766941b40d566ab91039ebae
   virtual_path: yamareco
   is_virtual: true
   package_type: claude_skill
   deployed_files:
   - .claude/skills/yamareco
-  - .claude/skills/yamareco/SKILL.md
-  deployed_file_hashes:
-    .claude/skills/yamareco/SKILL.md: sha256:f8c74578d84fe979fe368538944ff831b5295421bc1babf8d8ecfbd4afd142d6
-  content_hash: sha256:acb3541b4c6214c923930eb1285e867974612a7a0b3084b3afb613d42a849ccf
+  content_hash: sha256:326d2bd61e8d0e7ca60d0794d43bad52ff1daffd8edf961c1996f1b707b8adc9
