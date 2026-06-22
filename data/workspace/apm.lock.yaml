@@ -1,10 +1,10 @@
 lockfile_version: '1'
-generated_at: '2026-06-22T06:05:20.517828+00:00'
+generated_at: '2026-06-22T06:41:18.212620+00:00'
 apm_version: 0.18.0
 dependencies:
 - repo_url: ansanloms/skills
   host: github.com
-  resolved_commit: 4d3a10da3e546858766941b40d566ab91039ebae
+  resolved_commit: 160b5389d434eebf272afcf725c71bfc4848fa3a
   virtual_path: bluesky
   is_virtual: true
   package_type: claude_skill
@@ -13,7 +13,7 @@ dependencies:
   content_hash: sha256:14c0240f28133dabac0aab5b0afc9009195f4e5bf3d45d05202c7ccd3ac70cb6
 - repo_url: ansanloms/skills
   host: github.com
-  resolved_commit: 4d3a10da3e546858766941b40d566ab91039ebae
+  resolved_commit: 160b5389d434eebf272afcf725c71bfc4848fa3a
   virtual_path: discord
   is_virtual: true
   package_type: claude_skill
@@ -22,7 +22,7 @@ dependencies:
   content_hash: sha256:f733710ce685049ac25ab63c0f679cc10a6dff0f920146cddb8a7eec1bc92896
 - repo_url: ansanloms/skills
   host: github.com
-  resolved_commit: 4d3a10da3e546858766941b40d566ab91039ebae
+  resolved_commit: 160b5389d434eebf272afcf725c71bfc4848fa3a
   virtual_path: find-docs
   is_virtual: true
   package_type: claude_skill
@@ -31,7 +31,7 @@ dependencies:
   content_hash: sha256:2dc66974f2c064cb04595c0db3cd9ccd2e67453a2fa2287a64c69ffa539a668a
 - repo_url: ansanloms/skills
   host: github.com
-  resolved_commit: 4d3a10da3e546858766941b40d566ab91039ebae
+  resolved_commit: 160b5389d434eebf272afcf725c71bfc4848fa3a
   virtual_path: jartic-traffic
   is_virtual: true
   package_type: claude_skill
@@ -40,7 +40,7 @@ dependencies:
   content_hash: sha256:909af724432709f23c38525e8360affc37290eab6082018f8701f655320d1c11
 - repo_url: ansanloms/skills
   host: github.com
-  resolved_commit: 4d3a10da3e546858766941b40d566ab91039ebae
+  resolved_commit: 160b5389d434eebf272afcf725c71bfc4848fa3a
   virtual_path: news-digest
   is_virtual: true
   package_type: claude_skill
@@ -49,10 +49,10 @@ dependencies:
   content_hash: sha256:879e189c5c976bf15f6b26fcb93d5d1a40fa20395669b5585364df43db29ba74
 - repo_url: ansanloms/skills
   host: github.com
-  resolved_commit: 4d3a10da3e546858766941b40d566ab91039ebae
+  resolved_commit: 160b5389d434eebf272afcf725c71bfc4848fa3a
   virtual_path: yamareco
   is_virtual: true
   package_type: claude_skill
   deployed_files:
   - .claude/skills/yamareco
-  content_hash: sha256:326d2bd61e8d0e7ca60d0794d43bad52ff1daffd8edf961c1996f1b707b8adc9
+  content_hash: sha256:c521b1ed7b36752d6cd4f9d18d9662bd13777de060ac47a8ca48da0ac8ce87b8
