@@ -7,7 +7,8 @@ dependencies:
   - ansanloms/skills/find-docs
   - ansanloms/skills/yamareco
   - ansanloms/skills/discord
-  - ansanloms/skills/jartic-traffic
+  - ansanloms/skills/jartic-traffic-jam-forecast
+  - ansanloms/skills/jartic-traffic-volume
   - ansanloms/skills/bluesky
   - ansanloms/skills/news-digest
   mcp: []
