@@ -13,7 +13,7 @@ description: >-
 ## 情報源
 
 - 公開 AppView エンドポイント (認証不要): `https://public.api.bsky.app/xrpc/...`
-- 主なエンドポイント: `app.bsky.actor.getProfile` (プロフィール・各種件数) / `app.bsky.feed.getAuthorFeed` (投稿) / `app.bsky.graph.getFollows` (フォロー) / `app.bsky.graph.getFollowers` (フォロワー)
+- 主なエンドポイント: `app.bsky.actor.getProfile` (プロフィール・各種件数)/`app.bsky.feed.getAuthorFeed` (投稿)/`app.bsky.graph.getFollows` (フォロー)/`app.bsky.graph.getFollowers` (フォロワー)
 - API ドキュメント: <https://docs.bsky.app/docs/category/http-reference>
 
 ## 引数
@@ -24,7 +24,7 @@ description: >-
 | 範囲   | 直近 20 件         | 投稿取得時の件数 (例: 直近 20 件) か期間 (例: 直近 3 日)。指定が無ければ直近 20 件。                                                |
 | filter | `posts_no_replies` | 投稿種別。既定はオリジナル + リポスト (リプライ除外)。画像目的なら `posts_with_media`。                                             |
 
-`filter` の取りうる値は `posts_with_replies` (全部) / `posts_no_replies` (既定) / `posts_with_media` (画像付きのみ) / `posts_and_author_threads` (投稿と自己スレッド)。
+`filter` の取りうる値は `posts_with_replies` (全部)/`posts_no_replies` (既定)/`posts_with_media` (画像付きのみ)/`posts_and_author_threads` (投稿と自己スレッド)。
 
 ## 取得対象の選び方
 
@@ -45,7 +45,7 @@ curl -sS -G 'https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile' \
 | jq '{handle, displayName, description, postsCount, followsCount, followersCount}'
 ```
 
-- `displayName` と `description` (bio)、`postsCount` / `followsCount` / `followersCount` の総数が返る。
+- `displayName` と `description` (bio)、`postsCount`/`followsCount`/`followersCount` の総数が返る。
 - フォロー/フォロワー一覧を辿る前にこの総数を見て、何ページ必要かを見積もる。
 
 ## 投稿の取得
@@ -64,7 +64,7 @@ curl -sS -G 'https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed' \
 - ハンドルの実在確認が要るときだけ `com.atproto.identity.resolveHandle` を使う (例: `?handle=<handle>` で `{"did":"did:plc:..."}` が返る)。通常は不要。
 - ページネーションは、レスポンス末尾の `cursor` (タイムスタンプ文字列) を次回 `--data-urlencode "cursor=<値>"` に渡すと続きを取得できる。`cursor` が返らなくなったら終端である。
 - 期間指定のときは `cursor` を辿りつつ各投稿の活動時刻を見て、閾値より古くなった時点で打ち切る。閾値は現在 UTC から N 日を引いた時刻 (rolling) とし、暦日境界で切る必要があればユーザに確認する。境界が初回ページ内に収まれば `cursor` を辿らず終了してよい。活動時刻はオリジナルは `post.indexedAt`、リポストは `reason.indexedAt` を使う。`record.createdAt` はリポストでは元投稿の時刻を指すため期間判定に使わない。
-- 期間指定でページを辿る際は安全上限 (目安 5 ページ / 500 件) を設け、超えたら停止して「この範囲までしか確認していない」と明示する。値は捏造しない。
+- 期間指定でページを辿る際は安全上限 (目安 5 ページ/500 件) を設け、超えたら停止して「この範囲までしか確認していない」と明示する。値は捏造しない。
 
 ## 投稿の抽出と整形
 
@@ -90,8 +90,8 @@ curl -sS -G 'https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed' \
 
 - `is_repost` が真なら本人による他者投稿のリポストである。`author` (= `post.author.handle`) が元投稿者なので「リポスト: @元投稿者」と区別して示す。`reason.by.handle` がリポストした本人 (= 取得対象アカウント)。
 - embed は種別ごとに扱いを変える。
-  - `app.bsky.embed.images#view` は画像。`images[]` の `fullsize` / `alt` を使う (後述「画像の取得と表示」へ)。
-  - `app.bsky.embed.external#view` は外部リンク。`external.uri` / `external.title` を添える。
+  - `app.bsky.embed.images#view` は画像。`images[]` の `fullsize`/`alt` を使う (後述「画像の取得と表示」へ)。
+  - `app.bsky.embed.external#view` は外部リンク。`external.uri`/`external.title` を添える。
   - `app.bsky.embed.record#view` は引用投稿。`.post.embed.record` に引用元の本文がある。
 - Web URL へ変換するには、`rkey` (投稿 URI `at://{did}/app.bsky.feed.post/{rkey}` の末尾) を使い `https://bsky.app/profile/{author}/post/{rkey}` を組み立てて各投稿に併記する。リポストは元投稿者の URL になる (元投稿が `author` の下にあるため正しい)。
 
@@ -112,7 +112,7 @@ ffmpeg -y -loglevel error -i "/tmp/bluesky-{rkey}-{n}.jpg" \
 - リサイズ後のファイルを `Read` ツールでインライン表示し、`fullsize` の URL を併記する。
 - 長辺の既定は 1024px。総枚数が多くトークンが嵩む場合は長辺を 512 〜 768px へ下げる。
 - 引数省略の一般的な依頼では、本文は取得分すべてを示し、画像は画像付き投稿ごとに代表 1 枚を新しい順で添える。表示枚数は既定で最大 12 枚程度までとし、超えるときは新しい順を優先する。打ち切ったら省略した旨を明示する。コストは解像度と枚数の 2 軸で縛る。
-- 当環境に ImageMagick (`convert` / `magick`) は無い。リサイズは `ffmpeg` を使う。
+- 当環境に ImageMagick (`convert`/`magick`) は無い。リサイズは `ffmpeg` を使う。
 - 複数枚は各画像を rkey と連番で個別に curl → ffmpeg する単発コマンドの繰り返しで処理する。ループを書く場合、既定シェルが zsh だと bash 連想配列構文 (`${!arr[@]}` 等) で失敗するため `bash -c '...'` でラップする。
 - 一時ファイルは実行ごとに使い捨てディレクトリ (`mktemp -d`) を作りその中へ保存すると、過去実行の残骸と混ざらない。
 - CDN は URL が `.jpg` でも実体は WebP を返すことがある。`ffmpeg` は拡張子でなく中身で判定するため出力を `.jpg` にすれば JPEG へ再エンコードされ問題ない。`invalid TIFF header in EXIF data` の警告は無害である。
@@ -125,7 +125,7 @@ ffmpeg -y -loglevel error -i "/tmp/bluesky-{rkey}-{n}.jpg" \
 
 - 話題の偏りを見るため多めに取得する (例: `limit=50` 〜 100。会話の文脈も拾うなら `filter=posts_with_replies`)。
 - 手掛かりは、本文の頻出ハッシュタグ (`#...`)、外部リンク先のドメイン・タイトル、繰り返し出る固有名詞・話題、よくリポスト/言及する相手 (`reason.by` や本文の `@...`)。
-- フォロー先からの推察も有効である。`getFollows` で得た相手の `displayName` / `description` (bio) の傾向 (技術・登山・特定コミュニティ等) は関心分野の手掛かりになる。bio が空や一言の相手は機械的な分類から漏れやすいので、件数が偏るときは個別に目視で補い、分類しきれない分は別枠として件数を明示する (取りこぼしを関心の不在と混同しない)。機械分類は一次フィルタと割り切り、件数は単一の確定値でなく目視補正を踏まえたレンジで示す。
+- フォロー先からの推察も有効である。`getFollows` で得た相手の `displayName`/`description` (bio) の傾向 (技術・登山・特定コミュニティ等) は関心分野の手掛かりになる。bio が空や一言の相手は機械的な分類から漏れやすいので、件数が偏るときは個別に目視で補い、分類しきれない分は別枠として件数を明示する (取りこぼしを関心の不在と混同しない)。機械分類は一次フィルタと割り切り、件数は単一の確定値でなく目視補正を踏まえたレンジで示す。
 - 本人が発信する話題 (投稿) と、フォローで追っている対象は関心の性質が異なる (発信 vs 鑑賞・応援) 場合がある。総合する際はこの非対称を踏まえ、両者を区別して述べる。
 - 推定である旨を明示し、投稿やフォロー先から読み取れる範囲に留める。件数が少なければ確度が低いと添える。値を捏造しない。
 
@@ -146,8 +146,8 @@ curl -sS -G 'https://public.api.bsky.app/xrpc/app.bsky.graph.getFollowers' \
 ```
 
 - `limit` は最大 100。続きは末尾の `cursor` を次回 `--data-urlencode "cursor=<値>"` に渡す。`cursor` が返らなくなったら終端である。
-- 各要素は `handle` / `displayName` / `description` (bio) を持つ。一覧は handle を主に、必要なら displayName・bio を添える。
-- `getProfile` の `followsCount` / `followersCount` が 100 以下なら 1 リクエスト (`limit=100`) で全件取得し全件提示してよい。100 を超えるときは既定で新しい順に上位 50 件程度へ留め、`cursor` で続きを取れる旨を明示する。全件ダンプは避け、打ち切ったら省略を明示する。
+- 各要素は `handle`/`displayName`/`description` (bio) を持つ。一覧は handle を主に、必要なら displayName・bio を添える。
+- `getProfile` の `followsCount`/`followersCount` が 100 以下なら 1 リクエスト (`limit=100`) で全件取得し全件提示してよい。100 を超えるときは既定で新しい順に上位 50 件程度へ留め、`cursor` で続きを取れる旨を明示する。全件ダンプは避け、打ち切ったら省略を明示する。
 - `getProfile` の総数と、一覧で実際に列挙できる件数は一致しないことがある (削除・凍結・ブロック等のアカウントは総数に含まれても一覧から落ちる)。`cursor` が返らなければ列挙は終端であり、差は誤差としてその旨を添える。件数を補完・捏造しない。
 - 並び順は新しくフォローした順 (API 既定) である。
 
@@ -157,4 +157,4 @@ curl -sS -G 'https://public.api.bsky.app/xrpc/app.bsky.graph.getFollowers' \
 - 0 件のとき: ハンドルの誤りか、投稿/フォローが無い。`resolveHandle` で実在を確認する。値を捏造しない。
 - `limit` に 100 を超える値を渡すとエラー。100 件超はページネーションで対応する。
 - 公開 API にも緩いレート制限がある。過度なページングは避け、打ち切り条件を守る。
-- 投稿日時はユーザに示す際 JST へ直すと分かりやすい (`indexedAt` / `createdAt` は UTC の ISO 8601)。
+- 投稿日時はユーザに示す際 JST へ直すと分かりやすい (`indexedAt`/`createdAt` は UTC の ISO 8601)。

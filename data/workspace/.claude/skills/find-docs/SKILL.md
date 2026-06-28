@@ -41,7 +41,7 @@ deno run --no-lock --allow-env --allow-sys=osRelease,homedir --allow-read --allo
 - **Name** — ライブラリ・パッケージ名。
 - **Description** — 短い概要。
 - **Code Snippets** — 利用可能なコード例の数。
-- **Source Reputation** — ソースの信頼性 (High / Medium / Low / Unknown)。
+- **Source Reputation** — ソースの信頼性 (High/Medium/Low/Unknown)。
 - **Benchmark Score** — 品質指標 (100 が最高)。
 - **Versions** — バージョン一覧 (存在する場合)。バージョン指定がある場合はここから選ぶ。形式は `/org/project/version`。
 
@@ -50,7 +50,7 @@ deno run --no-lock --allow-env --allow-sys=osRelease,homedir --allow-read --allo
 最適なライブラリ ID を次の優先順位で決定する。上位で差がつかない場合のみ下位で tie-break する。
 
 1. 正式名称の一致 (完全一致を優先)。
-2. ソースの信頼性 (High / Medium を推奨)。
+2. ソースの信頼性 (High/Medium を推奨)。
 3. ベンチマークスコア (高いほど良い、最高 100)。
 4. Description の関連性。
 5. Code Snippets の数 (多いほど良い)。
@@ -103,7 +103,7 @@ deno run --no-lock --allow-env --allow-sys=osRelease,homedir --allow-read --allo
 
 ## エラー処理
 
-コマンドがクォータエラー (`Monthly quota reached` / `quota exceeded` 等) で失敗した場合は、Context7 のクォータを使い切っており、これ以上はドキュメントを取得できない旨をユーザに伝える。
+コマンドがクォータエラー (`Monthly quota reached`/`quota exceeded` 等) で失敗した場合は、Context7 のクォータを使い切っており、これ以上はドキュメントを取得できない旨をユーザに伝える。
 
 取得できなかった場合に学習データから回答してはならない。Context7 のドキュメントに基づかない API 仕様・設定値の回答は、注記を添えても返さないこと。取得不可の事実だけを伝え、回答は保留する。
 
