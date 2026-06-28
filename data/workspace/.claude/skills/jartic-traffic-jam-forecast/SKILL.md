@@ -46,7 +46,7 @@ jq '{updateDate, minYearMonth, maxYearMonth, months: (.trafficJam|keys)}' highwa
 | `routeList`                   | 路線一覧。`routeId` / `name` / `directionUp` / `directionDown` (端点名)。         |
 | `trafficJam`                  | 予測本体。`trafficJam[年月][routeId]` に `directionUp` / `directionDown` の配列。 |
 
-年月キーは `YYYY-M` 形式 (月はゼロ埋めなし、例 `2026-5` `2026-10`)。先に `minYearMonth` / `maxYearMonth` と `.trafficJam|keys` で対象月の存在を確認する。
+年月キーは `YYYY-M` 形式 (月はゼロ埋めなし、例 `2026-5` `2026-10`)。先に `minYearMonth`/`maxYearMonth` と `.trafficJam|keys` で対象月の存在を確認する。
 
 ### 対象月・対象日の決め方 (お盆・GW・年末年始)
 
@@ -96,7 +96,7 @@ jq -r '.routeList[] | select(.name | test("東名|東北")) | "\(.routeId)\t\(.n
 | `cause`                   | 渋滞要因。データ無しは `―`。                                                |
 | `hourlyTrafficjam`        | 予測日・時間帯別の渋滞長配列。`{date, time, distance}` (距離は km の数値)。 |
 
-「ピークはいつか」を答えるには、該当区間の複数エントリを跨いで `hourlyTrafficjam[].distance` を比較する。`peakTime` / `peakDistance` は各エントリ内の代表値であり、月内最大とは限らない。
+「ピークはいつか」を答えるには、該当区間の複数エントリを跨いで `hourlyTrafficjam[].distance` を比較する。`peakTime`/`peakDistance` は各エントリ内の代表値であり、月内最大とは限らない。
 
 ## 2. 一般道のイベント周辺渋滞予測 (general.json)
 
@@ -173,7 +173,7 @@ jq -c '[.[] | select(type=="array") | .[] | select(any(.routeDetailList[]; .deto
 ## データの鮮度と 0 件の扱い
 
 - 取得結果には必ず `updateDate` を添える。`general.json` はシーズン外だと古い・空になりやすい。
-- `highway.json` で対象月が 0 件 (`trafficJam[年月]` が無い、または路線が空) のときは、`minYearMonth` / `maxYearMonth` で範囲を確認し、範囲外なら「予測の提供対象外」と答える。範囲内で空なら、その路線・月に渋滞予測が立っていない (=渋滞予測なし) と解する。
+- `highway.json` で対象月が 0 件 (`trafficJam[年月]` が無い、または路線が空) のときは、`minYearMonth`/`maxYearMonth` で範囲を確認し、範囲外なら「予測の提供対象外」と答える。範囲内で空なら、その路線・月に渋滞予測が立っていない (=渋滞予測なし) と解する。
 - 路線名・イベント名でヒットしない場合は `routeList` の `name` 一覧、または `general.json` の `destination` 一覧を提示して綴り・名称を確認する。憶測で別路線を当てない。
 
 ## 注意
