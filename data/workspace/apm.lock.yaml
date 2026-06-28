@@ -1,10 +1,10 @@
 lockfile_version: '1'
-generated_at: '2026-06-28T13:20:08.900160+00:00'
+generated_at: '2026-06-28T14:30:48.950513+00:00'
 apm_version: 0.21.0
 dependencies:
 - repo_url: ansanloms/skills
   host: github.com
-  resolved_commit: 07859102ce61f40979f9dde6796bd811dd990080
+  resolved_commit: a1ca4c218746d0414f89503c5086c22594f3a308
   virtual_path: bluesky
   is_virtual: true
   package_type: claude_skill
@@ -16,7 +16,7 @@ dependencies:
   content_hash: sha256:6648af8f4d59ba547538776a09d37764dc025fa1a8819f7d7ffe3c554c8de4a3
 - repo_url: ansanloms/skills
   host: github.com
-  resolved_commit: 07859102ce61f40979f9dde6796bd811dd990080
+  resolved_commit: a1ca4c218746d0414f89503c5086c22594f3a308
   virtual_path: discord
   is_virtual: true
   package_type: claude_skill
@@ -28,7 +28,7 @@ dependencies:
   content_hash: sha256:8ae53e41d679a9008831388b3e31fb0d335319f740460b7ac8569357d48cf710
 - repo_url: ansanloms/skills
   host: github.com
-  resolved_commit: 07859102ce61f40979f9dde6796bd811dd990080
+  resolved_commit: a1ca4c218746d0414f89503c5086c22594f3a308
   virtual_path: find-docs
   is_virtual: true
   package_type: claude_skill
@@ -40,7 +40,7 @@ dependencies:
   content_hash: sha256:d757dc033d4ef8554fae65e6a0bee0d27d18c1e83f7633050fb73892a0a3627d
 - repo_url: ansanloms/skills
   host: github.com
-  resolved_commit: 07859102ce61f40979f9dde6796bd811dd990080
+  resolved_commit: a1ca4c218746d0414f89503c5086c22594f3a308
   virtual_path: jartic-traffic-jam-forecast
   is_virtual: true
   package_type: claude_skill
@@ -52,7 +52,7 @@ dependencies:
   content_hash: sha256:e36965f0cbe5593afea44cbb02c2df9866c6ca8cc0a0f9d61bd841c349b1f4b3
 - repo_url: ansanloms/skills
   host: github.com
-  resolved_commit: 07859102ce61f40979f9dde6796bd811dd990080
+  resolved_commit: a1ca4c218746d0414f89503c5086c22594f3a308
   virtual_path: jartic-traffic-volume
   is_virtual: true
   package_type: claude_skill
@@ -64,19 +64,31 @@ dependencies:
   content_hash: sha256:cf2b075980d50ae22f5aeac76aa85434875623ac02961fc06f227c6c439cd7a5
 - repo_url: ansanloms/skills
   host: github.com
-  resolved_commit: 07859102ce61f40979f9dde6796bd811dd990080
+  resolved_commit: a1ca4c218746d0414f89503c5086c22594f3a308
   virtual_path: mountain-weather
   is_virtual: true
   package_type: claude_skill
   deployed_files:
   - .claude/skills/mountain-weather
   - .claude/skills/mountain-weather/SKILL.md
+  - .claude/skills/mountain-weather/scripts/.gitignore
+  - .claude/skills/mountain-weather/scripts/README.md
+  - .claude/skills/mountain-weather/scripts/cli/weekly-index.test.ts
+  - .claude/skills/mountain-weather/scripts/cli/weekly-index.ts
+  - .claude/skills/mountain-weather/scripts/deno.json
+  - .claude/skills/mountain-weather/scripts/deno.lock
   deployed_file_hashes:
-    .claude/skills/mountain-weather/SKILL.md: sha256:51518f4352b4f8a6252b84f12c2e6c5aee2e2108588550805348dc5af5522843
-  content_hash: sha256:dff6db7cf9ff0f4cc5f3462febdc6861450cee6aaccc2337ae2223e9a12a3b96
+    .claude/skills/mountain-weather/SKILL.md: sha256:3005130171810713bb80b389f5d0af8a58393d333bf2d561ba71cfdead1852f0
+    .claude/skills/mountain-weather/scripts/.gitignore: sha256:5c5daf48fdf4db42e16c29b5b3de54984bafe0c2ff367a186ca97f1d4ed48290
+    .claude/skills/mountain-weather/scripts/README.md: sha256:dbdc9733e681ee9aff997a1f681bf8dca6cd945251d7aae93791473a7ab34258
+    .claude/skills/mountain-weather/scripts/cli/weekly-index.test.ts: sha256:da09da77962df3e5076d7cd534f9948daa3a2d99fb1e3539f8201f447385e476
+    .claude/skills/mountain-weather/scripts/cli/weekly-index.ts: sha256:2c86d10591f67177d922d4ab09ea25348082361759852a98e204c396416f3ec7
+    .claude/skills/mountain-weather/scripts/deno.json: sha256:0be657cd4d3955c4e0de6e8a560a2d3057c7c015436d2d4c3dbc7e5798941213
+    .claude/skills/mountain-weather/scripts/deno.lock: sha256:b1e5cebd1c4079c9b211513d91ac200612d45dfd6e56b3ace2477e96eccbb135
+  content_hash: sha256:4286126d4fdf22b587eedc0dd53cde8a675bfb3829dd787beb208a1d0c86ae0d
 - repo_url: ansanloms/skills
   host: github.com
-  resolved_commit: 07859102ce61f40979f9dde6796bd811dd990080
+  resolved_commit: a1ca4c218746d0414f89503c5086c22594f3a308
   virtual_path: news-digest
   is_virtual: true
   package_type: claude_skill
@@ -88,7 +100,7 @@ dependencies:
   content_hash: sha256:879e189c5c976bf15f6b26fcb93d5d1a40fa20395669b5585364df43db29ba74
 - repo_url: ansanloms/skills
   host: github.com
-  resolved_commit: 07859102ce61f40979f9dde6796bd811dd990080
+  resolved_commit: a1ca4c218746d0414f89503c5086c22594f3a308
   virtual_path: yamareco
   is_virtual: true
   package_type: claude_skill
