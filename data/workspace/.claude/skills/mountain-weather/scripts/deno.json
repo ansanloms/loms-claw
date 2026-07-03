@@ -7,12 +7,13 @@
     "rules": { "tags": ["recommended"] },
     "plugins": ["jsr:@aireone/deno-lint-curly"]
   },
-  "exclude": ["coverage/"],
+  "exclude": ["coverage/", "testdata/"],
   "imports": {
-    "@std/assert": "jsr:@std/assert@1.0.19"
+    "@std/assert": "jsr:@std/assert@1.0.19",
+    "gunshi": "jsr:@gunshi/gunshi@0.35.1"
   },
   "tasks": {
-    "weekly-index": "deno run --allow-read cli/weekly-index.ts",
+    "fetch-index": "deno run --allow-net --allow-read cli/fetch-index.ts",
     "lint": "deno lint && deno check && deno fmt --check",
     "fix": "deno lint --fix && deno fmt",
     "test": "deno test -A --parallel --shuffle --coverage"
