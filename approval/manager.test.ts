@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertExists } from "@std/assert";
 import {
   type ApprovalManager,
   type ApprovalResult,
@@ -22,6 +22,7 @@ function mockManager(result: ApprovalResult): ApprovalManager {
 const toolOptions = {
   signal: new AbortController().signal,
   toolUseID: "tu-1",
+  requestId: "req-1",
 };
 
 Deno.test("createCanUseTool", async (t) => {
@@ -35,6 +36,7 @@ Deno.test("createCanUseTool", async (t) => {
       const input = { command: "ls" };
       const result = await canUseTool("Bash", input, toolOptions);
 
+      assertExists(result);
       assertEquals(result.behavior, "allow");
       if (result.behavior === "allow") {
         assertEquals(result.updatedInput, input);
@@ -51,6 +53,7 @@ Deno.test("createCanUseTool", async (t) => {
       );
       const result = await canUseTool("Bash", { command: "rm" }, toolOptions);
 
+      assertExists(result);
       assertEquals(result.behavior, "deny");
       if (result.behavior === "deny") {
         assertEquals(result.message, "Denied by user");
@@ -67,6 +70,7 @@ Deno.test("createCanUseTool", async (t) => {
       );
       const result = await canUseTool("Bash", {}, toolOptions);
 
+      assertExists(result);
       assertEquals(result.behavior, "deny");
       if (result.behavior === "deny") {
         assertEquals(result.message, "Denied");
