@@ -10,16 +10,16 @@
     "plugins": ["jsr:@aireone/deno-lint-curly"]
   },
   "imports": {
-    "@anthropic-ai/claude-agent-sdk": "npm:@anthropic-ai/claude-agent-sdk@0.3.185",
+    "@anthropic-ai/claude-agent-sdk": "npm:@anthropic-ai/claude-agent-sdk@0.3.199",
     "@discordjs/voice": "npm:@discordjs/voice@0.19.2",
-    "hono": "jsr:@hono/hono@4.12.26",
-    "@openai/openai": "jsr:@openai/openai@6.44.0",
+    "hono": "jsr:@hono/hono@4.12.27",
+    "@openai/openai": "jsr:@openai/openai@6.45.0",
     "@snazzah/davey": "npm:@snazzah/davey@0.1.12",
     "@std/front-matter": "jsr:@std/front-matter@1.0.9",
     "discord.js": "npm:discord.js@14.26.4",
     "opusscript": "npm:opusscript@0.1.1",
     "@std/assert": "jsr:@std/assert@1.0.19",
-    "@std/path": "jsr:@std/path@1.1.5",
+    "@std/path": "jsr:@std/path@1.1.6",
     "@cfworker/json-schema": "npm:@cfworker/json-schema@4.1.1",
     "json-schema-to-ts": "npm:json-schema-to-ts@3.1.1"
   },
@@ -28,7 +28,7 @@
     "dev": "deno run --allow-env --allow-sys --allow-ffi --allow-read --allow-write --allow-net --allow-run --watch main.ts",
     "test": "deno test --allow-env --allow-sys --allow-ffi --allow-read --allow-write --allow-net --allow-run --parallel --coverage=coverage && deno coverage coverage",
     "check": "deno check",
-    "generate": "deno task generate:internal",
+    "generate": "deno task generate:*",
     "generate:internal": "deno task --cwd ./docs/api bundle:json && deno task --cwd ./docs/api emit-server-schemas ../../api/internal-schemas.ts",
     "lint": "deno lint && deno fmt --check",
     "fix": "deno lint --fix && deno fmt"
