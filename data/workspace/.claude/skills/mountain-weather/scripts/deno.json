@@ -14,6 +14,9 @@
   },
   "tasks": {
     "fetch-index": "deno run --allow-net --allow-read cli/fetch-index.ts",
+    "fetch-openmeteo": "deno run --allow-net cli/fetch-openmeteo.ts",
+    "find-mountain": "deno run --allow-net --allow-read=../assets --allow-write=../assets cli/find-mountain.ts",
+    "find-area": "deno run --allow-net --allow-read=../assets --allow-write=../assets cli/find-area.ts",
     "lint": "deno lint && deno check && deno fmt --check",
     "fix": "deno lint --fix && deno fmt",
     "test": "deno test -A --parallel --shuffle --coverage"

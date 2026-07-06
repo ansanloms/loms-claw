@@ -1,10 +1,10 @@
 lockfile_version: '1'
-generated_at: '2026-07-03T04:55:58.447458+00:00'
+generated_at: '2026-07-06T01:22:21.945271+00:00'
 apm_version: 0.21.0
 dependencies:
 - repo_url: ansanloms/skills
   host: github.com
-  resolved_commit: 8118aba8b586a20361bc0b31f6511a611d9591c3
+  resolved_commit: c27a3ca09ea2ae91f037b7bd7b2be4d9b3372f70
   virtual_path: bluesky
   is_virtual: true
   package_type: claude_skill
@@ -18,7 +18,7 @@ dependencies:
   content_hash: sha256:dd5e7c8dd005876a5f173d6b1c78dadeff1e7df75dae55522feae2417ed4869b
 - repo_url: ansanloms/skills
   host: github.com
-  resolved_commit: 8118aba8b586a20361bc0b31f6511a611d9591c3
+  resolved_commit: c27a3ca09ea2ae91f037b7bd7b2be4d9b3372f70
   virtual_path: discord
   is_virtual: true
   package_type: claude_skill
@@ -32,7 +32,7 @@ dependencies:
   content_hash: sha256:2d4b649258716981068cabbb2b3032fd61f821857cb293f5a107d2eca68bdf20
 - repo_url: ansanloms/skills
   host: github.com
-  resolved_commit: 8118aba8b586a20361bc0b31f6511a611d9591c3
+  resolved_commit: c27a3ca09ea2ae91f037b7bd7b2be4d9b3372f70
   virtual_path: find-docs
   is_virtual: true
   package_type: claude_skill
@@ -46,7 +46,7 @@ dependencies:
   content_hash: sha256:999e9b5602208f3f859b5483d0d509640c9cff2f5b3fa703b7b1c21d1f6648fb
 - repo_url: ansanloms/skills
   host: github.com
-  resolved_commit: 8118aba8b586a20361bc0b31f6511a611d9591c3
+  resolved_commit: c27a3ca09ea2ae91f037b7bd7b2be4d9b3372f70
   virtual_path: jartic-traffic-jam-forecast
   is_virtual: true
   package_type: claude_skill
@@ -60,7 +60,7 @@ dependencies:
   content_hash: sha256:dbf9ee1b9c543916faa5d38c4f96c5a8b3bb35ca28eabaf2ea641cbf1236a4cd
 - repo_url: ansanloms/skills
   host: github.com
-  resolved_commit: 8118aba8b586a20361bc0b31f6511a611d9591c3
+  resolved_commit: c27a3ca09ea2ae91f037b7bd7b2be4d9b3372f70
   virtual_path: jartic-traffic-volume
   is_virtual: true
   package_type: claude_skill
@@ -74,7 +74,7 @@ dependencies:
   content_hash: sha256:988f901142386e762f41238648369b7b9fba96f7c8c7b61b4b0ab88cb92291a8
 - repo_url: ansanloms/skills
   host: github.com
-  resolved_commit: 8118aba8b586a20361bc0b31f6511a611d9591c3
+  resolved_commit: c27a3ca09ea2ae91f037b7bd7b2be4d9b3372f70
   virtual_path: mountain-weather
   is_virtual: true
   package_type: claude_skill
@@ -82,29 +82,51 @@ dependencies:
   - .claude/skills/mountain-weather
   - .claude/skills/mountain-weather/README.md
   - .claude/skills/mountain-weather/SKILL.md
+  - .claude/skills/mountain-weather/assets/jma-area.json
+  - .claude/skills/mountain-weather/assets/tenkura-mountains.json
   - .claude/skills/mountain-weather/scripts/.gitignore
   - .claude/skills/mountain-weather/scripts/README.md
+  - .claude/skills/mountain-weather/scripts/cli/area.test.ts
+  - .claude/skills/mountain-weather/scripts/cli/area.ts
   - .claude/skills/mountain-weather/scripts/cli/fetch-index.ts
+  - .claude/skills/mountain-weather/scripts/cli/fetch-openmeteo.ts
+  - .claude/skills/mountain-weather/scripts/cli/find-area.ts
+  - .claude/skills/mountain-weather/scripts/cli/find-mountain.ts
+  - .claude/skills/mountain-weather/scripts/cli/kasel.test.ts
+  - .claude/skills/mountain-weather/scripts/cli/kasel.ts
+  - .claude/skills/mountain-weather/scripts/cli/openmeteo.test.ts
+  - .claude/skills/mountain-weather/scripts/cli/openmeteo.ts
   - .claude/skills/mountain-weather/scripts/cli/parse.test.ts
   - .claude/skills/mountain-weather/scripts/cli/parse.ts
   - .claude/skills/mountain-weather/scripts/deno.json
   - .claude/skills/mountain-weather/scripts/deno.lock
   - .claude/skills/mountain-weather/scripts/testdata/aoyama-kad.utf8.html
   deployed_file_hashes:
-    .claude/skills/mountain-weather/README.md: sha256:f574c0aecb889e6cbb8d222731c1f19e847a10e4d94978851db3606704909174
-    .claude/skills/mountain-weather/SKILL.md: sha256:f03da5ad47e9bf17b6e2ced317532c24ce3bd9b2d9b0a36fcf9dec4d7fac20a5
+    .claude/skills/mountain-weather/README.md: sha256:a1b916593459f8543ebc69ddbc0e45219d3852ac01b4ecf3265490e6c6f45b41
+    .claude/skills/mountain-weather/SKILL.md: sha256:4c239bb7910a72ce0e6a9aa7e84925f02233f1bc07c8834c3f959431f7b1a4f1
+    .claude/skills/mountain-weather/assets/jma-area.json: sha256:398f89c043eed0ab252d4cbb94c7d463db278b9b37616519becdb83326d23424
+    .claude/skills/mountain-weather/assets/tenkura-mountains.json: sha256:c429f8fca4de1d760722af9b47df3bb2b3a99cc42cc5c573afe417073518deff
     .claude/skills/mountain-weather/scripts/.gitignore: sha256:5c5daf48fdf4db42e16c29b5b3de54984bafe0c2ff367a186ca97f1d4ed48290
-    .claude/skills/mountain-weather/scripts/README.md: sha256:831ba48d569949a1ba5eb36cac4d2760a50b1f88ab829427990e9b4e9bbac29a
+    .claude/skills/mountain-weather/scripts/README.md: sha256:e96b9fa3b04bff99479ce4353d6b6413df194b4c01beb5147d9bd342280c4ede
+    .claude/skills/mountain-weather/scripts/cli/area.test.ts: sha256:e0dc067a271339cdc4fb2894a558c8dbbe82f18766ac02ce9340722c526ad78f
+    .claude/skills/mountain-weather/scripts/cli/area.ts: sha256:5f1076dff96f50ac5af34194fa0a6eebb2d11708027abec401487c28cc0ef811
     .claude/skills/mountain-weather/scripts/cli/fetch-index.ts: sha256:5625aab60bc37d86a707f4734d8d66bd5bc181e75b3e242a7c34bcf88bc3bdb8
+    .claude/skills/mountain-weather/scripts/cli/fetch-openmeteo.ts: sha256:b4ae1d335e978c35de76926c482d4763d2218468e0ceeac73ed0b91162546773
+    .claude/skills/mountain-weather/scripts/cli/find-area.ts: sha256:fddae973b2ace9e89cf1ddad7370d5cc2d40fa283eb48b66de5819804df49c23
+    .claude/skills/mountain-weather/scripts/cli/find-mountain.ts: sha256:346a637ba1860ae94f7c68042df4e3a462039226ed71f37700c527b2dbd2f660
+    .claude/skills/mountain-weather/scripts/cli/kasel.test.ts: sha256:77183c6ef55f50153a09550e931cdbdf700884c1c74156e716196d84232b6f8f
+    .claude/skills/mountain-weather/scripts/cli/kasel.ts: sha256:0235938738889f94ee7849081b9ad47ccc8e1c108c1e0cbc1b8f1f82a14c2e7b
+    .claude/skills/mountain-weather/scripts/cli/openmeteo.test.ts: sha256:2157800aeab383e9a2e5a38590e1e20a0aba0a02c043f8d71110f3e8ba3d4e83
+    .claude/skills/mountain-weather/scripts/cli/openmeteo.ts: sha256:e62d25932a233ff27ec4985e1c4c517678389014f8c58d775083a86f91a8f84a
     .claude/skills/mountain-weather/scripts/cli/parse.test.ts: sha256:b70e26211007d13bb29914d0b4656b64f7a8bbb9bc2ccfdea969556d8ee59c5d
     .claude/skills/mountain-weather/scripts/cli/parse.ts: sha256:714c5b3cdeef5e9cf3bf98c609bbdee750388dbdff3a066429fba2a61084eb83
-    .claude/skills/mountain-weather/scripts/deno.json: sha256:e697d4f4a6521c67318b10cc2d108effddd2baa9e96260994675de6bd0dce491
+    .claude/skills/mountain-weather/scripts/deno.json: sha256:2d90cf9ef7318632a8bd7dfa8d1371bbde7e64f10643636aead3e397a14f6a6d
     .claude/skills/mountain-weather/scripts/deno.lock: sha256:4a504861f138b6357024ccc9486a6ff28ab0c6d87564d93b706f42dcc5ed4514
     .claude/skills/mountain-weather/scripts/testdata/aoyama-kad.utf8.html: sha256:4307c936a30115aae1fe9727fa026e91ac0de6d625c16345d33508e5720c0d3f
-  content_hash: sha256:2ac9d30a0a24b002e66a7bc7fc20c94b6eb648387c5194525423f8e36bf079cb
+  content_hash: sha256:3174fc5152c249f8f206aa78d3a07397edeefe82463ef49c2b3487360d8625a1
 - repo_url: ansanloms/skills
   host: github.com
-  resolved_commit: 8118aba8b586a20361bc0b31f6511a611d9591c3
+  resolved_commit: c27a3ca09ea2ae91f037b7bd7b2be4d9b3372f70
   virtual_path: news-digest
   is_virtual: true
   package_type: claude_skill
@@ -118,7 +140,7 @@ dependencies:
   content_hash: sha256:d833080e1a7cb61fb506ca40077f1870e3b41c9324840a8af8aaa164bf3a3512
 - repo_url: ansanloms/skills
   host: github.com
-  resolved_commit: 8118aba8b586a20361bc0b31f6511a611d9591c3
+  resolved_commit: c27a3ca09ea2ae91f037b7bd7b2be4d9b3372f70
   virtual_path: yamareco
   is_virtual: true
   package_type: claude_skill
