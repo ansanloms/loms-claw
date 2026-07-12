@@ -134,7 +134,8 @@ claude/mod.ts          askClaude(): Agent SDK の query() を呼び出し SDKMes
 claude/system-prompt.ts  SystemPromptStore: .claude/system-prompt/ 配下を起動時に読み込み、コンテキスト (chat/vc/cron) とスコープ (channelId/threadId) に応じて結合。
 claude/template.ts     replaceTemplateVariables(): システムプロンプトの {{key}} 置換。
 store/mod.ts           Store: Deno KV (SQLite backend) によるスコープ単位の session_id / model / effort / showThinking 永続化。スコープは {channelId, threadId?} の組。model / effort / showThinking は thread → channel → グローバルデフォルト (config.json `claude.defaults`) の動的フォールバック (showThinking は最終的に false)。session は thread と channel で独立。
-approval/manager.ts    ApprovalManager: Discord ボタンによるツール承認/拒否。createCanUseTool(): ApprovalResult を SDK の PermissionResult に変換する canUseTool コールバックを生成。
+approval/manager.ts    ApprovalManager: Discord ボタンによるツール承認/拒否。createCanUseTool(): ApprovalResult を SDK の PermissionResult に変換する canUseTool コールバックを生成。AskUserQuestion は承認フローを通さず QuestionManager へ委譲する。
+approval/question.ts   QuestionManager: AskUserQuestion の質問を Discord の select menu で提示し回答を収集。「Other (自由入力)」は Modal で受け付け、回答を updatedInput.answers として返す。
 approval/settings.ts   isInAllowList() / addToSettingsAllowList(): .claude/settings.json の permissions.allow 読み書き。
 api/server.ts              統合 HTTP サーバー。Hono アプリ作成、サブルート（cron / logs）マウント、共通エラーハンドラ。承認は in-process のため HTTP では扱わない。Discord 操作は Claude が公式 REST API を直接叩くため提供しない。
 api/routes/cron.ts         cron ルート（GET /cron, POST /cron/run, POST /cron/reload）。
@@ -359,6 +360,7 @@ Claude からは Bash + curl で呼び出す（ツール承認は in-process の
 - in-process `canUseTool` コールバック: ツール使用前に Discord にボタンを送信してユーザーが承認/拒否（デフォルト動作）。`createCanUseTool()` が `ApprovalManager.requestApproval()` を呼び、結果を SDK の `PermissionResult` に変換する。
 - `.claude/settings.json` の `permissions.allow`: 事前に許可するツール（ボタン確認をスキップ）。`settingSources: ["user", "project"]` で読み込まれる。
 - bypass モード: `permissionMode: "bypassPermissions"`（+ `allowDangerouslySkipPermissions`）で全ツール無条件許可（必要時のみ）。
+- `AskUserQuestion`: Claude からの質問（選択式）。承認ではなく回答収集のツールで、`createCanUseTool()` が `QuestionManager` に委譲して select menu（+ Other 自由入力の Modal）で回答を集め、`updatedInput.answers` に載せて allow で返す。キャンセル・タイムアウト（5 分）は deny となり、モデルは回答なしで続行する。**`permissions.allow` に `AskUserQuestion` を入れないこと**（SDK が `canUseTool` を呼ばず素通しし、回答が空のまま解決されるため）。
 
 ## 設定ファイル
 

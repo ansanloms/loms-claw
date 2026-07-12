@@ -18,7 +18,17 @@ import type {
   CanUseTool,
   PermissionBehavior,
 } from "@anthropic-ai/claude-agent-sdk";
+import type {
+  ModalSubmitInteraction,
+  StringSelectMenuInteraction,
+} from "discord.js";
 import { addToSettingsAllowList, isInAllowList } from "./settings.ts";
+import {
+  parseQuestions,
+  type Question,
+  QuestionManager,
+  type QuestionResult,
+} from "./question.ts";
 import { createLogger } from "../logger.ts";
 import { getErrorMessage } from "../errors.ts";
 
@@ -49,8 +59,11 @@ export class ApprovalManager {
     }
   >();
   private channelId: string | null = null;
+  private questions: QuestionManager;
 
-  constructor(private client: Client, private settingsPath: string) {}
+  constructor(private client: Client, private settingsPath: string) {
+    this.questions = new QuestionManager(client);
+  }
 
   /**
    * 承認リクエストの送信先チャンネルを設定する。
@@ -137,9 +150,45 @@ export class ApprovalManager {
   }
 
   /**
+   * AskUserQuestion の質問への回答をリクエストする。
+   *
+   * チャンネル解決 (引数 → setChannel() の fallback) はここで行い、
+   * 質問メッセージの送信・回答収集は {@link QuestionManager} に委譲する。
+   */
+  requestAnswers(
+    questions: Question[],
+    channelId?: string,
+  ): Promise<QuestionResult> {
+    return this.questions.requestAnswers(
+      questions,
+      channelId ?? this.channelId ?? undefined,
+    );
+  }
+
+  /**
+   * 質問の select メニューのインタラクションを処理する。
+   */
+  handleSelect(interaction: StringSelectMenuInteraction): Promise<boolean> {
+    return this.questions.handleSelect(interaction);
+  }
+
+  /**
+   * 質問の Other (自由入力) Modal のインタラクションを処理する。
+   */
+  handleModal(interaction: ModalSubmitInteraction): Promise<boolean> {
+    return this.questions.handleModal(interaction);
+  }
+
+  /**
    * ボタンインタラクションを処理する。
+   *
+   * 質問の Cancel ボタン → 承認ボタンの順に判定する。
    */
   async handleButton(interaction: ButtonInteraction): Promise<boolean> {
+    if (await this.questions.handleButton(interaction)) {
+      return true;
+    }
+
     const parts = interaction.customId.split(":");
     const action = parts[0];
     const requestId = parts[1];
@@ -202,12 +251,40 @@ export class ApprovalManager {
  *
  * `requestApproval` の結果 (`ApprovalResult`) を SDK の `PermissionResult` に
  * 変換する。allow 時は入力をそのまま echo back し、deny 時は理由を message に載せる。
+ *
+ * `AskUserQuestion` は承認ではなく回答収集のツールなので承認フローを通さず、
+ * `requestAnswers` で集めた回答を `updatedInput.answers` (質問文 → 選択ラベル)
+ * に載せて allow で返す。キャンセル・タイムアウト時は deny で返し、モデルは
+ * 回答なしで続行する。
+ *
+ * 注意: `.claude/settings.json` の `permissions.allow` に `AskUserQuestion` を
+ * 入れると SDK が canUseTool を呼ばずに素通しし、回答が空のまま解決される。
+ * このツールは allow list に入れないこと。
  */
 export function createCanUseTool(
   manager: ApprovalManager,
   channelId?: string,
 ): CanUseTool {
   return async (toolName, input) => {
+    if (toolName === "AskUserQuestion") {
+      const questions = parseQuestions(input);
+      if (!questions) {
+        log.warn("malformed AskUserQuestion input");
+        return { behavior: "deny", message: "Malformed AskUserQuestion input" };
+      }
+      const result = await manager.requestAnswers(questions, channelId);
+      if (result.kind === "answered") {
+        return {
+          behavior: "allow",
+          updatedInput: { ...input, answers: result.answers },
+        };
+      }
+      return {
+        behavior: "deny",
+        message: `The user did not answer (${result.reason})`,
+      };
+    }
+
     const result = await manager.requestApproval(toolName, input, channelId);
     if (result.decision === "allow") {
       return { behavior: "allow", updatedInput: input };
