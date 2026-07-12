@@ -255,7 +255,7 @@ export class DiscordBot {
    * スラッシュコマンドのハンドラ。
    */
   private async onInteraction(interaction: Interaction): Promise<void> {
-    // ボタンインタラクション（承認/拒否）
+    // ボタンインタラクション（承認/拒否、質問の Cancel）
     if (interaction.isButton()) {
       try {
         await this.approvalManager.handleButton(interaction);
@@ -265,6 +265,40 @@ export class DiscordBot {
         if (!interaction.replied && !interaction.deferred) {
           await interaction.reply({
             content: "承認処理中にエラーが発生しました。",
+            flags: MessageFlags.Ephemeral,
+          }).catch(() => {});
+        }
+      }
+      return;
+    }
+
+    // select メニュー（AskUserQuestion の回答）
+    if (interaction.isStringSelectMenu()) {
+      try {
+        await this.approvalManager.handleSelect(interaction);
+      } catch (error: unknown) {
+        const msg = getErrorMessage(error);
+        log.error("select interaction error:", msg);
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: "回答処理中にエラーが発生しました。",
+            flags: MessageFlags.Ephemeral,
+          }).catch(() => {});
+        }
+      }
+      return;
+    }
+
+    // Modal 送信（AskUserQuestion の Other 自由入力）
+    if (interaction.isModalSubmit()) {
+      try {
+        await this.approvalManager.handleModal(interaction);
+      } catch (error: unknown) {
+        const msg = getErrorMessage(error);
+        log.error("modal interaction error:", msg);
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: "回答処理中にエラーが発生しました。",
             flags: MessageFlags.Ephemeral,
           }).catch(() => {});
         }
