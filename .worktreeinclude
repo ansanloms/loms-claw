@@ -1,0 +1,17 @@
+# git worktree 作成時に git-worktree-include がメイン worktree からコピーする
+# ローカル資産の一覧 (gitignore 構文。マッチしたファイルが新しい worktree へ複製される)。
+#
+# data/ 配下の実行時データは本番 (ceres:/opt/services/loms-claw/data) から
+# メイン worktree の data/ へ同期したものを正とし、各 worktree はそこから複製する。
+
+# docker compose が host 側で読む env (存在する場合のみ)
+.env
+
+# アプリ設定 (ローカル実行用に調整した config)
+data/config.json
+
+# Claude の設定・認証情報 (CLAUDE_CONFIG_DIR が指す先)
+data/home/
+
+# エージェントワークスペース (.claude/, システムプロンプト, cron 等)
+data/workspace/
