@@ -36,6 +36,7 @@ cp .claude/skills/travel-note/TEMPLATE.md travel/YYYYMMDD-<旅行概要>.md
 - frontmatter を埋める (次節)。
 - 形態に該当しない装備サブセクションは削れ。
 - 事前計画段階では空欄でも構わない、旅行進行とともに埋めていけ。
+- `travel/PLANS.md` の「行きたい場所の種」から昇格した場合は、該当の行を PLANS.md から消す。
 - テンプレートの構造を変えたい場合は `TEMPLATE.md` 自体を編集する。
 
 ## frontmatter の運用
@@ -53,6 +54,7 @@ cp .claude/skills/travel-note/TEMPLATE.md travel/YYYYMMDD-<旅行概要>.md
 
 ## 過去ノートの参照
 
+- 全体像は `travel/index.md` を見る (status 別一覧 + 直近の旅行サマリ。cron ジョブ travel-digest が週次で自動生成)。
 - 次回計画時は `ls travel/` + 該当ファイルを `cat` して参照する。
 - ステータスや日程での絞り込みは frontmatter を使う (例: `grep -l "^status: planning" travel/*.md`)。
 
