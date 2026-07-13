@@ -11,10 +11,9 @@ data/workspace/*
 !data/workspace/memory
 !data/workspace/cron
 !data/workspace/travel
-# travel 配下の .md は原則として個人履歴 (YYYYMMDD-*.md 等) なので git 管理しない
+# travel 配下の .md は個人履歴 (YYYYMMDD-*.md 等) なので git 管理しない
+# (テンプレートは .claude/skills/travel-note/TEMPLATE.md として管理する)
 data/workspace/travel/*.md
-# 例外: TEMPLATE.md は共有資産として管理する
-!data/workspace/travel/TEMPLATE.md
 
 # Deno KV。ローカル実行ではリポジトリ直下の .claude/ にも作られる (storePath 既定値が cwd 基準のため)
 **/*.kv
