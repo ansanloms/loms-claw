@@ -22,8 +22,9 @@ user-invocable: false
 
 - パスは `travel/YYYYMMDD-<旅行概要>.md`。`YYYYMMDD` は出発日、`<旅行概要>` は行き先のスラッグ (英小文字、ハイフン区切り)。
   例: `travel/20260501-shizuoka.md`、`travel/20260608-takao.md`、`travel/20260720-yakushima-trek.md`
+- スラッグは行き先の地名のローマ字を基本とする。日本語名に地形語 (〜半島・〜湖・〜山等) が含まれるならローマ字化して含める (例: `izu-oshima`、`okutama-lake`)。同じ行き先の別計画と区別する必要があるときだけルート名等の修飾を足す (例: `tonotake-omoteone`)。
 - 出発日が未定の段階では `travel/TBD-<旅行概要>.md` とし、日程確定時に `YYYYMMDD-` へリネームする。延期等で日程が未定に戻ったら `TBD-` へ戻す。
-- Discord スレッド名 (`2026 年 5 月 1-3 日 静岡`) とファイル名 (`20260501-shizuoka.md`) は同じ旅行を指すよう揃える。
+- Discord スレッド名 (`2026 年 5 月 1-3 日 静岡`) とファイル名 (`20260501-shizuoka.md`) は同じ旅行を指すよう揃える。スレッド名の変更は discord skill で行う。Discord を操作できない文脈ではファイル側だけ更新し、スレッド名は次に Discord を操作できるときに追従させる。
 
 ## 新規作成
 
@@ -33,11 +34,15 @@ user-invocable: false
 cp .claude/skills/travel-note/TEMPLATE.md travel/YYYYMMDD-<旅行概要>.md
 ```
 
+cp は手段の一例。テンプレートの本文構造 (計画 / 装備 / 予約・チケット / 緊急連絡 / 当日メモ / 事後振り返り) と frontmatter のキー構成を保って新規作成できれば、ファイルツールで直接書いても構わない。
+
 - frontmatter を埋める (次節)。
 - 形態に該当しない装備サブセクションは削れ。
+- 削るのは `<...>` で囲まれた値プレースホルダと frontmatter の説明コメントだけ (実値に置き換えるか、書けなければ行ごと削る)。括弧書きの運用注記や見出しはノートの一部なので残す。値が空のラベル行 (「- 交通:」等) も構造なので残し、後で埋める。
+- 日程未定の間の行程セクションは、Day 見出しを省いて「日程未定」と 1 行書く (決まっている要素があれば続けて箇条書きで残す)。
 - 事前計画段階では空欄でも構わない、旅行進行とともに埋めていけ。
 - `travel/PLANS.md` の「行きたい場所の種」から昇格した場合は、該当の行を PLANS.md から消す。
-- テンプレートの構造を変えたい場合は `TEMPLATE.md` 自体を編集する。
+- `TEMPLATE.md` 自体はこの skill では編集しない (テンプレートの改訂は skill 外の運用として行う)。改訂があっても既存ノートへは遡及適用しない (既存ノートの見出し・欄はそのまま使う)。
 
 ## frontmatter の運用
 
@@ -47,6 +52,8 @@ cp .claude/skills/travel-note/TEMPLATE.md travel/YYYYMMDD-<旅行概要>.md
 - 遷移の契機: 日程が確定したら `scheduled`、当日メモを書き始めたら `ongoing`、事後振り返りを埋めたら `completed`、行かないことが確定したら `cancelled` (ノート自体は消さない)。延期で日程が未定に戻ったら `planning` へ戻し、`start_at` / `end_at` を削除する。
 - ノートを編集したら必ず `timestamp` を現在時刻 (ISO 8601、`+09:00` オフセット付き) へ更新する。
 - 日時 (`start_at` / `end_at` / `timestamp`) とスレッド ID (`thread`) は必ず引用符付きの文字列で書く (裸で書くと YAML の型自動推論で日付化・整数化して壊れる)。
+- キーの並び順は `TEMPLATE.md` に合わせる。後からキーを足すとき (`start_at` / `end_at` 等) も TEMPLATE.md と同じ位置に挿入する。
+- 日程の真実源は frontmatter (`start_at` / `end_at`)。日程確定時に本文の行程まで書き直す必要はない。本文の行程は中身が具体化した時点で書き、Day 見出しの日付もそのとき付ける。
 
 ## 記入ルール
 
@@ -54,7 +61,7 @@ cp .claude/skills/travel-note/TEMPLATE.md travel/YYYYMMDD-<旅行概要>.md
 
 ## 過去ノートの参照
 
-- 全体像は `travel/index.md` を見る (status 別一覧 + 直近の旅行サマリ。cron ジョブ travel-digest が週次で自動生成)。
+- 全体像は `travel/index.md` を見る (status 別一覧 + 直近の旅行サマリ。cron ジョブ travel-digest が週次で自動生成)。index.md は自動生成物なので手で編集しない。ノートを更新しても index.md への反映は不要 (週次 cron が追従する)。
 - 次回計画時は `ls travel/` + 該当ファイルを `cat` して参照する。
 - ステータスや日程での絞り込みは frontmatter を使う (例: `grep -l "^status: planning" travel/*.md`)。
 
@@ -70,4 +77,6 @@ cp .claude/skills/travel-note/TEMPLATE.md travel/YYYYMMDD-<旅行概要>.md
 
 対応する旅行ノートが無い場合 (ノート規約以前に立てたスレッド、またはスレッドを立てなかった日帰り等) は「新規作成」の手順でノートを作ってから埋める。ファイル名は出発日に揃える (スレッドがあればスレッド名の先頭日付と一致する)。
 
-埋め終えたら `status` を `completed` に、`timestamp` を現在時刻に更新する。
+振り返りを実行したら振り返り欄に空欄を残さない。拾えなかった欄は「不明」と書く (空欄 = 振り返り未実行、と区別するため)。形態上そもそも存在しない項目 (日帰りの宿泊等) は「不明」でなく「該当なし」と書く。判明した情報がどの欄にも収まらない場合は最も近い欄に書く (複数欄への重複記載も可)。ユーザに確認が必要だが確認できない文脈では、確認事項を「次回への申し送り」欄に残し、次に対話できるタイミングで確認する。
+
+埋め終えたら `status` を `completed` に、`timestamp` を現在時刻に更新する。実績が未取得でも、全欄を「不明」「実績未取得 (記録登録待ち)」で埋めた時点で `completed` に遷移してよい。後日の再振り返りは `completed` のまま該当欄を上書きし、`timestamp` を更新する。
