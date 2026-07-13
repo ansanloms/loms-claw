@@ -144,9 +144,12 @@ export class DiscordBot {
   async start(): Promise<void> {
     await this.systemPrompts.load();
 
-    await this.client.login(this.config.discord.token);
-
-    await new Promise<void>((resolve) => {
+    // ClientReady の listener は login() より前に登録する。
+    // discord.js は gateway の READY を受けると ClientReady を emit するが、
+    // このタイミングは login() の解決前になり得るため、login() の後に
+    // once() を登録すると発火済みイベントを取りこぼし、コマンド登録・
+    // cron 初期化・API サーバー起動が永久に実行されない。
+    const ready = new Promise<void>((resolve) => {
       this.client.once(Events.ClientReady, async (c) => {
         log.info(`logged in as ${c.user.tag}`);
         await this.registerCommands();
@@ -213,6 +216,10 @@ export class DiscordBot {
         resolve();
       });
     });
+
+    await this.client.login(this.config.discord.token);
+
+    await ready;
   }
 
   /**
