@@ -24,7 +24,7 @@ user-invocable: false
   例: `travel/20260501-shizuoka.md`、`travel/20260608-takao.md`、`travel/20260720-yakushima-trek.md`
 - スラッグは行き先の地名のローマ字を基本とする。日本語名に地形語 (〜半島・〜湖・〜山等) が含まれるならローマ字化して含める (例: `izu-oshima`、`okutama-lake`)。同じ行き先の別計画と区別する必要があるときだけルート名等の修飾を足す (例: `tonotake-omoteone`)。
 - 出発日が未定の段階では `travel/TBD-<旅行概要>.md` とし、日程確定時に `YYYYMMDD-` へリネームする。延期等で日程が未定に戻ったら `TBD-` へ戻す。
-- Discord スレッド名 (`2026 年 5 月 1-3 日 静岡`) とファイル名 (`20260501-shizuoka.md`) は同じ旅行を指すよう揃える。スレッド名の変更は discord skill で行う。Discord を操作できない文脈ではファイル側だけ更新し、スレッド名は次に Discord を操作できるときに追従させる。
+- Discord スレッド名 (`2026年5月1-3日 静岡`) とファイル名 (`20260501-shizuoka.md`) は同じ旅行を指すよう揃える。スレッド名の変更は discord skill で行う。Discord を操作できない文脈ではファイル側だけ更新し、スレッド名は次に Discord を操作できるときに追従させる。
 
 ## 新規作成
 
@@ -50,6 +50,7 @@ cp は手段の一例。テンプレートの本文構造 (計画 / 装備 / 予
 
 - `status` は旅行の状態: `planning` (検討中・日程未定) / `scheduled` (日程確定・実施待ち) / `ongoing` (旅行中) / `completed` (実施済) / `cancelled` (中止・行かないことが確定)。
 - 遷移の契機: 日程が確定したら `scheduled`、当日メモを書き始めたら `ongoing`、事後振り返りを埋めたら `completed`、行かないことが確定したら `cancelled` (ノート自体は消さない)。延期で日程が未定に戻ったら `planning` へ戻し、`start_at` / `end_at` を削除する。
+- `scheduled` へ遷移するときは `start_at` / `end_at` を必ず記入する (日程の真実源は frontmatter。ファイル名・スレッド名だけに日付を持たせない)。時刻が未確定の間の暫定値は `TEMPLATE.md` のコメントに従う。
 - ノートを編集したら必ず `timestamp` を現在時刻 (ISO 8601、`+09:00` オフセット付き) へ更新する。
 - 日時 (`start_at` / `end_at` / `timestamp`) とスレッド ID (`thread`) は必ず引用符付きの文字列で書く (裸で書くと YAML の型自動推論で日付化・整数化して壊れる)。
 - キーの並び順は `TEMPLATE.md` に合わせる。後からキーを足すとき (`start_at` / `end_at` 等) も TEMPLATE.md と同じ位置に挿入する。
