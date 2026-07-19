@@ -1,7 +1,13 @@
 {
   "$schema": "https://raw.githubusercontent.com/denoland/deno/refs/heads/main/cli/schemas/config-file.v1.json",
   "unstable": ["temporal", "kv"],
-  "exclude": ["data/", "coverage/", "docs/api", "api/internal-schemas.ts"],
+  "exclude": [
+    "data/",
+    "coverage/",
+    "docs/api",
+    "api/internal-schemas.ts",
+    ".claude/worktrees/"
+  ],
   "fmt": {
     "proseWrap": "preserve"
   },
