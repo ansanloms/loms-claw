@@ -25,5 +25,17 @@
       "mcp__claude_ai_Gmail__search_threads",
       "mcp__claude_ai_Google_Calendar__list_events"
     ]
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -cn --arg t \"Current time: $(date --iso-8601=seconds)\" '{hookSpecificOutput:{hookEventName:\"UserPromptSubmit\",additionalContext:$t}}'"
+          }
+        ]
+      }
+    ]
   }
 }
