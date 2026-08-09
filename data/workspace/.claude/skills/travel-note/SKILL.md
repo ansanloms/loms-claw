@@ -1,14 +1,14 @@
 ---
 name: travel-note
 description: >-
-  travel/ 配下の旅行ノート (AI 専用ストック) の作成・更新手順。旅行 1 件につき 1 ノートを持ち、計画・当日メモ・事後振り返りを 1 ファイルで管理する。旅行ノートの新規作成、frontmatter (status・日程等) の更新、ファイル命名・リネーム、事後振り返り欄の記入、過去ノートの検索・参照の際に使う。
+  memory/travel/ 配下の旅行ノート (AI 専用ストック) の作成・更新手順。旅行 1 件につき 1 ノートを持ち、計画・当日メモ・事後振り返りを 1 ファイルで管理する。旅行ノートの新規作成、frontmatter (status・日程等) の更新、ファイル命名・リネーム、事後振り返り欄の記入、過去ノートの検索・参照の際に使う。
   ノートは OKF (Open Knowledge Format) 準拠の YAML frontmatter でメタ情報を持ち、テンプレート (TEMPLATE.md) はこの skill と同じディレクトリに置く。
 user-invocable: false
 ---
 
 # 旅行ノートの書き方
 
-`travel/` 配下で旅行 1 件につき 1 つの Markdown ノートを管理する手順。
+`memory/travel/` 配下で旅行 1 件につき 1 つの Markdown ノートを管理する手順。
 
 ## 位置付け
 
@@ -16,14 +16,14 @@ user-invocable: false
 
 旅行終了後もファイルは削除するな。事後振り返りを埋めて、次回計画の材料にする。
 
-なお、まだ具体化していない行き先の種や、個別の旅行に紐付かない定番情報は `travel/PLANS.md` が持つ。具体的な計画・相談が始まった時点でこの skill の手順でノート化する。
+なお、まだ具体化していない行き先の種や、個別の旅行に紐付かない定番情報は `memory/travel/PLANS.md` が持つ。具体的な計画・相談が始まった時点でこの skill の手順でノート化する。
 
 ## ファイル命名
 
-- パスは `travel/YYYYMMDD-<旅行概要>.md`。`YYYYMMDD` は出発日、`<旅行概要>` は行き先のスラッグ (英小文字、ハイフン区切り)。
-  例: `travel/20260501-shizuoka.md`、`travel/20260608-takao.md`、`travel/20260720-yakushima-trek.md`
+- パスは `memory/travel/YYYYMMDD-<旅行概要>.md`。`YYYYMMDD` は出発日、`<旅行概要>` は行き先のスラッグ (英小文字、ハイフン区切り)。
+  例: `memory/travel/20260501-shizuoka.md`、`memory/travel/20260608-takao.md`、`memory/travel/20260720-yakushima-trek.md`
 - スラッグは行き先の地名のローマ字を基本とする。日本語名に地形語 (〜半島・〜湖・〜山等) が含まれるならローマ字化して含める (例: `izu-oshima`、`okutama-lake`)。同じ行き先の別計画と区別する必要があるときだけルート名等の修飾を足す (例: `tonotake-omoteone`)。
-- 出発日が未定の段階では `travel/TBD-<旅行概要>.md` とし、日程確定時に `YYYYMMDD-` へリネームする。延期等で日程が未定に戻ったら `TBD-` へ戻す。
+- 出発日が未定の段階では `memory/travel/TBD-<旅行概要>.md` とし、日程確定時に `YYYYMMDD-` へリネームする。延期等で日程が未定に戻ったら `TBD-` へ戻す。
 - Discord スレッド名 (`2026年5月1-3日 静岡`) とファイル名 (`20260501-shizuoka.md`) は同じ旅行を指すよう揃える。スレッド名の変更は discord skill で行う。Discord を操作できない文脈ではファイル側だけ更新し、スレッド名は次に Discord を操作できるときに追従させる。
 
 ## 新規作成
@@ -31,7 +31,7 @@ user-invocable: false
 この skill と同じディレクトリの `TEMPLATE.md` を起点にコピーして使う:
 
 ```sh
-cp .claude/skills/travel-note/TEMPLATE.md travel/YYYYMMDD-<旅行概要>.md
+cp .claude/skills/travel-note/TEMPLATE.md memory/travel/YYYYMMDD-<旅行概要>.md
 ```
 
 cp は手段の一例。テンプレートの本文構造 (計画 / 装備 / 予約・チケット / 緊急連絡 / 当日メモ / 事後振り返り) と frontmatter のキー構成を保って新規作成できれば、ファイルツールで直接書いても構わない。
@@ -41,7 +41,7 @@ cp は手段の一例。テンプレートの本文構造 (計画 / 装備 / 予
 - 削るのは `<...>` で囲まれた値プレースホルダと frontmatter の説明コメントだけ (実値に置き換えるか、書けなければ行ごと削る)。括弧書きの運用注記や見出しはノートの一部なので残す。値が空のラベル行 (「- 交通:」等) も構造なので残し、後で埋める。
 - 日程未定の間の行程セクションは、Day 見出しを省いて「日程未定」と 1 行書く (決まっている要素があれば続けて箇条書きで残す)。
 - 事前計画段階では空欄でも構わない、旅行進行とともに埋めていけ。
-- `travel/PLANS.md` の「行きたい場所の種」から昇格した場合は、該当の行を PLANS.md から消す。
+- `memory/travel/PLANS.md` の「行きたい場所の種」から昇格した場合は、該当の行を PLANS.md から消す。
 - `TEMPLATE.md` 自体はこの skill では編集しない (テンプレートの改訂は skill 外の運用として行う)。改訂があっても既存ノートへは遡及適用しない (既存ノートの見出し・欄はそのまま使う)。
 
 ## frontmatter の運用
@@ -62,9 +62,9 @@ cp は手段の一例。テンプレートの本文構造 (計画 / 装備 / 予
 
 ## 過去ノートの参照
 
-- 全体像は `travel/index.md` を見る (status 別一覧 + 直近の旅行サマリ。cron ジョブ travel-digest が週次で自動生成)。index.md は自動生成物なので手で編集しない。ノートを更新しても index.md への反映は不要 (週次 cron が追従する)。
-- 次回計画時は `ls travel/` + 該当ファイルを `cat` して参照する。
-- ステータスや日程での絞り込みは frontmatter を使う (例: `grep -l "^status: planning" travel/*.md`)。
+- 全体像は `memory/travel/index.md` を見る (status 別一覧 + 直近の旅行サマリ。cron ジョブ travel-digest が週次で自動生成)。index.md は自動生成物なので手で編集しない。ノートを更新しても index.md への反映は不要 (週次 cron が追従する)。
+- 次回計画時は `ls memory/travel/` + 該当ファイルを `cat` して参照する。
+- ステータスや日程での絞り込みは frontmatter を使う (例: `grep -l "^status: planning" memory/travel/*.md`)。
 
 ## 事後振り返りの埋め方
 
