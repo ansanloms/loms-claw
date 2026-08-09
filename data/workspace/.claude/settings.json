@@ -3,6 +3,9 @@
   "language": "japanese",
   "enableAllProjectMcpServers": true,
   "plansDirectory": ".claude/plans",
+  "env": {
+    "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1"
+  },
   "permissions": {
     "allow": [
       "mcp__claude_ai_Google_Calendar__gcal_list_events",

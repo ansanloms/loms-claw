@@ -3,6 +3,10 @@
 ワークスペースの `memory/` 配下にファイルベースの永続メモリがある。
 ディスクに保存したものだけが記憶。隠れた状態は存在しない。
 
+Claude Code 組み込みの auto memory（`~/.claude/projects/` 配下の memory/）は
+settings.json の `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` で無効化している。
+記憶の保存先はこのルールが定める `memory/` のみ。そちらには書くな。
+
 ## ストレージ構成
 
 ### memory/MEMORY.md（索引 + 横断的な好み）
