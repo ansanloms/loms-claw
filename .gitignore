@@ -3,17 +3,13 @@ coverage/
 **/.claude/settings.local.json
 
 # 実行時データ (data/ 配下)。ワークスペースの共有資産のみ追跡する
+# 個人データは data/workspace/memory/ に集約し、丸ごと管理外とする
 data/config.json
 data/home/*
 data/workspace/*
 !data/workspace/.claude
 !data/workspace/CLAUDE.md
-!data/workspace/memory
 !data/workspace/cron
-!data/workspace/travel
-# travel 配下の .md は個人履歴 (YYYYMMDD-*.md 等) なので git 管理しない
-# (テンプレートは .claude/skills/travel-note/TEMPLATE.md として管理する)
-data/workspace/travel/*.md
 
 # Deno KV。ローカル実行ではリポジトリ直下の .claude/ にも作られる (storePath 既定値が cwd 基準のため)
 **/*.kv
