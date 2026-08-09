@@ -1,0 +1,17 @@
+get:
+  operationId: getSettingsDefault
+  summary: グローバルデフォルト設定の取得。
+  tags:
+    - settings
+  description: config.json の claude.defaults に由来するグローバルデフォルト設定を取得する。読み取り専用であり、config.json はランタイムで書き換えない方針のため PATCH/DELETE は定義しない。
+  responses:
+    200:
+      description: 処理成功時。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/DefaultSettings.yaml
+          examples:
+            succeeded:
+              value:
+                $ref: ../examples/ResponseGetSettingsDefault.yaml

@@ -1,0 +1,34 @@
+type: object
+description: スコープ設定の部分更新リクエスト。JSON Merge Patch (RFC 7386) の意味論に従う。指定しなかったキーは変更せず、値に null を指定したキーは設定を削除してフォールバック解決へ戻す。
+additionalProperties: false
+minProperties: 1
+properties:
+  model:
+    type:
+      - string
+      - "null"
+    minLength: 1
+    description: モデルの alias またはフルネーム。null を指定すると削除し、フォールバック解決へ戻す。
+    example: claude-sonnet-4-5
+  effort:
+    type:
+      - string
+      - "null"
+    description: effort レベル。null を指定すると削除し、フォールバック解決へ戻す。
+    enum:
+      - low
+      - medium
+      - high
+      - xhigh
+      - max
+      - null
+    example: high
+  showThinking:
+    type:
+      - boolean
+      - "null"
+    description: thinking 表示設定。null を指定すると削除し、フォールバック解決へ戻す。
+    example: true
+  session:
+    type: "null"
+    description: セッションの削除指定のみを許可する。null 以外の値の書き込みを許可すると、任意のセッション ID を指定して他スコープの会話セッションを乗っ取れる経路になるため、削除以外の操作は許可しない。

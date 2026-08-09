@@ -12,6 +12,8 @@ tags:
     description: cron ジョブの一覧取得・手動実行・再読み込み API。
   - name: logs
     description: メモリ上のリングバッファからのログ取得 API。
+  - name: settings
+    description: チャンネル/スレッド単位の設定の取得・更新・削除 API。
 paths:
   /cron:
     $ref: ./paths/cron.yaml
@@ -21,14 +23,30 @@ paths:
     $ref: ./paths/cron.run.yaml
   /logs:
     $ref: ./paths/logs.yaml
+  /settings/default:
+    $ref: ./paths/settings.default.yaml
+  /settings/{id}:
+    $ref: ./paths/settings.{id}.yaml
 components:
   schemas:
+    BoolSettingEntry:
+      $ref: ./components/schemas/BoolSettingEntry.yaml
     CronJob:
       $ref: ./components/schemas/CronJob.yaml
+    DefaultSettings:
+      $ref: ./components/schemas/DefaultSettings.yaml
     LogEntry:
       $ref: ./components/schemas/LogEntry.yaml
+    ScopeSettings:
+      $ref: ./components/schemas/ScopeSettings.yaml
+    SettingEntry:
+      $ref: ./components/schemas/SettingEntry.yaml
+    RequestPatchSettings:
+      $ref: ./components/schemas/RequestPatchSettings.yaml
     RequestPostCronRun:
       $ref: ./components/schemas/RequestPostCronRun.yaml
+    ResponseDeleteSettings:
+      $ref: ./components/schemas/ResponseDeleteSettings.yaml
     ResponseError:
       $ref: ./components/schemas/ResponseError.yaml
     ResponseGetCron:

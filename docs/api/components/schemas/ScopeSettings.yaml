@@ -1,0 +1,16 @@
+type: object
+description: スコープの解決済み設定。model/effort/showThinking は thread → channel → default の順にフォールバックして解決する。session は thread と channel で独立しており、フォールバックしない。
+additionalProperties: false
+required:
+  - showThinking
+properties:
+  session:
+    type: string
+    description: セッション ID。未設定の場合はフィールドごと省略される。
+    example: 550e8400-e29b-41d4-a716-446655440000
+  model:
+    $ref: ./SettingEntry.yaml
+  effort:
+    $ref: ./SettingEntry.yaml
+  showThinking:
+    $ref: ./BoolSettingEntry.yaml

@@ -1,0 +1,19 @@
+type: object
+description: boolean 設定値とその出所。
+additionalProperties: false
+required:
+  - value
+  - source
+properties:
+  value:
+    type: boolean
+    description: 解決された設定値。
+    example: false
+  source:
+    type: string
+    description: 値の出所。thread はスレッド固有値、channel は親チャンネル値、default はグローバルデフォルト値を表す。ただし parentId を指定せず id 単独スコープで解決した場合、channel は id 自身に設定された値を指す。
+    enum:
+      - thread
+      - channel
+      - default
+    example: default

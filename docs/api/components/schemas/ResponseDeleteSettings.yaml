@@ -1,0 +1,10 @@
+type: object
+description: スコープ設定の削除結果。
+additionalProperties: false
+required:
+  - ok
+properties:
+  ok:
+    type: boolean
+    description: 削除を受け付けたか。常に true を返す。
+    example: true
