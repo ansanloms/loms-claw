@@ -1,0 +1,88 @@
+parameters:
+  - in: path
+    name: id
+    required: true
+    description: スコープを表す ID。チャンネル ID/スレッド ID (Discord Snowflake) のいずれか、または cron の擬似 ID `cron:{name}` を指定する。
+    schema:
+      type: string
+    example: "1234567890123456789"
+get:
+  operationId: getSettings
+  summary: スコープ設定の取得。
+  tags:
+    - settings
+  description: 指定スコープの解決済み設定を取得する。
+  parameters:
+    - in: query
+      name: parentId
+      required: false
+      description: id がスレッドの場合に親チャンネル ID を指定する。指定すると thread → channel → default の順でフォールバック解決する。省略時は id を単独スコープとして解決する。
+      schema:
+        type: string
+      example: "9876543210987654321"
+  responses:
+    200:
+      description: 処理成功時。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ScopeSettings.yaml
+          examples:
+            succeeded:
+              value:
+                $ref: ../examples/ResponseGetSettings.yaml
+patch:
+  operationId: patchSettings
+  summary: スコープ設定の部分更新。
+  tags:
+    - settings
+  description: 指定スコープの設定を JSON Merge Patch (RFC 7386) の意味論で部分更新する。書き込みは id 単独のスコープに対して行うため parentId は取らない。レスポンスも id 単独スコープで解決した結果を返す点に注意する (親チャンネルへのフォールバックは反映されない)。
+  requestBody:
+    required: true
+    description: 更新内容。
+    content:
+      application/json:
+        schema:
+          $ref: ../components/schemas/RequestPatchSettings.yaml
+        examples:
+          normal:
+            value:
+              $ref: ../examples/RequestPatchSettings.yaml
+  responses:
+    200:
+      description: 処理成功時。id 単独スコープで解決した更新後の設定を返す。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ScopeSettings.yaml
+          examples:
+            succeeded:
+              value:
+                $ref: ../examples/ResponsePatchSettings.yaml
+    400:
+      description: リクエストボディがスキーマに適合しない場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            badRequest:
+              value:
+                $ref: ../examples/ResponseError.yaml
+delete:
+  operationId: deleteSettings
+  summary: スコープ設定の削除。
+  tags:
+    - settings
+  description: 指定スコープの設定を全削除する。threadId 相当の id を指定した場合はその id 配下のキーのみ消え、親チャンネルの設定は残る。
+  responses:
+    200:
+      description: 処理成功時。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseDeleteSettings.yaml
+          examples:
+            succeeded:
+              value:
+                $ref: ../examples/ResponseDeleteSettings.yaml

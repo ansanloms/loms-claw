@@ -1,0 +1,24 @@
+type: object
+description: config.json の claude.defaults に由来するグローバルデフォルト設定。出所 (source) は持たない。
+additionalProperties: false
+required:
+  - showThinking
+properties:
+  model:
+    type: string
+    description: デフォルトのモデル alias またはフルネーム。config.json で未設定の場合はフィールドごと省略される。
+    example: claude-sonnet-4-5
+  effort:
+    type: string
+    description: デフォルトの effort レベル。config.json で未設定の場合はフィールドごと省略される。
+    enum:
+      - low
+      - medium
+      - high
+      - xhigh
+      - max
+    example: high
+  showThinking:
+    type: boolean
+    description: デフォルトの thinking 表示設定。config.json で未設定でも false が入る。
+    example: false

@@ -5,6 +5,32 @@
 // 型 (json-schema-to-ts の FromSchema) と検証 (@cfworker/json-schema) を得る。
 
 export const internalSchemas = {
+  "BoolSettingEntry": {
+    "type": "object",
+    "description": "boolean 設定値とその出所。",
+    "additionalProperties": false,
+    "required": [
+      "value",
+      "source"
+    ],
+    "properties": {
+      "value": {
+        "type": "boolean",
+        "description": "解決された設定値。",
+        "example": false
+      },
+      "source": {
+        "type": "string",
+        "description": "値の出所。thread はスレッド固有値、channel は親チャンネル値、default はグローバルデフォルト値を表す。ただし parentId を指定せず id 単独スコープで解決した場合、channel は id 自身に設定された値を指す。",
+        "enum": [
+          "thread",
+          "channel",
+          "default"
+        ],
+        "example": "default"
+      }
+    }
+  },
   "CronJob": {
     "type": "object",
     "description": "登録済み cron ジョブ。",
@@ -29,6 +55,38 @@ export const internalSchemas = {
       "once": {
         "type": "boolean",
         "description": "1 回実行後にジョブファイルを自動削除するか。"
+      }
+    }
+  },
+  "DefaultSettings": {
+    "type": "object",
+    "description": "config.json の claude.defaults に由来するグローバルデフォルト設定。出所 (source) は持たない。",
+    "additionalProperties": false,
+    "required": [
+      "showThinking"
+    ],
+    "properties": {
+      "model": {
+        "type": "string",
+        "description": "デフォルトのモデル alias またはフルネーム。config.json で未設定の場合はフィールドごと省略される。",
+        "example": "claude-sonnet-4-5"
+      },
+      "effort": {
+        "type": "string",
+        "description": "デフォルトの effort レベル。config.json で未設定の場合はフィールドごと省略される。",
+        "enum": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "example": "high"
+      },
+      "showThinking": {
+        "type": "boolean",
+        "description": "デフォルトの thinking 表示設定。config.json で未設定でも false が入る。",
+        "example": false
       }
     }
   },
@@ -68,6 +126,101 @@ export const internalSchemas = {
       }
     }
   },
+  "ScopeSettings": {
+    "type": "object",
+    "description": "スコープの解決済み設定。model/effort/showThinking は thread → channel → default の順にフォールバックして解決する。session は thread と channel で独立しており、フォールバックしない。",
+    "additionalProperties": false,
+    "required": [
+      "showThinking"
+    ],
+    "properties": {
+      "session": {
+        "type": "string",
+        "description": "セッション ID。未設定の場合はフィールドごと省略される。",
+        "example": "550e8400-e29b-41d4-a716-446655440000"
+      },
+      "model": {
+        "$ref": "#/components/schemas/SettingEntry"
+      },
+      "effort": {
+        "$ref": "#/components/schemas/SettingEntry"
+      },
+      "showThinking": {
+        "$ref": "#/components/schemas/BoolSettingEntry"
+      }
+    }
+  },
+  "SettingEntry": {
+    "type": "object",
+    "description": "文字列設定値とその出所。",
+    "additionalProperties": false,
+    "required": [
+      "value",
+      "source"
+    ],
+    "properties": {
+      "value": {
+        "type": "string",
+        "description": "解決された設定値。",
+        "example": "claude-sonnet-4-5"
+      },
+      "source": {
+        "type": "string",
+        "description": "値の出所。thread はスレッド固有値、channel は親チャンネル値、default はグローバルデフォルト値を表す。ただし parentId を指定せず id 単独スコープで解決した場合、channel は id 自身に設定された値を指す。",
+        "enum": [
+          "thread",
+          "channel",
+          "default"
+        ],
+        "example": "channel"
+      }
+    }
+  },
+  "RequestPatchSettings": {
+    "type": "object",
+    "description": "スコープ設定の部分更新リクエスト。JSON Merge Patch (RFC 7386) の意味論に従う。指定しなかったキーは変更せず、値に null を指定したキーは設定を削除してフォールバック解決へ戻す。",
+    "additionalProperties": false,
+    "minProperties": 1,
+    "properties": {
+      "model": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1,
+        "description": "モデルの alias またはフルネーム。null を指定すると削除し、フォールバック解決へ戻す。",
+        "example": "claude-sonnet-4-5"
+      },
+      "effort": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "effort レベル。null を指定すると削除し、フォールバック解決へ戻す。",
+        "enum": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max",
+          null
+        ],
+        "example": "high"
+      },
+      "showThinking": {
+        "type": [
+          "boolean",
+          "null"
+        ],
+        "description": "thinking 表示設定。null を指定すると削除し、フォールバック解決へ戻す。",
+        "example": true
+      },
+      "session": {
+        "type": "null",
+        "description": "セッションの削除指定のみを許可する。null 以外の値の書き込みを許可すると、任意のセッション ID を指定して他スコープの会話セッションを乗っ取れる経路になるため、削除以外の操作は許可しない。"
+      }
+    }
+  },
   "RequestPostCronRun": {
     "type": "object",
     "description": "cron ジョブ手動実行リクエスト。",
@@ -80,6 +233,21 @@ export const internalSchemas = {
         "type": "string",
         "minLength": 1,
         "description": "実行するジョブ名。"
+      }
+    }
+  },
+  "ResponseDeleteSettings": {
+    "type": "object",
+    "description": "スコープ設定の削除結果。",
+    "additionalProperties": false,
+    "required": [
+      "ok"
+    ],
+    "properties": {
+      "ok": {
+        "type": "boolean",
+        "description": "削除を受け付けたか。常に true を返す。",
+        "example": true
       }
     }
   },
