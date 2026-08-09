@@ -1,10 +1,12 @@
 lockfile_version: '1'
-generated_at: '2026-07-06T01:22:21.945271+00:00'
-apm_version: 0.21.0
+generated_at: '2026-08-09T02:13:59.676042+00:00'
+apm_version: 0.27.0
 dependencies:
 - repo_url: ansanloms/skills
+  name: bluesky
   host: github.com
-  resolved_commit: c27a3ca09ea2ae91f037b7bd7b2be4d9b3372f70
+  resolved_commit: b9cc726d6963e528ac67bfbc5d3b456d96354b39
+  version: unknown
   virtual_path: bluesky
   is_virtual: true
   package_type: claude_skill
@@ -17,8 +19,10 @@ dependencies:
     .claude/skills/bluesky/SKILL.md: sha256:b969ba2a180a033d7cb0d96bc8828c9fdd92daf2a85d74e629aa053aaa112784
   content_hash: sha256:dd5e7c8dd005876a5f173d6b1c78dadeff1e7df75dae55522feae2417ed4869b
 - repo_url: ansanloms/skills
+  name: discord
   host: github.com
-  resolved_commit: c27a3ca09ea2ae91f037b7bd7b2be4d9b3372f70
+  resolved_commit: b9cc726d6963e528ac67bfbc5d3b456d96354b39
+  version: unknown
   virtual_path: discord
   is_virtual: true
   package_type: claude_skill
@@ -31,8 +35,10 @@ dependencies:
     .claude/skills/discord/SKILL.md: sha256:b0fb8b8f69b08ee2311e4aa0ad9b4090d5d9cd51bc3b2c10394ab8fa572888ab
   content_hash: sha256:2d4b649258716981068cabbb2b3032fd61f821857cb293f5a107d2eca68bdf20
 - repo_url: ansanloms/skills
+  name: find-docs
   host: github.com
-  resolved_commit: c27a3ca09ea2ae91f037b7bd7b2be4d9b3372f70
+  resolved_commit: b9cc726d6963e528ac67bfbc5d3b456d96354b39
+  version: unknown
   virtual_path: find-docs
   is_virtual: true
   package_type: claude_skill
@@ -45,8 +51,10 @@ dependencies:
     .claude/skills/find-docs/SKILL.md: sha256:f9a1afea99a9f9a880eef532ffd83ae12229ccba67bd6dc9b73464cf31c75e63
   content_hash: sha256:999e9b5602208f3f859b5483d0d509640c9cff2f5b3fa703b7b1c21d1f6648fb
 - repo_url: ansanloms/skills
+  name: jartic-traffic-jam-forecast
   host: github.com
-  resolved_commit: c27a3ca09ea2ae91f037b7bd7b2be4d9b3372f70
+  resolved_commit: b9cc726d6963e528ac67bfbc5d3b456d96354b39
+  version: unknown
   virtual_path: jartic-traffic-jam-forecast
   is_virtual: true
   package_type: claude_skill
@@ -59,8 +67,10 @@ dependencies:
     .claude/skills/jartic-traffic-jam-forecast/SKILL.md: sha256:c7d141d4e6fd0f7fa24979ed29cac6670bb1f2152162d54d7b48c267d3679bf6
   content_hash: sha256:dbf9ee1b9c543916faa5d38c4f96c5a8b3bb35ca28eabaf2ea641cbf1236a4cd
 - repo_url: ansanloms/skills
+  name: jartic-traffic-volume
   host: github.com
-  resolved_commit: c27a3ca09ea2ae91f037b7bd7b2be4d9b3372f70
+  resolved_commit: b9cc726d6963e528ac67bfbc5d3b456d96354b39
+  version: unknown
   virtual_path: jartic-traffic-volume
   is_virtual: true
   package_type: claude_skill
@@ -73,8 +83,10 @@ dependencies:
     .claude/skills/jartic-traffic-volume/SKILL.md: sha256:a753ecd08edc74c1e07c63ca2ab1c72ada2c8da0bb4fe5d5908e4a51c1bca216
   content_hash: sha256:988f901142386e762f41238648369b7b9fba96f7c8c7b61b4b0ab88cb92291a8
 - repo_url: ansanloms/skills
+  name: mountain-weather
   host: github.com
-  resolved_commit: c27a3ca09ea2ae91f037b7bd7b2be4d9b3372f70
+  resolved_commit: b9cc726d6963e528ac67bfbc5d3b456d96354b39
+  version: unknown
   virtual_path: mountain-weather
   is_virtual: true
   package_type: claude_skill
@@ -102,8 +114,8 @@ dependencies:
   - .claude/skills/mountain-weather/scripts/deno.lock
   - .claude/skills/mountain-weather/scripts/testdata/aoyama-kad.utf8.html
   deployed_file_hashes:
-    .claude/skills/mountain-weather/README.md: sha256:a1b916593459f8543ebc69ddbc0e45219d3852ac01b4ecf3265490e6c6f45b41
-    .claude/skills/mountain-weather/SKILL.md: sha256:4c239bb7910a72ce0e6a9aa7e84925f02233f1bc07c8834c3f959431f7b1a4f1
+    .claude/skills/mountain-weather/README.md: sha256:902b48202c5898956a041c7cd4c278590996855ab9834d8b3dbec754d24868d0
+    .claude/skills/mountain-weather/SKILL.md: sha256:ac3316d8d44f17af8c023d7eb2e9823b9e40203ea78089303b4fb20a45403004
     .claude/skills/mountain-weather/assets/jma-area.json: sha256:398f89c043eed0ab252d4cbb94c7d463db278b9b37616519becdb83326d23424
     .claude/skills/mountain-weather/assets/tenkura-mountains.json: sha256:c429f8fca4de1d760722af9b47df3bb2b3a99cc42cc5c573afe417073518deff
     .claude/skills/mountain-weather/scripts/.gitignore: sha256:5c5daf48fdf4db42e16c29b5b3de54984bafe0c2ff367a186ca97f1d4ed48290
@@ -123,10 +135,12 @@ dependencies:
     .claude/skills/mountain-weather/scripts/deno.json: sha256:2d90cf9ef7318632a8bd7dfa8d1371bbde7e64f10643636aead3e397a14f6a6d
     .claude/skills/mountain-weather/scripts/deno.lock: sha256:4a504861f138b6357024ccc9486a6ff28ab0c6d87564d93b706f42dcc5ed4514
     .claude/skills/mountain-weather/scripts/testdata/aoyama-kad.utf8.html: sha256:4307c936a30115aae1fe9727fa026e91ac0de6d625c16345d33508e5720c0d3f
-  content_hash: sha256:3174fc5152c249f8f206aa78d3a07397edeefe82463ef49c2b3487360d8625a1
+  content_hash: sha256:71b04a576da6eb4886ae8bf0ea73374df0857551a1fa627b8d3f54c1e89bd037
 - repo_url: ansanloms/skills
+  name: news-digest
   host: github.com
-  resolved_commit: c27a3ca09ea2ae91f037b7bd7b2be4d9b3372f70
+  resolved_commit: b9cc726d6963e528ac67bfbc5d3b456d96354b39
+  version: unknown
   virtual_path: news-digest
   is_virtual: true
   package_type: claude_skill
@@ -139,8 +153,10 @@ dependencies:
     .claude/skills/news-digest/SKILL.md: sha256:2f115ee55606e5d2ff9d7cb33b8d1023b46a832f3bf8e53dfaefee958882f24a
   content_hash: sha256:d833080e1a7cb61fb506ca40077f1870e3b41c9324840a8af8aaa164bf3a3512
 - repo_url: ansanloms/skills
+  name: yamareco
   host: github.com
-  resolved_commit: c27a3ca09ea2ae91f037b7bd7b2be4d9b3372f70
+  resolved_commit: b9cc726d6963e528ac67bfbc5d3b456d96354b39
+  version: unknown
   virtual_path: yamareco
   is_virtual: true
   package_type: claude_skill
@@ -152,3 +168,391 @@ dependencies:
     .claude/skills/yamareco/README.md: sha256:259a92d7a060ea6e52e13f1222142dbbfc136caa5b6c12f34d132544d1951cac
     .claude/skills/yamareco/SKILL.md: sha256:93bb4e1fd1c48947a3f33ac767f49a1e07bcc8fff7d15368101092f301761151
   content_hash: sha256:4445b08156a37f8446aaa333ab9dd35ae76a0e5cc673f8f95286b6de77c9d628
+deployments:
+- kind: project-relative
+  target: claude
+  value: .claude/skills/bluesky
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/bluesky
+  active_owner: ansanloms/skills/bluesky
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/bluesky/README.md
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/bluesky
+  active_owner: ansanloms/skills/bluesky
+  content_hash: sha256:032c3eee122f105ad1a0696b5f083fb1f3c0771400342659a102b8c1f0fcb7ab
+- kind: project-relative
+  target: claude
+  value: .claude/skills/bluesky/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/bluesky
+  active_owner: ansanloms/skills/bluesky
+  content_hash: sha256:b969ba2a180a033d7cb0d96bc8828c9fdd92daf2a85d74e629aa053aaa112784
+- kind: project-relative
+  target: claude
+  value: .claude/skills/discord
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/discord
+  active_owner: ansanloms/skills/discord
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/discord/README.md
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/discord
+  active_owner: ansanloms/skills/discord
+  content_hash: sha256:921575e54d051eaaf01473ef874634b487d21dc868cf0cc23ed353318779e328
+- kind: project-relative
+  target: claude
+  value: .claude/skills/discord/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/discord
+  active_owner: ansanloms/skills/discord
+  content_hash: sha256:b0fb8b8f69b08ee2311e4aa0ad9b4090d5d9cd51bc3b2c10394ab8fa572888ab
+- kind: project-relative
+  target: claude
+  value: .claude/skills/find-docs
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/find-docs
+  active_owner: ansanloms/skills/find-docs
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/find-docs/README.md
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/find-docs
+  active_owner: ansanloms/skills/find-docs
+  content_hash: sha256:9abac44da1547f17c0c7ccfa87485e589b5d858791f26fd136df48ecb2b8d943
+- kind: project-relative
+  target: claude
+  value: .claude/skills/find-docs/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/find-docs
+  active_owner: ansanloms/skills/find-docs
+  content_hash: sha256:f9a1afea99a9f9a880eef532ffd83ae12229ccba67bd6dc9b73464cf31c75e63
+- kind: project-relative
+  target: claude
+  value: .claude/skills/jartic-traffic-jam-forecast
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/jartic-traffic-jam-forecast
+  active_owner: ansanloms/skills/jartic-traffic-jam-forecast
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/jartic-traffic-jam-forecast/README.md
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/jartic-traffic-jam-forecast
+  active_owner: ansanloms/skills/jartic-traffic-jam-forecast
+  content_hash: sha256:b60df73b21d465ba494c4880b0cee5ca2f655241ddad3bf8b0dc54852c2b49a8
+- kind: project-relative
+  target: claude
+  value: .claude/skills/jartic-traffic-jam-forecast/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/jartic-traffic-jam-forecast
+  active_owner: ansanloms/skills/jartic-traffic-jam-forecast
+  content_hash: sha256:c7d141d4e6fd0f7fa24979ed29cac6670bb1f2152162d54d7b48c267d3679bf6
+- kind: project-relative
+  target: claude
+  value: .claude/skills/jartic-traffic-volume
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/jartic-traffic-volume
+  active_owner: ansanloms/skills/jartic-traffic-volume
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/jartic-traffic-volume/README.md
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/jartic-traffic-volume
+  active_owner: ansanloms/skills/jartic-traffic-volume
+  content_hash: sha256:df1d500eb4fdb45e69895e17ccdb35cffca6ecd41a867d85b0db742ec6aaa356
+- kind: project-relative
+  target: claude
+  value: .claude/skills/jartic-traffic-volume/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/jartic-traffic-volume
+  active_owner: ansanloms/skills/jartic-traffic-volume
+  content_hash: sha256:a753ecd08edc74c1e07c63ca2ab1c72ada2c8da0bb4fe5d5908e4a51c1bca216
+- kind: project-relative
+  target: claude
+  value: .claude/skills/mountain-weather
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/mountain-weather
+  active_owner: ansanloms/skills/mountain-weather
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/mountain-weather/README.md
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/mountain-weather
+  active_owner: ansanloms/skills/mountain-weather
+  content_hash: sha256:902b48202c5898956a041c7cd4c278590996855ab9834d8b3dbec754d24868d0
+- kind: project-relative
+  target: claude
+  value: .claude/skills/mountain-weather/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/mountain-weather
+  active_owner: ansanloms/skills/mountain-weather
+  content_hash: sha256:ac3316d8d44f17af8c023d7eb2e9823b9e40203ea78089303b4fb20a45403004
+- kind: project-relative
+  target: claude
+  value: .claude/skills/mountain-weather/assets/jma-area.json
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/mountain-weather
+  active_owner: ansanloms/skills/mountain-weather
+  content_hash: sha256:398f89c043eed0ab252d4cbb94c7d463db278b9b37616519becdb83326d23424
+- kind: project-relative
+  target: claude
+  value: .claude/skills/mountain-weather/assets/tenkura-mountains.json
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/mountain-weather
+  active_owner: ansanloms/skills/mountain-weather
+  content_hash: sha256:c429f8fca4de1d760722af9b47df3bb2b3a99cc42cc5c573afe417073518deff
+- kind: project-relative
+  target: claude
+  value: .claude/skills/mountain-weather/scripts/.gitignore
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/mountain-weather
+  active_owner: ansanloms/skills/mountain-weather
+  content_hash: sha256:5c5daf48fdf4db42e16c29b5b3de54984bafe0c2ff367a186ca97f1d4ed48290
+- kind: project-relative
+  target: claude
+  value: .claude/skills/mountain-weather/scripts/README.md
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/mountain-weather
+  active_owner: ansanloms/skills/mountain-weather
+  content_hash: sha256:e96b9fa3b04bff99479ce4353d6b6413df194b4c01beb5147d9bd342280c4ede
+- kind: project-relative
+  target: claude
+  value: .claude/skills/mountain-weather/scripts/cli/area.test.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/mountain-weather
+  active_owner: ansanloms/skills/mountain-weather
+  content_hash: sha256:e0dc067a271339cdc4fb2894a558c8dbbe82f18766ac02ce9340722c526ad78f
+- kind: project-relative
+  target: claude
+  value: .claude/skills/mountain-weather/scripts/cli/area.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/mountain-weather
+  active_owner: ansanloms/skills/mountain-weather
+  content_hash: sha256:5f1076dff96f50ac5af34194fa0a6eebb2d11708027abec401487c28cc0ef811
+- kind: project-relative
+  target: claude
+  value: .claude/skills/mountain-weather/scripts/cli/fetch-index.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/mountain-weather
+  active_owner: ansanloms/skills/mountain-weather
+  content_hash: sha256:5625aab60bc37d86a707f4734d8d66bd5bc181e75b3e242a7c34bcf88bc3bdb8
+- kind: project-relative
+  target: claude
+  value: .claude/skills/mountain-weather/scripts/cli/fetch-openmeteo.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/mountain-weather
+  active_owner: ansanloms/skills/mountain-weather
+  content_hash: sha256:b4ae1d335e978c35de76926c482d4763d2218468e0ceeac73ed0b91162546773
+- kind: project-relative
+  target: claude
+  value: .claude/skills/mountain-weather/scripts/cli/find-area.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/mountain-weather
+  active_owner: ansanloms/skills/mountain-weather
+  content_hash: sha256:fddae973b2ace9e89cf1ddad7370d5cc2d40fa283eb48b66de5819804df49c23
+- kind: project-relative
+  target: claude
+  value: .claude/skills/mountain-weather/scripts/cli/find-mountain.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/mountain-weather
+  active_owner: ansanloms/skills/mountain-weather
+  content_hash: sha256:346a637ba1860ae94f7c68042df4e3a462039226ed71f37700c527b2dbd2f660
+- kind: project-relative
+  target: claude
+  value: .claude/skills/mountain-weather/scripts/cli/kasel.test.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/mountain-weather
+  active_owner: ansanloms/skills/mountain-weather
+  content_hash: sha256:77183c6ef55f50153a09550e931cdbdf700884c1c74156e716196d84232b6f8f
+- kind: project-relative
+  target: claude
+  value: .claude/skills/mountain-weather/scripts/cli/kasel.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/mountain-weather
+  active_owner: ansanloms/skills/mountain-weather
+  content_hash: sha256:0235938738889f94ee7849081b9ad47ccc8e1c108c1e0cbc1b8f1f82a14c2e7b
+- kind: project-relative
+  target: claude
+  value: .claude/skills/mountain-weather/scripts/cli/openmeteo.test.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/mountain-weather
+  active_owner: ansanloms/skills/mountain-weather
+  content_hash: sha256:2157800aeab383e9a2e5a38590e1e20a0aba0a02c043f8d71110f3e8ba3d4e83
+- kind: project-relative
+  target: claude
+  value: .claude/skills/mountain-weather/scripts/cli/openmeteo.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/mountain-weather
+  active_owner: ansanloms/skills/mountain-weather
+  content_hash: sha256:e62d25932a233ff27ec4985e1c4c517678389014f8c58d775083a86f91a8f84a
+- kind: project-relative
+  target: claude
+  value: .claude/skills/mountain-weather/scripts/cli/parse.test.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/mountain-weather
+  active_owner: ansanloms/skills/mountain-weather
+  content_hash: sha256:b70e26211007d13bb29914d0b4656b64f7a8bbb9bc2ccfdea969556d8ee59c5d
+- kind: project-relative
+  target: claude
+  value: .claude/skills/mountain-weather/scripts/cli/parse.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/mountain-weather
+  active_owner: ansanloms/skills/mountain-weather
+  content_hash: sha256:714c5b3cdeef5e9cf3bf98c609bbdee750388dbdff3a066429fba2a61084eb83
+- kind: project-relative
+  target: claude
+  value: .claude/skills/mountain-weather/scripts/deno.json
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/mountain-weather
+  active_owner: ansanloms/skills/mountain-weather
+  content_hash: sha256:2d90cf9ef7318632a8bd7dfa8d1371bbde7e64f10643636aead3e397a14f6a6d
+- kind: project-relative
+  target: claude
+  value: .claude/skills/mountain-weather/scripts/deno.lock
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/mountain-weather
+  active_owner: ansanloms/skills/mountain-weather
+  content_hash: sha256:4a504861f138b6357024ccc9486a6ff28ab0c6d87564d93b706f42dcc5ed4514
+- kind: project-relative
+  target: claude
+  value: .claude/skills/mountain-weather/scripts/testdata/aoyama-kad.utf8.html
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/mountain-weather
+  active_owner: ansanloms/skills/mountain-weather
+  content_hash: sha256:4307c936a30115aae1fe9727fa026e91ac0de6d625c16345d33508e5720c0d3f
+- kind: project-relative
+  target: claude
+  value: .claude/skills/news-digest
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/news-digest
+  active_owner: ansanloms/skills/news-digest
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/news-digest/README.md
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/news-digest
+  active_owner: ansanloms/skills/news-digest
+  content_hash: sha256:379d1ff1cfd41c1ef4d3cef152ed27be8f794ddad60f9466b50042390b2edea3
+- kind: project-relative
+  target: claude
+  value: .claude/skills/news-digest/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/news-digest
+  active_owner: ansanloms/skills/news-digest
+  content_hash: sha256:2f115ee55606e5d2ff9d7cb33b8d1023b46a832f3bf8e53dfaefee958882f24a
+- kind: project-relative
+  target: claude
+  value: .claude/skills/yamareco
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/yamareco
+  active_owner: ansanloms/skills/yamareco
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/yamareco/README.md
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/yamareco
+  active_owner: ansanloms/skills/yamareco
+  content_hash: sha256:259a92d7a060ea6e52e13f1222142dbbfc136caa5b6c12f34d132544d1951cac
+- kind: project-relative
+  target: claude
+  value: .claude/skills/yamareco/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/yamareco
+  active_owner: ansanloms/skills/yamareco
+  content_hash: sha256:93bb4e1fd1c48947a3f33ac767f49a1e07bcc8fff7d15368101092f301761151
