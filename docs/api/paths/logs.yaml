@@ -52,7 +52,7 @@ get:
               value:
                 $ref: ../examples/ResponseGetLogs.yaml
     400:
-      description: level / since / limit のいずれかが不正な場合。
+      description: level/since/limit のいずれかが不正な場合。
       content:
         application/json:
           schema:
