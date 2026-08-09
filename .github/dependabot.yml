@@ -1,0 +1,36 @@
+version: 2
+updates:
+  - package-ecosystem: "deno"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "07:00"
+      timezone: "Asia/Tokyo"
+    commit-message:
+      prefix: "build"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "07:00"
+      timezone: "Asia/Tokyo"
+    commit-message:
+      prefix: "build"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "07:00"
+      timezone: "Asia/Tokyo"
+    commit-message:
+      prefix: "ci"
