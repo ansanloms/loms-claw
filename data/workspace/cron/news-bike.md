@@ -11,7 +11,8 @@ effort: "medium"
 まず以下のコマンドで #news チャンネルの直近の投稿を取得しろ。
 
 ```bash
-curl -s 'http://127.0.0.1:3000/discord/channels/1479719413396541450/messages?limit=100'
+curl -sS "https://discord.com/api/v10/channels/1479719413396541450/messages?limit=100" \
+  -H "Authorization: Bot ${DISCORD_BOT_TOKEN}"
 ```
 
 直近 5 日分の投稿のうち、このジョブのテーマ（下記「記事収集」のテーマ）に該当する記事のタイトル・URL を拾え。これを news-digest skill の除外リストとして渡す。#news には他テーマの記事も混在するので、無関係なテーマの投稿は除外リストに含めなくてよい。該当する投稿が無ければ除外リストは空でよい。
@@ -63,13 +64,14 @@ news-digest skill は「タイトル / 要約 / 公開日 / 個別 URL」のラ�
 
 ```bash
 # 1 記事目: /tmp/news-bike-1.txt に 1 記事分の整形済み本文を書いてから POST
-jq -Rs '{content: .}' /tmp/news-bike-1.txt | curl -s -X POST \
-  'http://127.0.0.1:3000/discord/channels/1479719413396541450/messages' \
+jq -Rs '{content: .}' /tmp/news-bike-1.txt | curl -sS -X POST \
+  "https://discord.com/api/v10/channels/1479719413396541450/messages" \
+  -H "Authorization: Bot ${DISCORD_BOT_TOKEN}" \
   -H 'Content-Type: application/json' -d @-
 # 2 記事目は /tmp/news-bike-2.txt、3 記事目は /tmp/news-bike-3.txt に書いて同じ curl を繰り返す
 ```
 
-レスポンスに `"id"` が含まれれば投稿成功。`"error"` が返ったら内容を確認しろ。
+レスポンスに `"id"` が含まれれば投稿成功。`"message"` と `"code"` が返ったらエラーだ（401 はトークン不正、403 は権限不足）。429（レート制限）が返ったら discord skill のレート制限節に従い `retry_after` 秒待って再試行しろ。
 
 ### ルール
 
