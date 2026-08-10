@@ -51,13 +51,13 @@ export const command = new SlashCommandBuilder()
   .setDescription("loms-claw bot commands")
   .addSubcommandGroup((group) =>
     group
-      .setName("status")
-      .setDescription("Bot status (show / set / unset channel config)")
+      .setName("settings")
+      .setDescription("Channel settings (show / set / unset)")
       .addSubcommand((sub) =>
         sub
           .setName("show")
           .setDescription(
-            "Show bot status (channel config, defaults, cron, VC, uptime)",
+            "Show channel settings (channel config, defaults, cron, VC)",
           )
       )
       .addSubcommand((sub) =>
@@ -168,39 +168,27 @@ export async function handleVcLeave(
 }
 
 /**
- * /claw status show — bot 全体のステータスを表示する。
+ * /claw settings show — bot 全体のステータスを表示する。
  *
  * 含む情報:
- *   - 起動時刻 / uptime
  *   - 現チャンネルの session / model / effort (source 付き)
  *   - グローバルデフォルト (env)
  *   - cron ジョブ数 + 名前一覧
  *   - VC 接続状態 (有効時のみ)
  */
-export async function handleStatusShow(
+export async function handleSettingsShow(
   interaction: ChatInputCommandInteraction,
   deps: {
     store: Store;
     defaults: ClaudeDefaults;
     cronExecutor: CronExecutor | null;
     voiceManager: VoiceManager | null;
-    startedAt: Temporal.Instant;
   },
 ): Promise<void> {
   const scope = scopeFromInteraction(interaction);
   const settings = await deps.store.getScopeSettings(scope);
 
-  const lines: string[] = ["**loms-claw status**"];
-
-  // uptime
-  const uptimeMs = Temporal.Now.instant().since(deps.startedAt).total({
-    unit: "millisecond",
-  });
-  lines.push(
-    `**Uptime:** ${
-      formatDuration(uptimeMs)
-    } (started ${deps.startedAt.toString()})`,
-  );
+  const lines: string[] = ["**loms-claw settings**"];
 
   // 現スコープ (channel + 必要なら thread)
   lines.push("");
@@ -267,12 +255,12 @@ export async function handleStatusShow(
 }
 
 /**
- * /claw status set — チャンネル単位で model / effort を設定する。
+ * /claw settings set — チャンネル単位で model / effort を設定する。
  *
  * model と effort は両方 optional。少なくとも片方の指定が必須。
  * 両方指定した場合は同時に保存する。
  */
-export async function handleStatusSet(
+export async function handleSettingsSet(
   interaction: ChatInputCommandInteraction,
   store: Store,
 ): Promise<void> {
@@ -309,13 +297,13 @@ export async function handleStatusSet(
     flags: MessageFlags.Ephemeral,
   });
   log.info(
-    `status set for ${scopeLabel} ${scope.threadId ?? scope.channelId}:`,
+    `settings set for ${scopeLabel} ${scope.threadId ?? scope.channelId}:`,
     updates.join(", "),
   );
 }
 
 /**
- * /claw status unset — チャンネル / スレッド単位の設定を削除する。
+ * /claw settings unset — チャンネル / スレッド単位の設定を削除する。
  *
  * 実行スコープはコマンドを叩いた場所で決まる:
  *   - スレッド内: そのスレッドの値のみ削除。親チャンネルの値は触らない。
@@ -327,7 +315,7 @@ export async function handleStatusSet(
  *   - "effort"  → スコープの effort を削除 (フォールバック先が新たな解決値)
  *   - "session" → スコープの session を削除 (会話を再開で新規セッション)
  */
-export async function handleStatusUnset(
+export async function handleSettingsUnset(
   interaction: ChatInputCommandInteraction,
   store: Store,
 ): Promise<void> {
@@ -373,7 +361,7 @@ export async function handleStatusUnset(
       return;
   }
   log.info(
-    `status unset ${target} for ${scopeLabel} ${
+    `settings unset ${target} for ${scopeLabel} ${
       scope.threadId ?? scope.channelId
     }`,
   );
@@ -411,24 +399,4 @@ function scopeFromInteraction(
     };
   }
   return { channelId: interaction.channelId };
-}
-
-function formatDuration(ms: number): string {
-  const sec = Math.floor(ms / 1000);
-  const days = Math.floor(sec / 86400);
-  const hours = Math.floor((sec % 86400) / 3600);
-  const minutes = Math.floor((sec % 3600) / 60);
-  const seconds = sec % 60;
-  const parts: string[] = [];
-  if (days > 0) {
-    parts.push(`${days}d`);
-  }
-  if (hours > 0) {
-    parts.push(`${hours}h`);
-  }
-  if (minutes > 0) {
-    parts.push(`${minutes}m`);
-  }
-  parts.push(`${seconds}s`);
-  return parts.join(" ");
 }

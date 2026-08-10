@@ -126,7 +126,7 @@ config.schema.ts       config.schema.json を @cfworker/json-schema の Validato
 logger.ts              名前空間付き軽量ロガー。`initLogger({ level, bufferSize })` で設定。リングバッファで直近ログをメモリ保持。
 errors.ts              getErrorMessage(): unknown なエラー値からメッセージを取り出す共通ユーティリティ。
 bot/mod.ts             DiscordBot クラス。messageCreate ハンドラ、start/shutdown。
-bot/commands.ts        スラッシュコマンド定義とハンドラ（/claw status show|set|unset で model/effort/show_thinking/session を操作, /claw vc join|leave）。
+bot/commands.ts        スラッシュコマンド定義とハンドラ（/claw settings show|set|unset で model/effort/show_thinking/session を操作, /claw vc join|leave）。
 bot/guard.ts           isAuthorized(): ギルド ID + ユーザー ID + bot 除外の認可チェック。shouldRespond(): active channel / mention / スレッドによる反応判定。
 bot/queue.ts           ScopeQueue: scope (localId) 単位でメッセージ処理を直列化するキュー。応答中の scope に届いた次のメッセージを現在のターン終了後に処理する (並行 query と session 競合の防止)。
 bot/message.ts         splitMessage(): 2000 文字分割。keepTyping(): typing インジケーター維持。ProgressReporter: ツール進捗表示。
@@ -310,10 +310,10 @@ cron ジョブ用のシステムプロンプトは `.claude/system-prompt/CRON.m
 - **ボイスチャンネル**: `{ channelId }` スコープ（VC はスレッドを持たない）
 
 `model / effort / showThinking` の解決順は **thread → channel → グローバルデフォルト** の動的フォールバック。グローバルデフォルトは `config.json` の `claude.defaults`（`showThinking` は未設定時 false）。
-スレッドで `/claw status set model=...` を叩くと thread のみに保存され、親チャンネルの設定には影響しない。`showThinking` も同様に `/claw status set show_thinking=...` で per-scope に上書きでき、`/claw status unset show_thinking` でフォールバックへ戻せる。
+スレッドで `/claw settings set model=...` を叩くと thread のみに保存され、親チャンネルの設定には影響しない。`showThinking` も同様に `/claw settings set show_thinking=...` で per-scope に上書きでき、`/claw settings unset show_thinking` でフォールバックへ戻せる。
 逆にスレッドで未設定なら親チャンネルの設定が即時に反映される。
 
-`session` は thread と channel で完全に独立する。スレッドを切ると新規セッションとして始まり、親チャンネル側のセッションは触らない。`/claw status unset session` をスレッド内で実行するとスレッドのセッションのみ削除する。
+`session` は thread と channel で完全に独立する。スレッドを切ると新規セッションとして始まり、親チャンネル側のセッションは触らない。`/claw settings unset session` をスレッド内で実行するとスレッドのセッションのみ削除する。
 
 ### ボイスチャンネル（`voice.enabled: true` 時）
 

@@ -97,7 +97,7 @@ once: true
 `frontmatter > channel 設定 > グローバルデフォルト` の順で解決される。
 
 1. ジョブの frontmatter に書かれていればそれを使う。
-2. 無ければ `channelId` で指定したチャンネルの `/claw status set` で設定された値を使う（`channelId` 省略時はスキップ）。
+2. 無ければ `channelId` で指定したチャンネルの `/claw settings set` で設定された値を使う（`channelId` 省略時はスキップ）。
 3. それも無ければ `config.json` の `claude.defaults.model` / `claude.defaults.effort` を使う。
 4. いずれも未設定なら CLI のデフォルトに任せる（`--model` / `--effort` を渡さない）。
 
@@ -105,7 +105,7 @@ once: true
 
 - **重い分析・要約等で精度が要るジョブ**: `model: opus` + `effort: high` 以上。
 - **軽量な定型通知・リマインダー**: `model: haiku` + `effort: low` でコストとレイテンシを抑える。
-- **チャンネルの既定値を使いたい**: 両方とも省略する（`channelId` 経由で `/claw status` の設定が拾われる）。
+- **チャンネルの既定値を使いたい**: 両方とも省略する（`channelId` 経由で `/claw settings` の設定が拾われる）。
 
 例:
 

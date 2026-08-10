@@ -1,6 +1,6 @@
 import { assertEquals } from "@std/assert";
 import { Store, type StoreScope } from "../store/mod.ts";
-import { handleStatusSet, handleStatusUnset } from "./commands.ts";
+import { handleSettingsSet, handleSettingsUnset } from "./commands.ts";
 
 /**
  * `:memory:` KV を持つ Store を生成し、関数実行後に必ず close する。
@@ -25,7 +25,7 @@ const th = (channelId: string, threadId: string): StoreScope => ({
 
 /**
  * ChatInputCommandInteraction の最小モック。
- * handleStatusSet / handleStatusUnset が使うプロパティのみ実装する。
+ * handleSettingsSet / handleSettingsUnset が使うプロパティのみ実装する。
  *
  * threadParentId:
  *   - undefined: 非 thread (interaction.channel.isThread() === false)
@@ -78,14 +78,14 @@ function mockInteraction(
   };
 }
 
-Deno.test("handleStatusSet", async (t) => {
+Deno.test("handleSettingsSet", async (t) => {
   await t.step(
     "model のみ指定で設定されること",
     () =>
       withStore(async (store) => {
         // deno-lint-ignore no-explicit-any
         const interaction = mockInteraction("ch-1", { model: "opus" }) as any;
-        await handleStatusSet(interaction, store);
+        await handleSettingsSet(interaction, store);
         assertEquals(await store.getModel(ch("ch-1")), "opus");
         assertEquals(await store.getEffort(ch("ch-1")), undefined);
       }),
@@ -97,7 +97,7 @@ Deno.test("handleStatusSet", async (t) => {
       withStore(async (store) => {
         // deno-lint-ignore no-explicit-any
         const interaction = mockInteraction("ch-1", { effort: "high" }) as any;
-        await handleStatusSet(interaction, store);
+        await handleSettingsSet(interaction, store);
         assertEquals(await store.getEffort(ch("ch-1")), "high");
         assertEquals(await store.getModel(ch("ch-1")), undefined);
       }),
@@ -112,7 +112,7 @@ Deno.test("handleStatusSet", async (t) => {
           effort: "max",
           // deno-lint-ignore no-explicit-any
         }) as any;
-        await handleStatusSet(interaction, store);
+        await handleSettingsSet(interaction, store);
         assertEquals(await store.getModel(ch("ch-1")), "sonnet");
         assertEquals(await store.getEffort(ch("ch-1")), "max");
       }),
@@ -124,7 +124,7 @@ Deno.test("handleStatusSet", async (t) => {
       withStore(async (store) => {
         // deno-lint-ignore no-explicit-any
         const interaction = mockInteraction("ch-1", {}) as any;
-        await handleStatusSet(interaction, store);
+        await handleSettingsSet(interaction, store);
         assertEquals(await store.getModel(ch("ch-1")), undefined);
         assertEquals(await store.getEffort(ch("ch-1")), undefined);
         assertEquals(
@@ -142,7 +142,7 @@ Deno.test("handleStatusSet", async (t) => {
           show_thinking: true,
           // deno-lint-ignore no-explicit-any
         }) as any;
-        await handleStatusSet(interaction, store);
+        await handleSettingsSet(interaction, store);
         assertEquals(await store.getShowThinking(ch("ch-1")), true);
         assertEquals(await store.getModel(ch("ch-1")), undefined);
       }),
@@ -158,7 +158,7 @@ Deno.test("handleStatusSet", async (t) => {
           show_thinking: false,
           // deno-lint-ignore no-explicit-any
         }) as any;
-        await handleStatusSet(interaction, store);
+        await handleSettingsSet(interaction, store);
         assertEquals(await store.getShowThinking(ch("ch-1")), false);
       }),
   );
@@ -174,7 +174,7 @@ Deno.test("handleStatusSet", async (t) => {
           "ch-parent",
           // deno-lint-ignore no-explicit-any
         ) as any;
-        await handleStatusSet(interaction, store);
+        await handleSettingsSet(interaction, store);
         assertEquals(
           await store.getModel(th("ch-parent", "thread-1")),
           "haiku",
@@ -194,7 +194,7 @@ Deno.test("handleStatusSet", async (t) => {
           null,
           // deno-lint-ignore no-explicit-any
         ) as any;
-        await handleStatusSet(interaction, store);
+        await handleSettingsSet(interaction, store);
         // channelId === threadId === "orphan-thread" として保存される
         assertEquals(
           await store.getModel({
@@ -207,7 +207,7 @@ Deno.test("handleStatusSet", async (t) => {
   );
 });
 
-Deno.test("handleStatusUnset", async (t) => {
+Deno.test("handleSettingsUnset", async (t) => {
   await t.step(
     "target=model でチャンネルの model のみ削除されること",
     () =>
@@ -220,7 +220,7 @@ Deno.test("handleStatusUnset", async (t) => {
           target: "model",
           // deno-lint-ignore no-explicit-any
         }) as any;
-        await handleStatusUnset(interaction, store);
+        await handleSettingsUnset(interaction, store);
 
         assertEquals(await store.getModel(ch("ch-1")), undefined);
         assertEquals(await store.getEffort(ch("ch-1")), "high");
@@ -239,7 +239,7 @@ Deno.test("handleStatusUnset", async (t) => {
           target: "effort",
           // deno-lint-ignore no-explicit-any
         }) as any;
-        await handleStatusUnset(interaction, store);
+        await handleSettingsUnset(interaction, store);
 
         assertEquals(await store.getEffort(ch("ch-1")), undefined);
         assertEquals(await store.getModel(ch("ch-1")), "opus");
@@ -257,7 +257,7 @@ Deno.test("handleStatusUnset", async (t) => {
           target: "show_thinking",
           // deno-lint-ignore no-explicit-any
         }) as any;
-        await handleStatusUnset(interaction, store);
+        await handleSettingsUnset(interaction, store);
 
         // 削除後は defaults (= false) へフォールバック
         assertEquals(await store.getShowThinking(ch("ch-1")), false);
@@ -276,7 +276,7 @@ Deno.test("handleStatusUnset", async (t) => {
           target: "session",
           // deno-lint-ignore no-explicit-any
         }) as any;
-        await handleStatusUnset(interaction, store);
+        await handleSettingsUnset(interaction, store);
 
         assertEquals(await store.getSession(ch("ch-1")), undefined);
         assertEquals(await store.getModel(ch("ch-1")), "opus");
@@ -292,7 +292,7 @@ Deno.test("handleStatusUnset", async (t) => {
 
         // deno-lint-ignore no-explicit-any
         const interaction = mockInteraction("ch-1", { target: "model" }) as any;
-        await handleStatusUnset(interaction, store);
+        await handleSettingsUnset(interaction, store);
 
         assertEquals(await store.getModel(ch("ch-1")), undefined);
         assertEquals(await store.getModel(ch("ch-2")), "sonnet");
@@ -312,7 +312,7 @@ Deno.test("handleStatusUnset", async (t) => {
           "ch-parent",
           // deno-lint-ignore no-explicit-any
         ) as any;
-        await handleStatusUnset(interaction, store);
+        await handleSettingsUnset(interaction, store);
 
         assertEquals(
           await store.getSession(th("ch-parent", "thread-1")),
