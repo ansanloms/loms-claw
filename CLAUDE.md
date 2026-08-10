@@ -137,10 +137,10 @@ store/mod.ts           Store: Deno KV (SQLite backend) によるスコープ単�
 approval/manager.ts    ApprovalManager: Discord ボタンによるツール承認/拒否。createCanUseTool(): ApprovalResult を SDK の PermissionResult に変換する canUseTool コールバックを生成。AskUserQuestion は承認フローを通さず QuestionManager へ委譲する。
 approval/question.ts   QuestionManager: AskUserQuestion の質問を Discord の select menu で提示し回答を収集。「Other (自由入力)」は Modal で受け付け、回答を updatedInput.answers として返す。
 approval/settings.ts   isInAllowList() / addToSettingsAllowList(): .claude/settings.json の permissions.allow 読み書き。
-api/server.ts              統合 HTTP サーバー。Hono アプリ作成、サブルート（cron / logs / settings）マウント、共通エラーハンドラ。承認は in-process のため HTTP では扱わない。Discord 操作は Claude が公式 REST API を直接叩くため提供しない。
+api/server.ts              統合 HTTP サーバー。Hono アプリ作成、サブルート（cron / logs / settings）マウント、共通エラーハンドラ。承認は in-process のため HTTP では扱わない。Discord 操作は Claude が公式 REST API を直接叩くため提供しない。`startApiServer(port, settingsCtx, cronCtx?)` は settings ルートの依存関係コンテキストを cron と同じ流儀で受け取る。
 api/routes/cron.ts         cron ルート（GET /cron, POST /cron/run, POST /cron/reload）。
 api/routes/logs.ts         ログ取得ルート（GET /logs）。リングバッファからフィルタ付きで取得。
-api/routes/settings.ts     settings ルート（GET /settings/default, GET/PATCH/DELETE /settings/:id）。Store.applyPatch() / getDefaults() / getScopeSettings() / clearScope() をそのまま呼ぶ薄いアダプタ。
+api/routes/settings.ts     settings ルート（GET /settings/default, GET/PATCH/DELETE /settings/:id）。`SettingsRouteContext { store, resolveParentId? }` を受け取り、resolveScope() ヘルパーで `{id}` がスレッドか通常チャンネルかを解決してから Store.applyPatch() / getScopeSettings() / clearScope() を呼ぶ。resolveParentId が未注入・throw 時はチャンネル単独スコープにフォールバックする。
 api/validate.ts            docs/api の OpenAPI から生成した internal-schemas.ts を単一ソースに、@cfworker/json-schema でリクエストボディを構造検証（matchesSchema / schemaErrorOf）。
 api/internal-schemas.ts    docs/api の component schema を as const で書き出した自動生成物（deno task generate）。サーバの型（json-schema-to-ts の FromSchema）と検証の単一ソース。
 voice/mod.ts           VoiceManager: VC 接続管理、STT→Agent SDK→TTS パイプライン、auto-join/leave。
@@ -364,7 +364,9 @@ Claude からは Bash + curl で呼び出す（ツール承認は in-process の
 | `DELETE` | `/settings/{id}`    | スコープ設定の全削除       |
 | `GET`    | `/settings/default` | グローバルデフォルトの取得 |
 
-スコープへの書き込みは leaf id（`threadId ?? channelId`）単位で行われる。そのため `PATCH` / `DELETE` はスレッド ID をそのまま `{id}` に渡せばそのスレッドのスコープを操作でき、`parentId` は不要。`parentId` は `GET` で thread → channel フォールバック解決するときだけ使う。
+スコープへの書き込みは leaf id（`threadId ?? channelId`）単位で行われる。そのため `PATCH` / `DELETE` はスレッド ID をそのまま `{id}` に渡せばそのスレッドのスコープを操作できる。
+
+読み取り時のスコープ解決（`{id}` がスレッドか通常チャンネルかの判定と、スレッドの場合の親チャンネルへのフォールバック）はサーバが行う。呼び出し側は対象の ID を渡すだけでよく、親子関係を意識する必要はない。
 
 ## ツール権限
 

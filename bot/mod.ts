@@ -56,6 +56,7 @@ import { OpenAiTts } from "../voice/tts.ts";
 import { VoicePlayer } from "../voice/player.ts";
 import { startApiServer } from "../api/server.ts";
 import type { CronRouteContext } from "../api/routes/cron.ts";
+import type { SettingsRouteContext } from "../api/routes/settings.ts";
 import { CronExecutor } from "../cron/executor.ts";
 import { loadCronJobsFromDir } from "../cron/loader.ts";
 import { getErrorMessage } from "../errors.ts";
@@ -198,15 +199,19 @@ export class DiscordBot {
           await this.cronExecutor!.runJob(job);
         };
 
-        // 統合 API サーバーを起動する（cron + ログ取得）。
+        // 統合 API サーバーを起動する（cron + ログ取得 + 設定）。
         const cronCtx: CronRouteContext = {
           reloadCronJobs: reloadJobs,
           runJob: runJobByName,
           listJobs: () => this.cronExecutor!.listJobs(),
         };
+        const settingsCtx: SettingsRouteContext = {
+          store: this.store,
+          resolveParentId: (id) => this.resolveThreadParentId(id),
+        };
         this.apiServer = startApiServer(
           this.config.claude.apiPort,
-          this.store,
+          settingsCtx,
           cronCtx,
         );
 
@@ -256,6 +261,19 @@ export class DiscordBot {
     );
 
     log.info("registered slash commands");
+  }
+
+  /**
+   * 指定 ID がスレッドならその親チャンネル ID を、そうでなければ null を返す。
+   *
+   * settings ルートの `resolveParentId` として注入される。`channels.fetch()` は
+   * 存在しない ID や cron の擬似 id (`cron:{name}`) 等で throw しうるが、ここでは
+   * 握りつぶさずそのまま素通しする。呼び出し元 (settings ルートの resolveScope())
+   * が catch してチャンネル扱いへフォールバックする設計のため。
+   */
+  private async resolveThreadParentId(id: string): Promise<string | null> {
+    const channel = await this.client.channels.fetch(id);
+    return channel?.isThread() ? channel.parentId : null;
   }
 
   /**

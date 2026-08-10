@@ -2,7 +2,7 @@ parameters:
   - in: path
     name: id
     required: true
-    description: スコープを表す ID。チャンネル ID/スレッド ID (Discord Snowflake) のいずれか、または cron の擬似 ID `cron:{name}` を指定する。スレッドを対象にする場合はスレッド ID をそのまま渡せばよい。
+    description: スコープを表す ID。チャンネル ID/スレッド ID (Discord Snowflake) のいずれか、または cron の擬似 ID `cron:{name}` を指定する。id がスレッドか通常チャンネルかはサーバが判定するため、利用者は対象の ID をそのまま渡せばよい。
     schema:
       type: string
     example: "1234567890123456789"
@@ -11,15 +11,7 @@ get:
   summary: スコープ設定の取得。
   tags:
     - settings
-  description: 指定スコープの解決済み設定を取得する。
-  parameters:
-    - in: query
-      name: parentId
-      required: false
-      description: id がスレッドの場合に親チャンネル ID を指定する。指定すると thread → channel → default の順でフォールバック解決する。省略時は id を単独スコープとして解決する。
-      schema:
-        type: string
-      example: "9876543210987654321"
+  description: 指定スコープの解決済み設定を取得する。id がスレッドか通常チャンネルかはサーバが判定し、スレッドであれば親チャンネルへのフォールバックを含めて解決する。呼び出し側が親子関係を意識する必要はない。
   responses:
     200:
       description: 処理成功時。
@@ -36,7 +28,7 @@ patch:
   summary: スコープ設定の部分更新。
   tags:
     - settings
-  description: 指定スコープの設定を JSON Merge Patch (RFC 7386) の意味論で部分更新する。スレッドを対象にする場合は id にスレッド ID をそのまま渡せばよい。書き込みは常に id 自身に対して行われるため、それだけで正しくそのスレッドのスコープへ書き込まれる。parentId を取らないのは、書き込みには親チャンネルの情報が不要なためである。レスポンスも id 単独スコープで解決した結果であり、親チャンネルへのフォールバックは反映されない。そのスレッドで実際に効く設定を確認したい場合は、parentId に親チャンネル ID を指定した GET を別途叩く。
+  description: 指定スコープの設定を JSON Merge Patch (RFC 7386) の意味論で部分更新する。スレッドを対象にする場合は id にスレッド ID をそのまま渡せばよい。書き込みは常に id 自身に対して行われるため、それだけで正しくそのスレッドのスコープへ書き込まれる。レスポンスは書き込み後にサーバが解決した実効設定であり、id がスレッドであれば親チャンネルへのフォールバックを含む。
   requestBody:
     required: true
     description: 更新内容。
@@ -50,7 +42,7 @@ patch:
               $ref: ../examples/RequestPatchSettings.yaml
   responses:
     200:
-      description: 処理成功時。id 単独スコープで解決した更新後の設定を返す。
+      description: 処理成功時。更新後にサーバが解決した実効設定を返す。
       content:
         application/json:
           schema:
