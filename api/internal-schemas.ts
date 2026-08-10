@@ -118,7 +118,7 @@ export const internalSchemas = {
       "namespace": {
         "type": "string",
         "description": "ロガーの名前空間。",
-        "example": "api-discord"
+        "example": "api-cron"
       },
       "message": {
         "type": "string",

@@ -21,7 +21,7 @@ properties:
   namespace:
     type: string
     description: ロガーの名前空間。
-    example: api-discord
+    example: api-cron
   message:
     type: string
     description: メッセージ本文。引数を含む文字列化済み。
