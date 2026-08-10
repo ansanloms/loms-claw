@@ -314,6 +314,61 @@ Deno.test("Store - showThinking", async (t) => {
   );
 });
 
+Deno.test("Store - active", async (t) => {
+  await t.step("未設定なら undefined を返すこと", async () => {
+    await withStore({}, async (store) => {
+      assertEquals(await store.getActive(ch("ch-1")), undefined);
+    });
+  });
+
+  await t.step(
+    "true を設定して取得できること",
+    async () => {
+      await withStore({}, async (store) => {
+        await store.applyPatch(ch("ch-1"), { active: true });
+        assertEquals(await store.getActive(ch("ch-1")), true);
+      });
+    },
+  );
+
+  await t.step(
+    "false を設定したとき undefined ではなく false が返ること",
+    async () => {
+      await withStore({}, async (store) => {
+        await store.applyPatch(ch("ch-1"), { active: false });
+        assertEquals(await store.getActive(ch("ch-1")), false);
+      });
+    },
+  );
+
+  await t.step(
+    "thread に未設定なら channel の値にフォールバックすること",
+    async () => {
+      await withStore({}, async (store) => {
+        await store.applyPatch(ch("ch-1"), { active: true });
+        assertEquals(
+          await store.getActive(th("ch-1", "th-1")),
+          true,
+        );
+      });
+    },
+  );
+
+  await t.step(
+    "thread に false、channel に true を設定したとき thread の false が勝つこと",
+    async () => {
+      await withStore({}, async (store) => {
+        await store.applyPatch(ch("ch-1"), { active: true });
+        await store.applyPatch(th("ch-1", "th-1"), { active: false });
+        assertEquals(
+          await store.getActive(th("ch-1", "th-1")),
+          false,
+        );
+      });
+    },
+  );
+});
+
 Deno.test("Store - clearScope", async (t) => {
   await t.step(
     "channel スコープで session / model / effort が同時に削除され、defaults は残ること",
@@ -483,6 +538,16 @@ Deno.test("Store - getScopeSettings", async (t) => {
       });
     },
   );
+
+  await t.step(
+    "active は未設定時 undefined になること",
+    async () => {
+      await withStore({}, async (store) => {
+        const s = await store.getScopeSettings(ch("ch-1"));
+        assertEquals(s.active, undefined);
+      });
+    },
+  );
 });
 
 Deno.test("Store - applyPatch", async (t) => {
@@ -515,6 +580,28 @@ Deno.test("Store - applyPatch", async (t) => {
         await store.setModel(ch("ch-1"), "opus");
         const s = await store.applyPatch(ch("ch-1"), { model: null });
         assertEquals(s.model, { value: "sonnet", source: "default" });
+      });
+    },
+  );
+
+  await t.step("active を patch で設定できること", async () => {
+    await withStore({}, async (store) => {
+      const s = await store.applyPatch(ch("ch-1"), { active: true });
+      assertEquals(s.active, { value: true, source: "channel" });
+    });
+  });
+
+  await t.step(
+    "active: null で削除され、getScopeSettings() の active が undefined に戻ること",
+    async () => {
+      await withStore({}, async (store) => {
+        await store.applyPatch(ch("ch-1"), { active: true });
+        const s = await store.applyPatch(ch("ch-1"), { active: null });
+        assertEquals(s.active, undefined);
+        assertEquals(
+          (await store.getScopeSettings(ch("ch-1"))).active,
+          undefined,
+        );
       });
     },
   );

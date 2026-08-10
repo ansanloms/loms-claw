@@ -24,6 +24,7 @@ import type {
 import type { VoiceManager } from "../voice/mod.ts";
 import { createLogger } from "../logger.ts";
 import { getErrorMessage } from "../errors.ts";
+import { resolveActive } from "./guard.ts";
 
 const log = createLogger("commands");
 
@@ -45,6 +46,7 @@ const UNSET_TARGET_CHOICES = [
   { name: "model", value: "model" },
   { name: "effort", value: "effort" },
   { name: "show_thinking", value: "show_thinking" },
+  { name: "active", value: "active" },
   { name: "session", value: "session" },
 ] as const;
 
@@ -89,6 +91,14 @@ export const command = new SlashCommandBuilder()
             opt
               .setName("show_thinking")
               .setDescription("Show thinking (reasoning) in this channel")
+              .setRequired(false)
+          )
+          .addBooleanOption((opt) =>
+            opt
+              .setName("active")
+              .setDescription(
+                "Respond to all messages in this channel (no mention required)",
+              )
               .setRequired(false)
           )
       )
@@ -176,7 +186,7 @@ export async function handleVcLeave(
  * /claw settings show — bot 全体のステータスを表示する。
  *
  * 含む情報:
- *   - 現チャンネルの session / model / effort (source 付き)
+ *   - 現チャンネルの session / model / effort / active (source 付き)
  *   - グローバルデフォルト (env)
  *   - cron ジョブ数 + 名前一覧
  *   - VC 接続状態 (有効時のみ)
@@ -188,6 +198,7 @@ export async function handleSettingsShow(
     defaults: ClaudeDefaults;
     cronExecutor: CronExecutor | null;
     voiceManager: VoiceManager | null;
+    activeChannelIds: string[];
   },
 ): Promise<void> {
   const scope = scopeFromInteraction(interaction);
@@ -210,6 +221,18 @@ export async function handleSettingsShow(
   lines.push(
     `- show_thinking: \`${settings.showThinking.value}\` (${settings.showThinking.source})`,
   );
+
+  // active: 実効値 (今そのチャンネルが全拾いかどうか) と出所を出す。
+  const isThread = scope.threadId !== undefined;
+  const effectiveActive = resolveActive(
+    scope.threadId ?? scope.channelId,
+    deps.activeChannelIds,
+    isThread,
+    isThread ? scope.channelId : null,
+    settings.active?.value,
+  );
+  const activeSource = settings.active?.source ?? "config activeChannelIds";
+  lines.push(`- active: \`${effectiveActive}\` (${activeSource})`);
 
   // グローバルデフォルト
   lines.push("");
@@ -272,10 +295,12 @@ export async function handleSettingsSet(
   const model = interaction.options.getString("model");
   const effort = interaction.options.getString("effort");
   const showThinking = interaction.options.getBoolean("show_thinking");
+  const active = interaction.options.getBoolean("active");
 
-  if (!model && !effort && showThinking === null) {
+  if (!model && !effort && showThinking === null && active === null) {
     await interaction.reply({
-      content: "Specify at least one of `model` / `effort` / `show_thinking`.",
+      content:
+        "Specify at least one of `model` / `effort` / `show_thinking` / `active`.",
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -297,6 +322,10 @@ export async function handleSettingsSet(
   if (showThinking !== null) {
     patch.showThinking = showThinking;
     updates.push(`show_thinking = \`${showThinking}\``);
+  }
+  if (active !== null) {
+    patch.active = active;
+    updates.push(`active = \`${active}\``);
   }
   await store.applyPatch(scope, patch);
   await interaction.reply({
@@ -350,6 +379,14 @@ export async function handleSettingsUnset(
       await interaction.reply({
         content:
           `Show_thinking unset for this ${scopeLabel} (fallback applies).`,
+        flags: MessageFlags.Ephemeral,
+      });
+      break;
+    case "active":
+      await store.applyPatch(scope, { active: null });
+      await interaction.reply({
+        content:
+          `Active unset for this ${scopeLabel} (config activeChannelIds applies).`,
         flags: MessageFlags.Ephemeral,
       });
       break;

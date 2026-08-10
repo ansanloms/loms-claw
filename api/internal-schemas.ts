@@ -128,7 +128,7 @@ export const internalSchemas = {
   },
   "ScopeSettings": {
     "type": "object",
-    "description": "スコープの解決済み設定。model/effort/showThinking は thread → channel → default の順にフォールバックして解決する。session は thread と channel で独立しており、フォールバックしない。",
+    "description": "スコープの解決済み設定。model/effort/showThinking は thread → channel → default の順にフォールバックして解決する。session は thread と channel で独立しており、フォールバックしない。active はグローバルデフォルトを持たず、上書きが無ければフィールドごと省略される (省略は config.json の activeChannelIds による判定へフォールバックすることを意味する)。",
     "additionalProperties": false,
     "required": [
       "showThinking"
@@ -146,6 +146,9 @@ export const internalSchemas = {
         "$ref": "#/components/schemas/SettingEntry"
       },
       "showThinking": {
+        "$ref": "#/components/schemas/BoolSettingEntry"
+      },
+      "active": {
         "$ref": "#/components/schemas/BoolSettingEntry"
       }
     }
@@ -213,6 +216,14 @@ export const internalSchemas = {
           "null"
         ],
         "description": "thinking 表示設定。null を指定すると削除し、フォールバック解決へ戻す。",
+        "example": true
+      },
+      "active": {
+        "type": [
+          "boolean",
+          "null"
+        ],
+        "description": "反応モードの上書き。true で全メッセージに反応し、false で mention 必須になる。null で上書きを削除し、config.json の activeChannelIds による判定へ戻す。",
         "example": true
       },
       "session": {

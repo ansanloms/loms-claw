@@ -361,6 +361,7 @@ export class DiscordBot {
           defaults: this.config.claude.defaults,
           cronExecutor: this.cronExecutor,
           voiceManager: this.voiceManager,
+          activeChannelIds: this.config.discord.activeChannelIds,
         });
       }
       if (sub === "set") {
@@ -394,19 +395,36 @@ export class DiscordBot {
       return;
     }
 
+    // スコープ抽出 (反応判定で per-scope の active 上書きを引くために先に必要)。
+    // `message.channel.isThread()` は `this is ThreadChannel` の type guard だが、
+    // `message.channel` の型は元々 parentId を持つ型を含む union なので、
+    // 判定結果を isThread 変数に寄せても後続の parentId 参照で型エラーにならない。
+    const isThread = message.channel.isThread();
+    const scope: StoreScope = {
+      channelId: isThread
+        ? (message.channel.parentId ?? message.channelId)
+        : message.channelId,
+      threadId: isThread ? message.channelId : undefined,
+    };
+    // 承認ボタン・systemPrompt 解決・テンプレート変数は「発話があった場所」を見せたい。
+    // スレッド内ならスレッド ID、通常チャンネルなら channel ID。
+    const localId = scope.threadId ?? scope.channelId;
+
     // 反応判定
     const isMentioned = this.client.user
       ? message.mentions.has(this.client.user)
       : false;
     const hasNonBotMentions = message.mentions.users.some((u) => !u.bot);
+    const activeOverride = await this.store.getActive(scope);
     if (
       !shouldRespond(
         message.channelId,
         this.config.discord.activeChannelIds,
-        message.channel.isThread(),
-        message.channel.isThread() ? message.channel.parentId : null,
+        isThread,
+        isThread ? message.channel.parentId : null,
         isMentioned,
         hasNonBotMentions,
+        activeOverride,
       )
     ) {
       return;
@@ -429,16 +447,6 @@ export class DiscordBot {
     }
 
     const channel = message.channel as GuildTextBasedChannel;
-    const isThread = message.channel.isThread();
-    const scope: StoreScope = {
-      channelId: isThread
-        ? (message.channel.parentId ?? message.channelId)
-        : message.channelId,
-      threadId: isThread ? message.channelId : undefined,
-    };
-    // 承認ボタン・systemPrompt 解決・テンプレート変数は「発話があった場所」を見せたい。
-    // スレッド内ならスレッド ID、通常チャンネルなら channel ID。
-    const localId = scope.threadId ?? scope.channelId;
 
     // bot が応答中の scope に届いたメッセージは直列キューに積み、現在のターンが
     // 終わってから同一セッションで処理する (Claude Code が応答生成中の入力を

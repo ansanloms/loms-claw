@@ -211,6 +211,57 @@ Deno.test("createSettingsRoutes", async (t) => {
   );
 
   await t.step(
+    "PATCH /settings/:id: active を設定でき、応答に active が含まれること",
+    async () => {
+      await withApp({}, async (app) => {
+        const res = await app.request("/settings/ch-1", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ active: true }),
+        });
+        assertEquals(res.status, 200);
+        const json = await res.json();
+        assertEquals(json.active, { value: true, source: "channel" });
+      });
+    },
+  );
+
+  await t.step(
+    "PATCH /settings/:id: active: null を送ると応答から active が消えること",
+    async () => {
+      await withApp({}, async (app) => {
+        await app.request("/settings/ch-1", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ active: true }),
+        });
+
+        const res = await app.request("/settings/ch-1", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ active: null }),
+        });
+        assertEquals(res.status, 200);
+        const json = await res.json();
+        assertEquals(json.active, undefined);
+      });
+    },
+  );
+
+  await t.step(
+    "GET /settings/:id: 未設定なら active がフィールドごと省略されること",
+    async () => {
+      await withApp({}, async (app) => {
+        const res = await app.request("/settings/ch-1");
+        assertEquals(res.status, 200);
+        const json = await res.json();
+        assertEquals(json.active, undefined);
+        assertEquals("active" in json, false);
+      });
+    },
+  );
+
+  await t.step(
     "DELETE /settings/:id: 設定が全削除され { ok: true } が返ること",
     async () => {
       await withApp({}, async (app) => {

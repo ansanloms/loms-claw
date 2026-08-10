@@ -35,7 +35,7 @@
           "type": "array",
           "items": { "type": "string" },
           "default": [],
-          "description": "mention 不要で全メッセージに反応するチャンネル ID の配列。空配列なら全チャンネルで bot への mention が必要。"
+          "description": "mention 不要で全メッセージに反応するチャンネル ID の静的なベースライン配列。空配列なら全チャンネルで bot への mention が必要。/claw settings set active または PATCH /settings/{id} による per-scope の上書きが、この配列による判定より優先される。"
         }
       }
     },
