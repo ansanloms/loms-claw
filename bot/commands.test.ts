@@ -129,7 +129,7 @@ Deno.test("handleSettingsSet", async (t) => {
         assertEquals(await store.getEffort(ch("ch-1")), undefined);
         assertEquals(
           interaction.getReplyContent(),
-          "Specify at least one of `model` / `effort` / `show_thinking`.",
+          "Specify at least one of `model` / `effort` / `show_thinking` / `active`.",
         );
       }),
   );
@@ -181,6 +181,34 @@ Deno.test("handleSettingsSet", async (t) => {
         );
         // 親チャンネルは無傷
         assertEquals(await store.getModel(ch("ch-parent")), "opus");
+      }),
+  );
+
+  await t.step(
+    "active のみ指定で設定されること",
+    () =>
+      withStore(async (store) => {
+        const interaction = mockInteraction("ch-1", {
+          active: true,
+          // deno-lint-ignore no-explicit-any
+        }) as any;
+        await handleSettingsSet(interaction, store);
+        assertEquals(await store.getActive(ch("ch-1")), true);
+        assertEquals(await store.getModel(ch("ch-1")), undefined);
+      }),
+  );
+
+  await t.step(
+    "active = false も明示指定として保存されること",
+    () =>
+      withStore(async (store) => {
+        await store.applyPatch(ch("ch-1"), { active: true });
+        const interaction = mockInteraction("ch-1", {
+          active: false,
+          // deno-lint-ignore no-explicit-any
+        }) as any;
+        await handleSettingsSet(interaction, store);
+        assertEquals(await store.getActive(ch("ch-1")), false);
       }),
   );
 
@@ -261,6 +289,24 @@ Deno.test("handleSettingsUnset", async (t) => {
 
         // 削除後は defaults (= false) へフォールバック
         assertEquals(await store.getShowThinking(ch("ch-1")), false);
+        assertEquals(await store.getModel(ch("ch-1")), "opus");
+      }),
+  );
+
+  await t.step(
+    "target=active でチャンネルの active のみ削除されること",
+    () =>
+      withStore(async (store) => {
+        await store.applyPatch(ch("ch-1"), { active: true });
+        await store.setModel(ch("ch-1"), "opus");
+
+        const interaction = mockInteraction("ch-1", {
+          target: "active",
+          // deno-lint-ignore no-explicit-any
+        }) as any;
+        await handleSettingsUnset(interaction, store);
+
+        assertEquals(await store.getActive(ch("ch-1")), undefined);
         assertEquals(await store.getModel(ch("ch-1")), "opus");
       }),
   );

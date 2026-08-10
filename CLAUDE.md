@@ -126,14 +126,14 @@ config.schema.ts       config.schema.json を @cfworker/json-schema の Validato
 logger.ts              名前空間付き軽量ロガー。`initLogger({ level, bufferSize })` で設定。リングバッファで直近ログをメモリ保持。
 errors.ts              getErrorMessage(): unknown なエラー値からメッセージを取り出す共通ユーティリティ。
 bot/mod.ts             DiscordBot クラス。messageCreate ハンドラ、start/shutdown。
-bot/commands.ts        スラッシュコマンド定義とハンドラ（/claw settings show|set|unset で model/effort/show_thinking/session を操作, /claw vc join|leave）。
-bot/guard.ts           isAuthorized(): ギルド ID + ユーザー ID + bot 除外の認可チェック。shouldRespond(): active channel / mention / スレッドによる反応判定。
+bot/commands.ts        スラッシュコマンド定義とハンドラ（/claw settings show|set|unset で model/effort/show_thinking/active/session を操作, /claw vc join|leave）。
+bot/guard.ts           isAuthorized(): ギルド ID + ユーザー ID + bot 除外の認可チェック。resolveActive(): per-scope の active 上書き (KV) と config の activeChannelIds を解決する共通ロジック。shouldRespond(): resolveActive() の結果 + mention / スレッドによる反応判定。
 bot/queue.ts           ScopeQueue: scope (localId) 単位でメッセージ処理を直列化するキュー。応答中の scope に届いた次のメッセージを現在のターン終了後に処理する (並行 query と session 競合の防止)。
 bot/message.ts         splitMessage(): 2000 文字分割。keepTyping(): typing インジケーター維持。ProgressReporter: ツール進捗表示。
 claude/mod.ts          askClaude(): Agent SDK の query() を呼び出し SDKMessage ストリームを逐次 yield。buildQueryOptions() / normalizeEffort()。テストは queryFn DI でモック。
 claude/system-prompt.ts  SystemPromptStore: .claude/system-prompt/ 配下を起動時に読み込み、コンテキスト (chat/vc/cron) とスコープ (channelId/threadId) に応じて結合。
 claude/template.ts     replaceTemplateVariables(): システムプロンプトの {{key}} 置換。
-store/mod.ts           Store: Deno KV (SQLite backend) によるスコープ単位の session_id / model / effort / showThinking 永続化。スコープは {channelId, threadId?} の組。model / effort / showThinking は thread → channel → グローバルデフォルト (config.json `claude.defaults`) の動的フォールバック (showThinking は最終的に false)。session は thread と channel で独立。applyPatch() で複数キーの部分更新 (JSON Merge Patch 意味論) を atomic に適用する。
+store/mod.ts           Store: Deno KV (SQLite backend) によるスコープ単位の session_id / model / effort / showThinking / active 永続化。スコープは {channelId, threadId?} の組。model / effort / showThinking は thread → channel → グローバルデフォルト (config.json `claude.defaults`) の動的フォールバック (showThinking は最終的に false)。active は thread → channel のみで解決し、グローバルデフォルトを持たない (どちらにも無ければ undefined。呼び出し側で config の activeChannelIds によるリスト判定へフォールバックする)。session は thread と channel で独立。applyPatch() で複数キーの部分更新 (JSON Merge Patch 意味論) を atomic に適用する。
 approval/manager.ts    ApprovalManager: Discord ボタンによるツール承認/拒否。createCanUseTool(): ApprovalResult を SDK の PermissionResult に変換する canUseTool コールバックを生成。AskUserQuestion は承認フローを通さず QuestionManager へ委譲する。
 approval/question.ts   QuestionManager: AskUserQuestion の質問を Discord の select menu で提示し回答を収集。「Other (自由入力)」は Modal で受け付け、回答を updatedInput.answers として返す。
 approval/settings.ts   isInAllowList() / addToSettingsAllowList(): .claude/settings.json の permissions.allow 読み書き。
@@ -291,7 +291,7 @@ cron ジョブ用のシステムプロンプトは `.claude/system-prompt/CRON.m
 ### テキスト
 
 1. `messageCreate` → `isAuthorized()` で認可チェック
-2. `shouldRespond()` で反応判定（active channel / mention / 親が active channel のスレッド）
+2. `shouldRespond()` で反応判定（active channel / mention / 親が active channel のスレッド）。active channel の判定は `resolveActive()` に委譲しており、KV の per-scope 上書き（`/claw settings set active` 等）が config の `activeChannelIds` より優先される
 3. `message.channel.isThread()` から `StoreScope { channelId, threadId? }` を抽出（thread の場合 `parentId` を `channelId`、`message.channelId` を `threadId` に入れる）
 4. `ScopeQueue.enqueue(localId)` で以降の処理を **scope 単位で直列化**。応答中の scope に届いた次のメッセージは現在のターン終了後に処理される（Claude Code が応答生成中の入力をキューに積むのと同じ挙動）。待機に入ったメッセージには ⏳ リアクションを付け、自分のターン開始時に外す。これにより同一セッションへの並行 query と session 競合を防ぐ
 5. `message.cleanContent` からプロンプト抽出（bot mention を除去）
@@ -315,6 +315,8 @@ cron ジョブ用のシステムプロンプトは `.claude/system-prompt/CRON.m
 逆にスレッドで未設定なら親チャンネルの設定が即時に反映される。
 
 `session` は thread と channel で完全に独立する。スレッドを切ると新規セッションとして始まり、親チャンネル側のセッションは触らない。`/claw settings unset session` をスレッド内で実行するとスレッドのセッションのみ削除する。
+
+`active`（mention 不要で全メッセージに反応するかどうか）も `model / effort / showThinking` と同様に thread → channel の順で解決するが、**グローバルデフォルトを持たない**点が異なる。フォールバック先はグローバルデフォルトではなく、config の `activeChannelIds` によるチャンネル ID リスト判定（スレッドの場合は親チャンネル ID も見る）。thread / channel どちらの KV にも上書きが無ければ `ScopeSettings.active` はフィールドごと省略される。`/claw settings set active:<true|false>` で per-scope に上書きでき、`false` を明示すると config で active なチャンネルでも mention 必須へ落とせる。`/claw settings unset active` で上書きを削除し、config の判定へ戻す。
 
 `/claw settings set|unset`（Discord スラッシュコマンド）と内部 HTTP API の `PATCH /settings/{id}` は、どちらも `Store.applyPatch()` を通して同じ部分更新ロジックを共有する。
 

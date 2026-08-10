@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { isAuthorized, shouldRespond } from "./guard.ts";
+import { isAuthorized, resolveActive, shouldRespond } from "./guard.ts";
 import type { Config } from "../config.ts";
 
 const baseConfig: Config = {
@@ -270,6 +270,112 @@ Deno.test("shouldRespond", async (t) => {
     () => {
       assertEquals(
         shouldRespond("ch-other", activeChannels, false, null, true, true),
+        true,
+      );
+    },
+  );
+
+  await t.step(
+    "非 active channel で override が true なら mention 無しでも反応すること",
+    () => {
+      assertEquals(
+        shouldRespond(
+          "ch-other",
+          activeChannels,
+          false,
+          null,
+          false,
+          false,
+          true,
+        ),
+        true,
+      );
+    },
+  );
+
+  await t.step(
+    "active channel で override が false なら mention 必須になること",
+    () => {
+      assertEquals(
+        shouldRespond(
+          "ch-active-1",
+          activeChannels,
+          false,
+          null,
+          false,
+          false,
+          false,
+        ),
+        false,
+      );
+    },
+  );
+
+  await t.step(
+    "override が true でも bot mention 無し + 他ユーザーメンションありは無視すること",
+    () => {
+      assertEquals(
+        shouldRespond(
+          "ch-other",
+          activeChannels,
+          false,
+          null,
+          false,
+          true,
+          true,
+        ),
+        false,
+      );
+    },
+  );
+});
+
+Deno.test("resolveActive", async (t) => {
+  await t.step(
+    "override が true なら config のリストに無くても true になること",
+    () => {
+      assertEquals(
+        resolveActive("ch-other", activeChannels, false, null, true),
+        true,
+      );
+    },
+  );
+
+  await t.step(
+    "override が false なら config のリストにあっても false になること",
+    () => {
+      assertEquals(
+        resolveActive("ch-active-1", activeChannels, false, null, false),
+        false,
+      );
+    },
+  );
+
+  await t.step(
+    "override が undefined なら config のリスト判定にフォールバックすること",
+    () => {
+      assertEquals(
+        resolveActive("ch-active-1", activeChannels, false, null, undefined),
+        true,
+      );
+      assertEquals(
+        resolveActive("ch-other", activeChannels, false, null, undefined),
+        false,
+      );
+    },
+  );
+
+  await t.step(
+    "override が undefined でスレッドの場合、親チャンネルが active なら true になること",
+    () => {
+      assertEquals(
+        resolveActive(
+          "thread-1",
+          activeChannels,
+          true,
+          "ch-active-1",
+          undefined,
+        ),
         true,
       );
     },

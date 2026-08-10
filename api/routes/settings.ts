@@ -1,7 +1,7 @@
 /**
  * settings ルート。
  *
- * チャンネル / スレッド単位の設定 (model / effort / showThinking / session) の
+ * チャンネル / スレッド単位の設定 (model / effort / showThinking / active / session) の
  * 取得・部分更新・全削除と、グローバルデフォルトの取得を HTTP エンドポイントとして提供する。
  */
 

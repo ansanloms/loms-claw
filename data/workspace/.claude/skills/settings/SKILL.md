@@ -1,13 +1,15 @@
 ---
 name: settings
-description: チャンネル / スレッド単位の bot 設定 (model / effort / show_thinking / session) を内部 API 経由で取得・変更する手順。設定を確認したいとき、スレッド作成時に初期設定を書き込みたいときに使う。
+description: チャンネル / スレッド単位の bot 設定 (model / effort / show_thinking / active / session) を内部 API 経由で取得・変更する手順。設定を確認したいとき、スレッド作成時に初期設定を書き込みたいときに使う。
 user-invocable: false
 ---
 
 # 設定操作 API
 
-bot はチャンネル / スレッド単位で **model / effort / show_thinking / session** を Deno KV に永続化している。
+bot はチャンネル / スレッド単位で **model / effort / show_thinking / active / session** を Deno KV に永続化している。
 Discord のスラッシュコマンド (`/claw settings`) と同じロジックを内部 API 経由で呼べる。
+
+`active` は他の設定と異なり、グローバルデフォルトを持たない。上書きが無ければ `GET` のレスポンスから `active` フィールドごと省略され、`config.json` の `activeChannelIds` によるチャンネル ID リスト判定へフォールバックする (`showThinking` 等のように「未設定なら false / config の値」という単一のデフォルト値には解決できないため)。
 
 ## エンドポイント
 
@@ -45,6 +47,16 @@ curl -s -X PATCH -H 'Content-Type: application/json' \
   -d '{"model":null}' \
   http://127.0.0.1:3000/settings/1234567890123456789
 
+# active を有効化 (mention 不要で全メッセージに反応させる)
+curl -s -X PATCH -H 'Content-Type: application/json' \
+  -d '{"active":true}' \
+  http://127.0.0.1:3000/settings/1234567890123456789
+
+# active の上書きを削除し、config.json の activeChannelIds による判定へ戻す
+curl -s -X PATCH -H 'Content-Type: application/json' \
+  -d '{"active":null}' \
+  http://127.0.0.1:3000/settings/1234567890123456789
+
 # セッションを削除 (次回発話から新規セッション)
 curl -s -X PATCH -H 'Content-Type: application/json' \
   -d '{"session":null}' \
@@ -63,7 +75,7 @@ curl -s http://127.0.0.1:3000/settings/default
 
 - キーを省略した場合: その設定は変更しない
 - キーに `null` を指定した場合: その設定を削除し、フォールバック解決へ戻す
-- 指定できるキーは `model` / `effort` / `showThinking` / `session`
+- 指定できるキーは `model` / `effort` / `showThinking` / `active` / `session`
 
 `session` は `null` による削除のみ受け付ける。任意の値を書き込むことはできない。他スコープの会話セッションを乗っ取れる経路になるため、意図的に禁止されている。会話を引き継ぎたい場合はこの API では実現できない。
 
@@ -78,6 +90,8 @@ curl -s http://127.0.0.1:3000/settings/default
 - `default`: グローバルデフォルト値
 
 注意: **`parentId` を付けずに `{id}` 単独で解決した場合、`channel` はその `{id}` 自身に設定された値を指す** (親子関係の意味ではない)。スレッド ID を `parentId` 無しで叩くと、そのスレッド自身への直接設定が `channel` として返る。
+
+`active` も同じ形で返るが、`source` は `thread` / `channel` のみで `default` にはならない。上書きが無ければ `active` フィールドごとレスポンスから省略される (他の設定と違いグローバルデフォルトを持たないため)。
 
 ## 典型的な使い方
 

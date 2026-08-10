@@ -29,6 +29,12 @@ properties:
       - "null"
     description: thinking 表示設定。null を指定すると削除し、フォールバック解決へ戻す。
     example: true
+  active:
+    type:
+      - boolean
+      - "null"
+    description: 反応モードの上書き。true で全メッセージに反応し、false で mention 必須になる。null で上書きを削除し、config.json の activeChannelIds による判定へ戻す。
+    example: true
   session:
     type: "null"
     description: セッションの削除指定のみを許可する。null 以外の値の書き込みを許可すると、任意のセッション ID を指定して他スコープの会話セッションを乗っ取れる経路になるため、削除以外の操作は許可しない。

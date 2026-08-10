@@ -10,9 +10,12 @@
  *
  * model / effort / showThinking は thread → channel → defaults の順に解決する。
  * session は thread と channel で完全に独立し、互いにフォールバックしない。
+ * active は thread → channel の順に解決するが、defaults を持たない (未設定なら
+ * undefined を返し、呼び出し側で config.json の activeChannelIds による判定へ
+ * フォールバックする)。
  *
  * KV キー設計:
- *   ["channel", id, "session" | "model" | "effort" | "showThinking"] -> string
+ *   ["channel", id, "session" | "model" | "effort" | "showThinking" | "active"] -> string
  *   id は Discord Snowflake (channel / thread どちらも) または `cron:{name}`。
  *   thread と channel は同一 Snowflake 名前空間で衝突しないため、id をそのまま
  *   キーに使い分ける。
@@ -25,6 +28,7 @@ const SESSION = "session";
 const MODEL = "model";
 const EFFORT = "effort";
 const SHOW_THINKING = "showThinking";
+const ACTIVE = "active";
 
 /**
  * グローバルデフォルト値。チャンネル / スレッド単位の上書きが無いときに使われる。
@@ -76,6 +80,11 @@ export interface ScopeSettings {
   effort?: ScopeSettingEntry;
   /** showThinking は未設定でも false (source: default) として常に解決する。 */
   showThinking: BoolScopeSettingEntry;
+  /**
+   * active は上書きが無ければ undefined。config の activeChannelIds による
+   * 判定へフォールバックすることを意味する (showThinking と異なり defaults を持たない)。
+   */
+  active?: BoolScopeSettingEntry;
 }
 
 /**
@@ -90,6 +99,7 @@ export interface SettingsPatch {
   model?: string | null;
   effort?: string | null;
   showThinking?: boolean | null;
+  active?: boolean | null;
   session?: null;
 }
 
@@ -220,6 +230,34 @@ export class Store {
     await this.kv.delete([NS, id, SHOW_THINKING]);
   }
 
+  // ── active ──────────────────────────────────────────────
+  // thread → channel の順で解決。showThinking と異なり defaults を持たず、
+  // どちらにも無ければ undefined を返す (呼び出し側で config の
+  // activeChannelIds による判定へフォールバックする)。false を明示できることが
+  // この設定の要点なので、未設定と false を混同しないこと。
+
+  async getActive(scope: StoreScope): Promise<boolean | undefined> {
+    if (scope.threadId !== undefined) {
+      const threadEntry = await this.kv.get<string>([
+        NS,
+        scope.threadId,
+        ACTIVE,
+      ]);
+      if (threadEntry.value !== null) {
+        return threadEntry.value === "true";
+      }
+    }
+    const channelEntry = await this.kv.get<string>([
+      NS,
+      scope.channelId,
+      ACTIVE,
+    ]);
+    if (channelEntry.value !== null) {
+      return channelEntry.value === "true";
+    }
+    return undefined;
+  }
+
   // ── まとめ操作 ─────────────────────────────────────────
 
   /**
@@ -279,6 +317,13 @@ export class Store {
         atomic.set([NS, id, SHOW_THINKING], String(patch.showThinking));
       }
     }
+    if (patch.active !== undefined) {
+      if (patch.active === null) {
+        atomic.delete([NS, id, ACTIVE]);
+      } else {
+        atomic.set([NS, id, ACTIVE], String(patch.active));
+      }
+    }
     if (patch.session !== undefined) {
       // session は null (削除) のみ許可される (SettingsPatch 型で保証)。
       atomic.delete([NS, id, SESSION]);
@@ -306,13 +351,19 @@ export class Store {
       [NS, scope.channelId, MODEL],
       [NS, scope.channelId, EFFORT],
       [NS, scope.channelId, SHOW_THINKING],
+      [NS, scope.channelId, ACTIVE],
     ] as const;
 
     if (scope.threadId === undefined) {
-      const [sessionEntry, modelEntry, effortEntry, showThinkingEntry] =
-        await this.kv.getMany<
-          [string, string, string, string]
-        >([...channelKeys]);
+      const [
+        sessionEntry,
+        modelEntry,
+        effortEntry,
+        showThinkingEntry,
+        activeEntry,
+      ] = await this.kv.getMany<
+        [string, string, string, string, string]
+      >([...channelKeys]);
       return {
         session: sessionEntry.value ?? undefined,
         model: resolveSetting(
@@ -330,6 +381,7 @@ export class Store {
           showThinkingEntry.value,
           this.defaults.showThinking,
         ),
+        active: resolveOptionalBoolSetting(null, activeEntry.value),
       };
     }
 
@@ -338,18 +390,32 @@ export class Store {
       [NS, scope.threadId, MODEL],
       [NS, scope.threadId, EFFORT],
       [NS, scope.threadId, SHOW_THINKING],
+      [NS, scope.threadId, ACTIVE],
     ] as const;
     const [
       threadSession,
       threadModel,
       threadEffort,
       threadShowThinking,
+      threadActive,
       _channelSession,
       channelModel,
       channelEffort,
       channelShowThinking,
+      channelActive,
     ] = await this.kv.getMany<
-      [string, string, string, string, string, string, string, string]
+      [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+      ]
     >([...threadKeys, ...channelKeys]);
 
     return {
@@ -364,6 +430,10 @@ export class Store {
         threadEffort.value,
         channelEffort.value,
         this.defaults.effort,
+      ),
+      active: resolveOptionalBoolSetting(
+        threadActive.value,
+        channelActive.value,
       ),
       showThinking: resolveBoolSetting(
         threadShowThinking.value,
@@ -425,4 +495,22 @@ function resolveBoolSetting(
     return { value: channelValue === "true", source: "channel" };
   }
   return { value: defaultValue ?? false, source: "default" };
+}
+
+/**
+ * boolean 設定値を thread → channel の順で解決する。resolveBoolSetting() と
+ * 異なり defaults へのフォールバックを持たないため、どちらにも値が無ければ
+ * undefined を返す (false にしない。未設定と false を区別するのが active の要点)。
+ */
+function resolveOptionalBoolSetting(
+  threadValue: string | null,
+  channelValue: string | null,
+): BoolScopeSettingEntry | undefined {
+  if (threadValue !== null) {
+    return { value: threadValue === "true", source: "thread" };
+  }
+  if (channelValue !== null) {
+    return { value: channelValue === "true", source: "channel" };
+  }
+  return undefined;
 }

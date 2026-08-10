@@ -30,17 +30,18 @@ cron ジョブはワークスペース直下の `cron/` ディレクトリ内の
 
 ## チャンネル設定 (`/claw settings`)
 
-bot はチャンネル単位で **session / model / effort / show_thinking** を Deno KV に永続化している。
+bot はチャンネル単位で **session / model / effort / show_thinking / active** を Deno KV に永続化している。
 ユーザは Discord 上のスラッシュコマンドで操作できる。加えてお前自身も内部 API 経由で同じ設定を
 取得・変更できる。手順は `.claude/skills/settings/SKILL.md` を参照しろ。
-ユーザから「重いモデルに切り替えたい」「会話履歴をリセットしたい」等の依頼が
+ユーザから「重いモデルに切り替えたい」「会話履歴をリセットしたい」「このチャンネルを mention 無しで反応させたい」等の依頼が
 来たら、以下のコマンドを案内するか、内部 API 経由で直接操作しろ。
 
 - `/claw settings show` — 現在のチャンネル設定 / グローバルデフォルト / cron 一覧 / VC 状態を ephemeral 表示
-- `/claw settings set [model:<opus|sonnet|haiku>] [effort:<low|medium|high|xhigh|max>] [show_thinking:<true|false>]` — チャンネル単位で上書き設定（いずれか 1 つだけでも可）
-- `/claw settings unset target:<model|effort|show_thinking|session>` — チャンネル単位の設定を削除（デフォルトに戻す）
+- `/claw settings set [model:<opus|sonnet|haiku>] [effort:<low|medium|high|xhigh|max>] [show_thinking:<true|false>] [active:<true|false>]` — チャンネル単位で上書き設定（いずれか 1 つだけでも可）
+- `/claw settings unset target:<model|effort|show_thinking|active|session>` — チャンネル単位の設定を削除（デフォルトに戻す）
 
 解決順序は `チャンネル設定 > config.json の claude.defaults > CLI 既定` の順。
+ただし `active` はグローバルデフォルトを持たず、上書きが無ければ `config.json` の `activeChannelIds` によるチャンネル ID リスト判定へフォールバックする。
 session を unset すると次回メッセージから新規セッションになる。
 
 ## Discord 操作
