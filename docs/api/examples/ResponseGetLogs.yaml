@@ -1,7 +1,7 @@
 - timestamp: "2026-06-14T09:00:00.000Z"
   level: INFO
-  namespace: api-discord
-  message: "GET /discord/channels"
+  namespace: api-cron
+  message: "manual run: news"
 - timestamp: "2026-06-14T09:00:01.000Z"
   level: ERROR
   namespace: claude

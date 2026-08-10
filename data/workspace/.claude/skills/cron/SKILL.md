@@ -7,6 +7,9 @@ user-invocable: false
 # Cron タスクファイルの書き方
 
 `cron/` ディレクトリに `.md` ファイルを配置し、reload API を叩くと定期実行ジョブとして登録される。
+`cron/` はワークスペースルート（bot プロセスの cwd）からの相対パス。エージェントの作業ディレクトリがワークスペースルートであることを前提にしている。
+
+内部 API のポートは固定ではない。`config.json` の `claude.apiPort`（既定 3000）で変わる。以下の例では `3000` を使う。
 
 ## 重要
 
@@ -24,6 +27,92 @@ cron ジョブの管理はファイル操作で行う。`RemoteTrigger`、`CronC
 curl -s -X POST http://127.0.0.1:3000/cron/reload
 ```
 
+### reload が `{"ok": true}` を返しても、ジョブが登録されたとは限らない
+
+reload は不正なジョブファイル（YAML フロントマターの構文エラー、必須フィールド欠落、本文が空 等）を**黙って捨てる**。エラーは `cron-loader` 名前空間のログに ERROR で出るだけで、reload の HTTP レスポンスは例外の有無に関わらず常に `{"ok": true}` になる。`{"ok": true}` を見て「登録できた」と判断してはいけない。
+
+ファイルを追加・変更したら、必ず次の手順で検証すること。
+
+1. `POST /cron/reload` を叩く。
+2. `GET /cron` の `jobs` に目的の `name` が含まれるか確認する。
+3. 含まれていなければ `GET /logs?namespace=cron-loader&level=ERROR` で原因を確認する（詳細は `logs` skill 参照）。
+
+```bash
+# 1. reload
+curl -s -X POST http://127.0.0.1:3000/cron/reload
+
+# 2. 登録確認（jobs はオブジェクトの配列。jq '.jobs[]' で見る）
+curl -s http://127.0.0.1:3000/cron | jq '.jobs[] | select(.name == "news")'
+
+# 3. 見つからなければ原因調査
+curl -s 'http://127.0.0.1:3000/logs?namespace=cron-loader&level=ERROR'
+```
+
+## エンドポイントのレスポンス形状
+
+### `GET /cron`
+
+**オブジェクト**を返す。トップレベルが配列ではないので `jq '.[]'` ではなく `jq '.jobs[]'` を使うこと。`channelId` は未指定のジョブでは省略される。
+
+成功（200）:
+
+```json
+{
+  "jobs": [
+    { "name": "news", "schedule": "0 9 * * *", "channelId": "1234567890123456789", "once": false },
+    { "name": "reminder", "schedule": "30 18 * * 5", "once": true }
+  ]
+}
+```
+
+cron 機能が無効な場合（503）:
+
+```json
+{ "error": "cron not available" }
+```
+
+### `POST /cron/run`
+
+成功（200）:
+
+```json
+{ "ok": true, "name": "news" }
+```
+
+ジョブが見つからない場合（404）:
+
+```json
+{ "error": "job not found: news" }
+```
+
+リクエストボディが不正な場合（400、`name` 未指定等）:
+
+```json
+{ "error": "..." }
+```
+
+cron 機能が無効な場合（503）:
+
+```json
+{ "error": "cron not available" }
+```
+
+### `POST /cron/reload`
+
+成功（200）:
+
+```json
+{ "ok": true }
+```
+
+reload 機能が無効な場合（503）:
+
+```json
+{ "error": "cron reload not available" }
+```
+
+**繰り返しになるが、成功レスポンスはファイル読み込みの成否を保証しない。** 上記「reload が `{"ok": true}` を返しても、ジョブが登録されたとは限らない」の検証手順を必ず踏むこと。
+
 ## フォーマット
 
 YAML フロントマターとマークダウン本文で構成する。ジョブ名はファイル名（拡張子除く）から自動決定される。
@@ -35,6 +124,7 @@ channelId: "1234567890123456789"
 resumeSession: false
 maxTurns: 5
 timeout: 120000
+once: false
 model: sonnet
 effort: medium
 ---
@@ -69,9 +159,11 @@ effort: medium
 
 ### once について
 
-- `true` に設定すると、スケジュールまたは手動実行で1回実行された後にジョブファイルが自動削除される。
+**`once: true` は実行後にジョブファイルを自動削除する不可逆な操作。** ファイルを消してしまうので、内容を復元する手段は無い（他ジョブからコピーして作り直す以外に無い）。ユーザーから明示的な指示が無い限り、既存ジョブに `once: true` を勝手に付けたり、`once: true` の新規ジョブを作ったりする前に、削除される前提で問題ないかユーザーへ確認すること。
+
+- `true` に設定すると、スケジュールまたは手動実行で1回実行された後、成功・失敗を問わずジョブファイルが削除される。
+- ファイル削除後、bot が自動的に reload を行う。エージェントが手動で `POST /cron/reload` を叩く必要は無い。
 - 1回きりのリマインダーや通知に使う。
-- 成功・失敗を問わず実行後に削除される。
 
 例:
 
@@ -140,5 +232,5 @@ effort: high
 ## 注意
 
 - `schedule` は必ず引用符で囲むこと（YAML でパースエラーになる場合がある）
-- プロンプト本文（フロントマター後の部分）が空の場合はエラーになる
-- ファイルを追加・変更・削除したら必ず reload API を叩くこと
+- プロンプト本文（フロントマター後の部分）が空の場合はエラーになる（`cron-loader` の ERROR ログに出て reload では捨てられる。上記「reload の検証手順」参照）
+- ファイルを追加・変更・削除したら必ず reload API を叩き、`GET /cron` で反映を確認すること（`once: true` によるファイル削除後は自動 reload されるため不要）
