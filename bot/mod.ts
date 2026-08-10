@@ -44,9 +44,9 @@ import { join } from "jsr:@std/path@^1/join";
 import { createLogger } from "../logger.ts";
 import { SystemPromptStore } from "../claude/system-prompt.ts";
 import {
-  handleStatusSet,
-  handleStatusShow,
-  handleStatusUnset,
+  handleSettingsSet,
+  handleSettingsShow,
+  handleSettingsUnset,
   handleVcJoin,
   handleVcLeave,
 } from "./commands.ts";
@@ -74,7 +74,6 @@ export class DiscordBot {
   private voiceManager: VoiceManager | null = null;
   private cronExecutor: CronExecutor | null = null;
   private systemPrompts: SystemPromptStore;
-  private startedAt: Temporal.Instant = Temporal.Now.instant();
   /** scope (channel / thread) 単位でメッセージ処理を直列化するキュー。 */
   private chatQueue = new ScopeQueue();
 
@@ -353,22 +352,21 @@ export class DiscordBot {
       return;
     }
 
-    // /claw status <sub>
-    if (group === "status") {
+    // /claw settings <sub>
+    if (group === "settings") {
       if (sub === "show") {
-        return handleStatusShow(interaction, {
+        return handleSettingsShow(interaction, {
           store: this.store,
           defaults: this.config.claude.defaults,
           cronExecutor: this.cronExecutor,
           voiceManager: this.voiceManager,
-          startedAt: this.startedAt,
         });
       }
       if (sub === "set") {
-        return handleStatusSet(interaction, this.store);
+        return handleSettingsSet(interaction, this.store);
       }
       if (sub === "unset") {
-        return handleStatusUnset(interaction, this.store);
+        return handleSettingsUnset(interaction, this.store);
       }
       return;
     }
