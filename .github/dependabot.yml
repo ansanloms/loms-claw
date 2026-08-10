@@ -15,6 +15,24 @@ updates:
           - "minor"
           - "patch"
 
+  # docs/api は独自の deno.json / deno.lock を持ち、ルートの deno.json からは
+  # 参照されない。エントリを分けないと追従されず、テンプレート
+  # (ansanloms/openapi-template) との差が開き続ける。
+  - package-ecosystem: "deno"
+    directory: "/docs/api"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "07:00"
+      timezone: "Asia/Tokyo"
+    commit-message:
+      prefix: "build"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
