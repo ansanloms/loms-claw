@@ -1,11 +1,11 @@
 lockfile_version: '1'
-generated_at: '2026-08-09T02:13:59.676042+00:00'
+generated_at: '2026-08-10T06:51:28.716856+00:00'
 apm_version: 0.27.0
 dependencies:
 - repo_url: ansanloms/skills
   name: bluesky
   host: github.com
-  resolved_commit: b9cc726d6963e528ac67bfbc5d3b456d96354b39
+  resolved_commit: 716a3dba09caee022309dc5984c0101ae2b30f1f
   version: unknown
   virtual_path: bluesky
   is_virtual: true
@@ -16,12 +16,12 @@ dependencies:
   - .claude/skills/bluesky/SKILL.md
   deployed_file_hashes:
     .claude/skills/bluesky/README.md: sha256:032c3eee122f105ad1a0696b5f083fb1f3c0771400342659a102b8c1f0fcb7ab
-    .claude/skills/bluesky/SKILL.md: sha256:b969ba2a180a033d7cb0d96bc8828c9fdd92daf2a85d74e629aa053aaa112784
-  content_hash: sha256:dd5e7c8dd005876a5f173d6b1c78dadeff1e7df75dae55522feae2417ed4869b
+    .claude/skills/bluesky/SKILL.md: sha256:2bc52509e2b12679bbae1537efc1f044eed0e7f4314a588cbfb68faf81afe43a
+  content_hash: sha256:ea5f262c2ee18162600136bde22b6d395f04025ab13e4c4917ccc0267454794c
 - repo_url: ansanloms/skills
   name: discord
   host: github.com
-  resolved_commit: b9cc726d6963e528ac67bfbc5d3b456d96354b39
+  resolved_commit: 716a3dba09caee022309dc5984c0101ae2b30f1f
   version: unknown
   virtual_path: discord
   is_virtual: true
@@ -31,13 +31,13 @@ dependencies:
   - .claude/skills/discord/README.md
   - .claude/skills/discord/SKILL.md
   deployed_file_hashes:
-    .claude/skills/discord/README.md: sha256:921575e54d051eaaf01473ef874634b487d21dc868cf0cc23ed353318779e328
-    .claude/skills/discord/SKILL.md: sha256:b0fb8b8f69b08ee2311e4aa0ad9b4090d5d9cd51bc3b2c10394ab8fa572888ab
-  content_hash: sha256:2d4b649258716981068cabbb2b3032fd61f821857cb293f5a107d2eca68bdf20
+    .claude/skills/discord/README.md: sha256:8ed6bde73d7ca2f66a5dd88130be270c02eb015a7ad813bb117218ac63fb3e1a
+    .claude/skills/discord/SKILL.md: sha256:be25061afc0a81579991c239a45fd7365edecd3b171aaae8298136f9e58d6666
+  content_hash: sha256:a106becd206c47d4ed0dd1282ff98eeef268e706b2197760610700004f4fd993
 - repo_url: ansanloms/skills
   name: find-docs
   host: github.com
-  resolved_commit: b9cc726d6963e528ac67bfbc5d3b456d96354b39
+  resolved_commit: 716a3dba09caee022309dc5984c0101ae2b30f1f
   version: unknown
   virtual_path: find-docs
   is_virtual: true
@@ -48,12 +48,12 @@ dependencies:
   - .claude/skills/find-docs/SKILL.md
   deployed_file_hashes:
     .claude/skills/find-docs/README.md: sha256:9abac44da1547f17c0c7ccfa87485e589b5d858791f26fd136df48ecb2b8d943
-    .claude/skills/find-docs/SKILL.md: sha256:f9a1afea99a9f9a880eef532ffd83ae12229ccba67bd6dc9b73464cf31c75e63
-  content_hash: sha256:999e9b5602208f3f859b5483d0d509640c9cff2f5b3fa703b7b1c21d1f6648fb
+    .claude/skills/find-docs/SKILL.md: sha256:2fa995c605390db080122b4f61a6ee6026babf69c2dfab226b2c7f230b4c065a
+  content_hash: sha256:02ac10fc96d5e738074f5910ad4c99fe1c21f9b0af0924f6321df070b4d2763c
 - repo_url: ansanloms/skills
   name: jartic-traffic-jam-forecast
   host: github.com
-  resolved_commit: b9cc726d6963e528ac67bfbc5d3b456d96354b39
+  resolved_commit: 716a3dba09caee022309dc5984c0101ae2b30f1f
   version: unknown
   virtual_path: jartic-traffic-jam-forecast
   is_virtual: true
@@ -64,12 +64,12 @@ dependencies:
   - .claude/skills/jartic-traffic-jam-forecast/SKILL.md
   deployed_file_hashes:
     .claude/skills/jartic-traffic-jam-forecast/README.md: sha256:b60df73b21d465ba494c4880b0cee5ca2f655241ddad3bf8b0dc54852c2b49a8
-    .claude/skills/jartic-traffic-jam-forecast/SKILL.md: sha256:c7d141d4e6fd0f7fa24979ed29cac6670bb1f2152162d54d7b48c267d3679bf6
-  content_hash: sha256:dbf9ee1b9c543916faa5d38c4f96c5a8b3bb35ca28eabaf2ea641cbf1236a4cd
+    .claude/skills/jartic-traffic-jam-forecast/SKILL.md: sha256:6e22840a61080a2662d3c886fa8412b253f9fc0683c43d8a4b89ad75106135e9
+  content_hash: sha256:b0ae033298dff467e1946968673feb98a66fa784300ac5c4b51af9ec67f86239
 - repo_url: ansanloms/skills
   name: jartic-traffic-volume
   host: github.com
-  resolved_commit: b9cc726d6963e528ac67bfbc5d3b456d96354b39
+  resolved_commit: 716a3dba09caee022309dc5984c0101ae2b30f1f
   version: unknown
   virtual_path: jartic-traffic-volume
   is_virtual: true
@@ -80,12 +80,12 @@ dependencies:
   - .claude/skills/jartic-traffic-volume/SKILL.md
   deployed_file_hashes:
     .claude/skills/jartic-traffic-volume/README.md: sha256:df1d500eb4fdb45e69895e17ccdb35cffca6ecd41a867d85b0db742ec6aaa356
-    .claude/skills/jartic-traffic-volume/SKILL.md: sha256:a753ecd08edc74c1e07c63ca2ab1c72ada2c8da0bb4fe5d5908e4a51c1bca216
-  content_hash: sha256:988f901142386e762f41238648369b7b9fba96f7c8c7b61b4b0ab88cb92291a8
+    .claude/skills/jartic-traffic-volume/SKILL.md: sha256:ee951eacf64586e8665d724b1f36bfca3ffd9f86815cbf3ed45c8bcb7af55c72
+  content_hash: sha256:88b584044eb2bb2ca77c5f039b706a9d04d21f6f25cff45b4d40585d7b052b98
 - repo_url: ansanloms/skills
   name: mountain-weather
   host: github.com
-  resolved_commit: b9cc726d6963e528ac67bfbc5d3b456d96354b39
+  resolved_commit: 716a3dba09caee022309dc5984c0101ae2b30f1f
   version: unknown
   virtual_path: mountain-weather
   is_virtual: true
@@ -115,7 +115,7 @@ dependencies:
   - .claude/skills/mountain-weather/scripts/testdata/aoyama-kad.utf8.html
   deployed_file_hashes:
     .claude/skills/mountain-weather/README.md: sha256:902b48202c5898956a041c7cd4c278590996855ab9834d8b3dbec754d24868d0
-    .claude/skills/mountain-weather/SKILL.md: sha256:ac3316d8d44f17af8c023d7eb2e9823b9e40203ea78089303b4fb20a45403004
+    .claude/skills/mountain-weather/SKILL.md: sha256:55c474411d3ff00f4a85c18844ea08b70db472d3d7a3e9eb2f822bff727a17b4
     .claude/skills/mountain-weather/assets/jma-area.json: sha256:398f89c043eed0ab252d4cbb94c7d463db278b9b37616519becdb83326d23424
     .claude/skills/mountain-weather/assets/tenkura-mountains.json: sha256:c429f8fca4de1d760722af9b47df3bb2b3a99cc42cc5c573afe417073518deff
     .claude/skills/mountain-weather/scripts/.gitignore: sha256:5c5daf48fdf4db42e16c29b5b3de54984bafe0c2ff367a186ca97f1d4ed48290
@@ -135,11 +135,11 @@ dependencies:
     .claude/skills/mountain-weather/scripts/deno.json: sha256:2d90cf9ef7318632a8bd7dfa8d1371bbde7e64f10643636aead3e397a14f6a6d
     .claude/skills/mountain-weather/scripts/deno.lock: sha256:4a504861f138b6357024ccc9486a6ff28ab0c6d87564d93b706f42dcc5ed4514
     .claude/skills/mountain-weather/scripts/testdata/aoyama-kad.utf8.html: sha256:4307c936a30115aae1fe9727fa026e91ac0de6d625c16345d33508e5720c0d3f
-  content_hash: sha256:71b04a576da6eb4886ae8bf0ea73374df0857551a1fa627b8d3f54c1e89bd037
+  content_hash: sha256:2065e8117be75fb39e383e741d723fb765e3dab68403dfe9f3b48b7fa4a2e789
 - repo_url: ansanloms/skills
   name: news-digest
   host: github.com
-  resolved_commit: b9cc726d6963e528ac67bfbc5d3b456d96354b39
+  resolved_commit: 716a3dba09caee022309dc5984c0101ae2b30f1f
   version: unknown
   virtual_path: news-digest
   is_virtual: true
@@ -149,13 +149,13 @@ dependencies:
   - .claude/skills/news-digest/README.md
   - .claude/skills/news-digest/SKILL.md
   deployed_file_hashes:
-    .claude/skills/news-digest/README.md: sha256:379d1ff1cfd41c1ef4d3cef152ed27be8f794ddad60f9466b50042390b2edea3
-    .claude/skills/news-digest/SKILL.md: sha256:2f115ee55606e5d2ff9d7cb33b8d1023b46a832f3bf8e53dfaefee958882f24a
-  content_hash: sha256:d833080e1a7cb61fb506ca40077f1870e3b41c9324840a8af8aaa164bf3a3512
+    .claude/skills/news-digest/README.md: sha256:dfc2a6c5a83d4adac9202a504d9d296e9440bd2f2ddb10393eca25056792c7d3
+    .claude/skills/news-digest/SKILL.md: sha256:545015f651f8ef762b89cd7dcda8dfb93537324a6a164ea9892a8c5822a5bb93
+  content_hash: sha256:f4ae03ecb2ab1fcd89c17ec5eb71aa688677393a181890293d9f98a8a8891812
 - repo_url: ansanloms/skills
   name: yamareco
   host: github.com
-  resolved_commit: b9cc726d6963e528ac67bfbc5d3b456d96354b39
+  resolved_commit: 716a3dba09caee022309dc5984c0101ae2b30f1f
   version: unknown
   virtual_path: yamareco
   is_virtual: true
@@ -165,9 +165,9 @@ dependencies:
   - .claude/skills/yamareco/README.md
   - .claude/skills/yamareco/SKILL.md
   deployed_file_hashes:
-    .claude/skills/yamareco/README.md: sha256:259a92d7a060ea6e52e13f1222142dbbfc136caa5b6c12f34d132544d1951cac
-    .claude/skills/yamareco/SKILL.md: sha256:93bb4e1fd1c48947a3f33ac767f49a1e07bcc8fff7d15368101092f301761151
-  content_hash: sha256:4445b08156a37f8446aaa333ab9dd35ae76a0e5cc673f8f95286b6de77c9d628
+    .claude/skills/yamareco/README.md: sha256:1bd92242b723abe31f84dcc6787ccb434bc052ec1c204fa3cae3ae71a657fa55
+    .claude/skills/yamareco/SKILL.md: sha256:08becdd2c1b13355225db85dd909b76186e6a9e52388580e9e8c74de32dda5f1
+  content_hash: sha256:56ce2c06bcd7075d7b1b96d172fa20c0284b6adb0980084159cdb6c2bfc2bfff
 deployments:
 - kind: project-relative
   target: claude
@@ -195,7 +195,7 @@ deployments:
   owners:
   - ansanloms/skills/bluesky
   active_owner: ansanloms/skills/bluesky
-  content_hash: sha256:b969ba2a180a033d7cb0d96bc8828c9fdd92daf2a85d74e629aa053aaa112784
+  content_hash: sha256:2bc52509e2b12679bbae1537efc1f044eed0e7f4314a588cbfb68faf81afe43a
 - kind: project-relative
   target: claude
   value: .claude/skills/discord
@@ -213,7 +213,7 @@ deployments:
   owners:
   - ansanloms/skills/discord
   active_owner: ansanloms/skills/discord
-  content_hash: sha256:921575e54d051eaaf01473ef874634b487d21dc868cf0cc23ed353318779e328
+  content_hash: sha256:8ed6bde73d7ca2f66a5dd88130be270c02eb015a7ad813bb117218ac63fb3e1a
 - kind: project-relative
   target: claude
   value: .claude/skills/discord/SKILL.md
@@ -222,7 +222,7 @@ deployments:
   owners:
   - ansanloms/skills/discord
   active_owner: ansanloms/skills/discord
-  content_hash: sha256:b0fb8b8f69b08ee2311e4aa0ad9b4090d5d9cd51bc3b2c10394ab8fa572888ab
+  content_hash: sha256:be25061afc0a81579991c239a45fd7365edecd3b171aaae8298136f9e58d6666
 - kind: project-relative
   target: claude
   value: .claude/skills/find-docs
@@ -249,7 +249,7 @@ deployments:
   owners:
   - ansanloms/skills/find-docs
   active_owner: ansanloms/skills/find-docs
-  content_hash: sha256:f9a1afea99a9f9a880eef532ffd83ae12229ccba67bd6dc9b73464cf31c75e63
+  content_hash: sha256:2fa995c605390db080122b4f61a6ee6026babf69c2dfab226b2c7f230b4c065a
 - kind: project-relative
   target: claude
   value: .claude/skills/jartic-traffic-jam-forecast
@@ -276,7 +276,7 @@ deployments:
   owners:
   - ansanloms/skills/jartic-traffic-jam-forecast
   active_owner: ansanloms/skills/jartic-traffic-jam-forecast
-  content_hash: sha256:c7d141d4e6fd0f7fa24979ed29cac6670bb1f2152162d54d7b48c267d3679bf6
+  content_hash: sha256:6e22840a61080a2662d3c886fa8412b253f9fc0683c43d8a4b89ad75106135e9
 - kind: project-relative
   target: claude
   value: .claude/skills/jartic-traffic-volume
@@ -303,7 +303,7 @@ deployments:
   owners:
   - ansanloms/skills/jartic-traffic-volume
   active_owner: ansanloms/skills/jartic-traffic-volume
-  content_hash: sha256:a753ecd08edc74c1e07c63ca2ab1c72ada2c8da0bb4fe5d5908e4a51c1bca216
+  content_hash: sha256:ee951eacf64586e8665d724b1f36bfca3ffd9f86815cbf3ed45c8bcb7af55c72
 - kind: project-relative
   target: claude
   value: .claude/skills/mountain-weather
@@ -330,7 +330,7 @@ deployments:
   owners:
   - ansanloms/skills/mountain-weather
   active_owner: ansanloms/skills/mountain-weather
-  content_hash: sha256:ac3316d8d44f17af8c023d7eb2e9823b9e40203ea78089303b4fb20a45403004
+  content_hash: sha256:55c474411d3ff00f4a85c18844ea08b70db472d3d7a3e9eb2f822bff727a17b4
 - kind: project-relative
   target: claude
   value: .claude/skills/mountain-weather/assets/jma-area.json
@@ -519,7 +519,7 @@ deployments:
   owners:
   - ansanloms/skills/news-digest
   active_owner: ansanloms/skills/news-digest
-  content_hash: sha256:379d1ff1cfd41c1ef4d3cef152ed27be8f794ddad60f9466b50042390b2edea3
+  content_hash: sha256:dfc2a6c5a83d4adac9202a504d9d296e9440bd2f2ddb10393eca25056792c7d3
 - kind: project-relative
   target: claude
   value: .claude/skills/news-digest/SKILL.md
@@ -528,7 +528,7 @@ deployments:
   owners:
   - ansanloms/skills/news-digest
   active_owner: ansanloms/skills/news-digest
-  content_hash: sha256:2f115ee55606e5d2ff9d7cb33b8d1023b46a832f3bf8e53dfaefee958882f24a
+  content_hash: sha256:545015f651f8ef762b89cd7dcda8dfb93537324a6a164ea9892a8c5822a5bb93
 - kind: project-relative
   target: claude
   value: .claude/skills/yamareco
@@ -546,7 +546,7 @@ deployments:
   owners:
   - ansanloms/skills/yamareco
   active_owner: ansanloms/skills/yamareco
-  content_hash: sha256:259a92d7a060ea6e52e13f1222142dbbfc136caa5b6c12f34d132544d1951cac
+  content_hash: sha256:1bd92242b723abe31f84dcc6787ccb434bc052ec1c204fa3cae3ae71a657fa55
 - kind: project-relative
   target: claude
   value: .claude/skills/yamareco/SKILL.md
@@ -555,4 +555,4 @@ deployments:
   owners:
   - ansanloms/skills/yamareco
   active_owner: ansanloms/skills/yamareco
-  content_hash: sha256:93bb4e1fd1c48947a3f33ac767f49a1e07bcc8fff7d15368101092f301761151
+  content_hash: sha256:08becdd2c1b13355225db85dd909b76186e6a9e52388580e9e8c74de32dda5f1

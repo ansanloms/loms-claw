@@ -19,7 +19,7 @@ JARTIC が公開する渋滞「予測」データを取得する手順。高速�
 
 ## 情報源 (エンドポイント)
 
-ベースは `https://www.jartic.or.jp`。いずれも認証不要・追加ヘッダ不要で、素の `curl` で HTTP 200・`application/json` が返る (2026 年 6 月時点で確認)。
+ベースは `https://www.jartic.or.jp`。いずれも認証不要・追加ヘッダ不要で、素の `curl` で HTTP 200・`application/json` が返る (2026 年 8 月時点で確認)。
 
 | パス                                 | 中身                                                                  | 規模の目安 |
 | ------------------------------------ | --------------------------------------------------------------------- | ---------- |
@@ -30,21 +30,128 @@ JARTIC が公開する渋滞「予測」データを取得する手順。高速�
 - これらは明示的なオープンデータライセンスが確認できていない。取得結果の二次配布・公開は行わない。
 - `highway.json` は数 MB ある。パイプで丸読みせず一度ファイルへ保存し、`jq` で路線名・年月へ絞ってから読む (下記)。
 
+### 取得失敗時の扱い
+
+- 非 200 (例 `404`) の場合、レスポンス本体は JSON ではなく HTML のエラーページになる。実際に存在しないパスへ `curl` して `HTTP/2 404`・`content-type: text/html; charset=utf-8` の HTML ページが返ることを確認済み (2026 年 8 月)。ステータスコードと `Content-Type` の両方を必ず確認し、`200` かつ `application/json` でなければ `jq` に渡さず取得失敗として扱う。
+- 取得は一時ファイルへ書いてから検証し、成功したときだけ本番パスへ `mv` する。素の `curl -o` で本番パスへ直接書くと、失敗レスポンス (HTML 等) が直前まで正常だったファイルを上書きし、後続の「ファイルが存在するか」だけを見る復旧手順 (後述「注意」) では壊れたファイルが「存在する」と誤判定されて再取得されない。
+
+  ```sh
+  status=$(curl -sS -o /tmp/highway.json.tmp -w '%{http_code} %{content_type}' --max-time 60 'https://www.jartic.or.jp/d/service/trafficjam/highway.json')
+  code="${status%% *}"
+  type="${status#* }"
+  if [ "$code" = "200" ] && [ "$type" = "application/json" ]; then
+    mv /tmp/highway.json.tmp /tmp/highway.json
+  else
+    echo "取得失敗: HTTP $code $type" >&2
+    exit 1
+  fi
+  ```
+
+- このブロックは 1 回の実行単位 (1 つの `sh` スクリプト、または 1 回の Bash 呼び出し) として実行する。`status`/`code`/`type` はシェル変数なので、行ごとに別々に実行すると値が失われ、`code` が空になってガードが常に失敗扱いになる。また `[ ... ] || echo ... >&2` のような書き方は `echo` の終了コードが返るため、ガード自体が成功 (exit 0) 扱いになり `&& jq ...` と繋いだ後続処理が実行されてしまう。上記のように `if`/`else` で分岐し、失敗時は明示的に `exit 1` する。
+- HTML のエラーページを誤って `jq` に渡すとパースエラーで落ちる。落ちたこと自体を 0 件と解釈しない。取得失敗と 0 件 (後述「データの鮮度と 0 件の扱い」) は区別して報告する。
+- タイムアウトを検知するには、`curl` にあらかじめ `--max-time` 等で上限を設けておく必要がある (上限が無いとタイムアウト判定自体が起きない)。上記の取得コマンドはこれを反映済み。上限超過時は 1 回だけ再取得し、それも失敗したら取得失敗として扱う。
+- 取得失敗 (非 200・タイムアウト・HTML 応答のいずれも) はユーザに取得できなかった旨を明示し、時間を置いての再試行を提案する。予測データの代わりに推測値を答えない。
+- 高速道路 (`highway.json`) と一般道 (`general.json`) の取得は、それぞれの節 (下記「1. 高速道路の渋滞予測」「2. 一般道のイベント周辺渋滞予測」) の取得コード例が上記と同じ一時ファイル + `mv` パターンを使う。素の `curl -o` へ簡略化しない。
+
 ## 1. 高速道路の渋滞予測 (highway.json)
 
 ### 取得とトップレベル構造
 
+取得は前掲「取得失敗時の扱い」のパターンに従う (一時ファイルへ書いて検証してから本番パスへ `mv`)。
+
 ```sh
-curl -sS 'https://www.jartic.or.jp/d/service/trafficjam/highway.json' -o highway.json
-jq '{updateDate, minYearMonth, maxYearMonth, months: (.trafficJam|keys)}' highway.json
+status=$(curl -sS -o /tmp/highway.json.tmp -w '%{http_code} %{content_type}' --max-time 60 'https://www.jartic.or.jp/d/service/trafficjam/highway.json')
+code="${status%% *}"
+type="${status#* }"
+if [ "$code" = "200" ] && [ "$type" = "application/json" ]; then
+  mv /tmp/highway.json.tmp /tmp/highway.json
+else
+  echo "取得失敗: HTTP $code $type" >&2
+  exit 1
+fi
 ```
 
-| キー                          | 意味                                                                              |
-| ----------------------------- | --------------------------------------------------------------------------------- |
-| `updateDate`                  | データ更新日 (例 `2026年6月9日`)。提示時に添える。                                |
-| `minYearMonth` `maxYearMonth` | 予測がカバーする年月の範囲 (例 `2026-5` 〜 `2026-10`)。範囲外は取得できない。     |
-| `routeList`                   | 路線一覧。`routeId` / `name` / `directionUp` / `directionDown` (端点名)。         |
-| `trafficJam`                  | 予測本体。`trafficJam[年月][routeId]` に `directionUp` / `directionDown` の配列。 |
+取得できたら構造を確認する。
+
+```sh
+jq '{updateDate, minYearMonth, maxYearMonth, months: (.trafficJam|keys)}' /tmp/highway.json
+```
+
+| キー                          | 意味                                                                                                                                                                   |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `updateDate`                  | データ更新日 (例 `2026年7月17日`)。提示時に添える。                                                                                                                    |
+| `minYearMonth` `maxYearMonth` | 予測がカバーする年月の範囲 (例 `2026-5` 〜 `2026-10`)。範囲外は取得できない。                                                                                          |
+| `routeList`                   | 路線一覧。`routeId` / `name` / `directionUp` / `directionDown` (`{endpoint, name}` を持つオブジェクト)。                                                               |
+| `trafficJam`                  | 予測本体。`trafficJam[年月][routeId]` に `directionUp` / `directionDown` の配列 (先頭大文字の `J`。ネストする `hourlyTrafficjam` は先頭小文字で綴りが異なる点に注意)。 |
+
+- 同名キー `directionUp`/`directionDown` は箇所によって型が異なる。`routeList[].directionUp` は `{endpoint, name}` のオブジェクト、`trafficJam[年月][routeId].directionUp` は予測エントリの配列。`jq` で参照するときはどちらの経路かを意識する。
+
+### レスポンス例 (抜粋)
+
+上記の取得コマンドで得た `highway.json` (取得日: 2026-08-10) から、構造が分かる範囲に絞った抜粋 (`routeList` は 1 件、`trafficJam` は 1 年月 × 1 路線の上り・下り各 1 区間のみ残し、他は省略)。
+
+```json
+{
+  "updateDate": "2026年7月17日",
+  "minYearMonth": "2026-7",
+  "maxYearMonth": "2026-12",
+  "routeList": [
+    {
+      "routeId": "1005001",
+      "name": "道東自動車道",
+      "directionUp": { "endpoint": "千歳恵庭JCT方面", "name": "上り" },
+      "directionDown": { "endpoint": "本別IC方面", "name": "下り" }
+    }
+  ],
+  "trafficJam": {
+    "2026-8": {
+      "1005001": {
+        "directionUp": [
+          {
+            "routeName": "道東自動車道",
+            "direction": "上り",
+            "section": "占冠IC→むかわ穂別IC",
+            "timeZone": "16:00～20:00",
+            "peakDistance": "5km",
+            "peakTime": "17時",
+            "bottleneck": "穂別TN付近",
+            "requiredTimeNormal": "0:04",
+            "requiredTimeTrafficjam": "0:15",
+            "requiredTimeIncrease": "0:11",
+            "cause": "―",
+            "hourlyTrafficjam": [
+              { "date": "8月14日 (金)", "time": "17時台", "distance": 5 },
+              { "date": "8月14日 (金)", "time": "18時台", "distance": 4 },
+              { "date": "8月14日 (金)", "time": "19時台", "distance": 3 }
+            ]
+          }
+        ],
+        "directionDown": [
+          {
+            "routeName": "道東自動車道",
+            "direction": "下り",
+            "section": "夕張IC→むかわ穂別IC",
+            "timeZone": "10:00～17:00",
+            "peakDistance": "5km",
+            "peakTime": "12時",
+            "bottleneck": "楓TN付近",
+            "requiredTimeNormal": "0:04",
+            "requiredTimeTrafficjam": "0:15",
+            "requiredTimeIncrease": "0:11",
+            "cause": "―",
+            "hourlyTrafficjam": [
+              { "date": "8月13日 (木)", "time": "11時台", "distance": 3 },
+              { "date": "8月13日 (木)", "time": "12～14時台", "distance": 5 },
+              { "date": "8月13日 (木)", "time": "15時台", "distance": 4 },
+              { "date": "8月13日 (木)", "time": "16時台", "distance": 2 }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}
+```
 
 年月キーは `YYYY-M` 形式 (月はゼロ埋めなし、例 `2026-5` `2026-10`)。先に `minYearMonth`/`maxYearMonth` と `.trafficJam|keys` で対象月の存在を確認する。
 
@@ -68,7 +175,7 @@ jq -c --arg m "2026-8" --arg r "東名" '
   .trafficJam[$m] | to_entries[] | .value
   | (.directionUp + .directionDown)[]
   | select(.routeName | test($r))
-' highway.json
+' /tmp/highway.json
 ```
 
 `test($r)` は部分一致なので、`東名` は `新東名` や `東名阪` も巻き込む。単一路線に確定したいときは `select(.routeName == "東名高速道路")` の完全一致か境界つき正規表現を使い、部分一致は下の候補引きに留める。
@@ -76,25 +183,25 @@ jq -c --arg m "2026-8" --arg r "東名" '
 正式な路線名が分からなければ `routeList` で候補を引く。
 
 ```sh
-jq -r '.routeList[] | select(.name | test("東名|東北")) | "\(.routeId)\t\(.name)"' highway.json
+jq -r '.routeList[] | select(.name | test("東名|東北")) | "\(.routeId)\t\(.name)"' /tmp/highway.json
 ```
 
 ### エントリのフィールド
 
 `trafficJam[年月][routeId].directionUp[]` (下りは `directionDown`) の 1 要素が「ある区間・ある予測日 (または日グループ)」の渋滞予測。同一区間でも予測日ごとに別要素として並ぶ。
 
-| キー                      | 意味                                                                                                                                                             |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `routeName` `direction`   | 路線名・方向 (上り / 下り)。                                                                                                                                     |
-| `section`                 | 区間 (例 `横浜青葉IC→東京IC`)。                                                                                                                                  |
-| `timeZone`                | 渋滞が見込まれる時間帯 (例 `06:00～17:00`)。`hourlyTrafficjam` の時間窓と食い違うことがある。提示は `timeZone` を大枠、`hourlyTrafficjam` を実数として併記する。 |
-| `peakDistance` `peakTime` | ピーク時の渋滞長と時刻 (例 `10km` / `7時`)。                                                                                                                     |
-| `bottleneck`              | 渋滞の先頭になりやすい地点 (例 `東京IC付近`)。                                                                                                                   |
-| `requiredTimeNormal`      | 平常時所要時間 (`H:MM`)。                                                                                                                                        |
-| `requiredTimeTrafficjam`  | 渋滞時所要時間。                                                                                                                                                 |
-| `requiredTimeIncrease`    | 増加分。                                                                                                                                                         |
-| `cause`                   | 渋滞要因。データ無しは `―`。                                                                                                                                     |
-| `hourlyTrafficjam`        | 予測日・時間帯別の渋滞長配列。`{date, time, distance}` (距離は km の数値)。`time` は `7時台` の単一時台と `7～8時台` のレンジの 2 形式がある。                   |
+| キー                      | 意味                                                                                                                                                                                                                                                                                                  |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `routeName` `direction`   | 路線名・方向 (上り / 下り)。                                                                                                                                                                                                                                                                          |
+| `section`                 | 区間 (例 `横浜青葉IC→東京IC`)。                                                                                                                                                                                                                                                                       |
+| `timeZone`                | 渋滞が見込まれる時間帯 (例 `06:00～17:00`)。`hourlyTrafficjam` の時間窓と食い違うことがある。提示は `timeZone` を大枠、`hourlyTrafficjam` を実数として併記する。                                                                                                                                      |
+| `peakDistance` `peakTime` | ピーク時の渋滞長と時刻 (例 `10km` / `7時`)。一般道側 (`general.json`) では同じ「ピーク時の渋滞長」を `peakLength` という別名で持つ (後述「イベント 1 件のフィールド」参照)。                                                                                                                          |
+| `bottleneck`              | 渋滞の先頭になりやすい地点 (例 `東京IC付近`)。                                                                                                                                                                                                                                                        |
+| `requiredTimeNormal`      | 平常時所要時間 (`H:MM`)。                                                                                                                                                                                                                                                                             |
+| `requiredTimeTrafficjam`  | 渋滞時所要時間。                                                                                                                                                                                                                                                                                      |
+| `requiredTimeIncrease`    | 増加分。                                                                                                                                                                                                                                                                                              |
+| `cause`                   | 渋滞要因。データ無しは `―`。                                                                                                                                                                                                                                                                          |
+| `hourlyTrafficjam`        | 予測日・時間帯別の渋滞長配列。`{date, time, distance}` (距離は km の数値)。`time` は `7時台` の単一時台と `7～8時台` のレンジの 2 形式がある。先頭小文字の `t` で始まる実キーで、`trafficJam` (先頭大文字) とは大文字小文字が異なる。正規化して `hourlyTrafficJam` と書くと該当データが取得できない。 |
 
 「ピークはいつか」を答えるには、該当区間の複数エントリを跨いで `hourlyTrafficjam[].distance` を比較する。`peakTime`/`peakDistance` は各エントリ内の代表値であり、月内最大とは限らない。区間指定がない依頼では、方向内の全区間の `hourlyTrafficjam` を横断して比較する。判定は次の順で行う: (1) 対象窓 (お盆等) で日付を絞る → (2) 窓内の `distance` 最大を採る → (3) 同値が並ぶ場合は渋滞時間帯の長さで tie-break する (`time` のレンジをパースして時間数を数える。パースが煩雑なら同値エントリ数で代替してよい)。窓外に同値以上のピークがあれば補足として言及する。
 口語の路線名 (「東名」等) が複数の正式名に部分一致する場合は、最短一致の路線 (「東名」なら東名高速道路) を主として扱い、近縁路線 (新東名等) の存在を一言添える。
@@ -106,12 +213,57 @@ jq -r '.routeList[] | select(.name | test("東名|東北")) | "\(.routeId)\t\(.n
 
 ### 構造
 
+取得は「取得失敗時の扱い」のパターンに従う。
+
 ```sh
-curl -sS 'https://www.jartic.or.jp/d/service/trafficjam/general.json' -o general.json
-jq '{updateDate, prefsWithData: [to_entries[] | select(.value|type=="array" and length>0) | .key]}' general.json
+status=$(curl -sS -o /tmp/general.json.tmp -w '%{http_code} %{content_type}' --max-time 30 'https://www.jartic.or.jp/d/service/trafficjam/general.json')
+code="${status%% *}"
+type="${status#* }"
+if [ "$code" = "200" ] && [ "$type" = "application/json" ]; then
+  mv /tmp/general.json.tmp /tmp/general.json
+else
+  echo "取得失敗: HTTP $code $type" >&2
+  exit 1
+fi
+```
+
+取得できたら構造を確認する。
+
+```sh
+jq '{updateDate, prefsWithData: [to_entries[] | select(.value|type=="array" and length>0) | .key]}' /tmp/general.json
 ```
 
 トップレベルは `updateDate` と、都道府県別キー `R01`〜`R47`。各キーの値はイベント単位のオブジェクト配列 (該当無しは空配列)。`updateDate` がシーズンを反映するため古いことがある。古ければ「現在のイベントではなく前シーズンの予測」である旨を添える。
+
+### レスポンス例 (抜粋)
+
+上記の取得コマンドで得た `general.json` (取得日: 2026-08-10) から、`R14` (神奈川県) の 1 件目のイベントのみ残した抜粋 (他の都道府県キー・他のイベントは省略)。`targetDays` は改行区切りの各行末に全角スペース (`U+3000`) の連続が付くことがあり、下記はその生の値をそのまま載せている (除去していない)。行によって末尾の全角スペースの個数は 0〜8 個とばらつく。エディタや端末によっては見た目上ほぼ判別できないので、日付をパースする側は末尾の空白混入を前提にトリムする。
+
+```json
+{
+  "updateDate": "2026年7月21日",
+  "R14": [
+    {
+      "destination": "伊豆・箱根",
+      "startPoint": "小田原市早川",
+      "targetDays": "7月18日（土）～20日（月）　　　　　　\n7月25日（土）、26日（日）　　　　　　　\n8月1日（土）、2日（日）\n8月8日（土）～11日（火）　　　　　\n8月15日（土）、16日（日）　　　　　　　　\n8月22日（土）、23日（日）　　　　　\n8月29日（土）、30日（日）\n9月19日（土）～23日（水）",
+      "routeDetailList": [
+        {
+          "routeName": "（国）135～（有）真鶴道路",
+          "direction": "上り\n（熱海市方面から）",
+          "timeZone": "12:00～17:00",
+          "peakLength": "12.0km",
+          "peakTime": "60分",
+          "requiredTimeNormal": "20分",
+          "detourSection": "―",
+          "detourLength": "―",
+          "comment": "―"
+        }
+      ]
+    }
+  ]
+}
+```
 
 ### 都道府県コード (R + JIS X 0401 2 桁)
 
@@ -130,14 +282,14 @@ R43 熊本    R44 大分  R45 宮崎  R46 鹿児島 R47 沖縄
 都道府県で引く、またはイベント名で全国横断検索する。
 
 ```sh
-jq '.R13' general.json
-jq '[.[] | select(type=="array") | .[] | select(.destination | test("さくら"))]' general.json
+jq '.R13' /tmp/general.json
+jq '[.[] | select(type=="array") | .[] | select(.destination | test("さくら"))]' /tmp/general.json
 ```
 
 イベントによっては迂回データを持たず `routeDetailList` の各フィールドが `―` のことがある。迂回路の提示が目的なら、`detourSection` が `―` でないイベントを先に絞ってから選ぶ。
 
 ```sh
-jq -c '[.[] | select(type=="array") | .[] | select(any(.routeDetailList[]; .detourSection != "―"))]' general.json
+jq -c '[.[] | select(type=="array") | .[] | select(any(.routeDetailList[]; .detourSection != "―"))]' /tmp/general.json
 ```
 
 イベント 1 件のフィールド。
@@ -151,16 +303,16 @@ jq -c '[.[] | select(type=="array") | .[] | select(any(.routeDetailList[]; .deto
 
 `routeDetailList[]` の各要素。
 
-| キー                    | 意味                                           |
-| ----------------------- | ---------------------------------------------- |
-| `routeName`             | 道路名 (例 `（国）７` `（県）260石川百田線`)。 |
-| `direction`             | 方向。                                         |
-| `timeZone`              | 渋滞が見込まれる時間帯。                       |
-| `peakLength` `peakTime` | ピーク渋滞長とその通過所要時間。               |
-| `requiredTimeNormal`    | 平常時所要時間。                               |
-| `detourSection`         | 迂回路の区間。                                 |
-| `detourLength`          | 迂回路の距離。                                 |
-| `comment`               | 迂回手順等の補足。                             |
+| キー                    | 意味                                                                                                                                                            |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `routeName`             | 道路名 (例 `（国）７` `（県）260石川百田線`)。                                                                                                                  |
+| `direction`             | 方向。                                                                                                                                                          |
+| `timeZone`              | 渋滞が見込まれる時間帯。                                                                                                                                        |
+| `peakLength` `peakTime` | ピーク渋滞長とその通過所要時間。高速道路側 (`highway.json`) では同じ「ピーク時の渋滞長」を `peakDistance` という別名で持つ (前掲「エントリのフィールド」参照)。 |
+| `requiredTimeNormal`    | 平常時所要時間。                                                                                                                                                |
+| `detourSection`         | 迂回路の区間。                                                                                                                                                  |
+| `detourLength`          | 迂回路の距離。                                                                                                                                                  |
+| `comment`               | 迂回手順等の補足。                                                                                                                                              |
 
 `comment` は迂回手順だけでなく目的地・前提 (例: 特定の駐車場へ至る経路) を含むことがある。前提ごと提示し、目的地が異なるユーザに汎用の迂回路と誤認させない。
 
