@@ -9,7 +9,7 @@ Discord の REST API を curl で叩いてサーバ (ギルド) を操作する 
 - スレッドの作成・名前変更
 - チャンネルやメンバーの一覧・検索
 
-bot トークンは Authorization の Bot ヘッダで渡す。トークンは環境変数 `DISCORD_BOT_TOKEN` から取る。レート制限 (429) は `Retry-After` を見て自前で待つ。
+bot トークンは Authorization の Bot ヘッダで渡す。トークンは環境変数 `DISCORD_BOT_TOKEN` から取る。レート制限 (429) は body の `retry_after` (秒) を見て自前で待つ。
 
 ## 対象外
 

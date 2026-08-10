@@ -18,20 +18,30 @@ description: >-
 
 ## 引数
 
-| 引数   | 既定値             | 説明                                                                                                                                |
-| ------ | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| actor  | (必須)             | ハンドル (`<handle>`。bsky.social でもカスタムドメインでも可) または DID。全エンドポイント共通で、そのまま渡せる (DID 解決は不要)。 |
-| 範囲   | 直近 20 件         | 投稿取得時の件数 (例: 直近 20 件) か期間 (例: 直近 3 日)。指定が無ければ直近 20 件。                                                |
-| filter | `posts_no_replies` | 投稿種別。既定はオリジナル + リポスト (リプライ除外)。画像目的なら `posts_with_media`。                                             |
+実 API のクエリパラメータと、この skill 固有の抽象概念 (API には存在しない) を区別する。
 
-`filter` の取りうる値は `posts_with_replies` (全部)/`posts_no_replies` (既定)/`posts_with_media` (画像付きのみ)/`posts_and_author_threads` (投稿と自己スレッド)。
+### API パラメータ
+
+| 引数   | 対象 API             | この skill の既定値 | 説明                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ------ | -------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| actor  | 全エンドポイント共通 | (必須)              | ハンドル (`<handle>`。bsky.social でもカスタムドメインでも可) または DID。そのまま渡せる (DID 解決は不要)。                                                                                                                                                                                                                                                                                                                                                                                                           |
+| limit  | `getAuthorFeed` のみ | 20                  | 1 リクエストで取得する件数。**この既定値 20 は `getAuthorFeed` に限った skill の権威**であり、「取得対象の選び方」「投稿の取得」の各節はこれを参照する。API 自体の既定は 50、最大は 100 (超えるとエラー)。この skill は近況把握を主用途とするため既定を 20 に絞る。多めに集計したい場合は「関心トピックの導出」節の指示に従って上書きする。`getFollows`/`getFollowers` の `limit` はこの既定と無関係で、「フォロー・フォロワー」節を権威とする (100 以下なら `limit=100` で全件、100 超で打ち切るときは `limit=50`)。 |
+| filter | `getAuthorFeed` のみ | `posts_no_replies`  | 投稿種別。既定はオリジナル + リポスト (リプライ除外)。画像目的なら `posts_with_media`。API 自体の既定は `posts_with_replies`。                                                                                                                                                                                                                                                                                                                                                                                        |
+
+`filter` の取りうる値は `posts_with_replies` (全部)/`posts_no_replies` (既定)/`posts_with_media` (画像付きのみ)/`posts_and_author_threads` (投稿と自己スレッド)/`posts_with_video` (動画付きのみ)。
+
+### skill 固有の概念 (API パラメータではない)
+
+| 概念 | 説明                                                                                                                                                                                                                                            |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 範囲 | 投稿取得を「件数」 (例: 直近 20 件。`limit` にそのまま反映) と「期間」 (例: 直近 3 日。`cursor` を辿りながら投稿時刻で打ち切る) のどちらで指定するかを表す skill 内の区分。API には無い。指定が無ければ件数指定・`limit` 既定 20 件として扱う。 |
 
 ## 取得対象の選び方
 
 依頼に応じて必要なものだけ取得する。
 
 - 近況・最近の投稿・写真なら、プロフィール概要と投稿の取得 (必要なら画像) を行う。
-- 関心トピックなら、投稿を取得してそこから導出する。このとき取得件数は引数表の既定 (直近 20 件) でなく「関心トピックの導出」節の推奨 (limit=50 〜 100) を使う。
+- 関心トピックなら、投稿を取得してそこから導出する。このとき取得件数は `limit` の既定 (20、「引数」節を参照) でなく「関心トピックの導出」節の推奨 (limit=50 〜 100) を使う。
 - フォローしている人なら `getFollows`、フォローされている人 (フォロワー) なら `getFollowers` を使う。
 - 関心分野の推察なら、投稿の話題に加えてフォロー先 (`getFollows`) の傾向も材料にする。
 
@@ -48,6 +58,19 @@ curl -sS -G 'https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile' \
 - `displayName` と `description` (bio)、`postsCount`/`followsCount`/`followersCount` の総数が返る。
 - フォロー/フォロワー一覧を辿る前にこの総数を見て、何ページ必要かを見積もる。
 
+実レスポンス例 (取得日: 2026-08-10)。取得コマンド: `curl -sS -G 'https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile' --data-urlencode 'actor=bsky.app' | jq '{handle, displayName, description, postsCount, followsCount, followersCount}'`
+
+```json
+{
+  "handle": "bsky.app",
+  "displayName": "Bluesky",
+  "description": "official Bluesky account (check username👆)\n\nBugs, feature requests, feedback: support@bsky.app",
+  "postsCount": 804,
+  "followsCount": 11,
+  "followersCount": 34456261
+}
+```
+
 ## 投稿の取得
 
 基本のコマンド。`actor` にハンドルを直接渡す。
@@ -60,7 +83,7 @@ curl -sS -G 'https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed' \
 ```
 
 - `<handle>` には対象アカウントのハンドルを入れる (自分の動向把握が主目的なら自分のハンドル)。bsky.social でもカスタムドメインでも可。
-- `limit` は最大 100、既定 50。20 件程度の近況把握なら 1 リクエストで足りる。
+- `limit` は API 自体の既定は 50、最大 100。この skill の既定は 20 (「引数」節を参照)。20 件程度の近況把握なら 1 リクエストで足りる。
 - ハンドルの実在確認が要るときだけ `com.atproto.identity.resolveHandle` を使う (例: `?handle=<handle>` で `{"did":"did:plc:..."}` が返る)。通常は不要。
 - ページネーションは、レスポンス末尾の `cursor` (タイムスタンプ文字列) を次回 `--data-urlencode "cursor=<値>"` に渡すと続きを取得できる。`cursor` が返らなくなったら終端である。どのエンドポイントでも 1 ページの返却数は `limit` より少ないことがあり、終端判定は件数でなく `cursor` の有無のみで行う。
 - 期間指定のときは `cursor` を辿りつつ各投稿の活動時刻を見て、閾値より古くなった時点で打ち切る。閾値は現在 UTC から N 日を引いた時刻 (rolling) とし、暦日境界で切る必要があればユーザに確認する。境界が初回ページ内に収まれば `cursor` を辿らず終了してよい。活動時刻はオリジナルは `post.indexedAt`、リポストは `reason.indexedAt` を使う。`record.createdAt` はリポストでは元投稿の時刻を指すため期間判定に使わない。
@@ -82,8 +105,9 @@ curl -sS -G 'https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed' \
     text: .post.record.text,
     rkey: (.post.uri | split("/") | last),
     embed: .post.embed."$type",
-    images: [ (.post.embed.images // [])[] | {alt, fullsize} ],
-    external: (if .post.embed.external then {uri: .post.embed.external.uri, title: .post.embed.external.title} else null end),
+    media_type: (.post.embed.media."$type" // null),
+    images: [ ((.post.embed.images // .post.embed.items // .post.embed.media.images // .post.embed.media.items // [])[]) | {alt, fullsize} ],
+    external: ((.post.embed.external // .post.embed.media.external) as $e | if $e then {uri: $e.uri, title: $e.title} else null end),
     counts: {like: .post.likeCount, repost: .post.repostCount, reply: .post.replyCount}
   }'
 ```
@@ -95,8 +119,112 @@ curl -sS -G 'https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed' \
   - `app.bsky.embed.external#view` は外部リンク。`external.uri`/`external.title` を添える。
   - `app.bsky.embed.record#view` は引用投稿。`.post.embed.record` に引用元の本文がある。
   - `app.bsky.embed.video#view` は動画。ダウンロードは不要で「動画あり」の注記に留める。
-  - `app.bsky.embed.gallery#view` は複数枚画像 (images の複数枚版)。画像扱いとし、省略時の注記は「画像あり」でよい。
+  - `app.bsky.embed.gallery#view` は複数枚画像 (`bsky.app` 公式のカルーセル機能告知投稿の alt テキストに「carousel only shows for posts with at least 5 photos」とあり、実測でも `images#view` は 1/2/4 枚、`gallery#view` は 5 枚・10 枚の投稿で観測しておりこれと整合する。5 枚以上で `gallery#view` になる)。**`images` ではなく `items[]` にある** (各要素は `fullsize`/`alt`/`aspectRatio` に加え `thumbnail` を持つ。`images#view` の `thumb` とキー名が異なる点に注意)。上記 jq はこの位置もフォールバックで拾う。画像扱いとし、省略時の注記は「画像あり」でよい。
+  - `app.bsky.embed.recordWithMedia#view` は「引用投稿 + メディア添付」の複合埋め込み。実体は `media` (`images#view`/`gallery#view`/`video#view`/`external#view` のいずれか) と `record` (引用元) の組。上記 jq の `media_type` フィールド (`.post.embed.media."$type"`) で `media` の種別を判定する。
+    - `media_type` が `images#view` なら画像は `.post.embed.media.images`、`gallery#view` なら `.post.embed.media.items` にある。上記 jq の `images` フィールドはどちらの位置もフォールバックで拾う。
+    - `media_type` が `external#view` なら外部リンクは `.post.embed.media.external` にある。上記 jq の `external` フィールドはこの位置もフォールバックで拾う。
+    - `media_type` が `video#view` なら画像・外部リンクは無く、「動画あり」の注記に留める (`embed` フィールドだけでは判別できないため `media_type` を見る)。
+    - 引用元は `.post.embed.record.record` にある (`app.bsky.embed.record#view` と同じ扱い)。
   - 上記に無い種別が来たら、`(埋め込みあり: <$type>)` の形で種別名を添えて本文のみ提示する。列挙外を理由に投稿を落とさない。
+
+`recordWithMedia#view` (`media` が `images#view`) の実レスポンス例 (取得日: 2026-08-10。関係の無いフィールドは `…` で省略)。取得コマンド: `curl -sS -G 'https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed' --data-urlencode 'actor=bsky.app' --data-urlencode 'limit=100' --data-urlencode 'filter=posts_with_media'` の結果から該当投稿の `.post.embed` を抜粋。
+
+```json
+{
+  "$type": "app.bsky.embed.recordWithMedia#view",
+  "media": {
+    "$type": "app.bsky.embed.images#view",
+    "images": [
+      {
+        "alt": "Word cloud of most-used words: rolling, accounts, posts, …",
+        "fullsize": "https://cdn.bsky.app/img/feed_fullsize/plain/…"
+      }
+    ]
+  },
+  "record": {
+    "record": {
+      "uri": "at://did:plc:…/app.bsky.feed.post/3m6mwoadjbp2d",
+      "author": { "handle": "anisota.net", "…": "…" },
+      "value": { "text": "Hello moths, …", "…": "…" },
+      "…": "…"
+    }
+  }
+}
+```
+
+`gallery#view` の実レスポンス例 (取得日: 2026-08-10。5 枚中 1 枚のみ抜粋)。取得コマンド: `curl -sS -G 'https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed' --data-urlencode 'actor=bsky.app' --data-urlencode 'limit=100' --data-urlencode 'filter=posts_with_media'` の結果から該当投稿の `.post.embed` を抜粋。
+
+```json
+{
+  "$type": "app.bsky.embed.gallery#view",
+  "items": [
+    {
+      "$type": "app.bsky.embed.gallery#viewImage",
+      "thumbnail": "https://cdn.bsky.app/img/feed_thumbnail/plain/…",
+      "fullsize": "https://cdn.bsky.app/img/feed_fullsize/plain/…",
+      "alt": "We've increased the number of photos you can attach to a post from 4 to 10. …",
+      "aspectRatio": { "height": 1000, "width": 1000 }
+    }
+  ]
+}
+```
+
+`recordWithMedia#view` (`media` が `gallery#view`) の実レスポンス例 (取得日: 2026-08-10。`bsky.app` のカルーセル機能告知投稿を第三者が引用した投稿から取得。10 枚中 1 枚のみ抜粋、関係の無いフィールドは `…` で省略)。取得コマンド: まず `curl -sS -G 'https://public.api.bsky.app/xrpc/app.bsky.feed.getQuotes' --data-urlencode 'uri=at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.post/3mnslrkd6ok2g' --data-urlencode 'limit=100'` で該当投稿を発見し、`curl -sS -G 'https://public.api.bsky.app/xrpc/app.bsky.feed.getPosts' --data-urlencode 'uris=at://did:plc:2eexdpaaaz2ai3ymyigtceoj/app.bsky.feed.post/3moasw4lq422r'` で単体取得。
+
+```json
+{
+  "$type": "app.bsky.embed.recordWithMedia#view",
+  "media": {
+    "$type": "app.bsky.embed.gallery#view",
+    "items": [
+      {
+        "$type": "app.bsky.embed.gallery#viewImage",
+        "thumbnail": "https://cdn.bsky.app/img/feed_thumbnail/plain/…",
+        "fullsize": "https://cdn.bsky.app/img/feed_fullsize/plain/…",
+        "alt": "",
+        "aspectRatio": { "height": 776, "width": 1098 }
+      }
+    ]
+  },
+  "record": {
+    "record": {
+      "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.post/3mnslrkd6ok2g",
+      "author": { "handle": "bsky.app", "…": "…" },
+      "value": { "text": "v1.123 is live! …", "…": "…" },
+      "…": "…"
+    }
+  }
+}
+```
+
+`recordWithMedia#view` (`media` が `external#view`) の実レスポンス例 (取得日: 2026-08-10。関係の無いフィールドは `…` で省略)。取得コマンド: `curl -sS -G 'https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed' --data-urlencode 'actor=bsky.app' --data-urlencode 'limit=100' --data-urlencode 'filter=posts_no_replies'` の結果から該当投稿の `.post.embed` を抜粋。
+
+```json
+{
+  "$type": "app.bsky.embed.recordWithMedia#view",
+  "media": {
+    "$type": "app.bsky.embed.external#view",
+    "external": {
+      "uri": "https://kf.org/kfbluesky",
+      "title": "Why Knight Foundation Invested in Bluesky - Knight Foundation"
+    }
+  },
+  "record": {
+    "record": {
+      "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.post/3mhgprzgahs2l",
+      "author": { "handle": "bsky.app", "…": "…" },
+      "value": {
+        "text": "Last April, we raised $100M in Series B funding. …",
+        "…": "…"
+      },
+      "…": "…"
+    }
+  }
+}
+```
+
+修正前の jq (`external: (if .post.embed.external then {...} else null end)`) はこの投稿で `external: null` を返し、外部リンクが存在ごと欠落していた。修正後 (`.post.embed.external // .post.embed.media.external` を見る) では正しく拾える。
+
 - jq テンプレートは全フィールド版。依頼に不要なフィールド (画像不要なら `images` 等) は削ってよい。コアは `is_repost`/`time`/`author`/`text`/`rkey`。
 - 提示は 2 層で考える。提示必須 = 日時 (JST)・本文・リポスト区別・Web URL。依頼次第で省略可 = 画像・エンゲージメント数 (`counts`)・外部リンク・引用元本文。テンプレートの「削ってよい」は省略可の層にのみ適用する。
 - 省略したコンテンツがある投稿には 1 語の注記を添える (例: 画像あり・引用投稿)。存在ごと黙らない。
@@ -145,24 +273,42 @@ ffmpeg -y -loglevel error -i "/tmp/bluesky-{rkey}-{n}.jpg" \
 # フォローしている人
 curl -sS -G 'https://public.api.bsky.app/xrpc/app.bsky.graph.getFollows' \
   --data-urlencode 'actor=<handle>' --data-urlencode 'limit=100' \
-| jq -r '.cursor, (.follows[] | "\(.handle)\t\(.displayName // "")")'
+| jq -r 'if .cursor then "cursor:\(.cursor)" else empty end, (.follows[] | "\(.handle)\t\(.displayName // "")")'
 
 # フォロワー (getFollowers。応答のキーが follows[] でなく followers[] になる以外は同じ)
 curl -sS -G 'https://public.api.bsky.app/xrpc/app.bsky.graph.getFollowers' \
   --data-urlencode 'actor=<handle>' --data-urlencode 'limit=100' \
-| jq -r '.cursor, (.followers[] | "\(.handle)\t\(.displayName // "")")'
+| jq -r 'if .cursor then "cursor:\(.cursor)" else empty end, (.followers[] | "\(.handle)\t\(.displayName // "")")'
 ```
+
+`cursor` を本文行と同じストリームへ単純に `-r` 出力すると、終端 (`cursor` キーが無い) では `.cursor` が `null` になり文字列 `null` が本文行に混ざって次回リクエストへ誤って渡す事故が起きる (`app.bsky.graph.getFollows` を実際に終端まで叩いて確認した空応答: `.cursor` キー自体が存在しない)。上記のように `cursor` の有無を判定してから `cursor:` 接頭辞付きで出す形にすると、終端では cursor 行自体が出ず本文行と区別できる。
 
 - `limit` は最大 100。続きは末尾の `cursor` を次回 `--data-urlencode "cursor=<値>"` に渡す。`cursor` が返らなくなったら終端である。1 ページの返却数は `limit` より少ないことがある (削除・モデレーション落ち等) ため、終端判定は件数でなく `cursor` の有無のみで行う。
 - 各要素は `handle`/`displayName`/`description` (bio) を持つ。一覧は handle を主に、必要なら displayName・bio を添える。
-- `getProfile` の `followsCount`/`followersCount` が 100 以下なら 1 リクエスト (`limit=100`) で全件取得し全件提示してよい。100 を超えるときは既定で新しい順に上位 50 件程度へ留め、`cursor` で続きを取れる旨を明示する。打ち切る場合はリクエスト自体を `limit=50` で発行してよい (100 で取って 50 件だけ使う必要はない)。全件ダンプは避け、打ち切ったら省略を明示する。先頭ページだけを根拠に傾向を述べるときは、並び順由来の偏り (新しいフォロー順 = 直近の関心に偏る) を結論に添える。
+- `getProfile` の `followsCount`/`followersCount` が 100 以下なら 1 リクエスト (`limit=100`) で全件取得し全件提示してよい。100 を超えるときは既定で新しい順に上位 50 件程度へ留め、`cursor` で続きを取れる旨を明示する。打ち切る場合はリクエスト自体を `limit=50` で発行してよい (100 で取って 50 件だけ使う必要はない)。全件ダンプは避け、打ち切ったら省略を明示する。先頭ページだけを根拠に傾向を述べるときは、並び順由来の偏り (直近の関係変化ほど上位に来る) を結論に添える。
 - `getProfile` の総数と、一覧で実際に列挙できる件数は一致しないことがある (削除・凍結・ブロック等のアカウントは総数に含まれても一覧から落ちる)。`cursor` が返らなければ列挙は終端であり、差は誤差としてその旨を添える。件数を補完・捏造しない。
-- 並び順は新しくフォローした順 (API 既定) である。
+- 並び順は `getFollows` と `getFollowers` で意味が異なる。`getFollows` は対象アカウントが新しくフォローした順 (API 既定)。`getFollowers` は対象アカウントが新しくフォローされた順 (API 既定)。主語がフォローする側かされる側かで向きが変わるため取り違えない。
 
 ## 注意
 
 - 公開情報のみが対象。いいね一覧など認証必須のデータや非公開アカウントは取得できない。投稿・フォローの作成/削除もできない。
-- 0 件のとき: ハンドルの誤りか、投稿/フォローが無い。`resolveHandle` で実在を確認する。値を捏造しない。
+- ハンドルが実在しない場合は `feed`/`follows`/`followers` が空配列で返るのではなく、トップレベルが**エラーオブジェクト**になる。
+
+  取得コマンド (取得日: 2026-08-10): `curl -sS -G 'https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed' --data-urlencode 'actor=this-handle-does-not-exist-zzz999.bsky.social' --data-urlencode 'limit=5'`
+
+  ```json
+  { "error": "InvalidRequest", "message": "Profile not found" }
+  ```
+
+  この状態で `jq '.feed[]'` 等をそのままパイプすると `jq: error: Cannot iterate over null (null)` で落ちる。投稿/フォローが実際に 0 件のとき (ハンドルは実在) は次のように `feed`/`follows`/`followers` キー自体は空配列で返り、`cursor` キーは無く、エラーオブジェクトにもならない。
+
+  取得コマンド (取得日: 2026-08-10): `curl -sS -G 'https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed' --data-urlencode 'actor=standard.site' --data-urlencode 'limit=20' --data-urlencode 'filter=posts_with_video'`
+
+  ```json
+  { "feed": [] }
+  ```
+
+  両者を区別するため、`.feed[]` 等へパイプする前に `jq -e 'has("error") | not'` (エラーが無いときに終了コード 0 になる書き方。逆の `jq -e 'has("error")'` は正常系で終了コード 1 を返すため、`curl ... | jq -e 'has("error")' && ...` の形で書くと分岐が反転する点に注意) で判定するか、`resolveHandle` (「投稿の取得」節) で実在を先に確認する。値を捏造しない。
 - `limit` に 100 を超える値を渡すとエラー。100 件超はページネーションで対応する。
-- 公開 API にも緩いレート制限がある。過度なページングは避け、打ち切り条件を守る。
+- レート制限を超えると一般に HTTP 429 (Too Many Requests) が返る (出典: [Rate Limits](https://docs.bsky.app/docs/advanced-guides/rate-limits))。同ドキュメントは `public.api.bsky.app` について具体的な閾値を公開しておらず「generous rate limits (寛容なレート制限)」とのみ述べる。実際に 429 を踏みに行って確認はしない。過度なページングは避け、打ち切り条件を守る。
 - 投稿日時はユーザに示す際 JST へ直すと分かりやすい (`indexedAt`/`createdAt` は UTC の ISO 8601)。
