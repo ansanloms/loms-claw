@@ -21,7 +21,7 @@ export const internalSchemas = {
       },
       "source": {
         "type": "string",
-        "description": "値の出所。thread はスレッド固有値、channel は親チャンネル値、default はグローバルデフォルト値を表す。ただし parentId を指定せず id 単独スコープで解決した場合、channel は id 自身に設定された値を指す。",
+        "description": "値の出所。thread はスレッド固有値、channel は親チャンネル値、default はグローバルデフォルト値を表す。",
         "enum": [
           "thread",
           "channel",
@@ -169,7 +169,7 @@ export const internalSchemas = {
       },
       "source": {
         "type": "string",
-        "description": "値の出所。thread はスレッド固有値、channel は親チャンネル値、default はグローバルデフォルト値を表す。ただし parentId を指定せず id 単独スコープで解決した場合、channel は id 自身に設定された値を指す。",
+        "description": "値の出所。thread はスレッド固有値、channel は親チャンネル値、default はグローバルデフォルト値を表す。",
         "enum": [
           "thread",
           "channel",

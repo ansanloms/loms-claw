@@ -11,8 +11,10 @@
 import { Hono } from "hono";
 import { createCronRoutes, type CronRouteContext } from "./routes/cron.ts";
 import { createLogsRoutes } from "./routes/logs.ts";
-import { createSettingsRoutes } from "./routes/settings.ts";
-import type { Store } from "../store/mod.ts";
+import {
+  createSettingsRoutes,
+  type SettingsRouteContext,
+} from "./routes/settings.ts";
 import { createLogger } from "../logger.ts";
 import { getErrorMessage } from "../errors.ts";
 
@@ -22,13 +24,13 @@ const log = createLogger("api-server");
  * 統合 HTTP サーバーを起動する。
  *
  * @param port - リッスンポート。
- * @param store - スコープ設定ストア。
+ * @param settingsCtx - settings ルートの依存関係コンテキスト。
  * @param cronCtx - cron ルートの依存関係コンテキスト。
  * @returns Deno.HttpServer インスタンス（shutdown() で停止可能）。
  */
 export function startApiServer(
   port: number,
-  store: Store,
+  settingsCtx: SettingsRouteContext,
   cronCtx?: CronRouteContext,
 ): Deno.HttpServer {
   const app = new Hono();
@@ -42,7 +44,7 @@ export function startApiServer(
   // サブルートをマウント
   app.route("/cron", createCronRoutes(cronCtx));
   app.route("/logs", createLogsRoutes());
-  app.route("/settings", createSettingsRoutes(store));
+  app.route("/settings", createSettingsRoutes(settingsCtx));
 
   // 未定義パスへのアクセス
   app.notFound((c) => c.json({ error: "Not Found" }, 404));

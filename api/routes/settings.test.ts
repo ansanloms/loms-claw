@@ -6,12 +6,16 @@ import { Store, type StoreDefaults } from "../../store/mod.ts";
 async function withApp(
   defaults: StoreDefaults,
   fn: (app: Hono) => Promise<void>,
+  resolveParentId?: (id: string) => Promise<string | null>,
 ): Promise<void> {
   const kv = await Deno.openKv(":memory:");
   try {
     const store = new Store(kv, defaults);
     const app = new Hono();
-    app.route("/settings", createSettingsRoutes(store));
+    app.route(
+      "/settings",
+      createSettingsRoutes({ store, resolveParentId }),
+    );
     await fn(app);
   } finally {
     kv.close();
@@ -71,7 +75,7 @@ Deno.test("createSettingsRoutes", async (t) => {
   );
 
   await t.step(
-    "GET /settings/:id?parentId=...: thread → channel のフォールバックが効くこと",
+    "GET /settings/:id: resolveParentId がスレッドの親を返す場合、thread → channel のフォールバックが効くこと",
     async () => {
       await withApp({}, async (app) => {
         const patchRes = await app.request("/settings/ch-1", {
@@ -81,26 +85,70 @@ Deno.test("createSettingsRoutes", async (t) => {
         });
         assertEquals(patchRes.status, 200);
 
-        const res = await app.request(
-          "/settings/th-1?parentId=ch-1",
-        );
+        const res = await app.request("/settings/th-1");
         assertEquals(res.status, 200);
         const json = await res.json();
         assertEquals(json.model, { value: "opus", source: "channel" });
-      });
+      }, (id) => Promise.resolve(id === "th-1" ? "ch-1" : null));
     },
   );
 
   await t.step(
-    "GET /settings/:id?parentId=: parentId が空文字なら未指定として扱うこと",
+    "PATCH /settings/:id: resolveParentId がスレッドの親を返す場合、応答が実効設定になること",
+    async () => {
+      await withApp({}, async (app) => {
+        // 親チャンネルに effort を設定しておく。
+        const parentPatch = await app.request("/settings/ch-1", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ effort: "high" }),
+        });
+        assertEquals(parentPatch.status, 200);
+
+        // スレッドに model を書き込む。応答は thread と channel のフォールバックを
+        // 含めた実効設定になるはず。
+        const res = await app.request("/settings/th-1", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model: "opus" }),
+        });
+        assertEquals(res.status, 200);
+        const json = await res.json();
+        assertEquals(json.model, { value: "opus", source: "thread" });
+        assertEquals(json.effort, { value: "high", source: "channel" });
+      }, (id) => Promise.resolve(id === "th-1" ? "ch-1" : null));
+    },
+  );
+
+  await t.step(
+    "GET /settings/:id: resolveParentId が null を返す場合 (通常チャンネル) は親へフォールバックしないこと",
+    async () => {
+      await withApp({}, async (app) => {
+        // th-1 を親に持つかのような値を ch-1 に置くが、resolveParentId は常に null
+        // (通常チャンネル扱い) を返すので th-1 の GET はこれを拾わないはず。
+        await app.request("/settings/ch-1", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model: "opus" }),
+        });
+
+        const res = await app.request("/settings/th-1");
+        assertEquals(res.status, 200);
+        const json = await res.json();
+        assertEquals(json.model, undefined);
+      }, () => Promise.resolve(null));
+    },
+  );
+
+  await t.step(
+    "GET /settings/:id: resolveParentId が throw した場合でも 500 にならず、チャンネル扱いで解決されること",
     async () => {
       await withApp({ model: "sonnet" }, async (app) => {
-        // 空の channelId でスコープを組むと壊れた解決になるため、未指定と同じ結果になること。
-        const res = await app.request("/settings/th-1?parentId=");
+        const res = await app.request("/settings/th-1");
         assertEquals(res.status, 200);
         const json = await res.json();
         assertEquals(json.model, { value: "sonnet", source: "default" });
-      });
+      }, () => Promise.reject(new Error("channel fetch failed")));
     },
   );
 
@@ -305,6 +353,38 @@ Deno.test("createSettingsRoutes", async (t) => {
         const json = await res.json();
         assertEquals(json.model, { value: "opus", source: "channel" });
       });
+    },
+  );
+
+  await t.step(
+    "DELETE /settings/:id: resolveParentId が親を返しても、消えるのはスレッドの設定だけで親チャンネルの設定が残ること",
+    async () => {
+      await withApp({}, async (app) => {
+        await app.request("/settings/ch-1", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model: "opus" }),
+        });
+        await app.request("/settings/th-1", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model: "haiku" }),
+        });
+
+        const delRes = await app.request("/settings/th-1", {
+          method: "DELETE",
+        });
+        assertEquals(delRes.status, 200);
+
+        const res = await app.request("/settings/ch-1");
+        const json = await res.json();
+        assertEquals(json.model, { value: "opus", source: "channel" });
+
+        // スレッドの設定は消え、親チャンネルへフォールバックした値が返る。
+        const threadRes = await app.request("/settings/th-1");
+        const threadJson = await threadRes.json();
+        assertEquals(threadJson.model, { value: "opus", source: "channel" });
+      }, (id) => Promise.resolve(id === "th-1" ? "ch-1" : null));
     },
   );
 });

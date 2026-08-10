@@ -22,11 +22,11 @@ GET    http://127.0.0.1:3000/settings/default
 
 ## スコープの考え方
 
-`{id}` にはチャンネル ID、スレッド ID、または cron の擬似 id (`cron:{name}`) が入る。
+`{id}` にはチャンネル ID、スレッド ID、または cron の擬似 id (`cron:{name}`) が入る。対象の ID を渡すだけでよい。
 
 - 通常チャンネル: `{id}` = チャンネル ID
-- スレッド: `{id}` = スレッド ID。`GET` では query param `parentId` に親チャンネル ID を付けると thread → channel のフォールバック解決になる。付けない場合はそのスレッド自身に直接設定された値のみを見る (フォールバックしない)。
-- `PATCH` / `DELETE` でスレッドを対象にする場合も、`{id}` にスレッド ID をそのまま渡せばよい。書き込み / 削除先は `threadId ?? channelId` (thread があればそれ、無ければ channel) で決まるため、それだけで正しくそのスレッドのスコープに書き込まれる (削除される)。`parentId` は読み取り (`GET`) の解決にのみ使うパラメータで、書き込みには不要なので `PATCH` / `DELETE` は受け取らない。`DELETE` でスレッド ID を指定した場合、消えるのはそのスレッドの設定だけで親チャンネルの設定は残る。
+- スレッド: `{id}` = スレッド ID。`{id}` がスレッドかどうかはサーバが判定し、スレッドであれば thread → channel → default の順でフォールバック解決する。呼び出し側が親子関係を意識する必要はない。
+- `PATCH` / `DELETE` でスレッドを対象にする場合も、`{id}` にスレッド ID をそのまま渡せばよい。書き込み / 削除先は `threadId ?? channelId` (thread があればそれ、無ければ channel) で決まるため、それだけで正しくそのスレッドのスコープに書き込まれる (削除される)。`DELETE` でスレッド ID を指定した場合、消えるのはそのスレッドの設定だけで親チャンネルの設定は残る。
 
 ## curl 使用例
 
@@ -35,7 +35,7 @@ GET    http://127.0.0.1:3000/settings/default
 curl -s http://127.0.0.1:3000/settings/1234567890123456789
 
 # スレッドの設定を、親チャンネルへのフォールバックを含めて取得
-curl -s 'http://127.0.0.1:3000/settings/9876543210987654321?parentId=1234567890123456789'
+curl -s http://127.0.0.1:3000/settings/9876543210987654321
 
 # model / effort をまとめて更新
 curl -s -X PATCH -H 'Content-Type: application/json' \
@@ -86,34 +86,18 @@ curl -s http://127.0.0.1:3000/settings/default
 `GET` / `PATCH` のレスポンスに含まれる `model` / `effort` / `showThinking` は `{ "value": ..., "source": "thread" | "channel" | "default" }` の形。`source` は値の出所を示す。
 
 - `thread`: スレッド固有の値
-- `channel`: 親チャンネルの値 (`parentId` を付けて thread → channel フォールバックしたときに、thread 未設定で channel の値を拾った場合)
+- `channel`: 親チャンネルの値 (`{id}` がスレッドで、thread 未設定のため channel の値を拾った場合)
 - `default`: グローバルデフォルト値
-
-注意: **`parentId` を付けずに `{id}` 単独で解決した場合、`channel` はその `{id}` 自身に設定された値を指す** (親子関係の意味ではない)。スレッド ID を `parentId` 無しで叩くと、そのスレッド自身への直接設定が `channel` として返る。
 
 `active` も同じ形で返るが、`source` は `thread` / `channel` のみで `default` にはならない。上書きが無ければ `active` フィールドごとレスポンスから省略される (他の設定と違いグローバルデフォルトを持たないため)。
 
-## PATCH の応答はフォールバックを含まない
-
-`PATCH` は書き込み時に `parentId` を受け取らないため、レスポンスも `{id}` 単独スコープで解決した結果になる。これは上記「`parentId` を付けずに `{id}` 単独で解決した場合」の注意がそのまま当てはまるケースで、スレッドに `PATCH` した直後のレスポンスでも親チャンネルからのフォールバック分 (例: 親チャンネルで設定した `effort`) は含まれない。
-
-スレッドに `PATCH` した後、そのスレッドで実際に効く設定 (フォールバック込み) を確認したい場合は、続けて `parentId` 付きの `GET` を叩く。
-
-```bash
-# スレッドに model を設定
-curl -s -X PATCH -H 'Content-Type: application/json' \
-  -d '{"model":"opus"}' \
-  http://127.0.0.1:3000/settings/{スレッドID}
-
-# そのスレッドで実際に効く設定を、親チャンネルへのフォールバックを含めて確認
-curl -s 'http://127.0.0.1:3000/settings/{スレッドID}?parentId={親チャンネルID}'
-```
+`PATCH` のレスポンスも `GET` と同じく実効設定 (フォールバック込み) になる。スレッドに `model` だけを `PATCH` しても、親チャンネルで設定済みの `effort` 等はレスポンスにそのまま反映される。
 
 ## 典型的な使い方
 
 **スレッドを作った直後にそのスレッド固有の model を設定する**
 
-`{id}` に新規スレッド ID をそのまま渡すだけでよい (`parentId` は不要)。
+`{id}` に新規スレッド ID をそのまま渡すだけでよい。
 
 ```bash
 curl -s -X PATCH -H 'Content-Type: application/json' \
@@ -124,5 +108,5 @@ curl -s -X PATCH -H 'Content-Type: application/json' \
 **現在の設定を確認してからユーザに案内する**
 
 ```bash
-curl -s 'http://127.0.0.1:3000/settings/{チャンネルまたはスレッドID}?parentId={親チャンネルID}'
+curl -s http://127.0.0.1:3000/settings/{チャンネルまたはスレッドID}
 ```
