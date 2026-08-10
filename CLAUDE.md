@@ -364,6 +364,8 @@ Claude からは Bash + curl で呼び出す（ツール承認は in-process の
 | `DELETE` | `/settings/{id}`    | スコープ設定の全削除       |
 | `GET`    | `/settings/default` | グローバルデフォルトの取得 |
 
+スコープへの書き込みは leaf id（`threadId ?? channelId`）単位で行われる。そのため `PATCH` / `DELETE` はスレッド ID をそのまま `{id}` に渡せばそのスレッドのスコープを操作でき、`parentId` は不要。`parentId` は `GET` で thread → channel フォールバック解決するときだけ使う。
+
 ## ツール権限
 
 - in-process `canUseTool` コールバック: ツール使用前に Discord にボタンを送信してユーザーが承認/拒否（デフォルト動作）。`createCanUseTool()` が `ApprovalManager.requestApproval()` を呼び、結果を SDK の `PermissionResult` に変換する。
