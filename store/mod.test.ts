@@ -485,6 +485,119 @@ Deno.test("Store - getScopeSettings", async (t) => {
   );
 });
 
+Deno.test("Store - applyPatch", async (t) => {
+  await t.step("複数キーを同時に設定できること", async () => {
+    await withStore({}, async (store) => {
+      const s = await store.applyPatch(ch("ch-1"), {
+        model: "opus",
+        effort: "high",
+        showThinking: true,
+      });
+      assertEquals(s.model, { value: "opus", source: "channel" });
+      assertEquals(s.effort, { value: "high", source: "channel" });
+      assertEquals(s.showThinking, { value: true, source: "channel" });
+    });
+  });
+
+  await t.step("省略したキーが変更されないこと", async () => {
+    await withStore({}, async (store) => {
+      await store.setModel(ch("ch-1"), "opus");
+      await store.applyPatch(ch("ch-1"), { effort: "high" });
+      assertEquals(await store.getModel(ch("ch-1")), "opus");
+      assertEquals(await store.getEffort(ch("ch-1")), "high");
+    });
+  });
+
+  await t.step(
+    "null を指定したキーが削除され、フォールバックへ戻ること",
+    async () => {
+      await withStore({ model: "sonnet" }, async (store) => {
+        await store.setModel(ch("ch-1"), "opus");
+        const s = await store.applyPatch(ch("ch-1"), { model: null });
+        assertEquals(s.model, { value: "sonnet", source: "default" });
+      });
+    },
+  );
+
+  await t.step("session: null でセッションが削除されること", async () => {
+    await withStore({}, async (store) => {
+      await store.setSession(ch("ch-1"), "session-a");
+      const s = await store.applyPatch(ch("ch-1"), { session: null });
+      assertEquals(s.session, undefined);
+    });
+  });
+
+  await t.step(
+    "空の patch を渡しても既存の設定が壊れないこと",
+    async () => {
+      await withStore({}, async (store) => {
+        await store.setModel(ch("ch-1"), "opus");
+        await store.setEffort(ch("ch-1"), "high");
+        const s = await store.applyPatch(ch("ch-1"), {});
+        assertEquals(s.model, { value: "opus", source: "channel" });
+        assertEquals(s.effort, { value: "high", source: "channel" });
+      });
+    },
+  );
+
+  await t.step("戻り値が更新後の解決結果であること", async () => {
+    await withStore({}, async (store) => {
+      const s = await store.applyPatch(ch("ch-1"), { model: "opus" });
+      assertEquals(s, await store.getScopeSettings(ch("ch-1")));
+    });
+  });
+
+  await t.step(
+    "thread スコープに適用したとき、親チャンネルの設定が変わらないこと",
+    async () => {
+      await withStore({}, async (store) => {
+        await store.setModel(ch("ch-1"), "opus");
+        await store.applyPatch(th("ch-1", "th-1"), { model: "haiku" });
+        assertEquals(await store.getModel(ch("ch-1")), "opus");
+      });
+    },
+  );
+
+  await t.step(
+    "thread スコープで解決すると thread → channel のフォールバックが効くこと",
+    async () => {
+      await withStore({}, async (store) => {
+        await store.setModel(ch("ch-1"), "opus");
+        const s = await store.applyPatch(th("ch-1", "th-1"), {
+          effort: "high",
+        });
+        assertEquals(s.model, { value: "opus", source: "channel" });
+        assertEquals(s.effort, { value: "high", source: "thread" });
+      });
+    },
+  );
+});
+
+Deno.test("Store - getDefaults", async (t) => {
+  await t.step("コンストラクタに渡した defaults が返ること", async () => {
+    await withStore(
+      { model: "sonnet", effort: "medium", showThinking: true },
+      (store) => {
+        assertEquals(store.getDefaults(), {
+          model: "sonnet",
+          effort: "medium",
+          showThinking: true,
+        });
+        return Promise.resolve();
+      },
+    );
+  });
+
+  await t.step("返り値を書き換えても内部状態が変わらないこと", async () => {
+    await withStore({ model: "sonnet" }, (store) => {
+      const defaults = store.getDefaults();
+      defaults.model = "opus";
+      assertEquals(store.getDefaults().model, "sonnet");
+      return Promise.resolve();
+    });
+  });
+});
+
 Deno.test("Store - cron 用の擬似 channelId", async (t) => {
   await t.step(
     "'cron:<name>' を channelId として使っても動作すること",

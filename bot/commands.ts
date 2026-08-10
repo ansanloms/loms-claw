@@ -15,7 +15,12 @@ import {
 } from "discord.js";
 import type { ClaudeDefaults } from "../config.ts";
 import type { CronExecutor } from "../cron/executor.ts";
-import type { ScopeSettingEntry, Store, StoreScope } from "../store/mod.ts";
+import type {
+  ScopeSettingEntry,
+  SettingsPatch,
+  Store,
+  StoreScope,
+} from "../store/mod.ts";
 import type { VoiceManager } from "../voice/mod.ts";
 import { createLogger } from "../logger.ts";
 import { getErrorMessage } from "../errors.ts";
@@ -279,19 +284,21 @@ export async function handleSettingsSet(
   const scope = scopeFromInteraction(interaction);
   const scopeLabel = scope.threadId !== undefined ? "thread" : "channel";
 
+  const patch: SettingsPatch = {};
   const updates: string[] = [];
   if (model) {
-    await store.setModel(scope, model);
+    patch.model = model;
     updates.push(`model = \`${model}\``);
   }
   if (effort) {
-    await store.setEffort(scope, effort);
+    patch.effort = effort;
     updates.push(`effort = \`${effort}\``);
   }
   if (showThinking !== null) {
-    await store.setShowThinking(scope, showThinking);
+    patch.showThinking = showThinking;
     updates.push(`show_thinking = \`${showThinking}\``);
   }
+  await store.applyPatch(scope, patch);
   await interaction.reply({
     content: `Updated for this ${scopeLabel}: ${updates.join(", ")}.`,
     flags: MessageFlags.Ephemeral,
@@ -325,21 +332,21 @@ export async function handleSettingsUnset(
 
   switch (target) {
     case "model":
-      await store.deleteModel(scope);
+      await store.applyPatch(scope, { model: null });
       await interaction.reply({
         content: `Model unset for this ${scopeLabel} (fallback applies).`,
         flags: MessageFlags.Ephemeral,
       });
       break;
     case "effort":
-      await store.deleteEffort(scope);
+      await store.applyPatch(scope, { effort: null });
       await interaction.reply({
         content: `Effort unset for this ${scopeLabel} (fallback applies).`,
         flags: MessageFlags.Ephemeral,
       });
       break;
     case "show_thinking":
-      await store.deleteShowThinking(scope);
+      await store.applyPatch(scope, { showThinking: null });
       await interaction.reply({
         content:
           `Show_thinking unset for this ${scopeLabel} (fallback applies).`,
@@ -347,7 +354,7 @@ export async function handleSettingsUnset(
       });
       break;
     case "session":
-      await store.deleteSession(scope);
+      await store.applyPatch(scope, { session: null });
       await interaction.reply({
         content: `Session cleared for this ${scopeLabel}.`,
         flags: MessageFlags.Ephemeral,
