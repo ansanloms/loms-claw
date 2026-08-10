@@ -1,8 +1,8 @@
 /**
  * 統合 HTTP サーバー。
  *
- * cron ジョブの一覧取得・手動実行・再読み込みとログ取得を
- * Hono アプリケーションとして単一の Deno.serve() で提供する。
+ * cron ジョブの一覧取得・手動実行・再読み込み、ログ取得、スコープ設定の
+ * 取得・部分更新・削除を Hono アプリケーションとして単一の Deno.serve() で提供する。
  *
  * ツール承認は SDK の `canUseTool` コールバックで in-process に処理するため、
  * HTTP エンドポイントは持たない。
@@ -11,6 +11,8 @@
 import { Hono } from "hono";
 import { createCronRoutes, type CronRouteContext } from "./routes/cron.ts";
 import { createLogsRoutes } from "./routes/logs.ts";
+import { createSettingsRoutes } from "./routes/settings.ts";
+import type { Store } from "../store/mod.ts";
 import { createLogger } from "../logger.ts";
 import { getErrorMessage } from "../errors.ts";
 
@@ -20,11 +22,13 @@ const log = createLogger("api-server");
  * 統合 HTTP サーバーを起動する。
  *
  * @param port - リッスンポート。
+ * @param store - スコープ設定ストア。
  * @param cronCtx - cron ルートの依存関係コンテキスト。
  * @returns Deno.HttpServer インスタンス（shutdown() で停止可能）。
  */
 export function startApiServer(
   port: number,
+  store: Store,
   cronCtx?: CronRouteContext,
 ): Deno.HttpServer {
   const app = new Hono();
@@ -38,6 +42,7 @@ export function startApiServer(
   // サブルートをマウント
   app.route("/cron", createCronRoutes(cronCtx));
   app.route("/logs", createLogsRoutes());
+  app.route("/settings", createSettingsRoutes(store));
 
   // 未定義パスへのアクセス
   app.notFound((c) => c.json({ error: "Not Found" }, 404));

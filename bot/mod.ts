@@ -206,6 +206,7 @@ export class DiscordBot {
         };
         this.apiServer = startApiServer(
           this.config.claude.apiPort,
+          this.store,
           cronCtx,
         );
 

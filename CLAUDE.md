@@ -133,13 +133,14 @@ bot/message.ts         splitMessage(): 2000 文字分割。keepTyping(): typing 
 claude/mod.ts          askClaude(): Agent SDK の query() を呼び出し SDKMessage ストリームを逐次 yield。buildQueryOptions() / normalizeEffort()。テストは queryFn DI でモック。
 claude/system-prompt.ts  SystemPromptStore: .claude/system-prompt/ 配下を起動時に読み込み、コンテキスト (chat/vc/cron) とスコープ (channelId/threadId) に応じて結合。
 claude/template.ts     replaceTemplateVariables(): システムプロンプトの {{key}} 置換。
-store/mod.ts           Store: Deno KV (SQLite backend) によるスコープ単位の session_id / model / effort / showThinking 永続化。スコープは {channelId, threadId?} の組。model / effort / showThinking は thread → channel → グローバルデフォルト (config.json `claude.defaults`) の動的フォールバック (showThinking は最終的に false)。session は thread と channel で独立。
+store/mod.ts           Store: Deno KV (SQLite backend) によるスコープ単位の session_id / model / effort / showThinking 永続化。スコープは {channelId, threadId?} の組。model / effort / showThinking は thread → channel → グローバルデフォルト (config.json `claude.defaults`) の動的フォールバック (showThinking は最終的に false)。session は thread と channel で独立。applyPatch() で複数キーの部分更新 (JSON Merge Patch 意味論) を atomic に適用する。
 approval/manager.ts    ApprovalManager: Discord ボタンによるツール承認/拒否。createCanUseTool(): ApprovalResult を SDK の PermissionResult に変換する canUseTool コールバックを生成。AskUserQuestion は承認フローを通さず QuestionManager へ委譲する。
 approval/question.ts   QuestionManager: AskUserQuestion の質問を Discord の select menu で提示し回答を収集。「Other (自由入力)」は Modal で受け付け、回答を updatedInput.answers として返す。
 approval/settings.ts   isInAllowList() / addToSettingsAllowList(): .claude/settings.json の permissions.allow 読み書き。
-api/server.ts              統合 HTTP サーバー。Hono アプリ作成、サブルート（cron / logs）マウント、共通エラーハンドラ。承認は in-process のため HTTP では扱わない。Discord 操作は Claude が公式 REST API を直接叩くため提供しない。
+api/server.ts              統合 HTTP サーバー。Hono アプリ作成、サブルート（cron / logs / settings）マウント、共通エラーハンドラ。承認は in-process のため HTTP では扱わない。Discord 操作は Claude が公式 REST API を直接叩くため提供しない。
 api/routes/cron.ts         cron ルート（GET /cron, POST /cron/run, POST /cron/reload）。
 api/routes/logs.ts         ログ取得ルート（GET /logs）。リングバッファからフィルタ付きで取得。
+api/routes/settings.ts     settings ルート（GET /settings/default, GET/PATCH/DELETE /settings/:id）。Store.applyPatch() / getDefaults() / getScopeSettings() / clearScope() をそのまま呼ぶ薄いアダプタ。
 api/validate.ts            docs/api の OpenAPI から生成した internal-schemas.ts を単一ソースに、@cfworker/json-schema でリクエストボディを構造検証（matchesSchema / schemaErrorOf）。
 api/internal-schemas.ts    docs/api の component schema を as const で書き出した自動生成物（deno task generate）。サーバの型（json-schema-to-ts の FromSchema）と検証の単一ソース。
 voice/mod.ts           VoiceManager: VC 接続管理、STT→Agent SDK→TTS パイプライン、auto-join/leave。
@@ -315,6 +316,8 @@ cron ジョブ用のシステムプロンプトは `.claude/system-prompt/CRON.m
 
 `session` は thread と channel で完全に独立する。スレッドを切ると新規セッションとして始まり、親チャンネル側のセッションは触らない。`/claw settings unset session` をスレッド内で実行するとスレッドのセッションのみ削除する。
 
+`/claw settings set|unset`（Discord スラッシュコマンド）と内部 HTTP API の `PATCH /settings/{id}` は、どちらも `Store.applyPatch()` を通して同じ部分更新ロジックを共有する。
+
 ### ボイスチャンネル（`voice.enabled: true` 時）
 
 1. `/claw vc join` または auto-join で VC に参加
@@ -343,17 +346,21 @@ bot トークンを直接扱う構成へ移行し、内部ラッパーを廃止�
 - Discord Developer Portal で **Server Members Intent**（Privileged Gateway Intent）を有効にすること。
   メンバー一覧 API に必要。
 
-## 内部 HTTP API（cron / ログ）
+## 内部 HTTP API（cron / ログ / 設定）
 
-Bot プロセス内で `127.0.0.1:{claude.apiPort}` に HTTP サーバーを起動し、cron 操作とログ取得を同一ポートで提供する。
+Bot プロセス内で `127.0.0.1:{claude.apiPort}` に HTTP サーバーを起動し、cron 操作・ログ取得・スコープ設定の操作を同一ポートで提供する。
 Claude からは Bash + curl で呼び出す（ツール承認は in-process のため HTTP では扱わない）。
 
-| メソッド | パス           | 説明            |
-| -------- | -------------- | --------------- |
-| `GET`    | `/cron`        | cron ジョブ一覧 |
-| `POST`   | `/cron/run`    | cron 手動実行   |
-| `POST`   | `/cron/reload` | cron リロード   |
-| `GET`    | `/logs`        | ログ取得        |
+| メソッド | パス                | 説明                       |
+| -------- | ------------------- | -------------------------- |
+| `GET`    | `/cron`             | cron ジョブ一覧            |
+| `POST`   | `/cron/run`         | cron 手動実行              |
+| `POST`   | `/cron/reload`      | cron リロード              |
+| `GET`    | `/logs`             | ログ取得                   |
+| `GET`    | `/settings/{id}`    | スコープ設定の取得         |
+| `PATCH`  | `/settings/{id}`    | スコープ設定の部分更新     |
+| `DELETE` | `/settings/{id}`    | スコープ設定の全削除       |
+| `GET`    | `/settings/default` | グローバルデフォルトの取得 |
 
 ## ツール権限
 

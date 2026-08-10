@@ -79,6 +79,21 @@ export interface ScopeSettings {
 }
 
 /**
+ * 設定の部分更新。JSON Merge Patch (RFC 7386) の意味論に従う。
+ *   - キーを省略した場合: その設定を変更しない
+ *   - null を指定した場合: その設定を削除し、フォールバックへ戻す
+ *
+ * session は削除のみ受け付ける。任意のセッション ID の書き込みを許可すると
+ * 他スコープの会話を乗っ取れるため。
+ */
+export interface SettingsPatch {
+  model?: string | null;
+  effort?: string | null;
+  showThinking?: boolean | null;
+  session?: null;
+}
+
+/**
  * Deno KV ベースのスコープ設定ストア。
  */
 export class Store {
@@ -226,6 +241,54 @@ export class Store {
   }
 
   /**
+   * 指定スコープへ部分更新を適用する。
+   *
+   * 書き込み先の id は setter / deleter と同じく `scope.threadId ?? scope.channelId`。
+   * patch のキーのうち値が undefined でないものだけを処理し、null なら削除、
+   * それ以外なら設定する。複数キーの更新は kv.atomic() で 1 コミットにまとめ、
+   * 中途半端に一部だけ適用された状態を防ぐ (clearScope() と同じ方針)。
+   *
+   * 返す解決結果は渡された scope に基づく。threadId を含まない scope を渡せば
+   * thread のフォールバックは効かない (getScopeSettings() と同じ)。
+   */
+  async applyPatch(
+    scope: StoreScope,
+    patch: SettingsPatch,
+  ): Promise<ScopeSettings> {
+    const id = scope.threadId ?? scope.channelId;
+    const atomic = this.kv.atomic();
+
+    if (patch.model !== undefined) {
+      if (patch.model === null) {
+        atomic.delete([NS, id, MODEL]);
+      } else {
+        atomic.set([NS, id, MODEL], patch.model);
+      }
+    }
+    if (patch.effort !== undefined) {
+      if (patch.effort === null) {
+        atomic.delete([NS, id, EFFORT]);
+      } else {
+        atomic.set([NS, id, EFFORT], patch.effort);
+      }
+    }
+    if (patch.showThinking !== undefined) {
+      if (patch.showThinking === null) {
+        atomic.delete([NS, id, SHOW_THINKING]);
+      } else {
+        atomic.set([NS, id, SHOW_THINKING], String(patch.showThinking));
+      }
+    }
+    if (patch.session !== undefined) {
+      // session は null (削除) のみ許可される (SettingsPatch 型で保証)。
+      atomic.delete([NS, id, SESSION]);
+    }
+
+    await atomic.commit();
+    return await this.getScopeSettings(scope);
+  }
+
+  /**
    * 表示用に現在の設定を一括取得する。
    *
    * model / effort の source:
@@ -308,6 +371,14 @@ export class Store {
         this.defaults.showThinking,
       ),
     };
+  }
+
+  /**
+   * グローバルデフォルト値のコピーを返す。
+   * 呼び出し側から内部状態を書き換えられないよう、参照ではなくコピーを返す。
+   */
+  getDefaults(): StoreDefaults {
+    return { ...this.defaults };
   }
 
   /**
