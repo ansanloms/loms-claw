@@ -53,20 +53,6 @@ Deno.test("loadConfig", async (t) => {
       assertEquals(config.claude.timeout, 300000);
       assertEquals(config.claude.apiPort, 3000);
       assertEquals(config.claude.defaults.showThinking, false);
-      assertEquals(config.voice.enabled, false);
-      assertEquals(config.voice.whisper.url, "http://localhost:8178");
-      assertEquals(config.voice.whisper.noSpeechProbThreshold, 0.6);
-      assertEquals(config.voice.tts.url, "http://localhost:8000");
-      assertEquals(config.voice.tts.model, "voicevox");
-      assertEquals(config.voice.tts.speaker, "1");
-      assertEquals(config.voice.tts.speed, 1);
-      assertEquals(config.voice.minSpeechMs, 500);
-      assertEquals(config.voice.speechRms, 200);
-      assertEquals(config.voice.interruptRms, 500);
-      assertEquals(config.voice.autoLeaveMs, 600000);
-      assertEquals(config.voice.speechDebounceMs, 500);
-      assertEquals(config.voice.notificationTone, true);
-      assertEquals(config.voice.autoJoinVc, false);
       assertEquals(config.log.level, "INFO");
       assertEquals(config.log.bufferSize, 1000);
     });
@@ -212,51 +198,6 @@ Deno.test("loadConfig", async (t) => {
         assertEquals(config.claude.verbose, false);
         assertEquals(config.claude.timeout, 60000);
         assertEquals(config.claude.apiPort, 4000);
-      },
-    );
-  });
-
-  await t.step("voice.autoJoinVc が false で無効になること", () => {
-    withTempConfig(
-      { ...requiredFields, voice: { autoJoinVc: false } },
-      () => {
-        const config = loadConfig();
-        assertEquals(config.voice.autoJoinVc, false);
-      },
-    );
-  });
-
-  await t.step("voice.autoJoinVc が true で全 VC 対象になること", () => {
-    withTempConfig(
-      { ...requiredFields, voice: { autoJoinVc: true } },
-      () => {
-        const config = loadConfig();
-        assertEquals(config.voice.autoJoinVc, true);
-      },
-    );
-  });
-
-  await t.step(
-    "voice.autoJoinVc が string 配列で指定 VC のみ対象になること",
-    () => {
-      withTempConfig(
-        {
-          ...requiredFields,
-          voice: { autoJoinVc: ["ch-1", "ch-2"] },
-        },
-        () => {
-          const config = loadConfig();
-          assertEquals(config.voice.autoJoinVc, ["ch-1", "ch-2"]);
-        },
-      );
-    },
-  );
-
-  await t.step("voice.autoJoinVc が不正な値でエラーになること", () => {
-    withTempConfig(
-      { ...requiredFields, voice: { autoJoinVc: "invalid" } },
-      () => {
-        assertThrows(() => loadConfig(), Error, "autoJoinVc");
       },
     );
   });

@@ -32,10 +32,7 @@ Discord の指定ギルド・指定ユーザー（1 人）のみが操作でき�
 
 - Deno
 - discord.js v14
-- @discordjs/voice（ボイスチャンネル接続）
 - Claude Agent SDK (`@anthropic-ai/claude-agent-sdk` の `query()`)
-- whisper.cpp（STT、HTTP サーバーモード）
-- OpenAI 互換 TTS API（例: voicevox-openai-tts）
 
 ## コミット規約
 
@@ -126,12 +123,12 @@ config.schema.ts       config.schema.json を @cfworker/json-schema の Validato
 logger.ts              名前空間付き軽量ロガー。`initLogger({ level, bufferSize })` で設定。リングバッファで直近ログをメモリ保持。
 errors.ts              getErrorMessage(): unknown なエラー値からメッセージを取り出す共通ユーティリティ。
 bot/mod.ts             DiscordBot クラス。messageCreate ハンドラ、start/shutdown。
-bot/commands.ts        スラッシュコマンド定義とハンドラ（/claw settings show|set|unset で model/effort/show_thinking/active/session を操作, /claw vc join|leave）。
+bot/commands.ts        スラッシュコマンド定義とハンドラ（/claw settings show|set|unset で model/effort/show_thinking/active/session を操作）。
 bot/guard.ts           isAuthorized(): ギルド ID + ユーザー ID + bot 除外の認可チェック。resolveActive(): per-scope の active 上書き (KV) と config の activeChannelIds を解決する共通ロジック。shouldRespond(): resolveActive() の結果 + mention / スレッドによる反応判定。
 bot/queue.ts           ScopeQueue: scope (localId) 単位でメッセージ処理を直列化するキュー。応答中の scope に届いた次のメッセージを現在のターン終了後に処理する (並行 query と session 競合の防止)。
 bot/message.ts         splitMessage(): 2000 文字分割。keepTyping(): typing インジケーター維持。ProgressReporter: ツール進捗表示。
 claude/mod.ts          askClaude(): Agent SDK の query() を呼び出し SDKMessage ストリームを逐次 yield。buildQueryOptions() / normalizeEffort()。テストは queryFn DI でモック。
-claude/system-prompt.ts  SystemPromptStore: .claude/system-prompt/ 配下を起動時に読み込み、コンテキスト (chat/vc/cron) とスコープ (channelId/threadId) に応じて結合。
+claude/system-prompt.ts  SystemPromptStore: .claude/system-prompt/ 配下を起動時に読み込み、コンテキスト (chat/cron) とスコープ (channelId/threadId) に応じて結合。
 claude/template.ts     replaceTemplateVariables(): システムプロンプトの {{key}} 置換。
 store/mod.ts           Store: Deno KV (SQLite backend) によるスコープ単位の session_id / model / effort / showThinking / active 永続化。スコープは {channelId, threadId?} の組。model / effort / showThinking は thread → channel → グローバルデフォルト (config.json `claude.defaults`) の動的フォールバック (showThinking は最終的に false)。active は thread → channel のみで解決し、グローバルデフォルトを持たない (どちらにも無ければ undefined。呼び出し側で config の activeChannelIds によるリスト判定へフォールバックする)。session は thread と channel で独立。applyPatch() で複数キーの部分更新 (JSON Merge Patch 意味論) を atomic に適用する。
 approval/manager.ts    ApprovalManager: Discord ボタンによるツール承認/拒否。createCanUseTool(): ApprovalResult を SDK の PermissionResult に変換する canUseTool コールバックを生成。AskUserQuestion は承認フローを通さず QuestionManager へ委譲する。
@@ -143,13 +140,6 @@ api/routes/logs.ts         ログ取得ルート（GET /logs）。リングバ�
 api/routes/settings.ts     settings ルート（GET /settings/default, GET/PATCH/DELETE /settings/:id）。`SettingsRouteContext { store, resolveParentId? }` を受け取り、resolveScope() ヘルパーで `{id}` がスレッドか通常チャンネルかを解決してから Store.applyPatch() / getScopeSettings() / clearScope() を呼ぶ。resolveParentId が未注入・throw 時はチャンネル単独スコープにフォールバックする。
 api/validate.ts            docs/api の OpenAPI から生成した internal-schemas.ts を単一ソースに、@cfworker/json-schema でリクエストボディを構造検証（matchesSchema / schemaErrorOf）。
 api/internal-schemas.ts    docs/api の component schema を as const で書き出した自動生成物（deno task generate）。サーバの型（json-schema-to-ts の FromSchema）と検証の単一ソース。
-voice/mod.ts           VoiceManager: VC 接続管理、STT→Agent SDK→TTS パイプライン、auto-join/leave。
-voice/adapter.ts       streamClaudeForVoice(): askClaude() の SDKMessage ストリームから text_delta を文単位で逐次 yield するアダプタ。
-voice/codec.ts         Opus デコード、PCM→WAV 変換、RMS 計算。
-voice/player.ts        VoicePlayer: TTS 合成キュー + AudioPlayer。文単位並列合成で体感遅延を最小化。
-voice/tones.ts         処理中・エラー通知トーンの PCM 生成（マリンバ風倍音合成）。
-voice/stt.ts           SpeechToText IF + WhisperStt 実装（whisper.cpp HTTP サーバー）。
-voice/tts.ts           TextToSpeech IF + OpenAiTts 実装（OpenAI 互換 TTS API）。
 cron/types.ts          CronJobDef 型定義。
 cron/match.ts          cron 式パーサー + マッチャー。Temporal API でローカルタイム評価。
 cron/loader.ts         frontmatter パーサー + cron/ ディレクトリスキャン。
@@ -170,7 +160,6 @@ data/                  実行時データ置き場。home（Claude 設定・認�
 | ---------------- | -------------------------------------------------------------- |
 | `DEFAULT.md`     | 常に含める                                                     |
 | `CHAT.md`        | テキストチャット時に含める                                     |
-| `VC.md`          | VC 時に含める                                                  |
 | `CRON.md`        | cron ジョブ時に含める                                          |
 | `{channelId}.md` | 特定チャンネル / スレッドで含める (詳細は下のフォールバック節) |
 
@@ -190,15 +179,15 @@ data/                  実行時データ置き場。home（Claude 設定・認�
 
 ファイル内で `{{key}}` 形式のプレースホルダーを使用できる。`resolve()` 呼び出し時に実際の値で置換される。未定義のキーはそのまま残る。
 
-| 変数                       | 説明                                    |
-| -------------------------- | --------------------------------------- |
-| `{{discord.guild.id}}`     | ギルド ID                               |
-| `{{discord.guild.name}}`   | ギルド名                                |
-| `{{discord.channel.id}}`   | 現在のチャンネル / スレッド ID          |
-| `{{discord.channel.name}}` | 現在のチャンネル / スレッド名           |
-| `{{discord.channel.type}}` | チャンネル種別（text / thread / voice） |
-| `{{discord.user.id}}`      | メッセージ送信者の ID                   |
-| `{{discord.user.name}}`    | メッセージ送信者の名前                  |
+| 変数                       | 説明                            |
+| -------------------------- | ------------------------------- |
+| `{{discord.guild.id}}`     | ギルド ID                       |
+| `{{discord.guild.name}}`   | ギルド名                        |
+| `{{discord.channel.id}}`   | 現在のチャンネル / スレッド ID  |
+| `{{discord.channel.name}}` | 現在のチャンネル / スレッド名   |
+| `{{discord.channel.type}}` | チャンネル種別（text / thread） |
+| `{{discord.user.id}}`      | メッセージ送信者の ID           |
+| `{{discord.user.name}}`    | メッセージ送信者の名前          |
 
 注意: `{{discord.channel.id}}` / `{{discord.channel.name}}` は **発話があった場所** の ID / 名前を返す。スレッド内で発話されたメッセージでは thread の ID / 名前が入る (親チャンネルの値ではない)。`{channelId}.md` がスレッド内でフォールバック採用された場合も同様で、ファイル内の `{{discord.channel.id}}` はスレッド ID に展開される。Discord REST API で「親チャンネル」を操作したい場合は ID をハードコードするか、別途取得すること。
 
@@ -308,7 +297,6 @@ cron ジョブ用のシステムプロンプトは `.claude/system-prompt/CRON.m
 - **スレッド外** のメッセージ: `{ channelId }` スコープ
 - **スレッド内** のメッセージ: `{ channelId: parentId, threadId }` スコープ
 - **cron ジョブ**: `{ channelId: "cron:{name}" }` スコープ（thread 無し）
-- **ボイスチャンネル**: `{ channelId }` スコープ（VC はスレッドを持たない）
 
 `model / effort / showThinking` の解決順は **thread → channel → グローバルデフォルト** の動的フォールバック。グローバルデフォルトは `config.json` の `claude.defaults`（`showThinking` は未設定時 false）。
 スレッドで `/claw settings set model=...` を叩くと thread のみに保存され、親チャンネルの設定には影響しない。`showThinking` も同様に `/claw settings set show_thinking=...` で per-scope に上書きでき、`/claw settings unset show_thinking` でフォールバックへ戻せる。
@@ -319,19 +307,6 @@ cron ジョブ用のシステムプロンプトは `.claude/system-prompt/CRON.m
 `active`（mention 不要で全メッセージに反応するかどうか）も `model / effort / showThinking` と同様に thread → channel の順で解決するが、**グローバルデフォルトを持たない**点が異なる。フォールバック先はグローバルデフォルトではなく、config の `activeChannelIds` によるチャンネル ID リスト判定（スレッドの場合は親チャンネル ID も見る）。thread / channel どちらの KV にも上書きが無ければ `ScopeSettings.active` はフィールドごと省略される。`/claw settings set active:<true|false>` で per-scope に上書きでき、`false` を明示すると config で active なチャンネルでも mention 必須へ落とせる。`/claw settings unset active` で上書きを削除し、config の判定へ戻す。
 
 `/claw settings set|unset`（Discord スラッシュコマンド）と内部 HTTP API の `PATCH /settings/{id}` は、どちらも `Store.applyPatch()` を通して同じ部分更新ロジックを共有する。
-
-### ボイスチャンネル（`voice.enabled: true` 時）
-
-1. `/claw vc join` または auto-join で VC に参加
-2. Opus フレーム受信 → PCM デコード → RMS フィルタ（ノイズ除去・割り込み検知）
-3. 1.5 秒の無音で発話終了を検出、最小長・最小 RMS フィルタ適用
-4. thinking tone 開始
-5. `WhisperStt.transcribe()` で PCM → テキスト（whisper.cpp HTTP）
-6. 発話デバウンス（同一ユーザーの連続発話をマージ）
-7. `streamClaudeForVoice()` で Agent SDK の query() を呼び出し、結果テキストを文単位で取得
-8. `SessionStore` にセッション ID 保存
-9. `VoicePlayer.speak()` でテキストを文単位に TTS 合成 → 音声再生
-10. ツール承認が必要な場合は VC テキストチャットに承認ボタンを表示（既存の ApprovalManager を利用）
 
 ## Discord 操作
 

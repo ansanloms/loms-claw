@@ -18,26 +18,6 @@
       "showThinking": false
     }
   },
-  "voice": {
-    "enabled": false,
-    "whisper": {
-      "url": "http://localhost:8178",
-      "noSpeechProbThreshold": 0.6
-    },
-    "tts": {
-      "url": "http://localhost:8000",
-      "model": "voicevox",
-      "speaker": "1",
-      "speed": 1
-    },
-    "minSpeechMs": 500,
-    "speechRms": 200,
-    "interruptRms": 500,
-    "autoLeaveMs": 600000,
-    "speechDebounceMs": 500,
-    "notificationTone": true,
-    "autoJoinVc": false
-  },
   "log": {
     "level": "INFO",
     "bufferSize": 1000

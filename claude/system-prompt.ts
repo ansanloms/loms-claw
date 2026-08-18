@@ -2,13 +2,12 @@
  * コンテキスト別システムプロンプトの解決。
  *
  * ワークスペースの .claude/system-prompt/ 配下のファイルを起動時に読み込み、
- * コンテキスト（chat/vc/cron）とスコープ (channelId / threadId) に応じて
+ * コンテキスト（chat/cron）とスコープ (channelId / threadId) に応じて
  * 結合して返す。
  *
  * ファイル構成:
  *   DEFAULT.md              — 常に読み込む
  *   CHAT.md                 — テキストチャット時に読み込む
- *   VC.md                   — VC 時に読み込む
  *   CRON.md                 — cron ジョブ時に読み込む
  *   {{CHANNEL_ID}}.md       — 特定チャンネル / スレッドで応答する際に読み込む
  *
@@ -30,7 +29,7 @@ const log = createLogger("system-prompt");
 /**
  * システムプロンプトのコンテキスト種別。
  */
-export type PromptContext = "chat" | "vc" | "cron";
+export type PromptContext = "chat" | "cron";
 
 /**
  * システムプロンプトの解決スコープ。
@@ -65,7 +64,6 @@ async function readFileOrUndefined(path: string): Promise<string | undefined> {
 export class SystemPromptStore {
   private defaultPrompt: string | undefined;
   private chatPrompt: string | undefined;
-  private vcPrompt: string | undefined;
   private cronPrompt: string | undefined;
   private channelPrompts = new Map<string, string>();
 
@@ -82,15 +80,12 @@ export class SystemPromptStore {
     this.chatPrompt = (await readFileOrUndefined(
       join(this.dir, "CHAT.md"),
     ))?.trim() || undefined;
-    this.vcPrompt = (await readFileOrUndefined(
-      join(this.dir, "VC.md"),
-    ))?.trim() || undefined;
     this.cronPrompt = (await readFileOrUndefined(
       join(this.dir, "CRON.md"),
     ))?.trim() || undefined;
 
     // チャンネル固有ファイルをスキャンする。
-    // DEFAULT.md, CHAT.md, VC.md 以外の .md ファイルは
+    // DEFAULT.md, CHAT.md, CRON.md 以外の .md ファイルは
     // ファイル名（拡張子除く）をチャンネル ID として扱う。
     // Discord のチャンネル ID は数値文字列（Snowflake）。
     this.channelPrompts.clear();
@@ -101,8 +96,7 @@ export class SystemPromptStore {
         }
         const name = basename(entry.name, ".md");
         if (
-          name === "DEFAULT" || name === "CHAT" || name === "VC" ||
-          name === "CRON"
+          name === "DEFAULT" || name === "CHAT" || name === "CRON"
         ) {
           continue;
         }
@@ -124,7 +118,6 @@ export class SystemPromptStore {
 
     const count = (this.defaultPrompt ? 1 : 0) +
       (this.chatPrompt ? 1 : 0) +
-      (this.vcPrompt ? 1 : 0) +
       (this.cronPrompt ? 1 : 0) +
       this.channelPrompts.size;
     log.info(`loaded ${count} system prompt file(s) from ${this.dir}`);
@@ -135,13 +128,13 @@ export class SystemPromptStore {
    *
    * 読み込み順:
    * 1. DEFAULT.md — 常に含める
-   * 2. CHAT.md / VC.md / CRON.md — コンテキストに応じて含める
+   * 2. CHAT.md / CRON.md — コンテキストに応じて含める
    * 3. スコープ別ファイル — thread → channel の動的フォールバックで 1 件のみ
    *    - `{threadId}.md` があればそれ
    *    - 無ければ `{channelId}.md`
    *    - どちらも無ければスキップ
    *
-   * @param context - "chat" / "vc" / "cron"。
+   * @param context - "chat" / "cron"。
    * @param scope - 解決スコープ。`{ channelId, threadId? }`。
    * @param vars - テンプレート変数。`{{key}}` を値で置換する。
    * @returns 結合されたシステムプロンプト。全不在なら undefined。
@@ -159,8 +152,6 @@ export class SystemPromptStore {
 
     const contextPrompt = context === "chat"
       ? this.chatPrompt
-      : context === "vc"
-      ? this.vcPrompt
       : this.cronPrompt;
     if (contextPrompt) {
       parts.push(contextPrompt);
