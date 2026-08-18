@@ -3,21 +3,19 @@
   "specifiers": {
     "jsr:@aireone/deno-lint-curly@*": "0.2.0",
     "jsr:@hono/hono@4.13.1": "4.13.1",
-    "jsr:@openai/openai@7.2.0": "7.2.0",
     "jsr:@std/assert@1.0.19": "1.0.19",
+    "jsr:@std/collections@^1.1.3": "1.2.0",
     "jsr:@std/front-matter@1.0.9": "1.0.9",
     "jsr:@std/internal@^1.0.12": "1.0.14",
     "jsr:@std/internal@^1.0.14": "1.0.14",
     "jsr:@std/path@1": "1.1.6",
     "jsr:@std/path@1.1.6": "1.1.6",
+    "jsr:@std/toml@^1.0.3": "1.0.11",
     "jsr:@std/yaml@^1.0.5": "1.1.1",
     "npm:@anthropic-ai/claude-agent-sdk@0.3.226": "0.3.226_@anthropic-ai+sdk@0.116.0__zod@4.4.3_@modelcontextprotocol+sdk@1.30.0__@cfworker+json-schema@4.1.1__zod@4.4.3_zod@4.4.3_@cfworker+json-schema@4.1.1",
     "npm:@cfworker/json-schema@4.1.1": "4.1.1",
-    "npm:@discordjs/voice@0.19.2": "0.19.2_@emnapi+core@1.11.3_@emnapi+runtime@1.11.3_opusscript@0.1.1",
-    "npm:@snazzah/davey@0.1.12": "0.1.12_@emnapi+core@1.11.3_@emnapi+runtime@1.11.3",
     "npm:discord.js@14.27.0": "14.27.0",
-    "npm:json-schema-to-ts@3.1.1": "3.1.1",
-    "npm:opusscript@0.1.1": "0.1.1"
+    "npm:json-schema-to-ts@3.1.1": "3.1.1"
   },
   "jsr": {
     "@aireone/deno-lint-curly@0.2.0": {
@@ -26,18 +24,19 @@
     "@hono/hono@4.13.1": {
       "integrity": "36e130f7c3a07d2938d0960c3c726e71ff15becdf999512949bc69884b6afb65"
     },
-    "@openai/openai@7.2.0": {
-      "integrity": "73ffde8f4c85d6650fdffcd98308c26bec28d8ca6e883ccf511ff728e6266414"
-    },
     "@std/assert@1.0.19": {
       "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
       "dependencies": [
         "jsr:@std/internal@^1.0.12"
       ]
     },
+    "@std/collections@1.2.0": {
+      "integrity": "47627a21d3a13138b77fd0e4d790ba9d2e603c3510b686cde6b132fe9aa98a88"
+    },
     "@std/front-matter@1.0.9": {
       "integrity": "ee6201d06674cbef137dda2252f62477450b48249e7d8d9ab57a30f85ff6f051",
       "dependencies": [
+        "jsr:@std/toml",
         "jsr:@std/yaml"
       ]
     },
@@ -48,6 +47,12 @@
       "integrity": "c68485c2a4dfbb5ae3cc74fae4e8c4e5d874cf8a8ed12927917235c758b46cbe",
       "dependencies": [
         "jsr:@std/internal@^1.0.14"
+      ]
+    },
+    "@std/toml@1.0.11": {
+      "integrity": "e084988b872ca4bad6aedfb7350f6eeed0e8ba88e9ee5e1590621c5b5bb8f715",
+      "dependencies": [
+        "jsr:@std/collections"
       ]
     },
     "@std/yaml@1.1.1": {
@@ -175,17 +180,6 @@
         "discord-api-types"
       ]
     },
-    "@discordjs/voice@0.19.2_@emnapi+core@1.11.3_@emnapi+runtime@1.11.3_opusscript@0.1.1": {
-      "integrity": "sha512-3yJ255e4ag3wfZu/DSxeOZK1UtnqNxnspmLaQetGT0pDkThNZoHs+Zg6dgZZ19JEVomXygvfHn9lNpICZuYtEA==",
-      "dependencies": [
-        "@snazzah/davey",
-        "@types/ws",
-        "discord-api-types",
-        "prism-media",
-        "tslib",
-        "ws"
-      ]
-    },
     "@discordjs/ws@1.2.3": {
       "integrity": "sha512-wPlQDxEmlDg5IxhJPuxXr3Vy9AjYq5xCvFWGJyD7w7Np8ZGu+Mc+97LCoEc/+AYCo2IDpKioiH0/c/mj5ZR9Uw==",
       "dependencies": [
@@ -198,25 +192,6 @@
         "discord-api-types",
         "tslib",
         "ws"
-      ]
-    },
-    "@emnapi/core@1.11.3": {
-      "integrity": "sha512-zLpS5asjEb7lq8jYLq37N6XKaE41DIexlY1rF/z4/tIl3wo13Sqm28fRyfIsKZD+NZ8mM5RoKkpW/rBcuoSZSg==",
-      "dependencies": [
-        "@emnapi/wasi-threads",
-        "tslib"
-      ]
-    },
-    "@emnapi/runtime@1.11.3": {
-      "integrity": "sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA==",
-      "dependencies": [
-        "tslib"
-      ]
-    },
-    "@emnapi/wasi-threads@1.2.3": {
-      "integrity": "sha512-ELEBe8PsLvvJ6QMr0zLt8ffvOHW/dc1m3CEzNMg7aJUv3bMaoDtw2TXyDAwkYBuroxxuHEwhRTLJSe5sya547g==",
-      "dependencies": [
-        "tslib"
       ]
     },
     "@hono/node-server@2.1.0_hono@4.13.1": {
@@ -251,14 +226,6 @@
         "@cfworker/json-schema"
       ]
     },
-    "@napi-rs/wasm-runtime@1.2.2_@emnapi+core@1.11.3_@emnapi+runtime@1.11.3": {
-      "integrity": "sha512-JfB4kuJQjaoHuCTseIINHtHWeJnvgEcxjwA5t/Y00ZgaOO1Crz3fjT/p8kT28zA/Caz7oiUMn3d6H2yOVCVwuw==",
-      "dependencies": [
-        "@emnapi/core",
-        "@emnapi/runtime",
-        "@tybys/wasm-util"
-      ]
-    },
     "@sapphire/async-queue@1.5.5": {
       "integrity": "sha512-cvGzxbba6sav2zZkH8GPf2oGk9yYoD5qrNWdu9fRehifgnFZJMV+nuy2nON2roRO4yQQ+v7MK/Pktl/HgfsUXg=="
     },
@@ -272,105 +239,8 @@
     "@sapphire/snowflake@3.5.5": {
       "integrity": "sha512-xzvBr1Q1c4lCe7i6sRnrofxeO1QTP/LKQ6A6qy0iB4x5yfiSfARMEQEghojzTNALDTcv8En04qYNIco9/K9eZQ=="
     },
-    "@snazzah/davey-android-arm-eabi@0.1.12": {
-      "integrity": "sha512-6VC/an+Sx5dI5skb+90rYcIB1jhm48Rl0nDaw0UNT4bz1rMjpVfmmZqeocYXMq96IdbBMlE6OTKGcBm2C3gkQg==",
-      "os": ["android"],
-      "cpu": ["arm"]
-    },
-    "@snazzah/davey-android-arm64@0.1.12": {
-      "integrity": "sha512-0Bwd03/JsTFhlPhF4q/LW0RxSzntFpQdhz+TBdFljYSg8IEyA38saPJeTNjpIgDfhAumPzvhCdfS6O5qT8yXDw==",
-      "os": ["android"],
-      "cpu": ["arm64"]
-    },
-    "@snazzah/davey-darwin-arm64@0.1.12": {
-      "integrity": "sha512-lKMV6ITi9BQLt0fx/pAT7M8xcojVK7bryVJGdaW3bq8gABFslS3ti/KzrWabQvhpEV71FZe5mV0UcKHFVaTsZw==",
-      "os": ["darwin"],
-      "cpu": ["arm64"]
-    },
-    "@snazzah/davey-darwin-x64@0.1.12": {
-      "integrity": "sha512-vXXc/eW/e3TQeb7VsdtrPqs3/22j0aSqiP1ZXmZtDjQRBwgSxwItWYa6sh5MELP2EHB2igNlGzB6Hc0XlbGi4g==",
-      "os": ["darwin"],
-      "cpu": ["x64"]
-    },
-    "@snazzah/davey-freebsd-x64@0.1.12": {
-      "integrity": "sha512-G1gas5HrC4Xp3mRY0+OeAqXS6fG2tRgBEc8gQh69Hw4YK9RV9mzQKcmoKMkBM72U1+2C+2u57dolnKKzwozByQ==",
-      "os": ["freebsd"],
-      "cpu": ["x64"]
-    },
-    "@snazzah/davey-linux-arm-gnueabihf@0.1.12": {
-      "integrity": "sha512-97Fujh82r2Ll7dPZeNuoZ3yKfsqycf3c93OWXOo/ThNL/18Onl2Ht4SIvpX6VHhfeS9bDpHJ1lHCaz1b/i5ocw==",
-      "os": ["linux"],
-      "cpu": ["arm"]
-    },
-    "@snazzah/davey-linux-arm64-gnu@0.1.12": {
-      "integrity": "sha512-FWyAOv52cHKDM4BOsmImKKogHFvqNFoXmZcicNJbX3XpVl8Mas88ZoXQ+IA5V+qc9pNtAl1MbWwEZ9JrqAQtbg==",
-      "os": ["linux"],
-      "cpu": ["arm64"]
-    },
-    "@snazzah/davey-linux-arm64-musl@0.1.12": {
-      "integrity": "sha512-ptRbLSQxtV6EjXppS5z7qaPDI0NRKhrkJYsTlAjEghmOvlAObozSCYYnMO6nbkt6Ab3+lWqyahClzcRNcD2ouw==",
-      "os": ["linux"],
-      "cpu": ["arm64"]
-    },
-    "@snazzah/davey-linux-x64-gnu@0.1.12": {
-      "integrity": "sha512-w86fZvhJn0ErOoAQHt2UbQ95V/cgwvfvQ4GlTPQLCzt58nn+rLlXLgPn90qYlSQrZxFW38rKXwqVOMbm9p+pwQ==",
-      "os": ["linux"],
-      "cpu": ["x64"]
-    },
-    "@snazzah/davey-linux-x64-musl@0.1.12": {
-      "integrity": "sha512-LLNnO+hfG41ymeI+O1YHo5/0h3aKaetUNLdkBwpdJsjoyKMXZaeCnB+aHNkkupJCMPmWS0g6iPMCHUOqZSBcTg==",
-      "os": ["linux"],
-      "cpu": ["x64"]
-    },
-    "@snazzah/davey-wasm32-wasi@0.1.12_@emnapi+core@1.11.3_@emnapi+runtime@1.11.3": {
-      "integrity": "sha512-MPKFuqYVkDFXheR7qmtEY4FWxQ/ADfgsCojQWHi13sibUqCTR9q2F1LqNn2i9IVh3sh1sxeg87fdFMCH63pl7g==",
-      "dependencies": [
-        "@napi-rs/wasm-runtime"
-      ],
-      "cpu": ["wasm32"]
-    },
-    "@snazzah/davey-win32-arm64-msvc@0.1.12": {
-      "integrity": "sha512-Uf4OYHyfbXpzyaOqIV8/h6kv166Qni5+Bxmc1E/ov4uhhKO8qXbOky8zbVOzu0U4cv5ll3s4IQ8jDAJkx/K75Q==",
-      "os": ["win32"],
-      "cpu": ["arm64"]
-    },
-    "@snazzah/davey-win32-ia32-msvc@0.1.12": {
-      "integrity": "sha512-nRVbKTsb2ldcPI8D4BDA7P/UeiMEMvR+wYuUMp7H1pRD/3dF2hKo+MzUU+Pn78EhuYA3CWHItiAcS/GsPld67A==",
-      "os": ["win32"],
-      "cpu": ["ia32"]
-    },
-    "@snazzah/davey-win32-x64-msvc@0.1.12": {
-      "integrity": "sha512-AgUA3itPDVkxQq7RIkgE1thCiWePwWjyfOZefBBxGIlMWpRUOSwF4vY9kNLnrScyJcFULdR+Zm8PwiwV8/RKnw==",
-      "os": ["win32"],
-      "cpu": ["x64"]
-    },
-    "@snazzah/davey@0.1.12_@emnapi+core@1.11.3_@emnapi+runtime@1.11.3": {
-      "integrity": "sha512-V+NlX5931RwVamZhhEfZekMdcvXDKdMAmHW1AuGaykVQsNyBOq3bpmGpoKRBDCYgFWKIufJ0Dcg3m4cYhvUy6g==",
-      "optionalDependencies": [
-        "@snazzah/davey-android-arm-eabi",
-        "@snazzah/davey-android-arm64",
-        "@snazzah/davey-darwin-arm64",
-        "@snazzah/davey-darwin-x64",
-        "@snazzah/davey-freebsd-x64",
-        "@snazzah/davey-linux-arm-gnueabihf",
-        "@snazzah/davey-linux-arm64-gnu",
-        "@snazzah/davey-linux-arm64-musl",
-        "@snazzah/davey-linux-x64-gnu",
-        "@snazzah/davey-linux-x64-musl",
-        "@snazzah/davey-wasm32-wasi",
-        "@snazzah/davey-win32-arm64-msvc",
-        "@snazzah/davey-win32-ia32-msvc",
-        "@snazzah/davey-win32-x64-msvc"
-      ]
-    },
     "@stablelib/base64@1.0.1": {
       "integrity": "sha512-1bnPQqSxSuc3Ii6MhBysoWCg58j97aUjuCSZrGSmDxNqtytIi0k8utUenAwTZN4V5mXXYGsVUI9zeBqy+jBOSQ=="
-    },
-    "@tybys/wasm-util@0.10.3": {
-      "integrity": "sha512-F3fo1MYrRJYL3zER0OUOmkutjr1Vp23m7OsSgp7nq4SP6OqX6C/56XFIPAl5bt3zaBRjmW7SGz3u/6LwFpYcOg==",
-      "dependencies": [
-        "tslib"
-      ]
     },
     "@types/node@26.2.0": {
       "integrity": "sha512-5IviulTZeRNp2vAJ514cc/HUlY5nZ9fCbq9DMyC52BrhFZACo3nI0R7qBxhQmo/d27NFe96ur/b7Wwxklda+kg==",
@@ -749,9 +619,6 @@
         "wrappy"
       ]
     },
-    "opusscript@0.1.1": {
-      "integrity": "sha512-mL0fZZOUnXdZ78woRXp18lApwpp0lF5tozJOD1Wut0dgrA9WuQTgSels/CSmFleaAZrJi/nci5KOVtbuxeWoQA=="
-    },
     "parseurl@1.3.3": {
       "integrity": "sha512-CiyeOxFT/JZyN5m0z9PfXw4SCBJ6Sygz1Dpl0wqjlhDEGGBP1GnsUVEL0p63hoG1fcj3fHynXi9NYO4nWOL+qQ=="
     },
@@ -763,15 +630,6 @@
     },
     "pkce-challenge@5.0.1": {
       "integrity": "sha512-wQ0b/W4Fr01qtpHlqSqspcj3EhBvimsdh0KlHhH8HRZnMsEa0ea2fTULOXOS9ccQr3om+GcGRk4e+isrZWV8qQ=="
-    },
-    "prism-media@1.3.5_opusscript@0.1.1": {
-      "integrity": "sha512-IQdl0Q01m4LrkN1EGIE9lphov5Hy7WWlH6ulf5QdGePLlPas9p2mhgddTEHrlaXYjjFToM1/rWuwF37VF4taaA==",
-      "dependencies": [
-        "opusscript"
-      ],
-      "optionalPeers": [
-        "opusscript"
-      ]
     },
     "proxy-addr@2.0.7": {
       "integrity": "sha512-llQsMLSUDUPT44jdrU/O37qlnifitDP+ZwrmmZcoSKyLKvtZxpyV0n2/bD/N4tBAAZ/gJEdZU7KMraoK1+XYAg==",
@@ -956,17 +814,13 @@
   "workspace": {
     "dependencies": [
       "jsr:@hono/hono@4.13.1",
-      "jsr:@openai/openai@7.2.0",
       "jsr:@std/assert@1.0.19",
       "jsr:@std/front-matter@1.0.9",
       "jsr:@std/path@1.1.6",
       "npm:@anthropic-ai/claude-agent-sdk@0.3.226",
       "npm:@cfworker/json-schema@4.1.1",
-      "npm:@discordjs/voice@0.19.2",
-      "npm:@snazzah/davey@0.1.12",
       "npm:discord.js@14.27.0",
-      "npm:json-schema-to-ts@3.1.1",
-      "npm:opusscript@0.1.1"
+      "npm:json-schema-to-ts@3.1.1"
     ]
   }
 }

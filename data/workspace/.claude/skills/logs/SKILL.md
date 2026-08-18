@@ -117,15 +117,6 @@ curl -s 'http://127.0.0.1:3000/logs?limit=20'
 | `cron-loader`      | `cron/` 配下のジョブファイル読み込み・バリデーション（不正なジョブファイルのエラーはここに出る） |
 | `cron-scheduler`   | cron 式のマッチング・スケジュール評価              |
 
-### voice 層
-
-| namespace        | 内容                                       |
-| ----------------- | ------------------------------------------- |
-| `voice`           | VC 接続管理、auto-join / leave              |
-| `voice-adapter`   | Agent SDK ストリームから音声用テキストを逐次抽出するアダプタ |
-| `stt`             | 音声認識（whisper.cpp 呼び出し）            |
-| `tts`             | 音声合成（OpenAI 互換 TTS API 呼び出し）    |
-
 ### その他
 
 | namespace | 内容                                       |

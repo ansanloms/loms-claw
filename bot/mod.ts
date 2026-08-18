@@ -3,7 +3,6 @@
  *
  * messageCreate イベントを受け取り、認可チェックと反応判定を行い、
  * Claude Code CLI を呼び出して応答を返す。
- * ボイスチャンネル機能が有効な場合は VoiceManager を統合する。
  */
 
 import {
@@ -47,13 +46,7 @@ import {
   handleSettingsSet,
   handleSettingsShow,
   handleSettingsUnset,
-  handleVcJoin,
-  handleVcLeave,
 } from "./commands.ts";
-import { VoiceManager } from "../voice/mod.ts";
-import { WhisperStt } from "../voice/stt.ts";
-import { OpenAiTts } from "../voice/tts.ts";
-import { VoicePlayer } from "../voice/player.ts";
 import { startApiServer } from "../api/server.ts";
 import type { CronRouteContext } from "../api/routes/cron.ts";
 import type { SettingsRouteContext } from "../api/routes/settings.ts";
@@ -72,7 +65,6 @@ export class DiscordBot {
   private store: Store;
   private approvalManager: ApprovalManager;
   private apiServer: Deno.HttpServer | null = null;
-  private voiceManager: VoiceManager | null = null;
   private cronExecutor: CronExecutor | null = null;
   private systemPrompts: SystemPromptStore;
   /** scope (channel / thread) 単位でメッセージ処理を直列化するキュー。 */
@@ -90,49 +82,12 @@ export class DiscordBot {
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildMembers,
-        ...(config.voice.enabled ? [GatewayIntentBits.GuildVoiceStates] : []),
       ],
     });
     this.approvalManager = new ApprovalManager(
       this.client,
       join(config.claude.cwd, ".claude", "settings.json"),
     );
-
-    // ボイス機能の初期化。
-    if (config.voice.enabled) {
-      const stt = new WhisperStt({
-        baseUrl: config.voice.whisper.url,
-        noSpeechProbThreshold: config.voice.whisper.noSpeechProbThreshold,
-      });
-      const tts = new OpenAiTts({
-        baseUrl: config.voice.tts.url,
-        apiKey: config.voice.tts.apiKey,
-        model: config.voice.tts.model,
-        voice: config.voice.tts.speaker,
-        speed: config.voice.tts.speed,
-      });
-      const voicePlayer = new VoicePlayer(tts, config.voice.notificationTone);
-
-      this.voiceManager = new VoiceManager(
-        config.voice,
-        config.claude,
-        config.discord.guildId,
-        config.discord.token,
-        config.discord.userId,
-        this.client,
-        stt,
-        voicePlayer,
-        this.store,
-        this.approvalManager,
-        this.systemPrompts,
-      );
-
-      this.client.on(
-        Events.VoiceStateUpdate,
-        (oldState, newState) =>
-          this.voiceManager?.onVoiceStateUpdate(oldState, newState),
-      );
-    }
 
     this.client.on(Events.MessageCreate, (msg) => this.onMessage(msg));
     this.client.on(Events.InteractionCreate, (i) => this.onInteraction(i));
@@ -215,9 +170,6 @@ export class DiscordBot {
           cronCtx,
         );
 
-        // 起動時に auto-join 条件を満たす VC があれば参加する。
-        this.voiceManager?.scanAndAutoJoin();
-
         resolve();
       });
     });
@@ -230,12 +182,11 @@ export class DiscordBot {
   /**
    * bot をシャットダウンする。
    *
-   * VC 切断 → HTTP サーバー停止 → Discord クライアント破棄の順で処理し、
+   * HTTP サーバー停止 → Discord クライアント破棄の順で処理し、
    * クライアント破棄によりイベントループが自然終了する。
    */
   shutdown(): void {
     log.info("shutting down");
-    this.voiceManager?.shutdown();
     this.cronExecutor?.stop();
     // TODO: WebSocket/SSE 追加時は shutdown() を async にして await すること
     this.apiServer?.shutdown().catch((e) =>
@@ -353,24 +304,6 @@ export class DiscordBot {
     const group = interaction.options.getSubcommandGroup();
     const sub = interaction.options.getSubcommand();
 
-    // /claw vc <sub>
-    if (group === "vc") {
-      if (!this.voiceManager) {
-        await interaction.reply({
-          content: "Voice feature is not enabled.",
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-      if (sub === "join") {
-        return handleVcJoin(interaction, this.voiceManager);
-      }
-      if (sub === "leave") {
-        return handleVcLeave(interaction, this.voiceManager);
-      }
-      return;
-    }
-
     // /claw settings <sub>
     if (group === "settings") {
       if (sub === "show") {
@@ -378,7 +311,6 @@ export class DiscordBot {
           store: this.store,
           defaults: this.config.claude.defaults,
           cronExecutor: this.cronExecutor,
-          voiceManager: this.voiceManager,
           activeChannelIds: this.config.discord.activeChannelIds,
         });
       }

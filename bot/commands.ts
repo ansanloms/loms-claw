@@ -8,7 +8,6 @@
  */
 
 import {
-  ChannelType,
   type ChatInputCommandInteraction,
   MessageFlags,
   SlashCommandBuilder,
@@ -21,9 +20,7 @@ import type {
   Store,
   StoreScope,
 } from "../store/mod.ts";
-import type { VoiceManager } from "../voice/mod.ts";
 import { createLogger } from "../logger.ts";
-import { getErrorMessage } from "../errors.ts";
 import { resolveActive } from "./guard.ts";
 
 const log = createLogger("commands");
@@ -64,7 +61,7 @@ export const command = new SlashCommandBuilder()
         sub
           .setName("show")
           .setDescription(
-            "Show channel settings (channel config, defaults, cron, VC)",
+            "Show channel settings (channel config, defaults, cron)",
           )
       )
       .addSubcommand((sub) =>
@@ -116,71 +113,7 @@ export const command = new SlashCommandBuilder()
               .addChoices(...UNSET_TARGET_CHOICES)
           )
       )
-  )
-  .addSubcommandGroup((group) =>
-    group
-      .setName("vc")
-      .setDescription("Voice channel operations")
-      .addSubcommand((sub) =>
-        sub
-          .setName("join")
-          .setDescription("Join the voice channel")
-      )
-      .addSubcommand((sub) =>
-        sub
-          .setName("leave")
-          .setDescription("Leave the voice channel")
-      )
   );
-
-/**
- * /claw vc join — ユーザーが居る VC に参加する。
- */
-export async function handleVcJoin(
-  interaction: ChatInputCommandInteraction,
-  voiceManager: VoiceManager,
-): Promise<void> {
-  if (interaction.channel?.type !== ChannelType.GuildVoice) {
-    await interaction.reply({
-      content: "Please run this from a VC text chat.",
-      flags: MessageFlags.Ephemeral,
-    });
-    return;
-  }
-
-  await interaction.deferReply();
-  try {
-    await voiceManager.join(interaction.channelId);
-    await interaction.editReply("Joined VC.");
-  } catch (e: unknown) {
-    const msg = getErrorMessage(e);
-    log.error("failed to join VC:", msg);
-    await interaction.editReply(`Failed to join VC: ${msg}`);
-  }
-}
-
-/**
- * /claw vc leave — 現在の VC から離脱する。
- */
-export async function handleVcLeave(
-  interaction: ChatInputCommandInteraction,
-  voiceManager: VoiceManager,
-): Promise<void> {
-  const isVoiceChannel = interaction.channel?.type === ChannelType.GuildVoice;
-  if (
-    !isVoiceChannel ||
-    interaction.channelId !== voiceManager.getCurrentChannelId()
-  ) {
-    await interaction.reply({
-      content: "Please run this from the text chat of the VC I'm in.",
-      flags: MessageFlags.Ephemeral,
-    });
-    return;
-  }
-
-  voiceManager.leave();
-  await interaction.reply("Left VC.");
-}
 
 /**
  * /claw settings show — bot 全体のステータスを表示する。
@@ -189,7 +122,6 @@ export async function handleVcLeave(
  *   - 現チャンネルの session / model / effort / active (source 付き)
  *   - グローバルデフォルト (env)
  *   - cron ジョブ数 + 名前一覧
- *   - VC 接続状態 (有効時のみ)
  */
 export async function handleSettingsShow(
   interaction: ChatInputCommandInteraction,
@@ -197,7 +129,6 @@ export async function handleSettingsShow(
     store: Store;
     defaults: ClaudeDefaults;
     cronExecutor: CronExecutor | null;
-    voiceManager: VoiceManager | null;
     activeChannelIds: string[];
   },
 ): Promise<void> {
@@ -263,17 +194,6 @@ export async function handleSettingsShow(
     }
   } else {
     lines.push("**Cron:** not initialized");
-  }
-
-  // VC
-  if (deps.voiceManager) {
-    lines.push("");
-    const vcChannelId = deps.voiceManager.getCurrentChannelId();
-    lines.push(
-      `**Voice:** ${
-        vcChannelId ? `connected to ${vcChannelId}` : "not connected"
-      }`,
-    );
   }
 
   await interaction.reply({

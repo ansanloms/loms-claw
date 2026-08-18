@@ -27,7 +27,7 @@ bot はスコープ（チャンネル、またはスレッド）単位で **sess
 ユーザから「重いモデルに切り替えたい」「会話履歴をリセットしたい」「このチャンネルを mention 無しで反応させたい」等の依頼が
 来たら、以下のコマンドを案内するか、内部 API 経由で直接操作しろ。**実行した場所（チャンネルかスレッドか）のスコープにのみ書き込まれる**（スレッド内で叩いても親チャンネルの設定は変わらない）。
 
-- `/claw settings show` — 現在のスコープの設定 / グローバルデフォルト / cron 一覧 / VC 状態を ephemeral 表示
+- `/claw settings show` — 現在のスコープの設定 / グローバルデフォルト / cron 一覧を ephemeral 表示
 - `/claw settings set [model:<opus|sonnet|haiku>] [effort:<low|medium|high|xhigh|max>] [show_thinking:<true|false>] [active:<true|false>]` — 実行したスコープで上書き設定（いずれか 1 つだけでも可）
 - `/claw settings unset target:<model|effort|show_thinking|active|session>` — 実行したスコープの設定を削除（デフォルトに戻す）
 

@@ -4,7 +4,7 @@
   "description": "Discord + Claude Code CLI パーソナル AI エージェントのアプリケーション設定。",
   "type": "object",
   "additionalProperties": false,
-  "required": ["discord", "storePath", "claude", "voice", "log"],
+  "required": ["discord", "storePath", "claude", "log"],
   "properties": {
     "$schema": {
       "type": "string",
@@ -92,121 +92,6 @@
               "description": "thinking（推論）を Discord に表示するか。チャンネル / スレッド単位の上書きが無いときに使われるグローバルデフォルト。/claw settings set show_thinking で per-scope に上書きできる。true のとき、ストリームに流れてきた thinking ブロックを引用形式で投稿する。thinking が流れるかは model / effort 依存（effort: low 等では出ないことがある）。"
             }
           }
-        }
-      }
-    },
-    "voice": {
-      "type": "object",
-      "description": "ボイスチャンネル機能関連の設定（VC 参加・STT・TTS）。",
-      "default": {},
-      "additionalProperties": false,
-      "required": [
-        "enabled",
-        "whisper",
-        "tts",
-        "minSpeechMs",
-        "speechRms",
-        "interruptRms",
-        "autoLeaveMs",
-        "speechDebounceMs",
-        "notificationTone",
-        "autoJoinVc"
-      ],
-      "properties": {
-        "enabled": {
-          "type": "boolean",
-          "default": false,
-          "description": "VC 機能の有効/無効。false の場合 `voice.*` 以下の設定は使用されない。"
-        },
-        "whisper": {
-          "type": "object",
-          "description": "whisper.cpp（STT）サーバー設定。",
-          "default": {},
-          "additionalProperties": false,
-          "required": ["url", "noSpeechProbThreshold"],
-          "properties": {
-            "url": {
-              "type": "string",
-              "default": "http://localhost:8178",
-              "description": "whisper.cpp HTTP サーバーの URL。"
-            },
-            "noSpeechProbThreshold": {
-              "type": "number",
-              "default": 0.6,
-              "description": "whisper の no_speech_prob 閾値。全セグメントがこの値以上なら無音と判定し破棄する（ハルシネーション対策）。"
-            }
-          }
-        },
-        "tts": {
-          "type": "object",
-          "description": "TTS（OpenAI 互換 API）サーバー設定。",
-          "default": {},
-          "additionalProperties": false,
-          "required": ["url", "model", "speaker", "speed"],
-          "properties": {
-            "url": {
-              "type": "string",
-              "default": "http://localhost:8000",
-              "description": "TTS サーバーの URL（OpenAI 互換、例: voicevox-openai-tts）。"
-            },
-            "apiKey": {
-              "type": "string",
-              "description": "TTS API キー（不要な場合は省略）。"
-            },
-            "model": {
-              "type": "string",
-              "default": "voicevox",
-              "description": "TTS モデル名。"
-            },
-            "speaker": {
-              "type": "string",
-              "default": "1",
-              "description": "TTS スピーカー/音声 ID。"
-            },
-            "speed": {
-              "type": "number",
-              "default": 1,
-              "description": "TTS 再生速度（1.0 が等倍）。"
-            }
-          }
-        },
-        "minSpeechMs": {
-          "type": "number",
-          "default": 500,
-          "description": "STT に送る最小発話時間（ミリ秒）。これより短い発話は無視。"
-        },
-        "speechRms": {
-          "type": "number",
-          "default": 200,
-          "description": "発話とみなす最小 RMS 振幅。これ未満の音はノイズ扱い。"
-        },
-        "interruptRms": {
-          "type": "number",
-          "default": 500,
-          "description": "AI 再生を中断する最小 RMS 振幅。ユーザーの割り込みを検知する閾値。"
-        },
-        "autoLeaveMs": {
-          "type": "number",
-          "default": 600000,
-          "description": "無人 VC からの自動退出タイムアウト（ミリ秒）。-1 で無効。"
-        },
-        "speechDebounceMs": {
-          "type": "number",
-          "default": 500,
-          "description": "発話デバウンス待機時間（ミリ秒）。同一ユーザーの連続発話をこの間マージする。"
-        },
-        "notificationTone": {
-          "type": "boolean",
-          "default": true,
-          "description": "処理中・エラー通知トーンの有効/無効。"
-        },
-        "autoJoinVc": {
-          "anyOf": [
-            { "type": "boolean" },
-            { "type": "array", "items": { "type": "string" } }
-          ],
-          "default": false,
-          "description": "auto-join 設定。false=無効、true=全 VC、文字列配列=指定した VC ID のみ。"
         }
       }
     },

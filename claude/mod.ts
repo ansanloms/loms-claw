@@ -120,7 +120,7 @@ export function extractResultText(event: SDKResultMessage): string {
  * その差分テキストを返す。それ以外のイベントは `undefined` を返す。
  *
  * `parent_tool_use_id` が falsy (null / undefined / 未設定) ならトップレベル。
- * chat / voice のストリーミング処理で重複していた抽出ガードを共通化する。
+ * ストリーミング処理で重複していた抽出ガードを共通化する。
  */
 export function extractTopLevelTextDelta(
   event: SDKMessage,

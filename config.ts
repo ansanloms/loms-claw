@@ -46,58 +46,6 @@ export interface ClaudeConfig {
 }
 
 /**
- * whisper.cpp (STT) 設定。
- */
-export interface WhisperConfig {
-  /** whisper.cpp サーバーの URL。 */
-  url: string;
-  /** no_speech_prob 閾値。全セグメントがこの値以上なら無音と判定。 */
-  noSpeechProbThreshold: number;
-}
-
-/**
- * TTS (OpenAI 互換) 設定。
- */
-export interface TtsConfig {
-  /** TTS サーバーの URL（OpenAI 互換）。 */
-  url: string;
-  /** TTS API キー。 */
-  apiKey?: string;
-  /** TTS モデル名。 */
-  model: string;
-  /** TTS スピーカー/音声 ID。 */
-  speaker: string;
-  /** TTS 再生速度。 */
-  speed: number;
-}
-
-/**
- * ボイスチャンネル関連の設定。
- */
-export interface VoiceConfig {
-  /** VC 機能の有効/無効。 */
-  enabled: boolean;
-  /** whisper.cpp (STT) 設定。 */
-  whisper: WhisperConfig;
-  /** TTS 設定。 */
-  tts: TtsConfig;
-  /** STT に送る最小発話時間（ミリ秒）。 */
-  minSpeechMs: number;
-  /** 発話とみなす最小 RMS 振幅。 */
-  speechRms: number;
-  /** AI 再生を中断する最小 RMS 振幅。 */
-  interruptRms: number;
-  /** 無人 VC からの自動退出タイムアウト（ミリ秒）。-1 で無効。 */
-  autoLeaveMs: number;
-  /** 発話デバウンス待機時間（ミリ秒）。 */
-  speechDebounceMs: number;
-  /** 通知トーン（処理中・エラー）の有効/無効。 */
-  notificationTone: boolean;
-  /** auto-join: false=無効, true=全VC, string[]=指定VC IDのみ。 */
-  autoJoinVc: false | true | string[];
-}
-
-/**
  * ロガー設定。
  */
 export interface LogConfig {
@@ -131,8 +79,6 @@ export interface Config {
   storePath: string;
   /** Claude 呼び出し (Agent SDK query()) 設定。 */
   claude: ClaudeConfig;
-  /** ボイスチャンネル設定。 */
-  voice: VoiceConfig;
   /** ロガー設定。 */
   log: LogConfig;
 }

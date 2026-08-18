@@ -68,40 +68,6 @@ Deno.test("SystemPromptStore", async (t) => {
     },
   );
 
-  await t.step(
-    "vc コンテキストで DEFAULT.md + VC.md が結合されること",
-    async () => {
-      await withTempDir(async (dir) => {
-        await writeFile(dir, "DEFAULT.md", "default");
-        await writeFile(dir, "VC.md", "vc specific");
-        const store = new SystemPromptStore(dir);
-        await store.load();
-        assertEquals(
-          store.resolve("vc", ch("ch-1")),
-          "default\n\nvc specific",
-        );
-      });
-    },
-  );
-
-  await t.step("chat コンテキストで VC.md は読まれないこと", async () => {
-    await withTempDir(async (dir) => {
-      await writeFile(dir, "VC.md", "vc only");
-      const store = new SystemPromptStore(dir);
-      await store.load();
-      assertEquals(store.resolve("chat", ch("ch-1")), undefined);
-    });
-  });
-
-  await t.step("vc コンテキストで CHAT.md は読まれないこと", async () => {
-    await withTempDir(async (dir) => {
-      await writeFile(dir, "CHAT.md", "chat only");
-      const store = new SystemPromptStore(dir);
-      await store.load();
-      assertEquals(store.resolve("vc", ch("ch-1")), undefined);
-    });
-  });
-
   await t.step("チャンネル ID ファイルが結合されること", async () => {
     await withTempDir(async (dir) => {
       await writeFile(dir, "DEFAULT.md", "default");
@@ -118,13 +84,13 @@ Deno.test("SystemPromptStore", async (t) => {
   await t.step("全 3 種のファイルが順序通りに結合されること", async () => {
     await withTempDir(async (dir) => {
       await writeFile(dir, "DEFAULT.md", "default");
-      await writeFile(dir, "VC.md", "vc");
+      await writeFile(dir, "CHAT.md", "chat");
       await writeFile(dir, "ch-456.md", "channel");
       const store = new SystemPromptStore(dir);
       await store.load();
       assertEquals(
-        store.resolve("vc", ch("ch-456")),
-        "default\n\nvc\n\nchannel",
+        store.resolve("chat", ch("ch-456")),
+        "default\n\nchat\n\nchannel",
       );
     });
   });
@@ -185,11 +151,10 @@ Deno.test("SystemPromptStore", async (t) => {
   );
 
   await t.step(
-    "cron コンテキストで CHAT.md や VC.md は読まれないこと",
+    "cron コンテキストで CHAT.md は読まれないこと",
     async () => {
       await withTempDir(async (dir) => {
         await writeFile(dir, "CHAT.md", "chat only");
-        await writeFile(dir, "VC.md", "vc only");
         const store = new SystemPromptStore(dir);
         await store.load();
         assertEquals(store.resolve("cron", ch("ch-1")), undefined);
