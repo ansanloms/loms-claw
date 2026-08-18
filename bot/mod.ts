@@ -27,7 +27,14 @@ import {
 import type { Store, StoreScope } from "../store/mod.ts";
 import { ApprovalManager, createCanUseTool } from "../approval/manager.ts";
 import { command } from "./commands.ts";
-import { isAuthorized, shouldRespond } from "./guard.ts";
+import {
+  isAuthorized,
+  isAuthorizedSelfMessage,
+  parseHopMarker,
+  shouldRespond,
+  shouldRespondToSelf,
+} from "./guard.ts";
+import { SelfMentionRateLimiter } from "./ratelimit.ts";
 import { ScopeQueue } from "./queue.ts";
 import {
   appendImageReferences,
@@ -69,10 +76,16 @@ export class DiscordBot {
   private systemPrompts: SystemPromptStore;
   /** scope (channel / thread) 単位でメッセージ処理を直列化するキュー。 */
   private chatQueue = new ScopeQueue();
+  /** 自己メンション応答のレート制限 (bot 全体のスライディングウィンドウ)。 */
+  private selfMentionLimiter: SelfMentionRateLimiter;
 
   constructor(config: Config, store: Store) {
     this.config = config;
     this.store = store;
+    this.selfMentionLimiter = new SelfMentionRateLimiter(
+      config.discord.selfMention.rateLimit.maxCount,
+      config.discord.selfMention.rateLimit.windowMinutes,
+    );
     this.systemPrompts = new SystemPromptStore(
       join(config.claude.cwd, ".claude", "system-prompt"),
     );
@@ -83,6 +96,11 @@ export class DiscordBot {
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildMembers,
       ],
+      // bot 自身の投稿本文に `<@botId>` と `[hop:N]` が紛れても自己メンション
+      // 連鎖の発火条件を満たさないよう、送信時のメンション解決を既定で無効化
+      // する。メンションが必要な送信箇所は per-send の allowedMentions で
+      // 明示許可する（sendChunks の発話者宛てピング等）。
+      allowedMentions: { parse: [] },
     });
     this.approvalManager = new ApprovalManager(
       this.client,
@@ -328,13 +346,22 @@ export class DiscordBot {
    * メッセージ受信時のメインハンドラ。
    */
   private async onMessage(message: Message): Promise<void> {
-    // bot 自身のメッセージは無視
-    if (message.author.id === this.client.user?.id) {
-      return;
-    }
-
-    // 認可チェック
-    if (
+    // bot 自身のメッセージは、自己メンション機能が有効な場合のみ条件付きで処理する。
+    // 他の bot / 他ユーザーは従来どおり isAuthorized() で判定する。
+    const botUserId = this.client.user?.id ?? null;
+    const isSelfMessage = botUserId !== null && message.author.id === botUserId;
+    if (isSelfMessage) {
+      if (
+        !isAuthorizedSelfMessage(
+          message.guildId,
+          message.author.id,
+          botUserId,
+          this.config,
+        )
+      ) {
+        return;
+      }
+    } else if (
       !isAuthorized(
         message.guildId,
         message.author.id,
@@ -366,7 +393,20 @@ export class DiscordBot {
       : false;
     const hasNonBotMentions = message.mentions.users.some((u) => !u.bot);
     const activeOverride = await this.store.getActive(scope);
-    if (
+    const hop = isSelfMessage ? parseHopMarker(message.content) : null;
+    if (isSelfMessage) {
+      const { maxHops } = this.config.discord.selfMention;
+      if (!shouldRespondToSelf(isMentioned, hop, maxHops, activeOverride)) {
+        return;
+      }
+      // 全チェック通過後にのみレート枠を消費する（拒否されるメッセージで枠を浪費しない）。
+      if (!this.selfMentionLimiter.tryConsume()) {
+        log.warn(
+          `self-mention rate limit exceeded, ignoring message in ${message.channelId}`,
+        );
+        return;
+      }
+    } else if (
       !shouldRespond(
         message.channelId,
         this.config.discord.activeChannelIds,
@@ -388,6 +428,16 @@ export class DiscordBot {
       );
     }
     prompt = prompt.trim();
+
+    // 自己メンション起動時は、連鎖の続け方（ホップ増分）と上限をプロンプトに明示する。
+    // [hop:N] マーカー自体は cleanContent に残っているため、ここでは案内のみ追記する。
+    if (isSelfMessage && hop !== null) {
+      const { maxHops } = this.config.discord.selfMention;
+      prompt +=
+        `\n\n(AI to AI 連鎖: 現在 hop ${hop}/${maxHops}。さらに別チャンネル/スレッドへ依頼する場合は、送信メッセージに [hop:${
+          hop + 1
+        }] を含めること。上限に達している場合は新たな bot メンションを行わないこと。)`;
+    }
 
     const hasAttachments = message.attachments.size > 0;
 
@@ -430,14 +480,25 @@ export class DiscordBot {
       // 応答は発言者宛にする: 分割後のすべての投稿の先頭にメンションを付ける。
       // メンション分を引いた上限で分割してから各チャンク先頭に付与することで、
       // どのチャンクでも上限ぎりぎりでメンション分が溢れない（2000 字超過しない）。
-      const mention = `<@${message.author.id}> `;
+      // 自己メッセージ起動時は空文字にする: 応答冒頭に自 bot メンションを付けると、
+      // 応答自体が再度メンション条件を満たし連鎖の火種になるため。
+      const mention = isSelfMessage ? "" : `<@${message.author.id}> `;
       const sendChunks = async (text: string): Promise<void> => {
         const chunks = splitMessage(
           text,
           DISCORD_MESSAGE_LIMIT - mention.length,
         );
         for (const chunk of chunks) {
-          await channel.send(mention + chunk);
+          // 人間宛て応答 (mention が空でない) は発話者へのピングを維持する
+          // 必要があるため、Client 既定の allowedMentions.parse:[] を per-send
+          // で明示上書きする。自己メッセージ起動時 (mention === "") は
+          // 既定の全抑制のままでよい。
+          await (mention
+            ? channel.send({
+              content: mention + chunk,
+              allowedMentions: { users: [message.author.id] },
+            })
+            : channel.send(mention + chunk));
         }
       };
 

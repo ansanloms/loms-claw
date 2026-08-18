@@ -56,6 +56,28 @@ export interface LogConfig {
 }
 
 /**
+ * 自己メンション応答のレート制限設定。
+ */
+export interface SelfMentionRateLimitConfig {
+  /** ウィンドウ内で許可する自己メンション応答の最大回数。 */
+  maxCount: number;
+  /** レート制限ウィンドウの長さ（分）。 */
+  windowMinutes: number;
+}
+
+/**
+ * AI to AI 自己メンション機能の設定。
+ */
+export interface SelfMentionConfig {
+  /** 自己メンションへの応答を有効にするか。 */
+  enabled: boolean;
+  /** 連鎖の最大ホップ数。 */
+  maxHops: number;
+  /** レート制限設定。 */
+  rateLimit: SelfMentionRateLimitConfig;
+}
+
+/**
  * Discord 接続・認可関連の設定。
  */
 export interface DiscordConfig {
@@ -67,6 +89,8 @@ export interface DiscordConfig {
   userId: string;
   /** mention 不要で全メッセージに反応するチャンネル ID の配列。 */
   activeChannelIds: string[];
+  /** AI to AI 自己メンション機能の設定。 */
+  selfMention: SelfMentionConfig;
 }
 
 /**

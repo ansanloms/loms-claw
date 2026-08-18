@@ -145,8 +145,9 @@ logger.ts              名前空間付き軽量ロガー。`initLogger({ level, 
 errors.ts              getErrorMessage(): unknown なエラー値からメッセージを取り出す共通ユーティリティ。
 bot/mod.ts             DiscordBot クラス。messageCreate ハンドラ、start/shutdown。
 bot/commands.ts        スラッシュコマンド定義とハンドラ（/claw settings show|set|unset で model/effort/show_thinking/active/session を操作）。
-bot/guard.ts           isAuthorized(): ギルド ID + ユーザー ID + bot 除外の認可チェック。resolveActive(): per-scope の active 上書き (KV) と config の activeChannelIds を解決する共通ロジック。shouldRespond(): resolveActive() の結果 + mention / スレッドによる反応判定。
+bot/guard.ts           isAuthorized(): ギルド ID + ユーザー ID + bot 除外の認可チェック。resolveActive(): per-scope の active 上書き (KV) と config の activeChannelIds を解決する共通ロジック。shouldRespond(): resolveActive() の結果 + mention / スレッドによる反応判定。isAuthorizedSelfMessage() / parseHopMarker() / shouldRespondToSelf(): AI to AI 自己メンション機能の認可・ホップマーカー抽出・反応判定。
 bot/queue.ts           ScopeQueue: scope (localId) 単位でメッセージ処理を直列化するキュー。応答中の scope に届いた次のメッセージを現在のターン終了後に処理する (並行 query と session 競合の防止)。
+bot/ratelimit.ts       SelfMentionRateLimiter: 自己メンション応答用のスライディングウィンドウレートリミッタ (bot 全体、Temporal ベース)。
 bot/message.ts         splitMessage(): 2000 文字分割。keepTyping(): typing インジケーター維持。ProgressReporter: ツール進捗表示。
 claude/mod.ts          askClaude(): Agent SDK の query() を呼び出し SDKMessage ストリームを逐次 yield。buildQueryOptions() / normalizeEffort()。テストは queryFn DI でモック。
 claude/system-prompt.ts  SystemPromptStore: .claude/system-prompt/ 配下を起動時に読み込み、コンテキスト (chat/cron) とスコープ (channelId/threadId) に応じて結合。
@@ -310,6 +311,32 @@ cron ジョブ用のシステムプロンプトは `.claude/system-prompt/CRON.m
 8. Store から解決した `showThinking` が `true` のとき、`thinking_delta`（推論）を `>` 引用形式で投稿（メンション無し）。thinking が流れるかは model / effort 依存
 9. `Store` にスコープ単位で session ID を保存（次回 `query()` の `options.resume` で継続。thread と channel の session は独立）
 10. `splitMessage()` で応答を分割送信
+
+### AI to AI 自己メンション
+
+bot 自身が別チャンネル/スレッドで自分自身をメンションすると、そのスコープの独立セッションで応答する。`discord.selfMention.enabled`（既定 `false`）で有効化する。
+
+発火条件（すべて必須、fail-closed）:
+
+- 自 bot の user ID のみ許可。他 bot のメッセージは引き続き拒否する
+- 明示的な bot メンションが必要
+- メッセージ本文に `[hop:N]` マーカーが必要。マーカー無しの自己メッセージは無視する。active channel の全メッセージ反応（mention 不要）は自己メッセージには適用されない
+
+連鎖制御:
+
+- `maxHops`（既定 3）: `[hop:N]` の N がこの値を超える場合は応答しない
+- bot 全体のスライディングウィンドウレート制限（`rateLimit.maxCount` 回 / `rateLimit.windowMinutes` 分、既定 6 回 / 10 分）。超過時は無視して WARN ログを出す
+- 応答プロンプトには「現在 hop N/maxHops。続ける場合は `[hop:N+1]` を含めること」という案内が自動追記される
+- bot プロセスが送信するメッセージは Client 既定の `allowedMentions: { parse: [] }` によりメンション解決が既定で無効化されており、応答本文に `<@botId>` と `[hop:N]` が紛れても自己メンションの発火条件を満たさない（人間宛て応答のピングのみ per-send で明示許可）
+
+kill switch:
+
+- `discord.selfMention.enabled: false`（config 変更のため再起動が必要）
+- スコープの `/claw settings set active:false` による per-scope の停止。自己メッセージは `activeOverride` が明示的に `false` のとき無視される
+
+応答には発話者メンションプレフィックスを付けない（応答自体が再度メンション条件を満たし連鎖の火種になるのを防ぐため）。
+
+使い方: 依頼元のセッションが Discord REST API（`discord` skill）で対象チャンネル/スレッドに `<@{bot の user ID}> 依頼内容 [hop:1]` を投稿する。
 
 ### スコープと設定の解決
 
