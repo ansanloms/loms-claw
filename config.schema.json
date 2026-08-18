@@ -14,7 +14,13 @@
       "type": "object",
       "description": "Discord 接続・認可関連の設定。",
       "additionalProperties": false,
-      "required": ["token", "guildId", "userId", "activeChannelIds"],
+      "required": [
+        "token",
+        "guildId",
+        "userId",
+        "activeChannelIds",
+        "selfMention"
+      ],
       "properties": {
         "token": {
           "type": "string",
@@ -36,6 +42,47 @@
           "items": { "type": "string" },
           "default": [],
           "description": "mention 不要で全メッセージに反応するチャンネル ID の静的なベースライン配列。空配列なら全チャンネルで bot への mention が必要。/claw settings set active または PATCH /settings/{id} による per-scope の上書きが、この配列による判定より優先される。"
+        },
+        "selfMention": {
+          "type": "object",
+          "description": "AI to AI 自己メンション機能の設定。bot 自身のメッセージ（別スコープからの自己メンション）による応答起動を制御する。",
+          "default": {},
+          "additionalProperties": false,
+          "required": ["enabled", "maxHops", "rateLimit"],
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": false,
+              "description": "自己メンションへの応答を有効にするか。false なら bot 自身のメッセージは常に無視する。"
+            },
+            "maxHops": {
+              "type": "number",
+              "default": 3,
+              "minimum": 1,
+              "description": "連鎖の最大ホップ数。メッセージ内の [hop:N] マーカーの N がこの値を超える場合は応答しない。"
+            },
+            "rateLimit": {
+              "type": "object",
+              "description": "自己メンション応答のレート制限（bot 全体のスライディングウィンドウ）。",
+              "default": {},
+              "additionalProperties": false,
+              "required": ["maxCount", "windowMinutes"],
+              "properties": {
+                "maxCount": {
+                  "type": "number",
+                  "default": 6,
+                  "minimum": 1,
+                  "description": "ウィンドウ内で許可する自己メンション応答の最大回数。"
+                },
+                "windowMinutes": {
+                  "type": "number",
+                  "default": 10,
+                  "minimum": 1,
+                  "description": "レート制限ウィンドウの長さ（分）。"
+                }
+              }
+            }
+          }
         }
       }
     },

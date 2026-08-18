@@ -4,7 +4,12 @@
     "token": "",
     "guildId": "",
     "userId": "",
-    "activeChannelIds": []
+    "activeChannelIds": [],
+    "selfMention": {
+      "enabled": false,
+      "maxHops": 3,
+      "rateLimit": { "maxCount": 6, "windowMinutes": 10 }
+    }
   },
   "storePath": "loms-claw.kv",
   "claude": {

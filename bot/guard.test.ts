@@ -1,5 +1,12 @@
 import { assertEquals } from "@std/assert";
-import { isAuthorized, resolveActive, shouldRespond } from "./guard.ts";
+import {
+  isAuthorized,
+  isAuthorizedSelfMessage,
+  parseHopMarker,
+  resolveActive,
+  shouldRespond,
+  shouldRespondToSelf,
+} from "./guard.ts";
 import type { Config } from "../config.ts";
 
 const baseConfig: Config = {
@@ -8,6 +15,11 @@ const baseConfig: Config = {
     guildId: "guild-1",
     userId: "user-1",
     activeChannelIds: [],
+    selfMention: {
+      enabled: true,
+      maxHops: 3,
+      rateLimit: { maxCount: 6, windowMinutes: 10 },
+    },
   },
   storePath: "/tmp/test-loms-claw.kv",
   claude: {
@@ -363,4 +375,127 @@ Deno.test("resolveActive", async (t) => {
       );
     },
   );
+});
+
+Deno.test("isAuthorizedSelfMessage", async (t) => {
+  await t.step(
+    "enabled + 自 bot ID + 正しいギルドで許可されること",
+    () => {
+      assertEquals(
+        isAuthorizedSelfMessage("guild-1", "bot-1", "bot-1", baseConfig),
+        true,
+      );
+    },
+  );
+
+  await t.step("selfMention.enabled が false の場合は拒否されること", () => {
+    const config: Config = {
+      ...baseConfig,
+      discord: {
+        ...baseConfig.discord,
+        selfMention: { ...baseConfig.discord.selfMention, enabled: false },
+      },
+    };
+    assertEquals(
+      isAuthorizedSelfMessage("guild-1", "bot-1", "bot-1", config),
+      false,
+    );
+  });
+
+  await t.step("異なるギルドは拒否されること", () => {
+    assertEquals(
+      isAuthorizedSelfMessage("guild-other", "bot-1", "bot-1", baseConfig),
+      false,
+    );
+  });
+
+  await t.step("guildId が null (DM) の場合は拒否されること", () => {
+    assertEquals(
+      isAuthorizedSelfMessage(null, "bot-1", "bot-1", baseConfig),
+      false,
+    );
+  });
+
+  await t.step(
+    "authorId が botUserId と異なる (他 bot) 場合は拒否されること",
+    () => {
+      assertEquals(
+        isAuthorizedSelfMessage("guild-1", "other-bot", "bot-1", baseConfig),
+        false,
+      );
+    },
+  );
+
+  await t.step("botUserId が null の場合は拒否されること", () => {
+    assertEquals(
+      isAuthorizedSelfMessage("guild-1", "bot-1", null, baseConfig),
+      false,
+    );
+  });
+});
+
+Deno.test("parseHopMarker", async (t) => {
+  await t.step("[hop:1] から 1 が取れること", () => {
+    assertEquals(parseHopMarker("[hop:1]"), 1);
+  });
+
+  await t.step("本文中の [hop:2] から 2 が取れること", () => {
+    assertEquals(parseHopMarker("依頼本文 [hop:2] 続き"), 2);
+  });
+
+  await t.step("マーカーが無い場合は null であること", () => {
+    assertEquals(parseHopMarker("マーカー無しの本文"), null);
+  });
+
+  await t.step("[hop:0] は null であること", () => {
+    assertEquals(parseHopMarker("[hop:0]"), null);
+  });
+
+  await t.step("[hop:abc] は null であること", () => {
+    assertEquals(parseHopMarker("[hop:abc]"), null);
+  });
+
+  await t.step("負数マーカーは null であること", () => {
+    assertEquals(parseHopMarker("[hop:-1]"), null);
+  });
+
+  await t.step("複数マーカーは最初の正規表現一致を採用すること", () => {
+    assertEquals(parseHopMarker("[hop:2] [hop:5]"), 2);
+    assertEquals(parseHopMarker("[hop:0] [hop:5]"), null);
+    assertEquals(parseHopMarker("[hop:abc] [hop:2]"), 2);
+  });
+});
+
+Deno.test("shouldRespondToSelf", async (t) => {
+  await t.step("メンション + 有効な hop なら true であること", () => {
+    assertEquals(shouldRespondToSelf(true, 1, 3, undefined), true);
+  });
+
+  await t.step("メンション無しは false であること", () => {
+    assertEquals(shouldRespondToSelf(false, 1, 3, undefined), false);
+  });
+
+  await t.step("hop が null (マーカー無し) は false であること", () => {
+    assertEquals(shouldRespondToSelf(true, null, 3, undefined), false);
+  });
+
+  await t.step("hop が maxHops 超過は false であること", () => {
+    assertEquals(shouldRespondToSelf(true, 4, 3, undefined), false);
+  });
+
+  await t.step(
+    "activeOverride が false は false であること (kill switch)",
+    () => {
+      assertEquals(shouldRespondToSelf(true, 1, 3, false), false);
+    },
+  );
+
+  await t.step("activeOverride が true / undefined は通ること", () => {
+    assertEquals(shouldRespondToSelf(true, 1, 3, true), true);
+    assertEquals(shouldRespondToSelf(true, 1, 3, undefined), true);
+  });
+
+  await t.step("hop が maxHops ちょうどの場合は反応すること", () => {
+    assertEquals(shouldRespondToSelf(true, 3, 3, undefined), true);
+  });
 });
