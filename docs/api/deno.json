@@ -15,7 +15,7 @@
     "@ansanloms/textlint-plugin-yaml-keys/": "https://cdn.jsdelivr.net/gh/ansanloms/textlint-plugin-yaml-keys@0.0.2/",
     "@gunshi/gunshi": "jsr:@gunshi/gunshi@0.37.1",
     "@proofdict/textlint-rule-proofdict": "npm:@proofdict/textlint-rule-proofdict@3.1.2",
-    "@redocly/cli": "npm:@redocly/cli@2.45.0",
+    "@redocly/cli": "npm:@redocly/cli@2.46.1",
     "@std/fs": "jsr:@std/fs@1.0.24",
     "@std/path": "jsr:@std/path@1.1.6",
     "@stoplight/elements": "npm:@stoplight/elements@9.0.24",
@@ -27,7 +27,7 @@
     "openapi-types": "npm:openapi-types@12.1.3",
     "picocolors": "npm:picocolors@1.1.1",
     "textlint": "npm:textlint@15.8.0",
-    "textlint-rule-preset-ja-spacing": "npm:textlint-rule-preset-ja-spacing@3.0.2",
+    "textlint-rule-preset-ja-spacing": "npm:textlint-rule-preset-ja-spacing@3.0.3",
     "textlint-rule-preset-ja-technical-writing": "npm:textlint-rule-preset-ja-technical-writing@12.0.2",
     "textlint-rule-preset-jtf-style": "npm:textlint-rule-preset-jtf-style@3.0.3",
     "yaml": "npm:yaml@2.9.0"
