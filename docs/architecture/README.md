@@ -191,24 +191,24 @@ graph TD
 
 ### ルート
 
-| パス                  | 役割                                                                                                                                                                    |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `main.ts`             | エントリポイント。`loadConfig()` → `initLogger()` → `Deno.openKv()` → `new DiscordBot().start()`。指数バックオフで最大 5 回リトライ。SIGINT / SIGTERM で `shutdown()`   |
-| `config.ts`           | `config.json` → `Config` 型。`LOMS_CLAW_CONFIG` でパス変更可 (既定 `./data/config.json`)。`claude.cwd` に `Deno.cwd()` を注入                                           |
-| `config.schema.json`  | 設定の JSON Schema 本体。`config.json` 側で `$schema` として参照すれば IDE 補完が効く                                                                                   |
-| `config.schema.ts`    | `@cfworker/json-schema` の `Validator` で検証。`applyConfigDefaults()` が schema の `default` を補完                                                                    |
-| `logger.ts`           | 名前空間付きロガー。`initLogger()` / `createLogger()` / `getLogEntries()`。リングバッファで直近ログを保持                                                               |
-| `errors.ts`           | `getErrorMessage()`: unknown なエラー値からメッセージを取り出す                                                                                                         |
-| `deno.json`           | imports / tasks / fmt / lint 設定。`exclude` に `data/`, `docs/api`, `api/internal-schemas.ts`, `.claude/worktrees/`                                                    |
-| `Dockerfile`          | `denoland/deno` ベース。`CLAUDE_CONFIG_DIR` / `LOMS_CLAW_CONFIG` を `ENV` で宣言。SDK 同梱 Claude Code を `/usr/local/bin/claude` に symlink。`WORKDIR /data/workspace` |
-| `compose.yaml`        | 本番サービス定義。`./data` を `/data` に bind mount (マウントはこの 1 つ)。`TZ` を `.env` から渡す                                                                      |
-| `.devcontainer/`      | 開発コンテナ定義。`compose.yaml` にソースの `/app` bind mount を重ねる                                                                                                  |
-| `.github/`            | `dependabot.yml` (ルートと `docs/api` の 2 エントリ)、`workflows/claude.yml` (issue / PR コメントの `@claude` で起動する Claude Code Action)                            |
-| `.claude/rules/pr.md` | PR 作成前の検証チェーン (`deno task fix && deno task check && deno task lint && deno task test`)                                                                        |
-| `.worktreeinclude`    | worktree 作成時にメイン worktree から複製するローカル資産 (`.env`, `data/config.json`, `data/home/`, `data/workspace/`)                                                 |
-| `.env.example`        | docker compose が host 側で読む変数 (`TZ` のみ)                                                                                                                         |
-| `LICENSE`             | MIT License                                                                                                                                                             |
-| `CLAUDE.md`           | 開発者・エージェント向けのプロジェクト指示 (不変条件・規約・索引)                                                                                                       |
+| パス                  | 役割                                                                                                                                                                                |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `main.ts`             | エントリポイント。`loadConfig()` → `initLogger()` → `Deno.openKv()` → `new DiscordBot().start()`。指数バックオフで最大 5 回リトライ。SIGINT / SIGTERM で `shutdown()`               |
+| `config.ts`           | `config.json` → `Config` 型。`LOMS_CLAW_CONFIG` でパス変更可 (既定 `./data/config.json`)。`claude.cwd` に `Deno.cwd()` を注入                                                       |
+| `config.schema.json`  | 設定の JSON Schema 本体。`config.json` 側で `$schema` として参照すれば IDE 補完が効く                                                                                               |
+| `config.schema.ts`    | `@cfworker/json-schema` の `Validator` で検証。`applyConfigDefaults()` が schema の `default` を補完                                                                                |
+| `logger.ts`           | 名前空間付きロガー。`initLogger()` / `createLogger()` / `getLogEntries()`。リングバッファで直近ログを保持                                                                           |
+| `errors.ts`           | `getErrorMessage()`: unknown なエラー値からメッセージを取り出す                                                                                                                     |
+| `deno.json`           | imports / tasks / fmt / lint 設定。`exclude` に `data/`, `docs/api`, `api/internal-schemas.ts`, `.claude/worktrees/`                                                                |
+| `Dockerfile`          | `denoland/deno` ベース。`CLAUDE_CONFIG_DIR` / `LOMS_CLAW_CONFIG` を `ENV` で宣言。SDK 同梱 Claude Code を `/usr/local/bin/claude` に symlink。`WORKDIR /data/workspace`             |
+| `compose.yaml`        | 本番サービス定義。`./data` を `/data` に bind mount (マウントはこの 1 つ)。`TZ` を `.env` から渡す                                                                                  |
+| `.devcontainer/`      | 開発コンテナ定義。`compose.yaml` にソースの `/app` bind mount を重ねる                                                                                                              |
+| `.github/`            | `dependabot.yml` (deno はルートと `docs/api` の 2 エントリ、加えて docker / github-actions)、`workflows/claude.yml` (issue / PR コメントの `@claude` で起動する Claude Code Action) |
+| `.claude/rules/pr.md` | PR 作成前の検証チェーン (`deno task fix && deno task check && deno task lint && deno task test`)                                                                                    |
+| `.worktreeinclude`    | worktree 作成時にメイン worktree から複製するローカル資産 (`.env`, `data/config.json`, `data/home/`, `data/workspace/`)                                                             |
+| `.env.example`        | docker compose が host 側で読む変数 (`TZ` のみ)                                                                                                                                     |
+| `LICENSE`             | MIT License                                                                                                                                                                         |
+| `CLAUDE.md`           | 開発者・エージェント向けのプロジェクト指示 (不変条件・規約・索引)                                                                                                                   |
 
 ### `bot/` — Discord 入出力
 
