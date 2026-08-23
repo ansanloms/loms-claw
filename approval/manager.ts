@@ -245,10 +245,13 @@ export class ApprovalManager {
  * 注意: `.claude/settings.json` の `permissions.allow` に `AskUserQuestion` を
  * 入れると SDK が canUseTool を呼ばずに素通しし、回答が空のまま解決される。
  * このツールは allow list に入れないこと。
+ *
+ * channelId は呼び出し元が必須で渡す (`requestApproval` / `requestAnswers` と
+ * 揃える。cron でジョブに channelId が無ければ undefined を渡す)。
  */
 export function createCanUseTool(
   manager: ApprovalManager,
-  channelId?: string,
+  channelId: string | undefined,
 ): CanUseTool {
   return async (toolName, input) => {
     if (toolName === "AskUserQuestion") {

@@ -63,11 +63,22 @@ function createMockChannel() {
 /**
  * 最小限のモック ApprovalManager。
  *
- * channelId は createCanUseTool() の引数として明示的に渡されるため、
- * このモックは参照されない空オブジェクトでよい。
+ * requestApproval が呼ばれた際の channelId 引数を calls に記録する。
+ * デフォルトでは allow を返す。
  */
 function createMockApprovalManager() {
-  return { manager: {} };
+  const calls: { channelId: string | undefined }[] = [];
+  const manager = {
+    requestApproval(
+      _toolName: string,
+      _toolInput: Record<string, unknown>,
+      channelId: string | undefined,
+    ) {
+      calls.push({ channelId });
+      return Promise.resolve({ decision: "allow" as const });
+    },
+  };
+  return { manager, calls };
 }
 
 /** 最小限のモック SystemPromptStore。 */
@@ -102,6 +113,30 @@ function successQueryFn(
     session_id: sessionId,
     is_error: false,
   }]);
+}
+
+/**
+ * askClaude に渡された canUseTool を 1 回呼び出してから成功レスポンスを返す
+ * mock queryFn。ApprovalManager.requestApproval が実行される経路を作るために使う。
+ */
+function canUseToolQueryFn(): QueryFn {
+  return (params: Parameters<QueryFn>[0]) => {
+    async function* gen(): AsyncGenerator<SDKMessage> {
+      await params.options?.canUseTool?.("Bash", { command: "ls" }, {
+        signal: new AbortController().signal,
+        toolUseID: "tu-1",
+        requestId: "req-1",
+      });
+      yield {
+        type: "result",
+        subtype: "success",
+        result: "test result",
+        session_id: "test-session",
+        is_error: false,
+      } as unknown as SDKMessage;
+    }
+    return gen() as unknown as ReturnType<QueryFn>;
+  };
 }
 
 const TEST_CONFIG = {
@@ -535,6 +570,72 @@ Deno.test("CronExecutor", async (t) => {
         // 完了後はクリアされている
         // @ts-ignore: private フィールドへのアクセス
         assertEquals(executor.running.has("once-running-check"), false);
+      }),
+  );
+
+  await t.step(
+    "cron ジョブの承認リクエストが job.channelId 宛に送られること",
+    () =>
+      withStore(async (store) => {
+        const { channel } = createMockChannel();
+        const client = createMockClient(channel);
+        const { manager, calls } = createMockApprovalManager();
+        const systemPrompts = createMockSystemPromptStore();
+
+        const executor = new CronExecutor(
+          client as never,
+          TEST_CONFIG,
+          "guild-1",
+          "test-token",
+          store,
+          {},
+          manager as never,
+          systemPrompts,
+          canUseToolQueryFn(),
+        );
+
+        const job: CronJobDef = {
+          name: "approval-job",
+          schedule: "0 0 * * *",
+          prompt: "hello",
+          channelId: "ch-approval",
+        };
+
+        await executor.runJob(job);
+
+        assertEquals(calls, [{ channelId: "ch-approval" }]);
+      }),
+  );
+
+  await t.step(
+    "channelId の無いジョブでは undefined が渡ること",
+    () =>
+      withStore(async (store) => {
+        const client = createMockClient(null);
+        const { manager, calls } = createMockApprovalManager();
+        const systemPrompts = createMockSystemPromptStore();
+
+        const executor = new CronExecutor(
+          client as never,
+          TEST_CONFIG,
+          "guild-1",
+          "test-token",
+          store,
+          {},
+          manager as never,
+          systemPrompts,
+          canUseToolQueryFn(),
+        );
+
+        const job: CronJobDef = {
+          name: "approval-job-no-channel",
+          schedule: "0 0 * * *",
+          prompt: "hello",
+        };
+
+        await executor.runJob(job);
+
+        assertEquals(calls, [{ channelId: undefined }]);
       }),
   );
 });
