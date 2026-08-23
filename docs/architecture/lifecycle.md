@@ -119,9 +119,8 @@ schema はトップレベル・`discord`・`claude`・`claude.defaults`・`log` 
 | `discord.activeChannelIds`     | string[]                                         | `[]`                     | mention 不要で反応するチャンネル ID の静的ベースライン |
 | `storePath`                    | string                                           | `".claude/loms-claw.kv"` | Deno KV ファイルのパス。相対パスはプロセス cwd 基準    |
 | `claude.maxTurns`              | number                                           | `10`                     | `query()` の `maxTurns`                                |
-| `claude.verbose`               | boolean                                          | `true`                   | 現在未使用。後方互換のため保持                         |
 | `claude.timeout`               | number                                           | `300000`                 | Claude 呼び出しのタイムアウト (ms)                     |
-| `claude.apiPort`               | number                                           | `3000`                   | 内部 HTTP API のポート                                 |
+| `claude.apiPort`               | number                                           | `3000`                   | 内部 HTTP API のポート (cron + ログ + 設定 (settings)) |
 | `claude.defaults.model`        | string                                           |                          | 省略可。グローバルデフォルトのモデル                   |
 | `claude.defaults.effort`       | enum `low` / `medium` / `high` / `xhigh` / `max` |                          | 省略可。グローバルデフォルトの effort                  |
 | `claude.defaults.showThinking` | boolean                                          | `false`                  | thinking を Discord に表示するかのグローバルデフォルト |
@@ -130,7 +129,7 @@ schema はトップレベル・`discord`・`claude`・`claude.defaults`・`log` 
 
 `claude.cwd` (`Deno.cwd()` 注入) は表に無い。`Config` / `ClaudeConfig` / `ClaudeDefaults` / `LogConfig` / `DiscordConfig` の型は `config.ts` にあり、JSON 側の shape は `ConfigFile` (`claude.cwd` を除いた `Config`) である。
 
-`data/config.json.example` は `$schema` に `../config.schema.json` を指定した雛形で、`storePath` を `loms-claw.kv`、`claude.defaults` を `model: sonnet` / `effort: medium` / `showThinking: false` としている。`defaults` の各値がどう解決されるかは [store-and-settings](store-and-settings.md) を参照。
+`data/config.json.example` は `$schema` に `../config.schema.json` を指定した雛形で、`storePath` を `.claude/loms-claw.kv`、`claude.defaults` を `model: sonnet` / `effort: medium` / `showThinking: false` としている。`defaults` の各値がどう解決されるかは [store-and-settings](store-and-settings.md) を参照。
 
 ## ロガー (`logger.ts`)
 

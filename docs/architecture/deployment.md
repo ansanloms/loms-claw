@@ -174,7 +174,7 @@ docker compose logs -f               # ログ確認
 - 本番 (cwd `/data/workspace`): `/data/workspace/.claude/loms-claw.kv`。
 - ローカル実行 (`deno task start`、cwd はリポジトリ直下): リポジトリ直下の `.claude/loms-claw.kv`。
 
-`data/config.json.example` の `storePath` 値は `loms-claw.kv` で、schema の既定値 `.claude/loms-claw.kv` とは異なる。
+`data/config.json.example` の `storePath` 値も `.claude/loms-claw.kv` で、schema の既定値と一致している。
 
 ## workspace の構成 (`data/workspace/`)
 
@@ -191,7 +191,7 @@ docker compose logs -f               # ログ確認
 | `cron/*.once.md`            | `once: true` の一時ジョブ (実行後に自動削除される)                                                                                                                            | 管理外 |
 | `apm.yml` / `apm.lock.yaml` | APM の依存定義とロック                                                                                                                                                        | 追跡   |
 | `memory/`                   | エージェントのファイルベース永続メモリ (個人データ)                                                                                                                           | 管理外 |
-| `loms-claw.kv*`             | Deno KV (`storePath` 既定値の場合は `.claude/` 配下)                                                                                                                          | 管理外 |
+| `.claude/loms-claw.kv*`     | Deno KV (`storePath` 既定値)                                                                                                                                                  | 管理外 |
 | `apm_modules/`              | APM が取得したモジュール                                                                                                                                                      | 管理外 |
 
 ### 追跡対象

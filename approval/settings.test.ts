@@ -7,12 +7,15 @@ Deno.test("addToSettingsAllowList", async (t) => {
     const dir = await Deno.makeTempDir();
     const settingsPath = join(dir, ".claude", "settings.json");
 
-    await addToSettingsAllowList(settingsPath, "mcp__discord__send_message");
+    await addToSettingsAllowList(
+      settingsPath,
+      "mcp__claude_ai_Gmail__search_threads",
+    );
 
     const result = JSON.parse(await Deno.readTextFile(settingsPath));
     assertEquals(result, {
       permissions: {
-        allow: ["mcp__discord__send_message"],
+        allow: ["mcp__claude_ai_Gmail__search_threads"],
       },
     });
   });

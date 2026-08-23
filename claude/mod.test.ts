@@ -19,7 +19,6 @@ import {
 
 const baseConfig: ClaudeConfig = {
   maxTurns: 10,
-  verbose: false,
   timeout: 300000,
   cwd: "/workspace",
   apiPort: 3000,

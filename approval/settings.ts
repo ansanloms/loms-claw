@@ -40,7 +40,7 @@ export async function isInAllowList(
  * - 重複するツール名は追加しない。
  *
  * @param settingsPath - .claude/settings.json の絶対パス
- * @param toolName - 追加するツール名（例: "mcp__discord__discord_send_message"）
+ * @param toolName - 追加するツール名（例: "mcp__claude_ai_Gmail__search_threads"）
  */
 export async function addToSettingsAllowList(
   settingsPath: string,

@@ -97,7 +97,7 @@ export async function resizeImageIfNeeded(
       "-f",
       "mjpeg",
       "-q:v",
-      // ffmpeg の JPEG 品質は 2-31（低いほど高品質）。JPEG_QUALITY 80 ≒ q:v 4 程度。
+      // ffmpeg の JPEG 品質は 2-31（低いほど高品質）。q:v 4 は JPEG 品質 80 前後に相当。
       "4",
       "pipe:1",
     ],

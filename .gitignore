@@ -8,6 +8,7 @@ data/config.json
 data/home/*
 data/workspace/*
 !data/workspace/.claude
+data/workspace/.claude/plans/
 !data/workspace/CLAUDE.md
 !data/workspace/cron
 !data/workspace/apm.yml

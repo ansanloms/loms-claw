@@ -17,7 +17,6 @@ const baseConfig: Config = {
   storePath: "/tmp/test-loms-claw.kv",
   claude: {
     maxTurns: 10,
-    verbose: false,
     timeout: 300000,
     cwd: "/tmp",
     apiPort: 3000,
