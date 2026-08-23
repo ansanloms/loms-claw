@@ -31,6 +31,17 @@ const SHOW_THINKING = "showThinking";
 const ACTIVE = "active";
 
 /**
+ * `resolveScoped()` が読み取り対象にできる KV フィールド。
+ * thread → channel → (defaults) の解決チェーンを持つフィールドに限る
+ * (`session` はこのチェーンを持たないため含めない)。
+ */
+type KvField =
+  | typeof MODEL
+  | typeof EFFORT
+  | typeof SHOW_THINKING
+  | typeof ACTIVE;
+
+/**
  * グローバルデフォルト値。チャンネル / スレッド単位の上書きが無いときに使われる。
  */
 export interface StoreDefaults {
@@ -134,7 +145,7 @@ export class Store {
 
   private async resolveScoped<T>(
     scope: StoreScope,
-    field: string,
+    field: KvField,
     parse: (raw: string) => T,
     fallback: T | undefined,
   ): Promise<T | undefined> {
