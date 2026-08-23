@@ -29,15 +29,11 @@ import {
   QuestionManager,
   type QuestionResult,
 } from "./question.ts";
+import { INTERACTION_TIMEOUT_MS } from "./constants.ts";
 import { createLogger } from "../logger.ts";
 import { getErrorMessage } from "../errors.ts";
 
 const log = createLogger("approval");
-
-/**
- * 承認タイムアウト（ミリ秒）。
- */
-const APPROVAL_TIMEOUT_MS = 5 * 60 * 1000;
 
 /**
  * 承認結果。
@@ -143,7 +139,7 @@ export class ApprovalManager {
         this.pending.delete(requestId);
         log.warn("approval timed out:", requestId);
         resolve({ decision: "deny", reason: "Timed out" });
-      }, APPROVAL_TIMEOUT_MS);
+      }, INTERACTION_TIMEOUT_MS);
 
       this.pending.set(requestId, { resolve, timeout });
     });
