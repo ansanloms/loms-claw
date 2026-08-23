@@ -103,7 +103,7 @@ export const command = new SlashCommandBuilder()
         sub
           .setName("unset")
           .setDescription(
-            "Clear channel-level setting (model / effort / show_thinking / session)",
+            "Clear channel-level setting (model / effort / show_thinking / active / session)",
           )
           .addStringOption((opt) =>
             opt
@@ -167,7 +167,7 @@ export async function handleSettingsShow(
 
   // グローバルデフォルト
   lines.push("");
-  lines.push("**Defaults (env):**");
+  lines.push("**Defaults (config.json claude.defaults):**");
   lines.push(
     `- model: ${
       deps.defaults.model ? `\`${deps.defaults.model}\`` : "(unset)"
@@ -335,7 +335,7 @@ function formatSetting(
   entry: ScopeSettingEntry | undefined,
 ): string {
   if (!entry) {
-    return "(unset; CLI default applies)";
+    return "(unset; SDK default applies)";
   }
   return `\`${entry.value}\` (${entry.source})`;
 }

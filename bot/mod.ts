@@ -2,7 +2,7 @@
  * Discord ボットの本体。
  *
  * messageCreate イベントを受け取り、認可チェックと反応判定を行い、
- * Claude Code CLI を呼び出して応答を返す。
+ * Agent SDK (`askClaude()`) を呼び出して応答を返す。
  */
 
 import {

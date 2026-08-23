@@ -57,7 +57,7 @@ async function readFileOrUndefined(path: string): Promise<string | undefined> {
 /**
  * システムプロンプトの起動時キャッシュ。
  *
- * コンストラクタでディレクトリを指定し、loadSync() で全ファイルを読み込む。
+ * コンストラクタでディレクトリを指定し、load() で全ファイルを読み込む。
  * resolve() はキャッシュから同期的に結合結果を返すため、メッセージ/発話ごとの I/O が発生しない。
  * ファイル変更の反映にはボット再起動が必要。
  */
