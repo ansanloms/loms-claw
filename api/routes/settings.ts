@@ -61,7 +61,10 @@ async function resolveScope(
       channelId: id,
     };
   } catch (e) {
-    log.debug(`resolveParentId failed for ${id}, falling back to channel:`, e);
+    log.warn(
+      `resolveParentId failed for ${id}, falling back to channel scope (親チャンネルの解決に失敗したためチャンネル単独スコープとして扱う):`,
+      e,
+    );
     return { channelId: id };
   }
 }
