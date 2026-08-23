@@ -202,6 +202,22 @@ Deno.test("loadConfig", async (t) => {
     );
   });
 
+  await t.step(
+    "claude.verbose 未指定でも検証を通り既定値 true が補完されること（非推奨・required から除外済み）",
+    () => {
+      withTempConfig(
+        {
+          ...requiredFields,
+          claude: { maxTurns: 5, timeout: 60000, apiPort: 4000, defaults: {} },
+        },
+        () => {
+          const config = loadConfig();
+          assertEquals(config.claude.verbose, true);
+        },
+      );
+    },
+  );
+
   await t.step("LOMS_CLAW_CONFIG で指定したパスが読まれること", () => {
     const path = Deno.makeTempFileSync({ suffix: ".json" });
     const original = Deno.env.get(ENV_KEY);

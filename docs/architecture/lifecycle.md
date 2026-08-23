@@ -110,27 +110,27 @@ schema はトップレベル・`discord`・`claude`・`claude.defaults`・`log` 
 
 `config.schema.json` の定義。「既定値」が空のものは `default` を持たず、schema の `required` により書き込み必須になる (`claude.defaults.model` / `effort` は `required` に無く省略可)。
 
-| キー                           | 型                                               | 既定値                   | 備考                                                   |
-| ------------------------------ | ------------------------------------------------ | ------------------------ | ------------------------------------------------------ |
-| `$schema`                      | string                                           |                          | 任意。実行時 `Config` からは除外される                 |
-| `discord.token`                | string (minLength 1)                             |                          | 必須。bot トークン                                     |
-| `discord.guildId`              | string (minLength 1)                             |                          | 必須。対象ギルド ID                                    |
-| `discord.userId`               | string (minLength 1)                             |                          | 必須。操作を許可する唯一のユーザー ID                  |
-| `discord.activeChannelIds`     | string[]                                         | `[]`                     | mention 不要で反応するチャンネル ID の静的ベースライン |
-| `storePath`                    | string                                           | `".claude/loms-claw.kv"` | Deno KV ファイルのパス。相対パスはプロセス cwd 基準    |
-| `claude.maxTurns`              | number                                           | `10`                     | `query()` の `maxTurns`                                |
-| `claude.verbose`               | boolean                                          | `true`                   | 現在未使用。後方互換のため保持                         |
-| `claude.timeout`               | number                                           | `300000`                 | Claude 呼び出しのタイムアウト (ms)                     |
-| `claude.apiPort`               | number                                           | `3000`                   | 内部 HTTP API のポート                                 |
-| `claude.defaults.model`        | string                                           |                          | 省略可。グローバルデフォルトのモデル                   |
-| `claude.defaults.effort`       | enum `low` / `medium` / `high` / `xhigh` / `max` |                          | 省略可。グローバルデフォルトの effort                  |
-| `claude.defaults.showThinking` | boolean                                          | `false`                  | thinking を Discord に表示するかのグローバルデフォルト |
-| `log.level`                    | enum `DEBUG` / `INFO` / `WARN` / `ERROR`         | `"INFO"`                 | コンソールに出力する最低ログレベル                     |
-| `log.bufferSize`               | number (1..10000)                                | `1000`                   | リングバッファ容量                                     |
+| キー                           | 型                                               | 既定値                   | 備考                                                            |
+| ------------------------------ | ------------------------------------------------ | ------------------------ | --------------------------------------------------------------- |
+| `$schema`                      | string                                           |                          | 任意。実行時 `Config` からは除外される                          |
+| `discord.token`                | string (minLength 1)                             |                          | 必須。bot トークン                                              |
+| `discord.guildId`              | string (minLength 1)                             |                          | 必須。対象ギルド ID                                             |
+| `discord.userId`               | string (minLength 1)                             |                          | 必須。操作を許可する唯一のユーザー ID                           |
+| `discord.activeChannelIds`     | string[]                                         | `[]`                     | mention 不要で反応するチャンネル ID の静的ベースライン          |
+| `storePath`                    | string                                           | `".claude/loms-claw.kv"` | Deno KV ファイルのパス。相対パスはプロセス cwd 基準             |
+| `claude.maxTurns`              | number                                           | `10`                     | `query()` の `maxTurns`                                         |
+| `claude.verbose`               | boolean                                          | `true`                   | 非推奨。`required` から除外済み。現在未使用で後方互換のため保持 |
+| `claude.timeout`               | number                                           | `300000`                 | Claude 呼び出しのタイムアウト (ms)                              |
+| `claude.apiPort`               | number                                           | `3000`                   | 内部 HTTP API のポート (cron + ログ + 設定 (settings))          |
+| `claude.defaults.model`        | string                                           |                          | 省略可。グローバルデフォルトのモデル                            |
+| `claude.defaults.effort`       | enum `low` / `medium` / `high` / `xhigh` / `max` |                          | 省略可。グローバルデフォルトの effort                           |
+| `claude.defaults.showThinking` | boolean                                          | `false`                  | thinking を Discord に表示するかのグローバルデフォルト          |
+| `log.level`                    | enum `DEBUG` / `INFO` / `WARN` / `ERROR`         | `"INFO"`                 | コンソールに出力する最低ログレベル                              |
+| `log.bufferSize`               | number (1..10000)                                | `1000`                   | リングバッファ容量                                              |
 
 `claude.cwd` (`Deno.cwd()` 注入) は表に無い。`Config` / `ClaudeConfig` / `ClaudeDefaults` / `LogConfig` / `DiscordConfig` の型は `config.ts` にあり、JSON 側の shape は `ConfigFile` (`claude.cwd` を除いた `Config`) である。
 
-`data/config.json.example` は `$schema` に `../config.schema.json` を指定した雛形で、`storePath` を `loms-claw.kv`、`claude.defaults` を `model: sonnet` / `effort: medium` / `showThinking: false` としている。`defaults` の各値がどう解決されるかは [store-and-settings](store-and-settings.md) を参照。
+`data/config.json.example` は `$schema` に `../config.schema.json` を指定した雛形で、`storePath` を `.claude/loms-claw.kv`、`claude.defaults` を `model: sonnet` / `effort: medium` / `showThinking: false` としている。`defaults` の各値がどう解決されるかは [store-and-settings](store-and-settings.md) を参照。
 
 ## ロガー (`logger.ts`)
 

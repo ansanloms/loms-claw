@@ -33,15 +33,15 @@ export interface ClaudeDefaults {
 export interface ClaudeConfig {
   /** `query()` の `maxTurns` に渡す最大ターン数。 */
   maxTurns: number;
-  /** 現在未使用。後方互換のため保持。 */
-  verbose: boolean;
+  /** @deprecated 非推奨・現在未使用。後方互換のため残している。 */
+  verbose?: boolean;
   /** Claude 呼び出しのタイムアウト（ミリ秒）。`query()` の abort に使う。 */
   timeout: number;
-  /** 内部 API サーバーのポート（cron + ログ）。 */
+  /** 内部 API サーバーのポート（cron + ログ + 設定 (settings)）。 */
   apiPort: number;
   /** `query()` の作業ディレクトリ。実行時に `Deno.cwd()` が注入される。 */
   cwd: string;
-  /** Claude のグローバルデフォルト (model / effort)。 */
+  /** Claude のグローバルデフォルト (model / effort / showThinking)。 */
   defaults: ClaudeDefaults;
 }
 
