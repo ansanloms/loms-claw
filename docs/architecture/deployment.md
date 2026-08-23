@@ -36,15 +36,17 @@ flowchart LR
 - ベースイメージは `docker.io/denoland/deno:debian-2.9.5` (Debian ベースの glibc イメージ)。
 - `ENV CLAUDE_CONFIG_DIR=/data/home`: Claude Code の設定・認証情報の置き場所を既定の `~/.claude` から bind mount 先へ置き換える。
 - `ENV LOMS_CLAW_CONFIG=/data/config.json`: `config.ts` の `loadConfig()` が読む設定ファイルのパス。未設定時の既定は `./data/config.json`。
-- apt で `ca-certificates curl git jq bubblewrap socat ffmpeg tzdata` を入れる。用途がリポジトリ内で確認できるもの:
-  - `curl` / `jq`: workspace の skill (`discord` 等) が REST API を叩く手段。
+- apt で `ca-certificates curl git jq bubblewrap socat ffmpeg tzdata` を入れる。Dockerfile のコメントに用途を 1 行ずつ記載している。
+  - `ca-certificates`: `curl` / Agent SDK 同梱バイナリの TLS 検証。
+  - `curl` / `jq`: workspace の skill (`discord` 等) が REST API を叩く手段。`compose.yaml` の healthcheck でも使う。
+  - `git`: Claude Code (同梱バイナリ) がリポジトリ操作・文脈取得に使う。
+  - `bubblewrap` / `socat`: Agent SDK 同梱 Claude Code のサンドボックス機能が使う。`@anthropic-ai/claude-agent-sdk@0.3.232` の `sdk.mjs` に `bwrapPath` / `socatPath` という設定項目があることで確認済み。
   - `ffmpeg`: `bot/message.ts` の `resizeImageIfNeeded()` が画像添付の縮小に `Deno.Command("ffmpeg", ...)` で呼ぶ。`bluesky` skill も画像リサイズに使う。
   - `tzdata`: compose から渡す `TZ` を解決するため。
-  - `git` / `bubblewrap` / `socat` / `ca-certificates`: リポジトリ内に直接の消費者は無く、用途はリポジトリ内に記載が無い。
 - `WORKDIR /app` で `deno.json` / `deno.lock` をコピーし `deno install` を実行する。続けて Agent SDK が同梱する Claude Code バイナリ (`@anthropic-ai/claude-agent-sdk-linux-{x64,arm64}`) を `/usr/local/bin/claude` へ symlink する。Dockerfile のコメントによれば、この symlink は初回認証 `claude auth login` 等の手動操作用で、実行時の `query()` は SDK がバイナリを自動解決する。アーキテクチャは `dpkg --print-architecture` で判定し、`amd64` / `arm64` 以外はビルド失敗にする。
 - glibc イメージでは使われない musl 用バイナリ (`claude-agent-sdk-linux-*-musl/*/claude`) を削除する。Dockerfile のコメントによれば、パッケージディレクトリごと消すと deno が起動時に再ダウンロードするため、バイナリファイルのみ削除する。
 - `COPY . .` でソースツリー全体を `/app` に焼き込む (除外は `.dockerignore`)。
-- 最後に `WORKDIR /data/workspace` とし、`CMD ["deno", "run", "--allow-env", "--allow-sys", "--allow-ffi", "--allow-read", "--allow-write", "--allow-net", "--allow-run", "/app/main.ts"]` で起動する。Dockerfile のコメントによれば、`deno task` は `deno.json` のあるディレクトリを cwd にするためここでは使えず、権限フラグは `deno.json` の `start` タスクと手動で揃える。
+- 最後に `WORKDIR /data/workspace` とし、`CMD ["deno", "run", "--allow-env", "--allow-sys", "--allow-ffi", "--allow-read", "--allow-write", "--allow-net", "--allow-run", "/app/main.ts"]` で起動する。Dockerfile のコメントによれば、`deno task` は `deno.json` のあるディレクトリを cwd にするためここでは使えず、権限フラグは `deno.json` の `start` タスクと手動で揃える。同期を自動化する仕組み (CI での突合、`deno task --cwd /app start` への置き換え等) は導入しておらず、コメントによる手動同期を現状維持する ([#129](https://github.com/ansanloms/loms-claw/issues/129))。
 - multi-stage build は評価の上で見送った (単一ステージを維持)。`deno install` 専用の builder ステージを切り、実行ステージで `DENO_DIR` と `claude` symlink のみ `COPY --from` する構成を検証したところ、単一ステージ (`docker build` 時点で 1.09GB) に対し multi-stage は 1.42GB と約 30% 大きくなった。単一ステージは `deno install` と musl バイナリ削除を同一レイヤーで行うため無駄なレイヤーが残らない一方、multi-stage は builder ステージで構築した `DENO_DIR` (npm キャッシュ全体) を `COPY --from` で丸ごと複製するコストがレイヤー節約分を上回った ([#124](https://github.com/ansanloms/loms-claw/issues/124))。
 
 ### .dockerignore
@@ -64,11 +66,12 @@ flowchart LR
 | サービス       | `bot` (`build: .`)                                                                                                                                                                                                                                    |
 | environment    | `TZ: ${TZ:-Asia/Tokyo}` のみ。値は host の `.env` から compose が読む                                                                                                                                                                                 |
 | volumes        | `./data` → `/data` の bind mount 1 つ                                                                                                                                                                                                                 |
-| extra_hosts    | `host.docker.internal:host-gateway` (用途はリポジトリ内に記載なし)                                                                                                                                                                                    |
 | healthcheck    | `curl -fsS http://127.0.0.1:$(jq -r .claude.apiPort ${LOMS_CLAW_CONFIG:-/data/config.json})/health` (`interval: 60s` / `timeout: 10s` / `retries: 3` / `start_period: 60s`)。エンドポイント本体は [internal-api.md](internal-api.md) の `GET /health` |
 | restart        | `unless-stopped`                                                                                                                                                                                                                                      |
 
 `.env` は docker compose が host 側で参照する変数 (現状 `TZ` のみ) を持つファイルで、アプリ自体は `.env` を読まない (`.env.example` のコメント)。`.env` は `.gitignore` で管理外。
+
+`extra_hosts: host.docker.internal:host-gateway` は #113 で VC (ボイスチャンネル) 機能を削除した際に唯一の参照元が無くなり、リポジトリ内に消費者が無い状態になっていたため削除した ([#129](https://github.com/ansanloms/loms-claw/issues/129))。
 
 マウント先を変える等の調整は `compose.override.yaml` で行う。これは任意のファイルで、リポジトリでは追跡していない。
 
