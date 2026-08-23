@@ -17,7 +17,7 @@ function mockManager(
     requestApproval: (
       _toolName: string,
       _toolInput: Record<string, unknown>,
-      _channelId?: string,
+      _channelId: string | undefined,
     ) => Promise.resolve(result),
     requestAnswers: () =>
       Promise.resolve(

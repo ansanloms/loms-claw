@@ -590,9 +590,6 @@ export class DiscordBot {
           this.store.getShowThinking(scope),
         ]);
 
-        // 承認ボタンの送信先は発話があった場所 (スレッド優先)
-        this.approvalManager.setChannel(localId);
-
         const templateVars: Record<string, string> = {
           "discord.guild.id": this.config.discord.guildId,
           "discord.guild.name": message.guild?.name ?? "",

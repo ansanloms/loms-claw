@@ -131,7 +131,6 @@ export class CronExecutor {
           );
         }
         textChannel = channel as GuildTextBasedChannel;
-        this.approvalManager.setChannel(job.channelId);
       }
 
       const sessionKey = `cron:${job.name}`;

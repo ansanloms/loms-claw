@@ -60,17 +60,14 @@ function createMockChannel() {
   };
 }
 
-/** 最小限のモック ApprovalManager。 */
+/**
+ * 最小限のモック ApprovalManager。
+ *
+ * channelId は createCanUseTool() の引数として明示的に渡されるため、
+ * このモックは参照されない空オブジェクトでよい。
+ */
 function createMockApprovalManager() {
-  let channelId: string | undefined;
-  return {
-    manager: {
-      setChannel(id: string) {
-        channelId = id;
-      },
-    },
-    getChannelId: () => channelId,
-  };
+  return { manager: {} };
 }
 
 /** 最小限のモック SystemPromptStore。 */
@@ -188,70 +185,6 @@ Deno.test("CronExecutor", async (t) => {
         // running Set から除去されていること
         // @ts-ignore: private フィールドへのアクセス
         assertEquals(executor.running.has("bad-channel-job"), false);
-      }),
-  );
-
-  await t.step(
-    "承認先チャンネルが正しく設定されること",
-    () =>
-      withStore(async (store) => {
-        const { channel } = createMockChannel();
-        const client = createMockClient(channel);
-        const { manager, getChannelId } = createMockApprovalManager();
-        const systemPrompts = createMockSystemPromptStore();
-
-        const executor = new CronExecutor(
-          client as never,
-          TEST_CONFIG,
-          "guild-1",
-          "test-token",
-          store,
-          {},
-          manager as never,
-          systemPrompts,
-          successQueryFn(),
-        );
-
-        const job: CronJobDef = {
-          name: "approval-test",
-          schedule: "0 0 * * *",
-          prompt: "hello",
-          channelId: "ch-approval",
-        };
-
-        await executor.runJob(job);
-        assertEquals(getChannelId(), "ch-approval");
-      }),
-  );
-
-  await t.step(
-    "channelId なしで承認先チャンネルが設定されないこと",
-    () =>
-      withStore(async (store) => {
-        const client = createMockClient(null);
-        const { manager, getChannelId } = createMockApprovalManager();
-        const systemPrompts = createMockSystemPromptStore();
-
-        const executor = new CronExecutor(
-          client as never,
-          TEST_CONFIG,
-          "guild-1",
-          "test-token",
-          store,
-          {},
-          manager as never,
-          systemPrompts,
-          successQueryFn(),
-        );
-
-        const job: CronJobDef = {
-          name: "no-channel-job",
-          schedule: "0 0 * * *",
-          prompt: "hello",
-        };
-
-        await executor.runJob(job);
-        assertEquals(getChannelId(), undefined);
       }),
   );
 
