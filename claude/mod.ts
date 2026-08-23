@@ -116,6 +116,77 @@ export function extractResultText(event: SDKResultMessage): string {
 }
 
 /**
+ * `resultEvent` が無ければ `"claude stream ended without result event"` を
+ * throw する (result イベントを一度も受け取らずにストリームが終わったケース)。
+ * あれば `extractResultText()` で本文を取り出して返す。
+ *
+ * chat (ストリーミング応答の非ストリーミングフォールバック) と cron の両方が
+ * 持っていた「result が無ければ throw / あれば本文を取り出す」を集約する。
+ * 送信自体は呼び出し側が行う。
+ */
+export function requireResultText(
+  resultEvent: SDKResultMessage | undefined,
+): string {
+  if (!resultEvent) {
+    throw new Error("claude stream ended without result event");
+  }
+  return extractResultText(resultEvent);
+}
+
+/**
+ * result イベント 1 件分の副作用を行う。
+ *
+ * 非 success な `subtype` なら `options.onNonSuccess` でログし、
+ * `options.setSession` があればセッションを保存する (`event.session_id` を渡す)。
+ *
+ * chat (bot/mod.ts) のストリーミングループ内での result 処理と、
+ * cron ({@link drainResultEvent} 経由) の両方から呼ばれる。
+ */
+export async function handleResultEvent(
+  event: SDKResultMessage,
+  options: {
+    onNonSuccess: (event: SDKResultMessage) => void;
+    setSession?: (sessionId: string) => Promise<void>;
+  },
+): Promise<void> {
+  if (event.subtype !== "success") {
+    options.onNonSuccess(event);
+  }
+  if (options.setSession) {
+    await options.setSession(event.session_id);
+  }
+}
+
+/**
+ * `SDKMessage` ストリームを走査し、`result` イベントを拾う。
+ *
+ * `result` イベントに出会うたびに {@link handleResultEvent} を呼ぶ。
+ * ストリームを最後まで読み切った時点の最後の `result` イベントを返す
+ * (見つからなければ `undefined`)。
+ *
+ * cron (ストリーミング表示を行わない呼び出し元) がこの関数でストリーム全体を
+ * 走査する。chat (bot/mod.ts) は text_delta 等も同じループで扱うため、
+ * `result` イベントの捕捉は自前のループ内で {@link handleResultEvent} を直接
+ * 呼ぶ形で行い、この関数は使わない。
+ */
+export async function drainResultEvent(
+  stream: AsyncIterable<SDKMessage>,
+  options: {
+    onNonSuccess: (event: SDKResultMessage) => void;
+    setSession?: (sessionId: string) => Promise<void>;
+  },
+): Promise<SDKResultMessage | undefined> {
+  let resultEvent: SDKResultMessage | undefined;
+  for await (const event of stream) {
+    if (event.type === "result") {
+      resultEvent = event;
+      await handleResultEvent(event, options);
+    }
+  }
+  return resultEvent;
+}
+
+/**
  * SDKMessage がトップレベル (サブエージェント以外) の text_delta なら、
  * その差分テキストを返す。それ以外のイベントは `undefined` を返す。
  *

@@ -33,11 +33,13 @@ interface StoreScope {
 }
 ```
 
-| 発話場所 / 用途 | scope                                         | 抽出箇所                                                                  |
-| --------------- | --------------------------------------------- | ------------------------------------------------------------------------- |
-| スレッド外      | `{ channelId }`                               | `bot/mod.ts` (messageCreate) / `bot/commands.ts` `scopeFromInteraction()` |
-| スレッド内      | `{ channelId: parentId, threadId }`           | 同上。`parentId` が null のときは thread id 自体を `channelId` に入れる   |
-| cron ジョブ     | `{ channelId: "cron:{name}" }` (session のみ) | `cron/executor.ts`。詳細は後述                                            |
+| 発話場所 / 用途 | scope                                         | 抽出箇所                                                                                                                 |
+| --------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| スレッド外      | `{ channelId }`                               | `bot/scope.ts` `scopeFromChannel()`。`bot/mod.ts` (messageCreate) と `bot/commands.ts` `scopeFromInteraction()` から呼ぶ |
+| スレッド内      | `{ channelId: parentId, threadId }`           | 同上。`parentId` が null のときは thread id 自体を `channelId` に入れる                                                  |
+| cron ジョブ     | `{ channelId: "cron:{name}" }` (session のみ) | `cron/executor.ts`。詳細は後述                                                                                           |
+
+`api/routes/settings.ts` (`GET` / `PATCH` / `DELETE /settings/{id}`) は `bot/scope.ts` を使わず、`resolveParentId` で親を引いて別途スコープを組む (詳細は後述の `resolveScope()`)。親が取れないスレッドの扱いは bot 側 (`{ channelId: id, threadId: id }`) と API 側 (`{ channelId: id }`) で異なる (既存挙動。統一は別 issue)。
 
 書き込み (`setSession` / `applyPatch` / `clearScope`) は常に leaf id (`threadId ?? channelId`) に対して行われる。スレッド内で `/claw settings set` を叩いても親チャンネルのキーには触れない。
 
@@ -124,7 +126,7 @@ model / effort / showThinking / active に対する個別の setter / deleter �
 
 - `set` に `session` オプションは無い。session は `unset` (削除) のみ。`SettingsPatch.session?: null` の型と一致する。
 - スラッシュコマンドのオプション名は snake_case (`show_thinking`)、Store / API のキー名は camelCase (`showThinking`)。ハンドラが `patch.showThinking` に詰め替える。他の 4 つ (`model` / `effort` / `active` / `session`) は同名。
-- `scopeFromInteraction()` は `interaction.channel.isThread()` なら `{ channelId: parentId ?? interaction.channelId, threadId: interaction.channelId }`、そうでなければ `{ channelId: interaction.channelId }` を返す。messageCreate 側のスコープ抽出と同じ規則。
+- `scopeFromInteraction()` は `interaction.channel` を `bot/scope.ts` の `scopeFromChannel()` に渡すだけの薄いラッパ。messageCreate 側 (`bot/mod.ts`) のスコープ抽出も同じ `scopeFromChannel()` を使う。
 - `show` が表示する内容:
   - 現在スコープ (Thread + parent、または Channel) の `session` / `model` / `effort` / `show_thinking` / `active`。文字列設定は `value (source)`、`active` は `resolveActive()` で求めた実効値と出所 (KV に無ければ `config activeChannelIds`)
   - グローバルデフォルト (`config.claude.defaults` の `model` / `effort` / `show_thinking`)

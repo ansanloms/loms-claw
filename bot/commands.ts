@@ -22,6 +22,7 @@ import type {
 } from "../store/mod.ts";
 import { createLogger } from "../logger.ts";
 import { resolveActive } from "./guard.ts";
+import { scopeFromChannel } from "./scope.ts";
 
 const log = createLogger("commands");
 
@@ -343,24 +344,10 @@ function formatSetting(
 /**
  * インタラクションが起きた場所からスコープを抽出する。
  *
- * - スレッド内で実行: { channelId: parentId, threadId: thread.id }
- * - 通常チャンネルで実行: { channelId: channel.id }
- *
- * thread の parentId が null のケース (フォーラム親が消えた等の異常系) は
- * thread.id 自体を channelId にフォールバックさせ、Store の整合性を保つ。
- *
- * `channel?.isThread()` は `this is ThreadChannel` の TS type guard であり、
- * 真偽値変数経由では型ナローイングが効かないので呼び出し式のまま条件に使う。
+ * 組み立て方の詳細は scopeFromChannel (bot/scope.ts) にまとめてある。
  */
 function scopeFromInteraction(
   interaction: ChatInputCommandInteraction,
 ): StoreScope {
-  const channel = interaction.channel;
-  if (channel?.isThread()) {
-    return {
-      channelId: channel.parentId ?? interaction.channelId,
-      threadId: interaction.channelId,
-    };
-  }
-  return { channelId: interaction.channelId };
+  return scopeFromChannel(interaction.channel, interaction.channelId);
 }

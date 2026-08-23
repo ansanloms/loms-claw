@@ -341,6 +341,76 @@ Deno.test("CronExecutor", async (t) => {
   );
 
   await t.step(
+    "resumeSession: true のジョブ実行後、session_id が cron:{name} スコープに保存されること",
+    () =>
+      withStore(async (store) => {
+        const client = createMockClient(null);
+        const { manager } = createMockApprovalManager();
+        const systemPrompts = createMockSystemPromptStore();
+
+        const executor = new CronExecutor(
+          client as never,
+          TEST_CONFIG,
+          "guild-1",
+          "test-token",
+          store,
+          {},
+          manager as never,
+          systemPrompts,
+          successQueryFn("result", "session-xyz"),
+        );
+
+        const job: CronJobDef = {
+          name: "resume-job",
+          schedule: "0 0 * * *",
+          prompt: "hello",
+          resumeSession: true,
+        };
+
+        await executor.runJob(job);
+        assertEquals(
+          await store.getSession({ channelId: "cron:resume-job" }),
+          "session-xyz",
+        );
+      }),
+  );
+
+  await t.step(
+    "resumeSession: false のジョブ実行後は session が保存されないこと",
+    () =>
+      withStore(async (store) => {
+        const client = createMockClient(null);
+        const { manager } = createMockApprovalManager();
+        const systemPrompts = createMockSystemPromptStore();
+
+        const executor = new CronExecutor(
+          client as never,
+          TEST_CONFIG,
+          "guild-1",
+          "test-token",
+          store,
+          {},
+          manager as never,
+          systemPrompts,
+          successQueryFn("result", "session-xyz"),
+        );
+
+        const job: CronJobDef = {
+          name: "no-resume-job",
+          schedule: "0 0 * * *",
+          prompt: "hello",
+          resumeSession: false,
+        };
+
+        await executor.runJob(job);
+        assertEquals(
+          await store.getSession({ channelId: "cron:no-resume-job" }),
+          undefined,
+        );
+      }),
+  );
+
+  await t.step(
     "once: true のジョブ実行後にコールバックが呼ばれること",
     () =>
       withStore(async (store) => {

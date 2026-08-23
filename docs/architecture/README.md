@@ -89,6 +89,8 @@ graph TD
   message[bot/message.ts]
   queue[bot/queue.ts]
   ratelimit[bot/ratelimit.ts]
+  flush[bot/flush.ts]
+  scope[bot/scope.ts]
   claude[claude/mod.ts]
   sysprompt[claude/system-prompt.ts]
   template[claude/template.ts]
@@ -125,6 +127,8 @@ graph TD
   botmod --> ratelimit
   botmod --> queue
   botmod --> message
+  botmod --> flush
+  botmod --> scope
   botmod --> server
   botmod -.-> rcron
   botmod -.-> rsettings
@@ -135,6 +139,7 @@ graph TD
   commands -.-> executor
   commands -.-> store
   commands --> guard
+  commands --> scope
   guard -.-> config
 
   claude -.-> config
@@ -142,6 +147,7 @@ graph TD
 
   approval --> asettings
   approval --> question
+  question --> message
   approval --> aconstants
   question --> aconstants
 
@@ -171,7 +177,7 @@ graph TD
   scheduler -.-> ctypes
 ```
 
-層として読むと次のようになる。循環依存は無い。
+層として読むと次のようになる。ファイル単位の循環依存は無いが、ディレクトリ単位では `bot/mod.ts → approval/manager.ts` と `approval/question.ts → bot/message.ts` (`DISCORD_MESSAGE_LIMIT` の共有) により `bot ⇄ approval` の循環になる。
 
 | 層           | モジュール                                                                      | 役割                                                                                                                               |
 | ------------ | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
@@ -187,6 +193,7 @@ graph TD
 - `cron/loader.ts` → `claude/mod.ts` (`EFFORT_LEVELS`): frontmatter の `effort` 検証に effort の定義を共有
 - `bot/commands.ts` → `cron/executor.ts` (型のみ)
 - `api/routes/*` → `store/mod.ts` (型), `cron/types.ts` (型): API は実体を `bot/mod.ts` から `CronRouteContext` / `SettingsRouteContext` として注入される
+- `approval/question.ts` → `bot/message.ts` (`DISCORD_MESSAGE_LIMIT`): Discord メッセージ上限を bot と共有
 
 ## ディレクトリ / ファイル構成
 
@@ -223,6 +230,8 @@ graph TD
 | `bot/queue.ts`     | `ScopeQueue`: scope 単位でメッセージ処理を直列化                                                                                                                                                                                  |
 | `bot/ratelimit.ts` | `SelfMentionRateLimiter`: 自己メンション応答のスライディングウィンドウレート制限 (bot 全体、Temporal ベース)                                                                                                                      |
 | `bot/message.ts`   | `splitMessage()`、`keepTyping()`、`createProgressReporter()`、`stripBotMentions()`、画像添付の取得・リサイズ・後始末 (`downloadImageAttachments()` / `resizeImageIfNeeded()` / `appendImageReferences()` / `cleanupImageFiles()`) |
+| `bot/flush.ts`     | `splitAtBoundary()`: 文境界 (`。` / 改行) でのバッファ分割アルゴリズム。`bot/mod.ts` の `flushBuffer` / `flushThinking` が共有する純粋関数                                                                                        |
+| `bot/scope.ts`     | `scopeFromChannel()`: チャンネル / スレッドから `StoreScope` を組み立てる。`bot/mod.ts` と `bot/commands.ts` の両方から使う                                                                                                       |
 
 ### `claude/` — Agent SDK 連携
 
