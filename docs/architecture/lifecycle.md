@@ -32,7 +32,7 @@ sequenceDiagram
         D-->>B: ClientReady
         B->>D: registerCommands() (REST PUT)
         B->>X: new CronExecutor(...) / loadCronJobsFromDir(cwd) / start(jobs)
-        B->>A: startApiServer(apiPort, settingsCtx, cronCtx)
+        B->>A: startApiServer(apiPort, settingsCtx, healthCtx, cronCtx)
         B-->>M: start() 解決
     end
 ```
@@ -75,7 +75,7 @@ KV の所有は非対称で、`main.ts` が `Deno.openKv()` で開き、`Discord
    3. `loadCronJobsFromDir(config.claude.cwd)` (`cron/loader.ts`) で `{cwd}/cron/*.md` を読み、`cronExecutor.start(jobs)` でスケジューラを開始する。`cron/` が無ければ空配列で開始する。
    4. `reloadJobs` (再読込 → `cronExecutor.reload()`) を定義し、`cronExecutor.setOnceCallback()` に once ジョブ実行後の処理 (`{cwd}/cron/{name}.md` を `Deno.remove()` → `reloadJobs()`) を登録する。削除失敗はログのみで、reload は行う。
    5. `runJobByName` (`findJob()` → `runJob()`、未登録なら throw) を定義する。
-   6. `CronRouteContext { reloadCronJobs, runJob, listJobs }` と `SettingsRouteContext { store, resolveParentId }` を組み立て、`startApiServer(config.claude.apiPort, settingsCtx, cronCtx)` (`api/server.ts`) を呼ぶ。サーバーは `127.0.0.1` にバインドされる。詳細は [internal-api](internal-api.md)。
+   6. `CronRouteContext { reloadCronJobs, runJob, listJobs }`、`SettingsRouteContext { store, resolveParentId }`、`HealthRouteContext { isReady }` を組み立て、`startApiServer(config.claude.apiPort, settingsCtx, healthCtx, cronCtx)` (`api/server.ts`) を呼ぶ。サーバーは `127.0.0.1` にバインドされる。詳細は [internal-api](internal-api.md)。
    7. `ready` Promise を resolve する。
 4. `await this.client.login(config.discord.token)`。
 5. `await ready` で上記ハンドラの完了を待ってから `start()` が解決する。
@@ -140,7 +140,7 @@ schema はトップレベル・`discord`・`claude`・`claude.defaults`・`log` 
 - 出力: 各行は `<ISO timestamp> [<LEVEL>] [<namespace>] <msg> ...args` の形式。`ERROR` は `console.error`、`WARN` は `console.warn`、`DEBUG` / `INFO` は `console.log`。timestamp は `Temporal.Now.instant().toString()`。
 - `minLevel` の適用箇所: コンソール出力のみ。リングバッファには `minLevel` に関係なく全レベルのエントリを記録する (`emit()` 内で `pushEntry()` を先に呼び、その後でレベル判定して return する)。
 - リングバッファのエントリ (`LogEntry`) は `timestamp` / `level` / `namespace` / `message` を持ち、`message` は引数を `stringifyArg()` で文字列化して連結したもの (string はそのまま、`Error` は `stack` または `name: message`、それ以外は `JSON.stringify`、失敗時は `String()`)。
-- `getLogEntries(filter?)`: 時系列順に走査し、`level` (以上)・`namespace` (前方一致)・`since` (ISO 文字列の辞書順比較) でフィルタし、末尾 `limit` 件を返す。`limit` は既定 100、1..1000 に clamp される。
+- `getLogEntries(filter?)`: 時系列順に走査し、`level` (以上)・`namespace` (前方一致)・`since` (`Temporal.Instant.compare()` による時刻比較) でフィルタし、末尾 `limit` 件を返す。`limit` は既定 100、1..1000 に clamp される。
 - 消費先は内部 HTTP API の `GET /logs` ([internal-api](internal-api.md))。
 
 `errors.ts` の `getErrorMessage(error)` は `Error` なら `message`、それ以外は `String()` を返す共通ユーティリティで、`loadConfig()` のエラーメッセージ組み立てや各ハンドラの catch で使われる。

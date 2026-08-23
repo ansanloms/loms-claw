@@ -8,7 +8,6 @@ export const internalSchemas = {
   "BoolSettingEntry": {
     "type": "object",
     "description": "boolean 設定値とその出所。",
-    "additionalProperties": false,
     "required": [
       "value",
       "source"
@@ -61,7 +60,6 @@ export const internalSchemas = {
   "DefaultSettings": {
     "type": "object",
     "description": "config.json の claude.defaults に由来するグローバルデフォルト設定。出所 (source) は持たない。",
-    "additionalProperties": false,
     "required": [
       "showThinking"
     ],
@@ -69,7 +67,7 @@ export const internalSchemas = {
       "model": {
         "type": "string",
         "description": "デフォルトのモデル alias またはフルネーム。config.json で未設定の場合はフィールドごと省略される。",
-        "example": "claude-sonnet-4-5"
+        "example": "claude-sonnet-4-6"
       },
       "effort": {
         "type": "string",
@@ -129,7 +127,6 @@ export const internalSchemas = {
   "ScopeSettings": {
     "type": "object",
     "description": "スコープの解決済み設定。model/effort/showThinking は thread → channel → default の順にフォールバックして解決する。session は thread と channel で独立しており、フォールバックしない。active はグローバルデフォルトを持たず、上書きが無ければフィールドごと省略される (省略は config.json の activeChannelIds による判定へフォールバックすることを意味する)。",
-    "additionalProperties": false,
     "required": [
       "showThinking"
     ],
@@ -156,7 +153,6 @@ export const internalSchemas = {
   "SettingEntry": {
     "type": "object",
     "description": "文字列設定値とその出所。",
-    "additionalProperties": false,
     "required": [
       "value",
       "source"
@@ -165,7 +161,7 @@ export const internalSchemas = {
       "value": {
         "type": "string",
         "description": "解決された設定値。",
-        "example": "claude-sonnet-4-5"
+        "example": "claude-sonnet-4-6"
       },
       "source": {
         "type": "string",
@@ -192,7 +188,7 @@ export const internalSchemas = {
         ],
         "minLength": 1,
         "description": "モデルの alias またはフルネーム。null を指定すると削除し、フォールバック解決へ戻す。",
-        "example": "claude-sonnet-4-5"
+        "example": "claude-sonnet-4-6"
       },
       "effort": {
         "type": [
@@ -250,7 +246,6 @@ export const internalSchemas = {
   "ResponseDeleteSettings": {
     "type": "object",
     "description": "スコープ設定の削除結果。",
-    "additionalProperties": false,
     "required": [
       "ok"
     ],
@@ -289,6 +284,30 @@ export const internalSchemas = {
           "$ref": "#/components/schemas/CronJob"
         }
       }
+    }
+  },
+  "ResponseGetHealth": {
+    "type": "object",
+    "description": "healthcheck の結果。",
+    "required": [
+      "status"
+    ],
+    "properties": {
+      "status": {
+        "type": "string",
+        "description": "healthy なら ok、そうでなければ unavailable。",
+        "enum": [
+          "ok",
+          "unavailable"
+        ]
+      }
+    }
+  },
+  "ResponseGetLogs": {
+    "type": "array",
+    "description": "ログエントリ一覧。時系列順。",
+    "items": {
+      "$ref": "#/components/schemas/LogEntry"
     }
   },
   "ResponsePostCronReload": {

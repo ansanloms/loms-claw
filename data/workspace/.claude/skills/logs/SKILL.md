@@ -9,6 +9,8 @@ user-invocable: false
 Bot プロセスはメモリ上に直近のログをリングバッファで保持している。
 内部 API 経由で取得できる。
 
+リングバッファは `config.json` の `log.level`（コンソールに出力する最低ログレベル）に関わらず、全レベルのエントリを保持する。そのため `level=DEBUG` を指定すると、標準出力には出ていない DEBUG ログもここから返る。
+
 ## エンドポイント
 
 ```
@@ -24,7 +26,7 @@ GET http://127.0.0.1:3000/logs
 | `level`     | 最低ログレベル（DEBUG / INFO / WARN / ERROR） | 全レベル   |
 | `namespace` | 名前空間の前方一致フィルタ                 | なし       |
 | `since`     | ISO 8601 タイムスタンプ以降のみ（オフセット必須、下記参照） | なし       |
-| `limit`     | 取得件数（1〜1000）                        | 100        |
+| `limit`     | 取得件数（1〜1000。1000 を超えると 400）    | 100        |
 
 ### `since` はオフセット必須
 
@@ -148,5 +150,15 @@ bot プロセスが停止している、またはポート番号が違うと cur
 ```json
 {"error": "invalid since: must be ISO 8601"}
 ```
+
+```json
+{"error": "limit must not exceed 1000"}
+```
+
+```json
+{"error": "limit must be a positive integer"}
+```
+
+`limit` が 1 以上の整数でない場合（空文字、`abc`、`1e3`、`0x3e8`、小数等）にこの 400 が返る。
 
 `since` の 400 は多くの場合オフセット省略が原因なので、まずそこを疑う。

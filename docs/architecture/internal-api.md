@@ -6,16 +6,16 @@ bot プロセス内で `127.0.0.1:{config.claude.apiPort}` に Hono アプリを
 
 ## サーバー (`api/server.ts`)
 
-`startApiServer(port, settingsCtx, cronCtx?)` が `Hono` アプリを組み立てて `Deno.serve({ port, hostname: "127.0.0.1" }, app.fetch)` を呼び、`Deno.HttpServer` を返す。呼び出し側 (`bot/mod.ts` の `DiscordBot.shutdown()`) がこれを保持し、停止時に `shutdown()` を呼ぶ (失敗は WARN ログに落とすだけで握りつぶす)。
+`startApiServer(port, settingsCtx, healthCtx, cronCtx?)` が `Hono` アプリを組み立てて `Deno.serve({ port, hostname: "127.0.0.1" }, app.fetch)` を呼び、`Deno.HttpServer` を返す。呼び出し側 (`bot/mod.ts` の `DiscordBot.shutdown()`) がこれを保持し、停止時に `shutdown()` を呼ぶ (失敗は WARN ログに落とすだけで握りつぶす)。
 
-| 要素           | 内容                                                                                                                     |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| リクエストログ | `app.use()` の middleware で `{method} {path}` を DEBUG レベルで出力 (名前空間 `api-server`)                             |
-| マウント       | `/cron` → `createCronRoutes(cronCtx)`、`/logs` → `createLogsRoutes()`、`/settings` → `createSettingsRoutes(settingsCtx)` |
-| `notFound`     | `{ "error": "Not Found" }` を 404 で返す                                                                                 |
-| `onError`      | `getErrorMessage(err)` (`errors.ts`) でメッセージを取り出し ERROR ログに出した上で `{ "error": msg }` を 500 で返す      |
-| bind           | `hostname: "127.0.0.1"` 固定。ポートは `config.json` の `claude.apiPort` (`config.schema.json` の default は 3000)       |
-| エラー応答の形 | 全ルートで `{ "error": string }` + HTTP ステータス。RFC 9457 Problem Details ではない (`docs/api/README.md`)             |
+| 要素           | 内容                                                                                                                                                                                       |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| リクエストログ | `app.use()` の middleware で `{method} {path}` を DEBUG レベルで出力 (名前空間 `api-server`)                                                                                               |
+| マウント       | `/cron` → `createCronRoutes(cronCtx)`、`/health` → `createHealthRoutes(healthCtx)`、`/logs` → `createLogsRoutes()`、`/settings` → `createSettingsRoutes(settingsCtx)`                      |
+| `notFound`     | `{ "error": "Not Found" }` を 404 で返す                                                                                                                                                   |
+| `onError`      | `getErrorMessage(err)` (`errors.ts`) でメッセージを取り出し ERROR ログに出した上で `{ "error": msg }` を 500 で返す                                                                        |
+| bind           | `hostname: "127.0.0.1"` 固定。ポートは `config.json` の `claude.apiPort` (`config.schema.json` の default は 3000)                                                                         |
+| エラー応答の形 | 大半のルートで `{ "error": string }` + HTTP ステータス (RFC 9457 Problem Details ではない、`docs/api/README.md`)。`GET /health` のみ `{ "status": "ok" \| "unavailable" }` を返す (下記)。 |
 
 `cronCtx` は省略可能で、省略時 (または個々の関数が未注入の時) は cron ルートが 503 を返す。
 
@@ -33,13 +33,23 @@ bot プロセス内で `127.0.0.1:{config.claude.apiPort}` に Hono アプリを
 
 `POST /cron/run` は `c.req.json()` を try で包んでいないため、JSON として壊れたボディは `onError` に流れて 500 になる (settings の PATCH とは挙動が異なる)。
 
+### health (`api/routes/health.ts`)
+
+注入される `HealthRouteContext` は `isReady: () => boolean` を必須で持つ。`bot/mod.ts` は `client.ws.shards` の全シャードの `status` が `Status.Ready` かどうかを渡す (discord.js の `Client#isReady()` は一度 Ready になった後の Gateway 切断を検知できないため使わない)。応答は Discord Gateway の接続状態を反映する。`compose.yaml` の `healthcheck:` から `curl` で定期的に叩かれる想定 (`deployment.md` 参照)。
+
+| メソッド / パス | リクエスト | 正常応答                 | エラー                                                  |
+| --------------- | ---------- | ------------------------ | ------------------------------------------------------- |
+| `GET /health`   | なし       | 200 `{ "status": "ok" }` | `isReady()` が false: 503 `{ "status": "unavailable" }` |
+
+他のルートと異なり、エラー応答も `{ "error": string }` ではなく `{ "status": "unavailable" }` の形になる (healthcheck の呼び出し元は本文を読まず HTTP ステータスのみ見る想定のため)。
+
 ### logs (`api/routes/logs.ts`)
 
 `logger.ts` のリングバッファを `getLogEntries(filter)` で読む。バッファには `initLogger` の `level` に関係なく全レベルが記録されるため、API からは出力レベル未満のエントリも取得できる。ロガーの初期化とバッファ容量は [lifecycle.md](lifecycle.md) を参照。
 
-| メソッド / パス | クエリ                                                                                                                                                                                                                                                                                                                                                                               | 正常応答                                                                                         | エラー                                                                                                                         |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| `GET /logs`     | `level` (大文字化して `DEBUG` / `INFO` / `WARN` / `ERROR` と照合。この重要度以上を返す) / `namespace` (前方一致) / `since` (`Temporal.Instant.from()` でパースできる ISO 8601。タイムスタンプ文字列の比較で絞る) / `limit` (`Number()` で変換し正の整数のみ受理。`getLogEntries` 側で既定 100・上限 1000 に clamp するため、1001 以上を渡してもエラーにはならず 1000 件に丸められる) | `LogEntry[]` (`{ timestamp, level, namespace, message }`)。時系列順で、条件に合う末尾 `limit` 件 | `level` 不正: 400 / `since` 不正: 400 `invalid since: must be ISO 8601` / `limit` 不正: 400 `limit must be a positive integer` |
+| メソッド / パス | クエリ                                                                                                                                                                                                                                                                                                                                                                                                                                                             | 正常応答                                                                                         | エラー                                                                                                                                                                                             |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /logs`     | `level` (大文字化して `DEBUG` / `INFO` / `WARN` / `ERROR` と照合。この重要度以上を返す) / `namespace` (前方一致) / `since` (`Temporal.Instant.from()` でパースできる ISO 8601。`Temporal.Instant.compare()` による時刻比較で絞るため、オフセット付き・小数秒無しの指定でも正しく比較される) / `limit` (`/^\d+$/` に一致しかつ 1 以上の整数のみ受理。`MAX_LOG_LIMIT` (`logger.ts`、1000) を超える値は 400。`getLogEntries` 側の clamp はロガー内部の防御として残る) | `LogEntry[]` (`{ timestamp, level, namespace, message }`)。時系列順で、条件に合う末尾 `limit` 件 | `level` 不正: 400 / `since` 不正: 400 `invalid since: must be ISO 8601` / `limit` 不正: 400 `limit must be a positive integer` / `limit` が `MAX_LOG_LIMIT` 超過: 400 `limit must not exceed 1000` |
 
 ### settings (`api/routes/settings.ts`)
 
@@ -65,13 +75,14 @@ bot プロセス内で `127.0.0.1:{config.claude.apiPort}` に Hono アプリを
 
 ## コンテキスト注入 (`bot/mod.ts`)
 
-`DiscordBot.start()` の `ClientReady` ハンドラ内で、`CronExecutor` の初期化とジョブ読み込みの後に次を組み立てて `startApiServer(this.config.claude.apiPort, settingsCtx, cronCtx)` を呼ぶ。
+`DiscordBot.start()` の `ClientReady` ハンドラ内で、`CronExecutor` の初期化とジョブ読み込みの後に次を組み立てて `startApiServer(this.config.claude.apiPort, settingsCtx, healthCtx, cronCtx)` を呼ぶ。
 
 | コンテキスト           | フィールド        | 実体                                                                                                                                 |
 | ---------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `CronRouteContext`     | `reloadCronJobs`  | `loadCronJobsFromDir(config.claude.cwd)` → `CronExecutor.reload(jobs)` (once ジョブのファイル削除後にも同じ関数が使われる)           |
 |                        | `runJob`          | `CronExecutor.findJob(name)` が `undefined` なら `Error("job not found: {name}")` を throw し、見つかれば `CronExecutor.runJob(job)` |
 |                        | `listJobs`        | `CronExecutor.listJobs()`                                                                                                            |
+| `HealthRouteContext`   | `isReady`         | `client.ws.shards.size > 0 && client.ws.shards.every((shard) => shard.status === Status.Ready)`                                      |
 | `SettingsRouteContext` | `store`           | `DiscordBot` が保持する `Store`                                                                                                      |
 |                        | `resolveParentId` | `DiscordBot.resolveThreadParentId(id)`                                                                                               |
 
@@ -117,7 +128,7 @@ flowchart LR
 
 ## テスト
 
-`api/routes/cron.test.ts` / `api/routes/settings.test.ts` は `Deno.serve()` を起動せず、`new Hono()` に `createCronRoutes()` / `createSettingsRoutes()` をマウントして `app.request()` で直接リクエストを投げる形式。cron 側はコンテキスト関数をクロージャで差し替え、settings 側は `Deno.openKv(":memory:")` の `Store` を使う。`api/server.ts` 自体の統合テストは無い。
+`api/routes/cron.test.ts` / `api/routes/health.test.ts` / `api/routes/logs.test.ts` / `api/routes/settings.test.ts` は `Deno.serve()` を起動せず、`new Hono()` に `createCronRoutes()` / `createHealthRoutes()` / `createLogsRoutes()` / `createSettingsRoutes()` をマウントして `app.request()` で直接リクエストを投げる形式。cron 側はコンテキスト関数をクロージャで差し替え、settings 側は `Deno.openKv(":memory:")` の `Store` を使う。`api/server.ts` 自体の統合テストは無い。
 
 ## エージェント向けの利用手順
 

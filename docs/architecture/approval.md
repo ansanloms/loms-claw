@@ -59,7 +59,7 @@ Discord のボタン承認が発火するのは、上の表のとおり SDK 上�
 3. 以下を投稿する。
    - ボタン 3 種: `approve:{requestId}` (Allow, Success) / `always:{requestId}:{toolName}` (Allow Always, Primary) / `deny:{requestId}` (Deny, Danger)
    - 本文: 1 行目に `Tool: {toolName}` (太字 + インラインコード)、`toolInput.description` があればその値、続けて `toolInput` の 2 スペース JSON ダンプを json コードフェンスで囲んだもの。ダンプは 1500 文字を超える場合 1497 文字 + `...` に切り詰める
-4. `pending` に登録し Promise を返す。`handleButton()` が解決するか、`APPROVAL_TIMEOUT_MS` (5 分) 経過で `{ decision: "deny", reason: "Timed out" }` に解決する。タイムアウト時に投稿メッセージは編集しない。
+4. `pending` に登録し Promise を返す。`handleButton()` が解決するか、`INTERACTION_TIMEOUT_MS` (`approval/constants.ts`、5 分) 経過で `{ decision: "deny", reason: "Timed out" }` に解決する。タイムアウト時に投稿メッセージは編集しない。
 
 ### `handleButton(interaction)`
 
@@ -100,7 +100,7 @@ Discord のボタン承認が発火するのは、上の表のとおり SDK 上�
    - select の選択肢は各 option (value は index 文字列、label / description は 100 文字で切り詰め) に加え、`Other (自由入力)` (`OTHER_VALUE` = `__other__`) を自動で末尾に足す
    - `multiSelect` の質問は `maxValues = options.length + 1`、それ以外は 1
    - 回答済みの質問の select は disabled にし、placeholder に回答を表示する
-3. `ANSWER_TIMEOUT_MS` (5 分) でタイムアウト。メッセージを `\n**→ Timed out**` に編集し `{ kind: "denied", reason: "Timed out" }`。
+3. `INTERACTION_TIMEOUT_MS` (`approval/constants.ts`、5 分) でタイムアウト。メッセージを `\n**→ Timed out**` に編集し `{ kind: "denied", reason: "Timed out" }`。
 
 ### インタラクション
 

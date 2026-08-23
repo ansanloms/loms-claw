@@ -10,6 +10,12 @@ data/workspace/*
 !data/workspace/.claude
 !data/workspace/CLAUDE.md
 !data/workspace/cron
+!data/workspace/apm.yml
+!data/workspace/apm.lock.yaml
+
+# once: true の一時 cron ジョブ (実行後に自動削除される前提のファイル) は追跡しない。
+# 命名規則は data/workspace/.claude/skills/cron/SKILL.md 参照。
+data/workspace/cron/*.once.md
 
 # Deno KV。ローカル実行ではリポジトリ直下の .claude/ にも作られる (storePath 既定値が cwd 基準のため)
 **/*.kv

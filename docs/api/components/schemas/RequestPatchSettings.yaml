@@ -9,7 +9,7 @@ properties:
       - "null"
     minLength: 1
     description: モデルの alias またはフルネーム。null を指定すると削除し、フォールバック解決へ戻す。
-    example: claude-sonnet-4-5
+    example: claude-sonnet-4-6
   effort:
     type:
       - string

@@ -87,7 +87,7 @@ curl -s http://127.0.0.1:3000/settings/default
 
 | キー | PATCH で書けるか | GET に出るか | 取りうる値 | 未設定時のフォールバック |
 | --- | --- | --- | --- | --- |
-| `model` | ○ | `{value, source}` | モデル alias (`opus` / `sonnet` / `haiku`) またはフルネーム (`claude-sonnet-4-5` 等)。空文字は不可 | thread → channel → グローバルデフォルト |
+| `model` | ○ | `{value, source}` | モデル alias (`opus` / `sonnet` / `haiku`) またはフルネーム (`claude-sonnet-4-6` 等)。空文字は不可 | thread → channel → グローバルデフォルト |
 | `effort` | ○ | `{value, source}` | `low` / `medium` / `high` / `xhigh` / `max` のいずれか | thread → channel → グローバルデフォルト |
 | `showThinking` | ○ | `{value, source}` | `true` / `false` | thread → channel → グローバルデフォルト (最終的に `false`) |
 | `active` | ○ | `{value, source}`。上書きが無ければフィールドごと省略 | `true` / `false` | `config.json` の `activeChannelIds` によるチャンネル ID リスト判定 |
@@ -129,7 +129,7 @@ curl -s http://127.0.0.1:3000/settings/default
 
 ```json
 {
-  "model": "claude-sonnet-4-5",
+  "model": "claude-sonnet-4-6",
   "effort": "high",
   "showThinking": false
 }

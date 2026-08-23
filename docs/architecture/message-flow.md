@@ -52,7 +52,7 @@ sequenceDiagram
 
 ### 2. スコープ抽出
 
-`message.channel.isThread()` が true なら `{ channelId: parentId ?? message.channelId, threadId: message.channelId }`、それ以外は `{ channelId: message.channelId }` を `StoreScope` とする。`localId = threadId ?? channelId` を「発話があった場所」として、キューのキー・承認ボタンの送信先・テンプレート変数 `discord.channel.id` に使う。スコープの意味は [store-and-settings](store-and-settings.md) を参照。
+`scopeFromChannel(message.channel, message.channelId)` (`bot/scope.ts`) が `StoreScope` を組み立てる: スレッドなら `{ channelId: parentId ?? message.channelId, threadId: message.channelId }`、それ以外は `{ channelId: message.channelId }`。`bot/commands.ts` の `scopeFromInteraction()` も同じ関数を使う。`localId = threadId ?? channelId` を「発話があった場所」として、キューのキー・承認ボタンの送信先・テンプレート変数 `discord.channel.id` に使う。スコープの意味は [store-and-settings](store-and-settings.md) を参照。
 
 bot 側でメッセージをスレッドへ自動分離する機能は実装しない。スレッド分離はエージェントの運用フロー (チャンネル別システムプロンプトの「話題の管理」節 + `discord` / `travel-note` skill) で、ユーザ確認を取ってから行う。設定は `PATCH /settings/<threadId>` で `active: true` を入れる (2026-08-23 判断、#136)。
 
@@ -110,13 +110,13 @@ bot 側でメッセージをスレッドへ自動分離する機能は実装し�
 
 `for await` で `SDKMessage` を 1 件ずつ見る。各イベントは次の順で 1 つの分岐にだけ入る。
 
-| 優先 | 条件                                                                                                      | 処理                                                                                                                                         |
-| ---- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | `extractTopLevelTextDelta(event)` が文字列 (`stream_event` かつ `parent_tool_use_id` 無しの `text_delta`) | 未送出の thinking があれば強制 flush。`textBuffer` に追記し、800 文字以上なら境界 flush                                                      |
-| 2    | `showThinking` かつ `extractTopLevelThinkingDelta(event)` が文字列 (`thinking_delta`)                     | `thinkingBuffer` に追記し、1500 文字以上なら境界 flush                                                                                       |
-| 3    | `event.type === "assistant"` かつ `parent_tool_use_id` 無し                                               | thinking → text の順に強制 flush (assistant ターン 1 件ごとに別投稿へ区切る)                                                                 |
-| 4    | `event.type === "result"`                                                                                 | `resultEvent` に保持。`subtype !== "success"` なら WARN (イベント全体を JSON で記録)。`store.setSession(scope, event.session_id)` を即時保存 |
-| 5    | `event.type === "tool_progress"`                                                                          | `progress.report(tool_name, elapsed_time_seconds)`                                                                                           |
+| 優先 | 条件                                                                                                      | 処理                                                                                                                                                                                          |
+| ---- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | `extractTopLevelTextDelta(event)` が文字列 (`stream_event` かつ `parent_tool_use_id` 無しの `text_delta`) | 未送出の thinking があれば強制 flush。`textBuffer` に追記し、800 文字以上なら境界 flush                                                                                                       |
+| 2    | `showThinking` かつ `extractTopLevelThinkingDelta(event)` が文字列 (`thinking_delta`)                     | `thinkingBuffer` に追記し、1500 文字以上なら境界 flush                                                                                                                                        |
+| 3    | `event.type === "assistant"` かつ `parent_tool_use_id` 無し                                               | thinking → text の順に強制 flush (assistant ターン 1 件ごとに別投稿へ区切る)                                                                                                                  |
+| 4    | `event.type === "result"`                                                                                 | `resultEvent` に保持し `handleResultEvent()` (`claude/mod.ts`) を呼ぶ。`subtype !== "success"` なら WARN (イベント全体を JSON で記録)。`store.setSession(scope, event.session_id)` を即時保存 |
+| 5    | `event.type === "tool_progress"`                                                                          | `progress.report(tool_name, elapsed_time_seconds)`                                                                                                                                            |
 
 - `system` / `user` / サブエージェント由来 (`parent_tool_use_id` 有り) のイベントは扱わない。
 - 境界 flush: バッファ内で最後の `。` または改行までを送り、残りを保持する。境界が無い場合は何もしないが、閾値の 2 倍以上に達したら全量を強制 flush する (コードブロック・英語・URL が続くケース対策)。
@@ -126,7 +126,7 @@ bot 側でメッセージをスレッドへ自動分離する機能は実装し�
 ### 11. ループ後
 
 - thinking → text の順に最終 flush。
-- 一度もテキストを送っていなければ (`hasStreamedText` が false)、`extractResultText(resultEvent)` を送る。`result` フィールドが文字列なら `subtype` を問わず採用し、無ければ `errors` / `subtype` から組み立てた Error を throw する。`resultEvent` 自体が無ければ `claude stream ended without result event` を throw する。
+- 一度もテキストを送っていなければ (`hasStreamedText` が false)、`requireResultText(resultEvent)` (`claude/mod.ts`) で本文を取り出し `sendChunks` に渡す。`resultEvent` が無ければ `claude stream ended without result event` を throw する。取り出し自体は `extractResultText(resultEvent)` (`result` フィールドが文字列なら `subtype` を問わず採用し、無ければ `errors` / `subtype` から組み立てた Error を throw する)。cron 側の同じ組み合わせは [cron](cron.md) を参照。
 
 ### 12. エラーと後始末
 
@@ -169,7 +169,7 @@ per-scope の停止手段は無い。連鎖を止めるにはレート制限に�
 | modal 送信 (AskUserQuestion の Other 自由入力) | `interaction.isModalSubmit()`                        | `approvalManager.handleModal(interaction)`                                                                                                                                                                |
 | chat input `/claw settings show\|set\|unset`   | `isChatInputCommand()` かつ `commandName === "claw"` | `isAuthorized(guildId, user.id, user.bot, config)` を通過後、サブコマンド群 `settings` の `show` → `handleSettingsShow`、`set` → `handleSettingsSet`、`unset` → `handleSettingsUnset` (`bot/commands.ts`) |
 
-- ボタン / select / modal のハンドラが throw した場合は ERROR ログを出し、未応答なら ephemeral のエラー文言で `reply()` する。
+- ボタン / select / modal のハンドラが throw した場合は ERROR ログを出し、未応答なら ephemeral のエラー文言で `reply()` する。この 3 分岐は同形のため `runInteraction(interaction, label, handler, errorMessage)` (`bot/mod.ts`) に共通化してある。ログの label とエラー文言は分岐ごとに異なる (button: `"承認処理中にエラーが発生しました。"`、select / modal: `"回答処理中にエラーが発生しました。"`)。
 - スラッシュコマンドは `registerCommands()` で対象ギルドにのみ登録される ([lifecycle](lifecycle.md))。設定コマンドの意味は [store-and-settings](store-and-settings.md)、承認・質問の詳細は [approval](approval.md) を参照。
 
 ## 定数一覧
@@ -186,4 +186,4 @@ per-scope の停止手段は無い。連鎖を止めるにはレート制限に�
 | `SELF_MENTION_RATE_LIMIT_MAX_COUNT`      | `bot/ratelimit.ts`                          | 6       | 自己メンション応答の上限回数                         |
 | `SELF_MENTION_RATE_LIMIT_WINDOW_MINUTES` | `bot/ratelimit.ts`                          | 10      | 同ウィンドウ長 (分)                                  |
 | `claude.timeout`                         | `config.json`                               | 設定値  | `askClaude()` の `AbortSignal.timeout`               |
-| `APPROVAL_TIMEOUT_MS`                    | `approval/manager.ts`                       | 5 分    | 承認 / 質問の待ち時間 ([approval](approval.md))      |
+| `INTERACTION_TIMEOUT_MS`                 | `approval/constants.ts`                     | 5 分    | 承認 / 質問の待ち時間 ([approval](approval.md))      |

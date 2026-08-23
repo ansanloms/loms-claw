@@ -71,6 +71,16 @@ flowchart LR
 
 消費側の使い方 (chat のバッファリングとフラッシュ、cron の `result` のみ処理) は [message-flow](message-flow.md) と [cron](cron.md) を参照。
 
+`claude/mod.ts` はさらに、chat (bot/mod.ts) と cron (`cron/executor.ts`) が個別に持っていた「`result` イベントの処理 + drain + 本文取り出し」を副作用ありの 3 関数に集約している。
+
+| 関数                                                     | 役割                                                                                                                                                                                   |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `handleResultEvent(event, { onNonSuccess, setSession })` | `result` イベント 1 件分の副作用。非 success な `subtype` なら `onNonSuccess` を呼び、`setSession` があれば `event.session_id` で呼ぶ                                                  |
+| `drainResultEvent(stream, { onNonSuccess, setSession })` | `SDKMessage` ストリーム (`AsyncIterable`) を走査し、`result` イベントごとに `handleResultEvent()` を呼ぶ。ストリームを読み切った時点の `result` イベント (無ければ `undefined`) を返す |
+| `requireResultText(resultEvent)`                         | `resultEvent` が無ければ `"claude stream ended without result event"` を throw する。あれば `extractResultText()` の結果を返す (送信は呼び出し側が行う)                                |
+
+cron は `drainResultEvent()` でストリーム全体を走査してから `requireResultText()` で本文を取り出し、`textChannel` があれば送信する。chat (bot/mod.ts) は `text_delta` 等も同じループで処理する都合上、`result` イベントの捕捉自体は自前のループで `handleResultEvent()` を直接呼んで行い、ストリーミングが一度も発生しなかった場合 (`hasStreamedText === false`) のフォールバックとして `requireResultText()` のみを呼ぶ。
+
 ## SystemPromptStore
 
 `claude/system-prompt.ts` の `SystemPromptStore` は、ワークスペースの `{config.claude.cwd}/.claude/system-prompt/` 配下を起動時に読み込み、`query()` の `systemPrompt.append` に渡す文字列を組み立てる。`bot/mod.ts` の `DiscordBot` コンストラクタで生成し、`start()` の先頭で `load()` を呼ぶ。cron 側 (`CronExecutor`) にも同じインスタンスが渡る。
