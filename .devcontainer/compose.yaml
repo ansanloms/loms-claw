@@ -10,3 +10,6 @@ services:
         target: /app
     # 起動・停止は devcontainer が管理する (本番の自動再起動を無効化)。
     restart: "no"
+    # overrideCommand: true で API サーバーが起動せず /health が応答しないため無効化する。
+    healthcheck:
+      disable: true

@@ -60,14 +60,14 @@ flowchart LR
 
 `compose.yaml` はリポジトリルートに置き、compose のコマンドはすべてリポジトリルートで実行する。
 
-| 項目           | 内容                                                                                                                                                                                                                                                  |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| プロジェクト名 | `loms-claw`                                                                                                                                                                                                                                           |
-| サービス       | `bot` (`build: .`)                                                                                                                                                                                                                                    |
-| environment    | `TZ: ${TZ:-Asia/Tokyo}` のみ。値は host の `.env` から compose が読む                                                                                                                                                                                 |
-| volumes        | `./data` → `/data` の bind mount 1 つ                                                                                                                                                                                                                 |
-| healthcheck    | `curl -fsS http://127.0.0.1:$(jq -r .claude.apiPort ${LOMS_CLAW_CONFIG:-/data/config.json})/health` (`interval: 60s` / `timeout: 10s` / `retries: 3` / `start_period: 60s`)。エンドポイント本体は [internal-api.md](internal-api.md) の `GET /health` |
-| restart        | `unless-stopped`                                                                                                                                                                                                                                      |
+| 項目           | 内容                                                                                                                                                                                                                                                            |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| プロジェクト名 | `loms-claw`                                                                                                                                                                                                                                                     |
+| サービス       | `bot` (`build: .`)                                                                                                                                                                                                                                              |
+| environment    | `TZ: ${TZ:-Asia/Tokyo}` のみ。値は host の `.env` から compose が読む                                                                                                                                                                                           |
+| volumes        | `./data` → `/data` の bind mount 1 つ                                                                                                                                                                                                                           |
+| healthcheck    | `curl -fsS http://127.0.0.1:$(jq -r '.claude.apiPort // 3000' ${LOMS_CLAW_CONFIG:-/data/config.json})/health` (`interval: 60s` / `timeout: 10s` / `retries: 3` / `start_period: 60s`)。エンドポイント本体は [internal-api.md](internal-api.md) の `GET /health` |
+| restart        | `unless-stopped`                                                                                                                                                                                                                                                |
 
 `.env` は docker compose が host 側で参照する変数 (現状 `TZ` のみ) を持つファイルで、アプリ自体は `.env` を読まない (`.env.example` のコメント)。`.env` は `.gitignore` で管理外。
 
@@ -101,7 +101,7 @@ docker compose logs -f               # ログ確認
 `.devcontainer/` は本番と同じイメージ・compose 定義に、ソースツリーの bind mount を重ねただけの構成。
 
 - `.devcontainer/devcontainer.json`: `dockerComposeFile` に `../compose.yaml` と `./compose.yaml` の 2 つを順に指定し、`service` は `bot`、`workspaceFolder` は `/app`、`overrideCommand: true`。VS Code 向けに `denoland.vscode-deno` 拡張と `deno.enable: true` を設定する。
-- `.devcontainer/compose.yaml`: サービス `bot` に、リポジトリルート (`.`、相対パスは最初に指定した compose ファイルの場所基準) を `/app` へ重ねる bind mount を追加し、`restart: "no"` にする。コメントによれば、編集が即コンテナに反映されて `deno task dev` の `--watch` が拾い、起動・停止は devcontainer が管理する。
+- `.devcontainer/compose.yaml`: サービス `bot` に、リポジトリルート (`.`、相対パスは最初に指定した compose ファイルの場所基準) を `/app` へ重ねる bind mount を追加し、`restart: "no"` にする。コメントによれば、編集が即コンテナに反映されて `deno task dev` の `--watch` が拾い、起動・停止は devcontainer が管理する。`healthcheck: { disable: true }` で `compose.yaml` の healthcheck を無効化する。`devcontainer.json` の `overrideCommand: true` によりコンテナの CMD (本番相当の起動コマンド) が上書きされ待機状態になるため、bot プロセス自体が自動起動せず `/health` も応答しない。
 
 この構成から次が言える。
 
@@ -111,12 +111,12 @@ docker compose logs -f               # ログ確認
 
 ## 環境変数
 
-| 変数                | 供給元                                                                                                            | 消費者                                                                                                                                                                   |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `CLAUDE_CONFIG_DIR` | Dockerfile の `ENV` (`/data/home`)                                                                                | Claude Code (既定の `~/.claude` を置き換える)                                                                                                                            |
-| `LOMS_CLAW_CONFIG`  | Dockerfile の `ENV` (`/data/config.json`)                                                                         | `config.ts` の `loadConfig()` (未設定時 `./data/config.json`)。`compose.yaml` の `healthcheck:` もこの値 (既定 `/data/config.json`) から `jq` で `claude.apiPort` を読む |
-| `TZ`                | host の `.env` → `compose.yaml` の `environment` (`${TZ:-Asia/Tokyo}`)                                            | コンテナ全体 (cron 式のローカルタイム評価等)                                                                                                                             |
-| `DISCORD_BOT_TOKEN` | bot プロセスが `config.discord.token` を `query()` の `env` に注入する (`claude/mod.ts` の `buildQueryOptions()`) | SDK 同梱バイナリが spawn する Bash/curl。`discord` skill が `Authorization: Bot ${DISCORD_BOT_TOKEN}` で使う                                                             |
+| 変数                | 供給元                                                                                                            | 消費者                                                                                                                                                                                                                                           |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CLAUDE_CONFIG_DIR` | Dockerfile の `ENV` (`/data/home`)                                                                                | Claude Code (既定の `~/.claude` を置き換える)                                                                                                                                                                                                    |
+| `LOMS_CLAW_CONFIG`  | Dockerfile の `ENV` (`/data/config.json`)                                                                         | `config.ts` の `loadConfig()` (未設定時 `./data/config.json`)。`compose.yaml` の `healthcheck:` もこの値 (既定 `/data/config.json`) から `jq` で `claude.apiPort` を読む (未指定時は `// 3000` で `config.schema.json` の既定値にフォールバック) |
+| `TZ`                | host の `.env` → `compose.yaml` の `environment` (`${TZ:-Asia/Tokyo}`)                                            | コンテナ全体 (cron 式のローカルタイム評価等)                                                                                                                                                                                                     |
+| `DISCORD_BOT_TOKEN` | bot プロセスが `config.discord.token` を `query()` の `env` に注入する (`claude/mod.ts` の `buildQueryOptions()`) | SDK 同梱バイナリが spawn する Bash/curl。`discord` skill が `Authorization: Bot ${DISCORD_BOT_TOKEN}` で使う                                                                                                                                     |
 
 `buildQueryOptions()` は `Deno.env.toObject()` を展開した上で `DISCORD_BOT_TOKEN` を足して `env` に渡す (SDK は `env` を指定すると `process.env` を継承しないため)。
 
