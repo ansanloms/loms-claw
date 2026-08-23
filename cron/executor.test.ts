@@ -126,6 +126,24 @@ Deno.test("CronExecutor", async (t) => {
         const { manager } = createMockApprovalManager();
         const systemPrompts = createMockSystemPromptStore();
 
+        let resolveGate!: () => void;
+        const gate = new Promise<void>((resolve) => {
+          resolveGate = resolve;
+        });
+        const blockingQueryFn: QueryFn = (_params) => {
+          async function* gen(): AsyncGenerator<SDKMessage> {
+            await gate;
+            yield {
+              type: "result",
+              subtype: "success",
+              result: "blocked-result",
+              session_id: "blocked-session",
+              is_error: false,
+            } as unknown as SDKMessage;
+          }
+          return gen() as unknown as ReturnType<QueryFn>;
+        };
+
         const executor = new CronExecutor(
           client as never,
           TEST_CONFIG,
@@ -135,7 +153,7 @@ Deno.test("CronExecutor", async (t) => {
           {},
           manager as never,
           systemPrompts,
-          mockQueryFn([]),
+          blockingQueryFn,
         );
 
         const job: CronJobDef = {
@@ -145,14 +163,18 @@ Deno.test("CronExecutor", async (t) => {
           channelId: "ch-123",
         };
 
-        // running Set に追加して重複実行をシミュレート
-        // @ts-ignore: private フィールドへのアクセス
-        executor.running.add("test-job");
+        // 1 回目を実行開始し、running に登録された状態でブロックさせる
+        const firstRun = executor.runJob(job);
+        assertEquals(executor.isRunning("test-job"), true);
+
+        // 実行中の 2 回目はスキップされること
         await executor.runJob(job);
         assertEquals(sent.length, 0); // スキップされる
 
-        // @ts-ignore: private フィールドへのアクセス
-        executor.running.delete("test-job");
+        // ブロックを解除して 1 回目を完了させる
+        resolveGate();
+        await firstRun;
+        assertEquals(executor.isRunning("test-job"), false);
       }),
   );
 
@@ -186,8 +208,7 @@ Deno.test("CronExecutor", async (t) => {
         await executor.runJob(job);
 
         // running Set から除去されていること
-        // @ts-ignore: private フィールドへのアクセス
-        assertEquals(executor.running.has("bad-channel-job"), false);
+        assertEquals(executor.isRunning("bad-channel-job"), false);
       }),
   );
 
@@ -485,8 +506,7 @@ Deno.test("CronExecutor", async (t) => {
         await executor.runJob(job);
 
         // running からクリアされていること
-        // @ts-ignore: private フィールドへのアクセス
-        assertEquals(executor.running.has("once-no-callback"), false);
+        assertEquals(executor.isRunning("once-no-callback"), false);
       }),
   );
 
@@ -513,8 +533,7 @@ Deno.test("CronExecutor", async (t) => {
         let runningDuringCallback = false;
         executor.setOnceCallback((name: string) => {
           // コールバック実行中は running に残っているはず
-          // @ts-ignore: private フィールドへのアクセス
-          runningDuringCallback = executor.running.has(name);
+          runningDuringCallback = executor.isRunning(name);
           return Promise.resolve();
         });
 
@@ -530,8 +549,7 @@ Deno.test("CronExecutor", async (t) => {
         // コールバック実行中は running に含まれていた
         assertEquals(runningDuringCallback, true);
         // 完了後はクリアされている
-        // @ts-ignore: private フィールドへのアクセス
-        assertEquals(executor.running.has("once-running-check"), false);
+        assertEquals(executor.isRunning("once-running-check"), false);
       }),
   );
 });
