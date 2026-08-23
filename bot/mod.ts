@@ -38,6 +38,7 @@ import {
   SelfMentionRateLimiter,
 } from "./ratelimit.ts";
 import { ScopeQueue } from "./queue.ts";
+import { splitAtBoundary } from "./flush.ts";
 import {
   appendImageReferences,
   cleanupImageFiles,
@@ -609,42 +610,22 @@ export class DiscordBot {
 
         // ストリーミング応答: text_delta をバッファに蓄積し、
         // 閾値を超えたら文境界で区切って中間投稿する。
+        // 分割アルゴリズム自体は splitAtBoundary (bot/flush.ts) に切り出してある。
         const FLUSH_THRESHOLD = 800;
         let textBuffer = "";
         let hasStreamedText = false;
         let resultEvent: SDKResultMessage | undefined;
 
         const flushBuffer = async (force: boolean) => {
-          if (force) {
-            // 残り全部を投稿。
-            const text = textBuffer.trim();
-            textBuffer = "";
-            if (text) {
-              hasStreamedText = true;
-              await sendChunks(text);
-            }
+          const result = splitAtBoundary(textBuffer, FLUSH_THRESHOLD, force);
+          if (!result) {
             return;
           }
-          // 最後の文境界（。、改行）で区切って投稿。
-          const lastBoundary = Math.max(
-            textBuffer.lastIndexOf("。"),
-            textBuffer.lastIndexOf("\n"),
-          );
-          if (lastBoundary < 0) {
-            // 境界が見つからないが閾値の 2 倍を超えたら強制フラッシュ。
-            // コードブロック・英語テキスト・URL 等が連続するケースへの対策。
-            if (textBuffer.length >= FLUSH_THRESHOLD * 2) {
-              await flushBuffer(true);
-            }
-            return;
+          textBuffer = result.rest;
+          if (result.send) {
+            hasStreamedText = true;
+            await sendChunks(result.send);
           }
-          const send = textBuffer.slice(0, lastBoundary + 1).trim();
-          textBuffer = textBuffer.slice(lastBoundary + 1);
-          if (!send) {
-            return;
-          }
-          hasStreamedText = true;
-          await sendChunks(send);
         };
 
         // thinking 用バッファ。回答テキストとは独立に文境界でフラッシュする。
@@ -653,28 +634,17 @@ export class DiscordBot {
         let thinkingBuffer = "";
 
         const flushThinking = async (force: boolean) => {
-          if (force) {
-            const text = thinkingBuffer.trim();
-            thinkingBuffer = "";
-            if (text) {
-              await sendThinking(text);
-            }
-            return;
-          }
-          const lastBoundary = Math.max(
-            thinkingBuffer.lastIndexOf("。"),
-            thinkingBuffer.lastIndexOf("\n"),
+          const result = splitAtBoundary(
+            thinkingBuffer,
+            THINKING_FLUSH_THRESHOLD,
+            force,
           );
-          if (lastBoundary < 0) {
-            if (thinkingBuffer.length >= THINKING_FLUSH_THRESHOLD * 2) {
-              await flushThinking(true);
-            }
+          if (!result) {
             return;
           }
-          const send = thinkingBuffer.slice(0, lastBoundary + 1).trim();
-          thinkingBuffer = thinkingBuffer.slice(lastBoundary + 1);
-          if (send) {
-            await sendThinking(send);
+          thinkingBuffer = result.rest;
+          if (result.send) {
+            await sendThinking(result.send);
           }
         };
 
