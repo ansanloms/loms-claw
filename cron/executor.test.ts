@@ -174,12 +174,14 @@ Deno.test("CronExecutor", async (t) => {
           // 実行中の 2 回目はガードで即座に return すること。
           // await で直接待つと、ガードが壊れて待ち続けた場合にテストがハング
           // するため、タイムアウトと race させてアサーション失敗に落とす。
+          let timeoutId!: ReturnType<typeof setTimeout>;
           const raced = await Promise.race<string>([
             executor.runJob(job).then(() => "returned"),
-            new Promise<string>((resolve) =>
-              setTimeout(() => resolve("timeout"), 1000)
-            ),
+            new Promise<string>((resolve) => {
+              timeoutId = setTimeout(() => resolve("timeout"), 1000);
+            }),
           ]);
+          clearTimeout(timeoutId);
           assertEquals(
             raced,
             "returned",
@@ -194,6 +196,7 @@ Deno.test("CronExecutor", async (t) => {
         // ブロックを解除して 1 回目を完了させる
         await firstRun;
         assertEquals(sent.includes(resultText), true);
+        assertEquals(sent.length, 1); // 2 回目は何も投稿しない
         assertEquals(executor.isRunning("test-job"), false);
       }),
   );
