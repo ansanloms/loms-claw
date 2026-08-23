@@ -39,7 +39,7 @@ sequenceDiagram
 
 `.claude/settings.json` のパスは `bot/mod.ts` の `DiscordBot` コンストラクタで `join(config.claude.cwd, ".claude", "settings.json")` として `ApprovalManager` に渡される。`config.claude.cwd` は `config.ts` の `loadConfig()` が `Deno.cwd()` を注入する値で、本番 (Docker) ではワークスペースの `/data/workspace` になる (host では `data/workspace/.claude/settings.json`)。中身の allowlist は運用依存のためここでは列挙しない。配置は [deployment](deployment.md) を参照。
 
-Discord のボタン承認が発火するのは、上の表のとおり SDK 上の既定 (allow に無いツール) が呼ばれたときに限る。ワークスペースの `settings.json` の `permissions.allow` では組み込みツール (Bash / Read / Write / Edit 等) と、一部の MCP ツール (Google Calendar / Gmail の読み書き) を事前許可している。実際の一覧は `data/workspace/.claude/settings.json` を正とする。ボタン承認が発火するのは allow に無いツール (allow に入っていない MCP ツール等) に限られる。旧名 (現行 MCP に存在しない `gcal_*` / `gmail_*` の 4 件) の削除は行ったが、有効な許可範囲は変えていない。allowlist は現状維持 (縮小しない) と 2026-08-23 に判断した (#120)。
+Discord のボタン承認が発火するのは、上の表のとおり SDK 上の既定 (allow に無いツール) が呼ばれたときに限る。ワークスペースの `settings.json` の `permissions.allow` では組み込みツール群と一部の MCP ツールを事前許可している。一覧は `data/workspace/.claude/settings.json` を正とする。旧名 (現行 MCP に存在しない `gcal_*` / `gmail_*` の 4 件) の削除は行ったが、有効な許可範囲は変えていない。allowlist は現状維持 (縮小しない) と 2026-08-23 に判断した (#120)。
 
 ## ApprovalManager (`approval/manager.ts`)
 

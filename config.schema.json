@@ -59,7 +59,6 @@
         "verbose": {
           "type": "boolean",
           "default": true,
-          "deprecated": true,
           "description": "非推奨・現在未使用。後方互換のため残している。"
         },
         "timeout": {
