@@ -4,7 +4,7 @@
  * @module
  */
 
-import { dirname } from "jsr:@std/path@^1/dirname";
+import { dirname } from "@std/path/dirname";
 import { createLogger, initLogger } from "./logger.ts";
 import { loadConfig } from "./config.ts";
 import { DiscordBot } from "./bot/mod.ts";

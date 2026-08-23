@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { join } from "jsr:@std/path@^1/join";
+import { join } from "@std/path/join";
 import { type PromptScope, SystemPromptStore } from "./system-prompt.ts";
 
 /**
