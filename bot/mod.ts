@@ -248,17 +248,17 @@ export class DiscordBot {
    * bot をシャットダウンする。
    *
    * HTTP サーバー停止 → Discord クライアント破棄の順で処理し、
-   * クライアント破棄によりイベントループが自然終了する。
+   * クライアント破棄によりイベントループが自然終了する。Store の close() は
+   * 呼び出し元 (main.ts) が bot.shutdown() の後に行う (Store の open / close
+   * は main.ts が対で所有する)。
    */
-  shutdown(): void {
+  async shutdown(): Promise<void> {
     log.info("shutting down");
     this.cronExecutor?.stop();
-    // TODO: WebSocket/SSE 追加時は shutdown() を async にして await すること
-    this.apiServer?.shutdown().catch((e) =>
+    await this.apiServer?.shutdown().catch((e) =>
       log.warn("api server shutdown error:", e)
     );
     this.client.destroy();
-    this.store.close();
     log.info("shutdown sequence complete");
   }
 
