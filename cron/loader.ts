@@ -53,7 +53,7 @@ const frontMatterSchema: Schema = {
     },
   },
   required: ["schedule"],
-  additionalProperties: true,
+  additionalProperties: false,
 };
 
 // shortCircuit を false にして全エラーを収集する（ajv の allErrors: true 相当）。
@@ -139,6 +139,12 @@ export function validateCronJob(
       errors.push('"channelId" must be a string or number');
     } else if (err.keyword === "enum") {
       errors.push(`"${field}" must be one of the allowed values`);
+    } else if (err.keyword === "additionalProperties") {
+      // "false" keyword エラー (instanceLocation がキー名を指す) が同じキーについて
+      // 別途出るため、こちらは重複を避けてスキップする。
+      continue;
+    } else if (err.keyword === "false") {
+      errors.push(`"${field}" is not an allowed property`);
     } else {
       errors.push(err.error);
     }

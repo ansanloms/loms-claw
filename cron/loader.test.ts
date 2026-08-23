@@ -211,6 +211,19 @@ Deno.test("validateCronJob", async (t) => {
     );
   });
 
+  await t.step("未知のフロントマターキーがある場合はエラーになること", () => {
+    assertThrows(
+      () =>
+        validateCronJob(
+          { schedule: "0 9 * * *", chanelId: "123" },
+          "prompt",
+          "test.md",
+        ),
+      Error,
+      '"chanelId" is not an allowed property',
+    );
+  });
+
   await t.step("model / effort を未指定で undefined になること", () => {
     const job = validateCronJob(
       { schedule: "0 9 * * *" },
