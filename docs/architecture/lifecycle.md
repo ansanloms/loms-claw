@@ -22,6 +22,7 @@ sequenceDiagram
     C-->>M: Config
     M->>L: initLogger(config.log)
     M->>KV: Deno.mkdir(dirname(storePath)) / Deno.openKv(storePath) / new Store(kv, claude.defaults)
+    Note over M,KV: openKv() 失敗時は log.error して Deno.exit(1)
     M->>M: SIGINT / SIGTERM リスナ登録
     loop attempt = 1..MAX_RETRIES
         M->>B: new DiscordBot(config, store)
@@ -42,11 +43,11 @@ sequenceDiagram
 1. グローバルハンドラ登録: `globalThis` の `unhandledrejection` と `error` イベントにリスナを付け、`log.error()` で記録した上で `e.preventDefault()` を呼ぶ。未処理の reject / 例外でプロセスは終了しない。
 2. `loadConfig()` (`config.ts`) で設定を読み込む。失敗時は例外が投げられ、この呼び出しは後述の起動リトライの外側にあるためリトライされない。
 3. `initLogger(config.log)` (`logger.ts`) でログレベルとリングバッファ容量を適用する。この呼び出しより前に出るログ (手順 1 のハンドラ経由を含む) は `logger.ts` の既定値 (`INFO` / 1000 件) で扱われる。
-4. KV の初期化: `Deno.mkdir(dirname(config.storePath), { recursive: true })` で親ディレクトリを作り、`Deno.openKv(config.storePath)` で開き、`new Store(kv, config.claude.defaults)` を生成する。KV はリトライループの外側で 1 度だけ開く。
-5. シグナルハンドラ: `SIGINT` / `SIGTERM` に同じ `onSignal` を登録する。1 回目は `shuttingDown = true` にして `bot?.shutdown()` を呼ぶ (`bot` が未生成、すなわちリトライ待ち中なら no-op でリトライが続く)。2 回目は `Deno.exit(1)` で強制終了する。
-6. 起動リトライ: `MAX_RETRIES = 5`、`BASE_DELAY_MS = 3_000`。各試行で `new DiscordBot(config, store)` を生成して `await bot.start()` し、成功すればループを抜ける。失敗時は `BASE_DELAY_MS * 2^(attempt - 1)` ミリ秒 (3s, 6s, 12s, 24s) 待って再試行し、`MAX_RETRIES` 回目の失敗で `Deno.exit(1)` する。
+4. KV の初期化: `Deno.mkdir(dirname(config.storePath), { recursive: true })` で親ディレクトリを作り、`Deno.openKv(config.storePath)` を `try/catch` で囲んで開き、`new Store(kv, config.claude.defaults)` を生成する。KV はリトライループの外側で 1 度だけ開く。`Deno.openKv()` が失敗した場合は `log.error()` でパスとエラーを記録して `Deno.exit(1)` する (ローカル SQLite バックエンドのため起動リトライで回復する見込みが無く、リトライ対象にしない)。
+5. シグナルハンドラ: `SIGINT` / `SIGTERM` に同じ `onSignal` を登録する。1 回目は `shuttingDown = true` にして、`await bot?.shutdown()` (`bot` が未生成、すなわちリトライ待ち中なら no-op) → `store.close()` → `Deno.exit(0)` を非同期に実行する。2 回目は `Deno.exit(1)` で強制終了する。
+6. 起動リトライ: `MAX_RETRIES = 5`、`BASE_DELAY_MS = 3_000`。ループの先頭で `shuttingDown` を見て true ならループを抜ける (シグナル受信後に新しい試行が閉じた KV を使う経路を無くすため)。各試行で `new DiscordBot(config, store)` を生成して `await bot.start()` し、成功すればループを抜ける。失敗時は `BASE_DELAY_MS * 2^(attempt - 1)` ミリ秒 (3s, 6s, 12s, 24s) 待って再試行し、`MAX_RETRIES` 回目の失敗で `Deno.exit(1)` する。
 
-KV の所有は非対称で、`main.ts` が `Deno.openKv()` で開き、`DiscordBot.shutdown()` が `store.close()` で閉じる。
+KV の open / close は `main.ts` が対で所有する。`Deno.openKv()` で開き、`onSignal` が `bot.shutdown()` の後に `store.close()` を呼ぶ。`DiscordBot.shutdown()` は Store に触れない。
 
 ## `DiscordBot` の組み立て (`bot/mod.ts` コンストラクタ)
 
@@ -84,12 +85,13 @@ cron の詳細は [cron](cron.md)、`SettingsRouteContext` の中身は [store-a
 
 ## `DiscordBot.shutdown()`
 
-同期メソッド。次の順に呼ぶ。
+`async shutdown(): Promise<void>`。次の順に呼ぶ。
 
 1. `this.cronExecutor?.stop()`: スケジューラの interval を止める。
-2. `this.apiServer?.shutdown()`: 戻り値の Promise は await せず `.catch()` でログのみ。コード中に「WebSocket/SSE 追加時は `shutdown()` を async にして await すること」という TODO コメントがある。
+2. `await this.apiServer?.shutdown().catch((e) => log.warn(...))`: 戻り値の Promise を await する。失敗は WARN ログのみで続行する。
 3. `this.client.destroy()`: discord.js Client を破棄する。メソッドの doc コメントによると、これによりイベントループが自然終了する。
-4. `this.store.close()`: `Store.close()` → `Deno.Kv.close()`。
+
+Store の `close()` はここでは呼ばない。KV の open / close は `main.ts` が対で所有するため、`main.ts` の `onSignal` が `await bot.shutdown()` の後に `store.close()` を呼ぶ。
 
 `shutdown()` 自体は `Deno.exit()` を呼ばない。
 
