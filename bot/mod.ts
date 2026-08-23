@@ -13,6 +13,7 @@ import {
   type Interaction,
   type Message,
   MessageFlags,
+  type RepliableInteraction,
   REST,
   Routes,
 } from "discord.js";
@@ -75,6 +76,34 @@ const log = createLogger("bot");
  */
 const SELF_MENTION_PROMPT_NOTE =
   "[AI to AI 自己メンション] この依頼は認可ユーザー本人の発話ではなく、別のチャンネル/スレッドで動いている自 bot のセッションが投稿したもの。";
+
+/**
+ * インタラクションのハンドラを実行し、失敗時にログとエフェメラル返信で揃える。
+ *
+ * button / select メニュー / Modal 送信の 3 ハンドラが同形の
+ * `try { handler } catch { log.error; if (!replied && !deferred) reply(ephemeral) }`
+ * を持っていたため、ここに集約する。ログ文言・エラー返信文言は呼び出し側から渡す
+ * (各分岐の現行の文言を変えない)。
+ */
+async function runInteraction(
+  interaction: RepliableInteraction,
+  label: string,
+  handler: () => Promise<unknown>,
+  errorMessage: string,
+): Promise<void> {
+  try {
+    await handler();
+  } catch (error: unknown) {
+    const msg = getErrorMessage(error);
+    log.error(`${label} interaction error:`, msg);
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({
+        content: errorMessage,
+        flags: MessageFlags.Ephemeral,
+      }).catch(() => {});
+    }
+  }
+}
 
 /**
  * Discord ボット。
@@ -268,52 +297,34 @@ export class DiscordBot {
   private async onInteraction(interaction: Interaction): Promise<void> {
     // ボタンインタラクション（承認/拒否、質問の Cancel）
     if (interaction.isButton()) {
-      try {
-        await this.approvalManager.handleButton(interaction);
-      } catch (error: unknown) {
-        const msg = getErrorMessage(error);
-        log.error("button interaction error:", msg);
-        if (!interaction.replied && !interaction.deferred) {
-          await interaction.reply({
-            content: "承認処理中にエラーが発生しました。",
-            flags: MessageFlags.Ephemeral,
-          }).catch(() => {});
-        }
-      }
+      await runInteraction(
+        interaction,
+        "button",
+        () => this.approvalManager.handleButton(interaction),
+        "承認処理中にエラーが発生しました。",
+      );
       return;
     }
 
     // select メニュー（AskUserQuestion の回答）
     if (interaction.isStringSelectMenu()) {
-      try {
-        await this.approvalManager.handleSelect(interaction);
-      } catch (error: unknown) {
-        const msg = getErrorMessage(error);
-        log.error("select interaction error:", msg);
-        if (!interaction.replied && !interaction.deferred) {
-          await interaction.reply({
-            content: "回答処理中にエラーが発生しました。",
-            flags: MessageFlags.Ephemeral,
-          }).catch(() => {});
-        }
-      }
+      await runInteraction(
+        interaction,
+        "select",
+        () => this.approvalManager.handleSelect(interaction),
+        "回答処理中にエラーが発生しました。",
+      );
       return;
     }
 
     // Modal 送信（AskUserQuestion の Other 自由入力）
     if (interaction.isModalSubmit()) {
-      try {
-        await this.approvalManager.handleModal(interaction);
-      } catch (error: unknown) {
-        const msg = getErrorMessage(error);
-        log.error("modal interaction error:", msg);
-        if (!interaction.replied && !interaction.deferred) {
-          await interaction.reply({
-            content: "回答処理中にエラーが発生しました。",
-            flags: MessageFlags.Ephemeral,
-          }).catch(() => {});
-        }
-      }
+      await runInteraction(
+        interaction,
+        "modal",
+        () => this.approvalManager.handleModal(interaction),
+        "回答処理中にエラーが発生しました。",
+      );
       return;
     }
 

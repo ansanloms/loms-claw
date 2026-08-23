@@ -167,7 +167,7 @@ per-scope の停止手段は無い。連鎖を止めるにはレート制限に�
 | modal 送信 (AskUserQuestion の Other 自由入力) | `interaction.isModalSubmit()`                        | `approvalManager.handleModal(interaction)`                                                                                                                                                                |
 | chat input `/claw settings show\|set\|unset`   | `isChatInputCommand()` かつ `commandName === "claw"` | `isAuthorized(guildId, user.id, user.bot, config)` を通過後、サブコマンド群 `settings` の `show` → `handleSettingsShow`、`set` → `handleSettingsSet`、`unset` → `handleSettingsUnset` (`bot/commands.ts`) |
 
-- ボタン / select / modal のハンドラが throw した場合は ERROR ログを出し、未応答なら ephemeral のエラー文言で `reply()` する。
+- ボタン / select / modal のハンドラが throw した場合は ERROR ログを出し、未応答なら ephemeral のエラー文言で `reply()` する。この 3 分岐は同形のため `runInteraction(interaction, label, handler, errorMessage)` (`bot/mod.ts`) に共通化してある。ログの label とエラー文言は分岐ごとに異なる (button: `"承認処理中にエラーが発生しました。"`、select / modal: `"回答処理中にエラーが発生しました。"`)。
 - スラッシュコマンドは `registerCommands()` で対象ギルドにのみ登録される ([lifecycle](lifecycle.md))。設定コマンドの意味は [store-and-settings](store-and-settings.md)、承認・質問の詳細は [approval](approval.md) を参照。
 
 ## 定数一覧
