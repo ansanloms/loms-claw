@@ -25,7 +25,7 @@ function mockManager(
     requestApproval: (
       _toolName: string,
       _toolInput: Record<string, unknown>,
-      _channelId?: string,
+      _channelId: string | undefined,
     ) => Promise.resolve(result),
     requestAnswers: () =>
       Promise.resolve(
@@ -344,7 +344,7 @@ Deno.test("ApprovalManager", async (t) => {
   );
 
   await t.step(
-    "channelId 未指定 (setChannel 未呼び出し) は即座に deny すること",
+    "channelId が undefined の場合は即座に deny すること",
     async () => {
       const { resolver } = fakeChannelResolver(new Set(["ch-1"]));
       const manager = new ApprovalManagerClass(
@@ -353,7 +353,11 @@ Deno.test("ApprovalManager", async (t) => {
         { channelResolver: resolver },
       );
 
-      const result = await manager.requestApproval("Bash", { command: "ls" });
+      const result = await manager.requestApproval(
+        "Bash",
+        { command: "ls" },
+        undefined,
+      );
 
       assertEquals(result.decision, "deny");
       assertEquals(result.reason, "No approval channel");

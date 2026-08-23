@@ -31,8 +31,7 @@ sequenceDiagram
     B->>D: keepTyping / ⏳ 除去
     B->>B: 画像添付ダウンロード (任意)
     B->>S: getSession / getModel / getEffort / getShowThinking
-    B->>A: setChannel(localId)
-    B->>C: askClaude(prompt, opts)
+    B->>C: askClaude(prompt, opts (canUseTool: createCanUseTool(A, localId)))
     loop SDKMessage
         C-->>B: stream_event / assistant / result / tool_progress
         C-->>A: canUseTool → 承認ボタン / 質問
@@ -106,7 +105,6 @@ bot 側でメッセージをスレッドへ自動分離する機能は実装し�
 
 - 発話者: 人間なら `message.author.id` / `message.author.displayName`。自己メッセージなら `config.discord.userId` と、その表示名 (guild member cache → users cache → ID の順で解決)。
 - `store.getSession / getModel / getEffort / getShowThinking` を `Promise.all` で並列取得する (解決順は [store-and-settings](store-and-settings.md))。
-- `approvalManager.setChannel(localId)` で承認ボタン・質問の既定送信先を発話場所にする。
 - テンプレート変数 `discord.guild.id / discord.guild.name / discord.channel.id (= localId) / discord.channel.name / discord.channel.type ("thread" | "text") / discord.user.id / discord.user.name` を組み、`systemPrompts.resolve("chat", scope, vars)` で追記システムプロンプトを得る ([claude-integration](claude-integration.md))。
 - `askClaude(prompt, { sessionId, config: config.claude, discordToken: config.discord.token, signal: AbortSignal.timeout(config.claude.timeout), appendSystemPrompt, model, effort, canUseTool: createCanUseTool(approvalManager, localId) })`。`createCanUseTool()` は `AskUserQuestion` を `requestAnswers()` へ、それ以外を `requestApproval()` へ振り分ける ([approval](approval.md))。
 

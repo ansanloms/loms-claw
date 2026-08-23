@@ -95,7 +95,6 @@ export class ApprovalManager {
       timeout: ReturnType<typeof setTimeout>;
     }
   >();
-  private channelId: string | null = null;
   private questions: QuestionManager;
   private channelResolver: ApprovalChannelResolver;
   private timeoutMs: number;
@@ -124,23 +123,17 @@ export class ApprovalManager {
   }
 
   /**
-   * 承認リクエストの送信先チャンネルを設定する。
-   */
-  setChannel(channelId: string): void {
-    this.channelId = channelId;
-  }
-
-  /**
    * ツール使用の承認をリクエストする。
    *
    * @param toolName - 対象ツール名。
    * @param toolInput - ツールへの入力。承認ボタンの詳細表示に使う。
-   * @param channelId - 承認ボタンの送信先チャンネル ID。省略時は setChannel() で設定された値を使う。
+   * @param channelId - 承認ボタンの送信先チャンネル ID。呼び出し元が必須で渡す
+   * (cron でジョブに channelId が無ければ undefined を渡す。undefined なら自動 deny)。
    */
   async requestApproval(
     toolName: string,
     toolInput: Record<string, unknown>,
-    channelId?: string,
+    channelId: string | undefined,
   ): Promise<ApprovalResult> {
     // allow list に含まれるツールは即座に許可する。
     if (await isInAllowList(this.settingsPath, toolName)) {
@@ -148,7 +141,6 @@ export class ApprovalManager {
       return { decision: "allow", reason: "Already Allowed" };
     }
 
-    channelId = channelId ?? this.channelId ?? undefined;
     if (!channelId) {
       log.warn("no channel set for approval, auto-denying");
       return { decision: "deny", reason: "No approval channel" };
@@ -210,17 +202,14 @@ export class ApprovalManager {
   /**
    * AskUserQuestion の質問への回答をリクエストする。
    *
-   * チャンネル解決 (引数 → setChannel() の fallback) はここで行い、
+   * channelId は呼び出し元が必須で渡す (無ければ undefined)。
    * 質問メッセージの送信・回答収集は {@link QuestionManager} に委譲する。
    */
   requestAnswers(
     questions: Question[],
-    channelId?: string,
+    channelId: string | undefined,
   ): Promise<QuestionResult> {
-    return this.questions.requestAnswers(
-      questions,
-      channelId ?? this.channelId ?? undefined,
-    );
+    return this.questions.requestAnswers(questions, channelId);
   }
 
   /**
@@ -318,10 +307,13 @@ export class ApprovalManager {
  * 注意: `.claude/settings.json` の `permissions.allow` に `AskUserQuestion` を
  * 入れると SDK が canUseTool を呼ばずに素通しし、回答が空のまま解決される。
  * このツールは allow list に入れないこと。
+ *
+ * channelId は呼び出し元が必須で渡す (`requestApproval` / `requestAnswers` と
+ * 揃える。cron でジョブに channelId が無ければ undefined を渡す)。
  */
 export function createCanUseTool(
   manager: ApprovalManager,
-  channelId?: string,
+  channelId: string | undefined,
 ): CanUseTool {
   return async (toolName, input) => {
     if (toolName === "AskUserQuestion") {
