@@ -124,7 +124,7 @@ Deno.test("loadConfig", async (t) => {
     );
   });
 
-  await t.step("型不一致でエラーになること (maxTurns が string)", () => {
+  await t.step("maxTurns が string のとき型不一致でエラーになること", () => {
     withTempConfig(
       { ...requiredFields, claude: { maxTurns: "ten" } },
       () => {

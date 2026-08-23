@@ -7,7 +7,7 @@
  * @module
  */
 
-import { join } from "jsr:@std/path@^1/join";
+import { join } from "@std/path/join";
 import { extract } from "@std/front-matter/yaml";
 import { type Schema, Validator } from "@cfworker/json-schema";
 import { createLogger } from "../logger.ts";

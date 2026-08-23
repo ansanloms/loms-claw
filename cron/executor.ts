@@ -63,6 +63,13 @@ export class CronExecutor {
   }
 
   /**
+   * 指定した名前のジョブが実行中かどうかを返す。
+   */
+  isRunning(name: string): boolean {
+    return this.running.has(name);
+  }
+
+  /**
    * 名前でジョブを検索する。
    */
   findJob(name: string): CronJobDef | undefined {

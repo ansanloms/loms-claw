@@ -20,7 +20,8 @@
  * channelPrompts は単一の Map<id, string> で両方を保持する。
  */
 
-import { basename, join } from "jsr:@std/path@^1";
+import { basename } from "@std/path/basename";
+import { join } from "@std/path/join";
 import { createLogger } from "../logger.ts";
 import { replaceTemplateVariables } from "./template.ts";
 

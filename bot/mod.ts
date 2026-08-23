@@ -59,7 +59,7 @@ import {
   splitMessage,
   stripBotMentions,
 } from "./message.ts";
-import { join } from "jsr:@std/path@^1/join";
+import { join } from "@std/path/join";
 import { createLogger } from "../logger.ts";
 import { SystemPromptStore } from "../claude/system-prompt.ts";
 import { startApiServer } from "../api/server.ts";
