@@ -102,6 +102,32 @@ docker compose logs -f               # ログ確認
 
 `buildQueryOptions()` は `Deno.env.toObject()` を展開した上で `DISCORD_BOT_TOKEN` を足して `env` に渡す (SDK は `env` を指定すると `process.env` を継承しないため)。
 
+## Deno の権限フラグ
+
+`deno.json` の `start` / `dev` / `test` と Dockerfile の `CMD` は、`--allow-env --allow-sys --allow-ffi --allow-read --allow-write --allow-net --allow-run` を値なし (無制限) で与えており、実質 `-A` と同等になっている。2026-08-23 に絞り込みの余地を評価し ([#134](https://github.com/ansanloms/loms-claw/issues/134))、次の理由から **現状 (無制限) を維持** と判断した。再評価するときはこの節を更新する。
+
+評価の前提となる事実:
+
+- `query()` は Agent SDK 同梱のネイティブバイナリ `claude` (プラットフォーム別パッケージ `@anthropic-ai/claude-agent-sdk-linux-{x64,arm64}` 内) を子プロセスとして直接 spawn する (`.js` 以外のパスは node / bun を介さずそのまま `command` になる。SDK の `Options` には `pathToClaudeCodeExecutable` / `executable` / `executableArgs` がある)。spawn されたサブプロセスは Deno のサンドボックスの外で動き、コマンド実行者と同じ OS 権限を持つ (Deno 公式ドキュメント `examples/tutorials/subprocess.md`)。つまり Deno 側のフラグをどう絞っても、Claude Code とそれが実行する Bash / curl 等の到達範囲は変わらない。
+- 他に spawn するのは `bot/message.ts` の `ffprobe` / `ffmpeg` のみ。
+- discord.js の REST 先 (`discord.com/api`、`cdn.discordapp.com`、`media.discordapp.net`) は静的だが、Gateway の接続先は `GET /gateway/bot` の応答 `url` と READY の `resume_gateway_url` で実行時に与えられ、`@discordjs/ws` にホスト名のリテラルは無い。静的な `--allow-net` の許可リストでは列挙しきれない。
+- Deno KV (`Deno.openKv()` のローカル SQLite) は `--allow-ffi` 無しで開ける (Deno 2.x で確認)。
+- Deno 公式ドキュメント (`runtime/reference/permissions.md`、`runtime/fundamentals/security.md`) は、`--allow-run` の許可リストはコマンド名単位であること、`LD_PRELOAD` 等の環境変数を付けた spawn は無制限の `--allow-run` を要求すること、`--allow-write` と `--allow-run` の併用は許可された実行ファイルを書き換えられるため危険であることを明記している。`--allow-env` を絞った状態での `Deno.env.toObject()` の挙動は、取得したドキュメント範囲では確認できなかった。
+
+フラグごとの判断:
+
+| フラグ          | 判断     | 理由                                                                                                                                                                                                                                                                                                                                                            |
+| --------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--allow-run`   | 絞らない | 技術的には `--allow-run=ffprobe,ffmpeg,<claude のパス>` にできるが、`claude` の実パスは SDK のバージョンを含む npm キャッシュ配下で dependabot の更新ごとに変わる (`pathToClaudeCodeExecutable` で `/usr/local/bin/claude` の symlink に固定する案はローカル実行と Docker で設定が分かれる)。そして子プロセス側は無制限なので、絞っても防御上の価値がほぼ無い。 |
+| `--allow-net`   | 絞らない | Gateway / resume のホストが動的で静的列挙が脆い。REST 先と `127.0.0.1:{apiPort}` は列挙できるが、Claude API との通信は子プロセス側であり、Deno 側を絞る効果が限定的。                                                                                                                                                                                           |
+| `--allow-write` | 絞らない | Docker では `/data` と `/tmp` に限定できる (`storePath` は cwd 相対、`approval/settings.ts` の `.claude/settings.json`、添付の一時ディレクトリ、once ジョブの削除)。ただし `deno.json` のタスク (ローカル実行。パスは環境依存) と Dockerfile の `CMD` を同じフラグ列に保つ現行方針と衝突するため、現時点では絞らない。絞るなら最初の候補。                      |
+| `--allow-read`  | 絞らない | config / workspace / npm キャッシュ / `CLAUDE_CONFIG_DIR` と読み先が広く、列挙の保守コストに見合わない。                                                                                                                                                                                                                                                        |
+| `--allow-env`   | 絞らない | `Deno.env.toObject()` を子プロセスに丸ごと渡す設計で、許可リスト下での挙動が未確認。`LOMS_CLAW_CONFIG` / `CLAUDE_CONFIG_DIR` / `TZ` だけでは足りない。                                                                                                                                                                                                          |
+| `--allow-ffi`   | 絞らない | KV には不要と確認したが、npm 依存 (discord.js / SDK) の実行経路で要るかは実機起動でしか確認できず、外して壊れた場合を検知する CI が無い。無制限でも子プロセスの到達範囲は変わらない。                                                                                                                                                                           |
+| `--allow-sys`   | 絞らない | `--allow-ffi` と同じ理由 (node 互換層の `os.*` 呼び出しの有無を静的に確定できない)。                                                                                                                                                                                                                                                                            |
+
+要するに、この bot の実体はサンドボックス外で動く Claude Code (任意の Bash を実行できる) であり、Deno 側の権限を絞っても脅威モデル上の境界にならない。Deno のフラグは「bot プロセス自身のバグによる誤書き込み・誤接続を局所化する」程度の価値しか持たず、その価値のためにフラグ列を 2 箇所で保守するコストを払わない、というのが現時点の結論。
+
 ## data/ ディレクトリ
 
 実行時データは host の `data/` に集約し、丸ごとコンテナの `/data` へ bind mount する (マウントはこの 1 つだけ)。パスは host / コンテナで共通。
