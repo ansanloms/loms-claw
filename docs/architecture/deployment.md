@@ -45,10 +45,14 @@ flowchart LR
 - glibc イメージでは使われない musl 用バイナリ (`claude-agent-sdk-linux-*-musl/*/claude`) を削除する。Dockerfile のコメントによれば、パッケージディレクトリごと消すと deno が起動時に再ダウンロードするため、バイナリファイルのみ削除する。
 - `COPY . .` でソースツリー全体を `/app` に焼き込む (除外は `.dockerignore`)。
 - 最後に `WORKDIR /data/workspace` とし、`CMD ["deno", "run", "--allow-env", "--allow-sys", "--allow-ffi", "--allow-read", "--allow-write", "--allow-net", "--allow-run", "/app/main.ts"]` で起動する。Dockerfile のコメントによれば、`deno task` は `deno.json` のあるディレクトリを cwd にするためここでは使えず、権限フラグは `deno.json` の `start` タスクと手動で揃える。
+- multi-stage build は評価の上で見送った (単一ステージを維持)。`deno install` 専用の builder ステージを切り、実行ステージで `DENO_DIR` と `claude` symlink のみ `COPY --from` する構成を検証したところ、単一ステージ (`docker build` 時点で 1.09GB) に対し multi-stage は 1.42GB と約 30% 大きくなった。単一ステージは `deno install` と musl バイナリ削除を同一レイヤーで行うため無駄なレイヤーが残らない一方、multi-stage は builder ステージで構築した `DENO_DIR` (npm キャッシュ全体) を `COPY --from` で丸ごと複製するコストがレイヤー節約分を上回った ([#124](https://github.com/ansanloms/loms-claw/issues/124))。
 
 ### .dockerignore
 
-`.dockerignore` は `data` (実行時データ。機密を含み、実行時に `/data` へ bind mount される)、`.env`、`.git`、`.claude`、`coverage` をビルドコンテキストから除外する。
+`.dockerignore` は次を実行イメージのビルドコンテキストから除外する。
+
+- `data` (実行時データ。機密を含み、実行時に `/data` へ bind mount される)、`.env`、`.git`、`.claude`、`coverage`
+- `docs/`、`README.md`、`LICENSE`、`**/*.test.ts`、`.github/`、`compose.yaml` (実行時に不要で、`deno task generate` 等の開発時のみ使うファイル群)
 
 ## compose.yaml
 
