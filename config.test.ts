@@ -49,7 +49,6 @@ Deno.test("loadConfig", async (t) => {
       assertEquals(config.claude.defaults.model, undefined);
       assertEquals(config.claude.defaults.effort, undefined);
       assertEquals(config.claude.maxTurns, 10);
-      assertEquals(config.claude.verbose, true);
       assertEquals(config.claude.timeout, 300000);
       assertEquals(config.claude.apiPort, 3000);
       assertEquals(config.claude.defaults.showThinking, false);
@@ -124,7 +123,7 @@ Deno.test("loadConfig", async (t) => {
     );
   });
 
-  await t.step("型不一致でエラーになること (maxTurns が string)", () => {
+  await t.step("maxTurns が string のとき型不一致でエラーになること", () => {
     withTempConfig(
       { ...requiredFields, claude: { maxTurns: "ten" } },
       () => {
@@ -187,7 +186,6 @@ Deno.test("loadConfig", async (t) => {
         ...requiredFields,
         claude: {
           maxTurns: 5,
-          verbose: false,
           timeout: 60000,
           apiPort: 4000,
         },
@@ -195,12 +193,33 @@ Deno.test("loadConfig", async (t) => {
       () => {
         const config = loadConfig();
         assertEquals(config.claude.maxTurns, 5);
-        assertEquals(config.claude.verbose, false);
         assertEquals(config.claude.timeout, 60000);
         assertEquals(config.claude.apiPort, 4000);
       },
     );
   });
+
+  await t.step(
+    "claude.verbose を含む config は additionalProperties: false で検証エラーになること",
+    () => {
+      withTempConfig(
+        {
+          ...requiredFields,
+          claude: {
+            maxTurns: 10,
+            timeout: 300000,
+            apiPort: 3000,
+            defaults: {},
+            verbose: true,
+          },
+        },
+        () => {
+          const err = assertThrows(() => loadConfig(), Error);
+          assertStringIncludes(err.message, "verbose");
+        },
+      );
+    },
+  );
 
   await t.step("LOMS_CLAW_CONFIG で指定したパスが読まれること", () => {
     const path = Deno.makeTempFileSync({ suffix: ".json" });

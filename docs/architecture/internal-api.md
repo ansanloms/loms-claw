@@ -4,18 +4,22 @@ bot プロセス内で `127.0.0.1:{config.claude.apiPort}` に Hono アプリを
 
 関連: [README.md](README.md) / [lifecycle.md](lifecycle.md) (起動順・ロガー) / [cron.md](cron.md) (cron の意味) / [store-and-settings.md](store-and-settings.md) (settings の意味) / [approval.md](approval.md) / [deployment.md](deployment.md)
 
+## 検証・エラー応答の方針
+
+検証失敗は拒否する (HTTP は 400 + `{ error }`、cron 定義はロードエラーで当該ジョブのみ skip)。黙って丸める場合は明示的に記録する (`logger.ts` の `limit` clamp は防御のみで、route が先に 400 を返す)。Discord へのエラー投稿は要約 + 先頭 1 行に留め、全文はログ (`GET /logs`) に残す (`errors.ts` の `summarizeErrorForDiscord()`)。
+
 ## サーバー (`api/server.ts`)
 
-`startApiServer(port, settingsCtx, cronCtx?)` が `Hono` アプリを組み立てて `Deno.serve({ port, hostname: "127.0.0.1" }, app.fetch)` を呼び、`Deno.HttpServer` を返す。呼び出し側 (`bot/mod.ts` の `DiscordBot.shutdown()`) がこれを保持し、停止時に `shutdown()` を呼ぶ (失敗は WARN ログに落とすだけで握りつぶす)。
+`startApiServer(port, settingsCtx, healthCtx, cronCtx?)` が `Hono` アプリを組み立てて `Deno.serve({ port, hostname: "127.0.0.1" }, app.fetch)` を呼び、`Deno.HttpServer` を返す。呼び出し側 (`bot/mod.ts` の `DiscordBot.shutdown()`) がこれを保持し、停止時に `shutdown()` を呼ぶ (失敗は WARN ログに落とすだけで握りつぶす)。
 
-| 要素           | 内容                                                                                                                     |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| リクエストログ | `app.use()` の middleware で `{method} {path}` を DEBUG レベルで出力 (名前空間 `api-server`)                             |
-| マウント       | `/cron` → `createCronRoutes(cronCtx)`、`/logs` → `createLogsRoutes()`、`/settings` → `createSettingsRoutes(settingsCtx)` |
-| `notFound`     | `{ "error": "Not Found" }` を 404 で返す                                                                                 |
-| `onError`      | `getErrorMessage(err)` (`errors.ts`) でメッセージを取り出し ERROR ログに出した上で `{ "error": msg }` を 500 で返す      |
-| bind           | `hostname: "127.0.0.1"` 固定。ポートは `config.json` の `claude.apiPort` (`config.schema.json` の default は 3000)       |
-| エラー応答の形 | 全ルートで `{ "error": string }` + HTTP ステータス。RFC 9457 Problem Details ではない (`docs/api/README.md`)             |
+| 要素           | 内容                                                                                                                                                                                       |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| リクエストログ | `app.use()` の middleware で `{method} {path}` を DEBUG レベルで出力 (名前空間 `api-server`)                                                                                               |
+| マウント       | `/cron` → `createCronRoutes(cronCtx)`、`/health` → `createHealthRoutes(healthCtx)`、`/logs` → `createLogsRoutes()`、`/settings` → `createSettingsRoutes(settingsCtx)`                      |
+| `notFound`     | `{ "error": "Not Found" }` を 404 で返す                                                                                                                                                   |
+| `onError`      | `getErrorMessage(err)` (`errors.ts`) でメッセージを取り出し ERROR ログに出した上で `{ "error": msg }` を 500 で返す                                                                        |
+| bind           | `hostname: "127.0.0.1"` 固定。ポートは `config.json` の `claude.apiPort` (`config.schema.json` の default は 3000)                                                                         |
+| エラー応答の形 | 大半のルートで `{ "error": string }` + HTTP ステータス (RFC 9457 Problem Details ではない、`docs/api/README.md`)。`GET /health` のみ `{ "status": "ok" \| "unavailable" }` を返す (下記)。 |
 
 `cronCtx` は省略可能で、省略時 (または個々の関数が未注入の時) は cron ルートが 503 を返す。
 
@@ -25,13 +29,23 @@ bot プロセス内で `127.0.0.1:{config.claude.apiPort}` に Hono アプリを
 
 注入される `CronRouteContext` は `reloadCronJobs?`, `runJob?`, `listJobs?` の 3 関数をすべて省略可能として持つ。各ルートは使う関数が無ければ 503 を返す。ジョブの意味・実行の仕組みは [cron.md](cron.md) を参照。
 
-| メソッド / パス     | リクエスト                                                                 | 正常応答                                                                              | エラー                                                                                                                                                                                  |
-| ------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /cron`         | なし                                                                       | `{ jobs: [{ name, schedule, channelId?, once }] }` (`CronJobDef` から 4 項目だけ写す) | `listJobs` 未注入: 503 `cron not available`                                                                                                                                             |
-| `POST /cron/run`    | JSON `{ name }` (`RequestPostCronRun`。`name` は 1 文字以上、余剰キー不可) | `{ ok: true, name }`                                                                  | `runJob` 未注入: 503 `cron not available` / スキーマ不適合: 400 (`schemaErrorOf` の文言) / `runJob` が `job not found:` で始まる Error を throw: 404 (それ以外の throw は `onError` へ) |
-| `POST /cron/reload` | なし                                                                       | `{ ok: true }`                                                                        | `reloadCronJobs` 未注入: 503 `cron reload not available`                                                                                                                                |
+| メソッド / パス     | リクエスト                                                                 | 正常応答                                                                              | エラー                                                                                                                                                                                                                             |
+| ------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /cron`         | なし                                                                       | `{ jobs: [{ name, schedule, channelId?, once }] }` (`CronJobDef` から 4 項目だけ写す) | `listJobs` 未注入: 503 `cron not available`                                                                                                                                                                                        |
+| `POST /cron/run`    | JSON `{ name }` (`RequestPostCronRun`。`name` は 1 文字以上、余剰キー不可) | `{ ok: true, name }`                                                                  | `runJob` 未注入: 503 `cron not available` / JSON パース失敗: 400 `invalid JSON body` / スキーマ不適合: 400 (`schemaErrorOf` の文言) / `runJob` が `job not found:` で始まる Error を throw: 404 (それ以外の throw は `onError` へ) |
+| `POST /cron/reload` | なし                                                                       | `{ ok: true }`                                                                        | `reloadCronJobs` 未注入: 503 `cron reload not available`                                                                                                                                                                           |
 
-`POST /cron/run` は `c.req.json()` を try で包んでいないため、JSON として壊れたボディは `onError` に流れて 500 になる (settings の PATCH とは挙動が異なる)。
+`POST /cron/run` は `c.req.json()` を try/catch で包み、JSON として壊れたボディは 400 `invalid JSON body` を返す (settings の PATCH と同じ挙動)。
+
+### health (`api/routes/health.ts`)
+
+注入される `HealthRouteContext` は `isReady: () => boolean` を必須で持つ。`bot/mod.ts` は `client.ws.shards` の全シャードの `status` が `Status.Ready` かどうかを渡す (discord.js の `Client#isReady()` は一度 Ready になった後の Gateway 切断を検知できないため使わない)。応答は Discord Gateway の接続状態を反映する。`compose.yaml` の `healthcheck:` から `curl` で定期的に叩かれる想定 (`deployment.md` 参照)。
+
+| メソッド / パス | リクエスト | 正常応答                 | エラー                                                  |
+| --------------- | ---------- | ------------------------ | ------------------------------------------------------- |
+| `GET /health`   | なし       | 200 `{ "status": "ok" }` | `isReady()` が false: 503 `{ "status": "unavailable" }` |
+
+他のルートと異なり、エラー応答も `{ "error": string }` ではなく `{ "status": "unavailable" }` の形になる (healthcheck の呼び出し元は本文を読まず HTTP ステータスのみ見る想定のため)。
 
 ### logs (`api/routes/logs.ts`)
 
@@ -59,19 +73,20 @@ bot プロセス内で `127.0.0.1:{config.claude.apiPort}` に Hono アプリを
 - `resolveParentId` 未注入: `{ channelId: id }`
 - 注入済みで親 ID が返った: `{ channelId: parentId, threadId: id }`
 - 注入済みで `null` が返った: `{ channelId: id }`
-- 注入済みで throw した (未知の ID、cron の擬似 id `cron:{name}` 等): DEBUG ログを出して `{ channelId: id }` へフォールバック
+- 注入済みで throw した (未知の ID、cron の擬似 id `cron:{name}` 等): WARN ログ (「親チャンネルの解決に失敗したためチャンネル単独スコープとして扱う」旨) を出して `{ channelId: id }` へフォールバック
 
 書き込み (PATCH / DELETE) は Store の仕様どおり leaf id (`threadId ?? channelId`) 単位なので、スレッド解決の成否で書き込み先は変わらない。差が出るのは GET / PATCH の応答に含まれる解決結果 (親チャンネルへのフォールバックの有無) だけ。
 
 ## コンテキスト注入 (`bot/mod.ts`)
 
-`DiscordBot.start()` の `ClientReady` ハンドラ内で、`CronExecutor` の初期化とジョブ読み込みの後に次を組み立てて `startApiServer(this.config.claude.apiPort, settingsCtx, cronCtx)` を呼ぶ。
+`DiscordBot.start()` の `ClientReady` ハンドラ内で、`CronExecutor` の初期化とジョブ読み込みの後に次を組み立てて `startApiServer(this.config.claude.apiPort, settingsCtx, healthCtx, cronCtx)` を呼ぶ。
 
 | コンテキスト           | フィールド        | 実体                                                                                                                                 |
 | ---------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `CronRouteContext`     | `reloadCronJobs`  | `loadCronJobsFromDir(config.claude.cwd)` → `CronExecutor.reload(jobs)` (once ジョブのファイル削除後にも同じ関数が使われる)           |
 |                        | `runJob`          | `CronExecutor.findJob(name)` が `undefined` なら `Error("job not found: {name}")` を throw し、見つかれば `CronExecutor.runJob(job)` |
 |                        | `listJobs`        | `CronExecutor.listJobs()`                                                                                                            |
+| `HealthRouteContext`   | `isReady`         | `client.ws.shards.size > 0 && client.ws.shards.every((shard) => shard.status === Status.Ready)`                                      |
 | `SettingsRouteContext` | `store`           | `DiscordBot` が保持する `Store`                                                                                                      |
 |                        | `resolveParentId` | `DiscordBot.resolveThreadParentId(id)`                                                                                               |
 
@@ -117,7 +132,7 @@ flowchart LR
 
 ## テスト
 
-`api/routes/cron.test.ts` / `api/routes/logs.test.ts` / `api/routes/settings.test.ts` は `Deno.serve()` を起動せず、`new Hono()` に `createCronRoutes()` / `createLogsRoutes()` / `createSettingsRoutes()` をマウントして `app.request()` で直接リクエストを投げる形式。cron 側はコンテキスト関数をクロージャで差し替え、settings 側は `Deno.openKv(":memory:")` の `Store` を使う。`api/server.ts` 自体の統合テストは無い。
+`api/routes/cron.test.ts` / `api/routes/health.test.ts` / `api/routes/logs.test.ts` / `api/routes/settings.test.ts` は `Deno.serve()` を起動せず、`new Hono()` に `createCronRoutes()` / `createHealthRoutes()` / `createLogsRoutes()` / `createSettingsRoutes()` をマウントして `app.request()` で直接リクエストを投げる形式。cron 側はコンテキスト関数をクロージャで差し替え、settings 側は `Deno.openKv(":memory:")` の `Store` を使う。`api/server.ts` 自体の統合テストは無い。
 
 ## エージェント向けの利用手順
 

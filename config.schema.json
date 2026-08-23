@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "loms-claw config",
-  "description": "Discord + Claude Code CLI パーソナル AI エージェントのアプリケーション設定。",
+  "description": "Discord + Claude Agent SDK パーソナル AI エージェントのアプリケーション設定。",
   "type": "object",
   "additionalProperties": false,
   "required": ["discord", "storePath", "claude", "log"],
@@ -42,24 +42,19 @@
     "storePath": {
       "type": "string",
       "default": ".claude/loms-claw.kv",
-      "description": "session_id / model / effort を保存する Deno KV ファイルのパス。相対パスは cwd 基準。"
+      "description": "session / model / effort / showThinking / active を保存する Deno KV ファイルのパス。相対パスは cwd 基準。"
     },
     "claude": {
       "type": "object",
       "description": "Claude 呼び出し (Agent SDK query()) の挙動とグローバルデフォルト。",
       "default": {},
       "additionalProperties": false,
-      "required": ["maxTurns", "verbose", "timeout", "apiPort", "defaults"],
+      "required": ["maxTurns", "timeout", "apiPort", "defaults"],
       "properties": {
         "maxTurns": {
           "type": "number",
           "default": 10,
           "description": "エージェントの最大ターン数（query() の maxTurns に渡される）。"
-        },
-        "verbose": {
-          "type": "boolean",
-          "default": true,
-          "description": "（現在未使用。後方互換のため保持。）"
         },
         "timeout": {
           "type": "number",
@@ -69,7 +64,7 @@
         "apiPort": {
           "type": "number",
           "default": 3000,
-          "description": "内部 API サーバーのポート（Discord REST API + cron + ログ）。"
+          "description": "内部 API サーバーのポート（cron + ログ + 設定 (settings)）。"
         },
         "defaults": {
           "type": "object",

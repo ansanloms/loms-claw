@@ -20,7 +20,8 @@
  * channelPrompts は単一の Map<id, string> で両方を保持する。
  */
 
-import { basename, join } from "jsr:@std/path@^1";
+import { basename } from "@std/path/basename";
+import { join } from "@std/path/join";
 import { createLogger } from "../logger.ts";
 import { replaceTemplateVariables } from "./template.ts";
 
@@ -57,7 +58,7 @@ async function readFileOrUndefined(path: string): Promise<string | undefined> {
 /**
  * システムプロンプトの起動時キャッシュ。
  *
- * コンストラクタでディレクトリを指定し、loadSync() で全ファイルを読み込む。
+ * コンストラクタでディレクトリを指定し、load() で全ファイルを読み込む。
  * resolve() はキャッシュから同期的に結合結果を返すため、メッセージ/発話ごとの I/O が発生しない。
  * ファイル変更の反映にはボット再起動が必要。
  */

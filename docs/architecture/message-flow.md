@@ -53,6 +53,8 @@ sequenceDiagram
 
 `scopeFromChannel(message.channel, message.channelId)` (`bot/scope.ts`) が `StoreScope` を組み立てる: スレッドなら `{ channelId: parentId ?? message.channelId, threadId: message.channelId }`、それ以外は `{ channelId: message.channelId }`。`bot/commands.ts` の `scopeFromInteraction()` も同じ関数を使う。`localId = threadId ?? channelId` を「発話があった場所」として、キューのキー・承認ボタンの送信先・テンプレート変数 `discord.channel.id` に使う。スコープの意味は [store-and-settings](store-and-settings.md) を参照。
 
+bot 側でメッセージをスレッドへ自動分離する機能は実装しない。スレッド分離はエージェントの運用フロー (チャンネル別システムプロンプトの「話題の管理」節 + `discord` / `travel-note` skill) で、ユーザ確認を取ってから行う。設定は `PATCH /settings/<threadId>` で `active: true` を入れる (2026-08-23 判断、#136)。
+
 ### 3. メンション判定と反応判定
 
 - `isMentioned = message.mentions.has(client.user, opts)`。自己メッセージのときだけ `opts = { ignoreRepliedUser: true, ignoreEveryone: true, ignoreRoles: true }` を渡し、本文中の明示メンション `<@botId>` のみを数える (bot 投稿への返信ピング・@everyone・role メンションでは true にならない)。人間のメッセージは既定の判定。
@@ -126,7 +128,7 @@ sequenceDiagram
 
 ### 12. エラーと後始末
 
-- catch: `log.error` の後、`sendChunks("Error: <msg>")` をチャンネルへ送る (送信失敗は握り潰す)。
+- catch: `log.error` (全文) の後、`sendChunks(summarizeErrorForDiscord(error))` (`errors.ts`) で定型文 + エラーメッセージの先頭 1 行 (最大 200 文字) をチャンネルへ送る。全文は `GET /logs` を参照させる (送信失敗は握り潰す)。
 - finally: ダウンロードした画像の temp ディレクトリを削除 (`cleanupImageFiles`)、進捗メッセージを削除 (`progress.cleanup`)、typing を停止 (`typingController.abort()`)。
 
 ## AI to AI 自己メンション

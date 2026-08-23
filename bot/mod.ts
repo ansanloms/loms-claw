@@ -2,7 +2,7 @@
  * Discord ボットの本体。
  *
  * messageCreate イベントを受け取り、認可チェックと反応判定を行い、
- * Claude Code CLI を呼び出して応答を返す。
+ * Agent SDK (`askClaude()`) を呼び出して応答を返す。
  */
 
 import {
@@ -16,6 +16,7 @@ import {
   type RepliableInteraction,
   REST,
   Routes,
+  Status,
 } from "discord.js";
 import type { SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { Config } from "../config.ts";
@@ -58,15 +59,16 @@ import {
   splitMessage,
   stripBotMentions,
 } from "./message.ts";
-import { join } from "jsr:@std/path@^1/join";
+import { join } from "@std/path/join";
 import { createLogger } from "../logger.ts";
 import { SystemPromptStore } from "../claude/system-prompt.ts";
 import { startApiServer } from "../api/server.ts";
 import type { CronRouteContext } from "../api/routes/cron.ts";
+import type { HealthRouteContext } from "../api/routes/health.ts";
 import type { SettingsRouteContext } from "../api/routes/settings.ts";
 import { CronExecutor } from "../cron/executor.ts";
 import { loadCronJobsFromDir } from "../cron/loader.ts";
-import { getErrorMessage } from "../errors.ts";
+import { getErrorMessage, summarizeErrorForDiscord } from "../errors.ts";
 
 const log = createLogger("bot");
 
@@ -235,9 +237,23 @@ export class DiscordBot {
           store: this.store,
           resolveParentId: (id) => this.resolveThreadParentId(id),
         };
+        const healthCtx: HealthRouteContext = {
+          // Client#isReady() は ws.status (WebSocketManager 全体の状態) を見るが、
+          // 一度 Ready になった後は Gateway が切断されても Status.Ready のまま
+          // 戻らない (discord.js の WebSocketManager#status は constructor と
+          // triggerClientReady() でしか代入されない)。切断はシャード単位の
+          // ws.shards の各 status にしか反映されないため、ここでは全シャードの
+          // status が Status.Ready かどうかで判定する。
+          isReady: () =>
+            this.client.ws.shards.size > 0 &&
+            this.client.ws.shards.every((shard) =>
+              shard.status === Status.Ready
+            ),
+        };
         this.apiServer = startApiServer(
           this.config.claude.apiPort,
           settingsCtx,
+          healthCtx,
           cronCtx,
         );
 
@@ -730,11 +746,11 @@ export class DiscordBot {
           await sendChunks(text);
         }
       } catch (error: unknown) {
-        // logger は Error の stack を自動で展開する。
+        // logger は Error の stack を自動で展開する。全文はここに残す。
         log.error("failed to process message:", error);
-        const errMsg = getErrorMessage(error);
         // エラーもまだ何も送っていなければ発言者宛にする（content 送出済みなら継続扱い）。
-        await sendChunks(`Error: ${errMsg}`).catch(() => {});
+        // Discord へは要約のみ送り、全文は上記ログ (GET /logs) を参照させる。
+        await sendChunks(summarizeErrorForDiscord(error)).catch(() => {});
       } finally {
         if (downloadedImages.length > 0) {
           await cleanupImageFiles(downloadedImages);

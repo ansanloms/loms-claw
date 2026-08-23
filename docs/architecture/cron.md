@@ -63,7 +63,7 @@ channelId: "{channelId}"
 | `model`         | no   | string              | —                        | モデル alias / full name のオーバーライド                                                                          |
 | `effort`        | no   | string (enum)       | —                        | `claude/mod.ts` の `EFFORT_LEVELS` (`low` / `medium` / `high` / `xhigh` / `max`) のいずれか                        |
 
-- `additionalProperties: true` のため、上記以外のキーは検証エラーにならず無視される。
+- `additionalProperties: false` のため、上記以外のキー (typo 等) は検証エラーになる。ファイル単位の失敗として扱われるため、当該ジョブだけが loader (下記) でスキップされ、他のジョブの読み込みは続く。
 - 本文が空 (trim 後に空文字) のファイルは検証エラーになる (`prompt body is empty`)。
 - `channelId` は YAML で引用符なしに書くと数値として読まれるため、型は `string | number` の `oneOf` で受け、`CronJobDef.channelId` へは文字列として格納する。
 
@@ -96,7 +96,7 @@ channelId: "{channelId}"
 
 ## executor (`cron/executor.ts`)
 
-`CronExecutor` は `CronScheduler` を内部に持ち、コンストラクタで discord.js `Client`、`ClaudeConfig`、ギルド ID、bot トークン、`Store`、`ClaudeDefaults`、`ApprovalManager`、`SystemPromptStore`、任意の `queryFn` (テスト用 DI) を受け取る。`start(jobs)` は `replaceAll` → `scheduler.start()`、`reload(jobs)` は `replaceAll` のみ (実行中のジョブはそのまま完了し、次の tick から新定義が効く)、`stop()` は `scheduler.stop()`。
+`CronExecutor` は `CronScheduler` を内部に持ち、コンストラクタで discord.js `Client`、`ClaudeConfig`、ギルド ID、bot トークン、`Store`、`ClaudeDefaults`、`ApprovalManager`、`SystemPromptStore`、任意の `queryFn` (テスト用 DI) を受け取る。`start(jobs)` は `replaceAll` → `scheduler.start()`、`reload(jobs)` は `replaceAll` のみ (実行中のジョブはそのまま完了し、次の tick から新定義が効く)、`stop()` は `scheduler.stop()`。`isRunning(name)` は並行実行ガード (`running: Set<string>`) の状態を読む公開メソッドで、テストから使う。
 
 `runJob(job)` が 1 件の実行本体で、スケジューラのコールバックと `POST /cron/run` の両方から呼ばれる。
 
@@ -111,7 +111,7 @@ channelId: "{channelId}"
 6. `askClaude(job.prompt, { sessionId, config: jobConfig, discordToken, signal: AbortSignal.timeout(timeout), appendSystemPrompt, model, effort, canUseTool: createCanUseTool(approvalManager, job.channelId), queryFn })` を呼ぶ。`canUseTool` に渡す `channelId` は `job.channelId` で、省略時は `undefined` となり `ApprovalManager` は自動 deny する (共有状態へのフォールバックは無い)。承認フローは [approval](approval.md)。
 7. ストリーム消費: `drainResultEvent(stream, { onNonSuccess, setSession })` (`claude/mod.ts`) で `for await` を回し、`event.type === "result"` イベントごとに `handleResultEvent()` (非 success なら `onNonSuccess` で WARN ログ、`setSession` があれば `event.session_id` で呼ぶ) を呼び、最後の `result` イベントを返す。`text_delta` / `thinking_delta` / `tool_progress` は読まない (ストリーミング投稿・進捗表示・thinking 表示は無い)。`resumeSession` が true なら `setSession` から `store.setSession({ channelId: "cron:{name}" }, newSessionId)` で保存する。
 8. `requireResultText(resultEvent)` (`claude/mod.ts`) で本文を取り出す。`result` 無しで終わっていたら `claude stream ended without result event` を throw する (`textChannel` の有無に関わらず、この呼び出しがコード上先に評価されるため必ず throw される)。取り出せたら `textChannel` があるときだけ `splitMessage()` で 2000 文字に分割して `channel.send()` する (`channelId` 省略時は投稿しない。プロンプト側で Discord REST API を叩く設計にする)。
-9. catch: ERROR ログ (`cron job "{name}" failed:`) を出し、`textChannel` が取得済みなら `[cron: {name}] Error: {message}` を送る。通知自体の失敗は握りつぶす。
+9. catch: ERROR ログ (`cron job "{name}" failed:`、全文) を出し、`textChannel` が取得済みなら `[cron: {name}]` + `summarizeErrorForDiscord(error)` (`errors.ts`、定型文 + エラーメッセージの先頭 1 行を要約したもの) を送る。通知自体の失敗は握りつぶす。
 10. finally: `job.once` かつ `onceCallback` が設定されていれば `onceCallback(job.name)` を await する (失敗はログのみ)。最後に `running` から削除する。
 
 `askClaude()` / `drainResultEvent()` / `requireResultText()` は chat と共通で、cron 固有の分岐は持たない ([claude-integration](claude-integration.md))。
@@ -134,7 +134,7 @@ channelId: "{channelId}"
 3. `reloadJobs = () => loadCronJobsFromDir(cwd) → cronExecutor.reload(jobs)` を定義する。
 4. `cronExecutor.setOnceCallback()` で once 後処理を登録する: `join(cwd, "cron", "{name}.md")` を `Deno.remove()` し (失敗は ERROR ログ)、続けて `reloadJobs()` を呼ぶ。エージェント側の手動 reload は不要。
 5. `runJobByName(name)`: `cronExecutor.findJob(name)` が無ければ `job not found: {name}` を throw、あれば `runJob(job)` を await する。
-6. `CronRouteContext { reloadCronJobs: reloadJobs, runJob: runJobByName, listJobs: () => cronExecutor.listJobs() }` を `startApiServer(config.claude.apiPort, settingsCtx, cronCtx)` に渡す。
+6. `CronRouteContext { reloadCronJobs: reloadJobs, runJob: runJobByName, listJobs: () => cronExecutor.listJobs() }` を `startApiServer(config.claude.apiPort, settingsCtx, healthCtx, cronCtx)` に渡す。
 
 `shutdown()` では最初に `cronExecutor.stop()` を呼ぶ。
 

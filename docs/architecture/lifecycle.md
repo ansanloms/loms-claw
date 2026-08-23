@@ -33,7 +33,7 @@ sequenceDiagram
         D-->>B: ClientReady
         B->>D: registerCommands() (REST PUT)
         B->>X: new CronExecutor(...) / loadCronJobsFromDir(cwd) / start(jobs)
-        B->>A: startApiServer(apiPort, settingsCtx, cronCtx)
+        B->>A: startApiServer(apiPort, settingsCtx, healthCtx, cronCtx)
         B-->>M: start() 解決
     end
 ```
@@ -76,7 +76,7 @@ KV の open / close は `main.ts` が対で所有する。`Deno.openKv()` で開
    3. `loadCronJobsFromDir(config.claude.cwd)` (`cron/loader.ts`) で `{cwd}/cron/*.md` を読み、`cronExecutor.start(jobs)` でスケジューラを開始する。`cron/` が無ければ空配列で開始する。
    4. `reloadJobs` (再読込 → `cronExecutor.reload()`) を定義し、`cronExecutor.setOnceCallback()` に once ジョブ実行後の処理 (`{cwd}/cron/{name}.md` を `Deno.remove()` → `reloadJobs()`) を登録する。削除失敗はログのみで、reload は行う。
    5. `runJobByName` (`findJob()` → `runJob()`、未登録なら throw) を定義する。
-   6. `CronRouteContext { reloadCronJobs, runJob, listJobs }` と `SettingsRouteContext { store, resolveParentId }` を組み立て、`startApiServer(config.claude.apiPort, settingsCtx, cronCtx)` (`api/server.ts`) を呼ぶ。サーバーは `127.0.0.1` にバインドされる。詳細は [internal-api](internal-api.md)。
+   6. `CronRouteContext { reloadCronJobs, runJob, listJobs }`、`SettingsRouteContext { store, resolveParentId }`、`HealthRouteContext { isReady }` を組み立て、`startApiServer(config.claude.apiPort, settingsCtx, healthCtx, cronCtx)` (`api/server.ts`) を呼ぶ。サーバーは `127.0.0.1` にバインドされる。詳細は [internal-api](internal-api.md)。
    7. `ready` Promise を resolve する。
 4. `await this.client.login(config.discord.token)`。
 5. `await ready` で上記ハンドラの完了を待ってから `start()` が解決する。
@@ -121,9 +121,8 @@ schema はトップレベル・`discord`・`claude`・`claude.defaults`・`log` 
 | `discord.activeChannelIds`     | string[]                                         | `[]`                     | mention 不要で反応するチャンネル ID の静的ベースライン |
 | `storePath`                    | string                                           | `".claude/loms-claw.kv"` | Deno KV ファイルのパス。相対パスはプロセス cwd 基準    |
 | `claude.maxTurns`              | number                                           | `10`                     | `query()` の `maxTurns`                                |
-| `claude.verbose`               | boolean                                          | `true`                   | 現在未使用。後方互換のため保持                         |
 | `claude.timeout`               | number                                           | `300000`                 | Claude 呼び出しのタイムアウト (ms)                     |
-| `claude.apiPort`               | number                                           | `3000`                   | 内部 HTTP API のポート                                 |
+| `claude.apiPort`               | number                                           | `3000`                   | 内部 HTTP API のポート (cron + ログ + 設定 (settings)) |
 | `claude.defaults.model`        | string                                           |                          | 省略可。グローバルデフォルトのモデル                   |
 | `claude.defaults.effort`       | enum `low` / `medium` / `high` / `xhigh` / `max` |                          | 省略可。グローバルデフォルトの effort                  |
 | `claude.defaults.showThinking` | boolean                                          | `false`                  | thinking を Discord に表示するかのグローバルデフォルト |
@@ -132,7 +131,7 @@ schema はトップレベル・`discord`・`claude`・`claude.defaults`・`log` 
 
 `claude.cwd` (`Deno.cwd()` 注入) は表に無い。`Config` / `ClaudeConfig` / `ClaudeDefaults` / `LogConfig` / `DiscordConfig` の型は `config.ts` にあり、JSON 側の shape は `ConfigFile` (`claude.cwd` を除いた `Config`) である。
 
-`data/config.json.example` は `$schema` に `../config.schema.json` を指定した雛形で、`storePath` を `loms-claw.kv`、`claude.defaults` を `model: sonnet` / `effort: medium` / `showThinking: false` としている。`defaults` の各値がどう解決されるかは [store-and-settings](store-and-settings.md) を参照。
+`data/config.json.example` は `$schema` に `../config.schema.json` を指定した雛形で、`storePath` を `.claude/loms-claw.kv`、`claude.defaults` を `model: sonnet` / `effort: medium` / `showThinking: false` としている。`defaults` の各値がどう解決されるかは [store-and-settings](store-and-settings.md) を参照。
 
 ## ロガー (`logger.ts`)
 

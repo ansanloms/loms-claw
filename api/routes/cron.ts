@@ -57,7 +57,12 @@ export function createCronRoutes(ctx: CronRouteContext = {}) {
     if (!ctx.runJob) {
       return c.json({ error: "cron not available" }, 503);
     }
-    const body = await c.req.json();
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "invalid JSON body" }, 400);
+    }
     if (!isCronRunBody(body)) {
       return c.json({ error: schemaErrorOf("RequestPostCronRun", body) }, 400);
     }

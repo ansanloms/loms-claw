@@ -23,7 +23,7 @@ import { splitMessage } from "../bot/message.ts";
 import { createLogger } from "../logger.ts";
 import { CronScheduler } from "./scheduler.ts";
 import type { CronJobDef } from "./types.ts";
-import { getErrorMessage } from "../errors.ts";
+import { summarizeErrorForDiscord } from "../errors.ts";
 
 const log = createLogger("cron");
 
@@ -60,6 +60,13 @@ export class CronExecutor {
    */
   setOnceCallback(cb: (jobName: string) => Promise<void>): void {
     this.onceCallback = cb;
+  }
+
+  /**
+   * 指定した名前のジョブが実行中かどうかを返す。
+   */
+  isRunning(name: string): boolean {
+    return this.running.has(name);
   }
 
   /**
@@ -209,14 +216,15 @@ export class CronExecutor {
 
       log.info(`cron job "${job.name}" completed`);
     } catch (error: unknown) {
-      // logger は Error の stack を自動で展開する。
+      // logger は Error の stack を自動で展開する。全文はここに残す。
       log.error(`cron job "${job.name}" failed:`, error);
-      const errMsg = getErrorMessage(error);
 
-      // channelId 指定時かつチャンネル取得済みならエラーを通知
+      // channelId 指定時かつチャンネル取得済みならエラーを通知 (要約のみ、全文は上記ログ)。
       if (textChannel) {
         try {
-          await textChannel.send(`[cron: ${job.name}] Error: ${errMsg}`);
+          await textChannel.send(
+            `[cron: ${job.name}] ${summarizeErrorForDiscord(error)}`,
+          );
         } catch {
           // チャンネルへの通知も失敗した場合はログのみ
         }
