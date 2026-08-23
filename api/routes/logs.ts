@@ -56,6 +56,9 @@ export function createLogsRoutes() {
       if (!Number.isInteger(n) || n < 1) {
         return c.json({ error: "limit must be a positive integer" }, 400);
       }
+      if (n > 1000) {
+        return c.json({ error: "limit must not exceed 1000" }, 400);
+      }
       filter.limit = n;
     }
 
