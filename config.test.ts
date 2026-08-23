@@ -1,6 +1,5 @@
 import { assertEquals, assertStringIncludes, assertThrows } from "@std/assert";
 import { loadConfig } from "./config.ts";
-import { validateConfigFile } from "./config.schema.ts";
 
 const ENV_KEY = "LOMS_CLAW_CONFIG";
 
@@ -50,7 +49,6 @@ Deno.test("loadConfig", async (t) => {
       assertEquals(config.claude.defaults.model, undefined);
       assertEquals(config.claude.defaults.effort, undefined);
       assertEquals(config.claude.maxTurns, 10);
-      assertEquals(config.claude.verbose, true);
       assertEquals(config.claude.timeout, 300000);
       assertEquals(config.claude.apiPort, 3000);
       assertEquals(config.claude.defaults.showThinking, false);
@@ -188,7 +186,6 @@ Deno.test("loadConfig", async (t) => {
         ...requiredFields,
         claude: {
           maxTurns: 5,
-          verbose: false,
           timeout: 60000,
           apiPort: 4000,
         },
@@ -196,7 +193,6 @@ Deno.test("loadConfig", async (t) => {
       () => {
         const config = loadConfig();
         assertEquals(config.claude.maxTurns, 5);
-        assertEquals(config.claude.verbose, false);
         assertEquals(config.claude.timeout, 60000);
         assertEquals(config.claude.apiPort, 4000);
       },
@@ -204,29 +200,24 @@ Deno.test("loadConfig", async (t) => {
   });
 
   await t.step(
-    "claude.verbose が required から除外されていること（applyConfigDefaults を経由せず validateConfigFile を直接検証）",
+    "claude.verbose を含む config は additionalProperties: false で検証エラーになること",
     () => {
-      const configWithoutVerbose = {
-        discord: {
-          token: "test-token",
-          guildId: "test-guild",
-          userId: "test-user",
-          activeChannelIds: [],
+      withTempConfig(
+        {
+          ...requiredFields,
+          claude: {
+            maxTurns: 10,
+            timeout: 300000,
+            apiPort: 3000,
+            defaults: {},
+            verbose: true,
+          },
         },
-        storePath: ".claude/loms-claw.kv",
-        claude: {
-          maxTurns: 10,
-          timeout: 300000,
-          apiPort: 3000,
-          defaults: {},
+        () => {
+          const err = assertThrows(() => loadConfig(), Error);
+          assertStringIncludes(err.message, "verbose");
         },
-        log: {
-          level: "INFO",
-          bufferSize: 1000,
-        },
-      };
-      const { valid } = validateConfigFile(configWithoutVerbose);
-      assertEquals(valid, true);
+      );
     },
   );
 

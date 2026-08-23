@@ -109,7 +109,6 @@ function successQueryFn(
 
 const TEST_CONFIG = {
   maxTurns: 10,
-  verbose: true,
   timeout: 30000,
   cwd: "/tmp",
   apiPort: 3000,

@@ -56,11 +56,6 @@
           "default": 10,
           "description": "エージェントの最大ターン数（query() の maxTurns に渡される）。"
         },
-        "verbose": {
-          "type": "boolean",
-          "default": true,
-          "description": "非推奨・現在未使用。後方互換のため残している。"
-        },
         "timeout": {
           "type": "number",
           "default": 300000,

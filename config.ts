@@ -33,8 +33,6 @@ export interface ClaudeDefaults {
 export interface ClaudeConfig {
   /** `query()` の `maxTurns` に渡す最大ターン数。 */
   maxTurns: number;
-  /** @deprecated 非推奨・現在未使用。後方互換のため残している。 */
-  verbose?: boolean;
   /** Claude 呼び出しのタイムアウト（ミリ秒）。`query()` の abort に使う。 */
   timeout: number;
   /** 内部 API サーバーのポート（cron + ログ + 設定 (settings)）。 */
