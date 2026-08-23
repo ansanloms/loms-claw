@@ -287,6 +287,7 @@ graph TD
 | [cron.md](cron.md)                             | 定期実行 (ジョブファイル形式、スケジューラ、実行、once、reload)                             |
 | [internal-api.md](internal-api.md)             | 内部 HTTP API、`docs/api` (OpenAPI) と検証パイプライン                                      |
 | [deployment.md](deployment.md)                 | Docker / compose / devcontainer、`data/` ディレクトリ、環境変数、ワークスペース構成         |
+| [constants.md](constants.md)                   | ハードコード定数の分類表、設定化しない方針                                                  |
 
 ## 関連ドキュメント
 
