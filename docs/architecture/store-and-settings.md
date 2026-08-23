@@ -106,11 +106,11 @@ interface SettingsPatch {
 
 `kv.list({ prefix: ["channel", id] })` で leaf id 配下のキーを列挙し、1 つの `kv.atomic()` で全削除する。thread scope なら thread のキーだけ消え、親チャンネルの設定は残る。channel scope なら channel のキーだけ消え、配下スレッドの設定は残る。
 
-### 個別 setter / deleter
+### 個別 setter
 
-`setSession` は本番で使われる。`bot/mod.ts` と `cron/executor.ts` が `result` イベント受信時に `event.session_id` を保存する (ジェネレータが非ゼロ終了で throw してもセッションが残るよう、result を受け取った時点で即座に書く)。
+`setSession` のみが個別 setter として残る。`bot/mod.ts` と `cron/executor.ts` が `result` イベント受信時に `event.session_id` を保存する (ジェネレータが非ゼロ終了で throw してもセッションが残るよう、result を受け取った時点で即座に書く)。
 
-`setModel` / `setEffort` / `setShowThinking` / `deleteSession` / `deleteModel` / `deleteEffort` / `deleteShowThinking` は `store/mod.ts` に定義されているが、本番コードからは呼ばれていない (呼び出し元は `store/mod.test.ts` のみ)。本番の書き込み経路は `setSession` / `applyPatch` / `clearScope` の 3 つ。
+model / effort / showThinking / active に対する個別の setter / deleter は無く、書き込みは `setSession` / `applyPatch` / `clearScope` の 3 つに集約されている。読み取り側の thread → channel → (defaults) 解決も 4 つの getter (`getModel` / `getEffort` / `getShowThinking` / `getActive`) が共通の private ヘルパ (`resolveScoped()`) を呼ぶ形にまとまっている。
 
 ## Discord スラッシュコマンド `/claw settings`
 

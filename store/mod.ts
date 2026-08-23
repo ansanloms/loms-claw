@@ -126,72 +126,60 @@ export class Store {
     await this.kv.set([NS, id, SESSION], sessionId);
   }
 
-  async deleteSession(scope: StoreScope): Promise<void> {
-    const id = scope.threadId ?? scope.channelId;
-    await this.kv.delete([NS, id, SESSION]);
+  // ── thread → channel → (defaults) の共通解決ヘルパ ─────────
+  // model / effort / showThinking / active の読み取りはすべて
+  // 「thread になければ channel、channel にもなければ fallback」という同じ形を
+  // とる。fallback の有無・boolean 変換の要否だけがフィールドごとに異なるため、
+  // それを parse / fallback 引数に切り出す。
+
+  private async resolveScoped<T>(
+    scope: StoreScope,
+    field: string,
+    parse: (raw: string) => T,
+    fallback: T | undefined,
+  ): Promise<T | undefined> {
+    if (scope.threadId !== undefined) {
+      const threadEntry = await this.kv.get<string>([
+        NS,
+        scope.threadId,
+        field,
+      ]);
+      if (threadEntry.value !== null) {
+        return parse(threadEntry.value);
+      }
+    }
+    const channelEntry = await this.kv.get<string>([
+      NS,
+      scope.channelId,
+      field,
+    ]);
+    if (channelEntry.value !== null) {
+      return parse(channelEntry.value);
+    }
+    return fallback;
   }
 
   // ── model ───────────────────────────────────────────────
   // thread → channel → defaults の順で解決。
 
   async getModel(scope: StoreScope): Promise<string | undefined> {
-    if (scope.threadId !== undefined) {
-      const threadEntry = await this.kv.get<string>([
-        NS,
-        scope.threadId,
-        MODEL,
-      ]);
-      if (threadEntry.value !== null) {
-        return threadEntry.value;
-      }
-    }
-    const channelEntry = await this.kv.get<string>([
-      NS,
-      scope.channelId,
+    return await this.resolveScoped(
+      scope,
       MODEL,
-    ]);
-    return channelEntry.value ?? this.defaults.model;
-  }
-
-  async setModel(scope: StoreScope, model: string): Promise<void> {
-    const id = scope.threadId ?? scope.channelId;
-    await this.kv.set([NS, id, MODEL], model);
-  }
-
-  async deleteModel(scope: StoreScope): Promise<void> {
-    const id = scope.threadId ?? scope.channelId;
-    await this.kv.delete([NS, id, MODEL]);
+      (raw) => raw,
+      this.defaults.model,
+    );
   }
 
   // ── effort ──────────────────────────────────────────────
 
   async getEffort(scope: StoreScope): Promise<string | undefined> {
-    if (scope.threadId !== undefined) {
-      const threadEntry = await this.kv.get<string>([
-        NS,
-        scope.threadId,
-        EFFORT,
-      ]);
-      if (threadEntry.value !== null) {
-        return threadEntry.value;
-      }
-    }
-    const channelEntry = await this.kv.get<string>([
-      NS,
-      scope.channelId,
+    return await this.resolveScoped(
+      scope,
       EFFORT,
-    ]);
-    return channelEntry.value ?? this.defaults.effort;
-  }
-
-  async setEffort(scope: StoreScope, effort: string): Promise<void> {
-    const id = scope.threadId ?? scope.channelId;
-    await this.kv.set([NS, id, EFFORT], effort);
-  }
-
-  async deleteEffort(scope: StoreScope): Promise<void> {
-    const id = scope.threadId ?? scope.channelId;
-    await this.kv.delete([NS, id, EFFORT]);
+      (raw) => raw,
+      this.defaults.effort,
+    );
   }
 
   // ── showThinking ────────────────────────────────────────
@@ -199,35 +187,13 @@ export class Store {
   // の文字列で格納する (KV 値を文字列で統一するため)。未設定なら false。
 
   async getShowThinking(scope: StoreScope): Promise<boolean> {
-    if (scope.threadId !== undefined) {
-      const threadEntry = await this.kv.get<string>([
-        NS,
-        scope.threadId,
-        SHOW_THINKING,
-      ]);
-      if (threadEntry.value !== null) {
-        return threadEntry.value === "true";
-      }
-    }
-    const channelEntry = await this.kv.get<string>([
-      NS,
-      scope.channelId,
+    const value = await this.resolveScoped(
+      scope,
       SHOW_THINKING,
-    ]);
-    if (channelEntry.value !== null) {
-      return channelEntry.value === "true";
-    }
-    return this.defaults.showThinking ?? false;
-  }
-
-  async setShowThinking(scope: StoreScope, value: boolean): Promise<void> {
-    const id = scope.threadId ?? scope.channelId;
-    await this.kv.set([NS, id, SHOW_THINKING], String(value));
-  }
-
-  async deleteShowThinking(scope: StoreScope): Promise<void> {
-    const id = scope.threadId ?? scope.channelId;
-    await this.kv.delete([NS, id, SHOW_THINKING]);
+      (raw) => raw === "true",
+      this.defaults.showThinking,
+    );
+    return value ?? false;
   }
 
   // ── active ──────────────────────────────────────────────
@@ -237,25 +203,12 @@ export class Store {
   // この設定の要点なので、未設定と false を混同しないこと。
 
   async getActive(scope: StoreScope): Promise<boolean | undefined> {
-    if (scope.threadId !== undefined) {
-      const threadEntry = await this.kv.get<string>([
-        NS,
-        scope.threadId,
-        ACTIVE,
-      ]);
-      if (threadEntry.value !== null) {
-        return threadEntry.value === "true";
-      }
-    }
-    const channelEntry = await this.kv.get<string>([
-      NS,
-      scope.channelId,
+    return await this.resolveScoped(
+      scope,
       ACTIVE,
-    ]);
-    if (channelEntry.value !== null) {
-      return channelEntry.value === "true";
-    }
-    return undefined;
+      (raw) => raw === "true",
+      undefined,
+    );
   }
 
   // ── まとめ操作 ─────────────────────────────────────────
@@ -281,7 +234,7 @@ export class Store {
   /**
    * 指定スコープへ部分更新を適用する。
    *
-   * 書き込み先の id は setter / deleter と同じく `scope.threadId ?? scope.channelId`。
+   * 書き込み先の id は setSession() と同じく `scope.threadId ?? scope.channelId`。
    * patch のキーのうち値が undefined でないものだけを処理し、null なら削除、
    * それ以外なら設定する。複数キーの更新は kv.atomic() で 1 コミットにまとめ、
    * 中途半端に一部だけ適用された状態を防ぐ (clearScope() と同じ方針)。

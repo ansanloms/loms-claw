@@ -153,7 +153,7 @@ Deno.test("handleSettingsSet", async (t) => {
     () =>
       withStore(async (store) => {
         // defaults true でも channel に false を明示できる
-        await store.setShowThinking(ch("ch-1"), true);
+        await store.applyPatch(ch("ch-1"), { showThinking: true });
         const interaction = mockInteraction("ch-1", {
           show_thinking: false,
           // deno-lint-ignore no-explicit-any
@@ -167,7 +167,7 @@ Deno.test("handleSettingsSet", async (t) => {
     "スレッド内で実行すると thread スコープに保存され channel には影響しないこと",
     () =>
       withStore(async (store) => {
-        await store.setModel(ch("ch-parent"), "opus");
+        await store.applyPatch(ch("ch-parent"), { model: "opus" });
         const interaction = mockInteraction(
           "thread-1",
           { model: "haiku" },
@@ -240,8 +240,8 @@ Deno.test("handleSettingsUnset", async (t) => {
     "target=model でチャンネルの model のみ削除されること",
     () =>
       withStore(async (store) => {
-        await store.setModel(ch("ch-1"), "opus");
-        await store.setEffort(ch("ch-1"), "high");
+        await store.applyPatch(ch("ch-1"), { model: "opus" });
+        await store.applyPatch(ch("ch-1"), { effort: "high" });
         await store.setSession(ch("ch-1"), "sess-1");
 
         const interaction = mockInteraction("ch-1", {
@@ -260,8 +260,8 @@ Deno.test("handleSettingsUnset", async (t) => {
     "target=effort でチャンネルの effort のみ削除されること",
     () =>
       withStore(async (store) => {
-        await store.setEffort(ch("ch-1"), "high");
-        await store.setModel(ch("ch-1"), "opus");
+        await store.applyPatch(ch("ch-1"), { effort: "high" });
+        await store.applyPatch(ch("ch-1"), { model: "opus" });
 
         const interaction = mockInteraction("ch-1", {
           target: "effort",
@@ -278,8 +278,8 @@ Deno.test("handleSettingsUnset", async (t) => {
     "target=show_thinking でチャンネルの showThinking のみ削除されること",
     () =>
       withStore(async (store) => {
-        await store.setShowThinking(ch("ch-1"), true);
-        await store.setModel(ch("ch-1"), "opus");
+        await store.applyPatch(ch("ch-1"), { showThinking: true });
+        await store.applyPatch(ch("ch-1"), { model: "opus" });
 
         const interaction = mockInteraction("ch-1", {
           target: "show_thinking",
@@ -298,7 +298,7 @@ Deno.test("handleSettingsUnset", async (t) => {
     () =>
       withStore(async (store) => {
         await store.applyPatch(ch("ch-1"), { active: true });
-        await store.setModel(ch("ch-1"), "opus");
+        await store.applyPatch(ch("ch-1"), { model: "opus" });
 
         const interaction = mockInteraction("ch-1", {
           target: "active",
@@ -316,7 +316,7 @@ Deno.test("handleSettingsUnset", async (t) => {
     () =>
       withStore(async (store) => {
         await store.setSession(ch("ch-1"), "sess-1");
-        await store.setModel(ch("ch-1"), "opus");
+        await store.applyPatch(ch("ch-1"), { model: "opus" });
 
         const interaction = mockInteraction("ch-1", {
           target: "session",
@@ -333,8 +333,8 @@ Deno.test("handleSettingsUnset", async (t) => {
     "他チャンネルには影響しないこと",
     () =>
       withStore(async (store) => {
-        await store.setModel(ch("ch-1"), "opus");
-        await store.setModel(ch("ch-2"), "sonnet");
+        await store.applyPatch(ch("ch-1"), { model: "opus" });
+        await store.applyPatch(ch("ch-2"), { model: "sonnet" });
 
         // deno-lint-ignore no-explicit-any
         const interaction = mockInteraction("ch-1", { target: "model" }) as any;
