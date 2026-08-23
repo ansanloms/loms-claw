@@ -7,11 +7,14 @@ import type { ClaudeConfig } from "../config.ts";
 import {
   askClaude,
   buildQueryOptions,
+  drainResultEvent,
   extractResultText,
   extractTopLevelTextDelta,
+  handleResultEvent,
   isSessionNotFoundError,
   normalizeEffort,
   type QueryFn,
+  requireResultText,
 } from "./mod.ts";
 
 const baseConfig: ClaudeConfig = {
@@ -496,6 +499,145 @@ Deno.test("extractResultText", async (t) => {
       );
     },
   );
+});
+
+Deno.test("handleResultEvent", async (t) => {
+  await t.step(
+    "success では onNonSuccess は呼ばれず setSession が session_id で呼ばれること",
+    async () => {
+      let nonSuccessCalled = false;
+      let capturedSessionId: string | undefined;
+      await handleResultEvent(
+        {
+          type: "result",
+          subtype: "success",
+          result: "ok",
+          session_id: "sess-1",
+          is_error: false,
+        } as unknown as SDKResultMessage,
+        {
+          onNonSuccess: () => {
+            nonSuccessCalled = true;
+          },
+          setSession: (sessionId) => {
+            capturedSessionId = sessionId;
+            return Promise.resolve();
+          },
+        },
+      );
+      assertEquals(nonSuccessCalled, false);
+      assertEquals(capturedSessionId, "sess-1");
+    },
+  );
+
+  await t.step("非 success では onNonSuccess が呼ばれること", async () => {
+    let capturedEvent: SDKResultMessage | undefined;
+    await handleResultEvent(
+      {
+        type: "result",
+        subtype: "error_max_turns",
+        session_id: "sess-1",
+        is_error: true,
+      } as unknown as SDKResultMessage,
+      {
+        onNonSuccess: (event) => {
+          capturedEvent = event;
+        },
+      },
+    );
+    assertEquals(capturedEvent?.subtype, "error_max_turns");
+  });
+
+  await t.step("setSession 未指定でも動くこと", async () => {
+    let nonSuccessCalled = false;
+    await handleResultEvent(
+      {
+        type: "result",
+        subtype: "success",
+        result: "ok",
+        session_id: "sess-1",
+        is_error: false,
+      } as unknown as SDKResultMessage,
+      {
+        onNonSuccess: () => {
+          nonSuccessCalled = true;
+        },
+      },
+    );
+    assertEquals(nonSuccessCalled, false);
+  });
+});
+
+Deno.test("drainResultEvent", async (t) => {
+  async function* streamOf(
+    events: SDKMessage[],
+  ): AsyncGenerator<SDKMessage> {
+    for (const event of events) {
+      yield event;
+    }
+  }
+
+  await t.step("result が複数あれば最後を返すこと", async () => {
+    const first = {
+      type: "result",
+      subtype: "success",
+      result: "1回目",
+      session_id: "sess-1",
+      is_error: false,
+    } as SDKMessage;
+    const last = {
+      type: "result",
+      subtype: "success",
+      result: "2回目",
+      session_id: "sess-2",
+      is_error: false,
+    } as SDKMessage;
+
+    const resultEvent = await drainResultEvent(streamOf([first, last]), {
+      onNonSuccess: () => {},
+    });
+
+    assertEquals(
+      (resultEvent as unknown as SDKResultMessage | undefined)?.session_id,
+      "sess-2",
+    );
+  });
+
+  await t.step("result が無ければ undefined を返すこと", async () => {
+    const resultEvent = await drainResultEvent(
+      streamOf([{ type: "system", subtype: "init" } as SDKMessage]),
+      { onNonSuccess: () => {} },
+    );
+    assertEquals(resultEvent, undefined);
+  });
+});
+
+Deno.test("requireResultText", async (t) => {
+  await t.step(
+    "resultEvent が undefined なら throw すること",
+    () => {
+      assertThrows(
+        () => requireResultText(undefined),
+        Error,
+        "claude stream ended without result event",
+      );
+    },
+  );
+
+  await t.step("success なら本文を返すこと", () => {
+    assertEquals(
+      requireResultText(
+        {
+          type: "result",
+          subtype: "success",
+          result: "応答テキスト",
+          session_id: "sess-1",
+          is_error: false,
+        } as unknown as SDKResultMessage,
+      ),
+      "応答テキスト",
+    );
+  });
 });
 
 Deno.test("extractTopLevelTextDelta", async (t) => {

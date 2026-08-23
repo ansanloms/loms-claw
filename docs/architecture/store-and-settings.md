@@ -39,6 +39,8 @@ interface StoreScope {
 | スレッド内      | `{ channelId: parentId, threadId }`           | 同上。`parentId` が null のときは thread id 自体を `channelId` に入れる                                                  |
 | cron ジョブ     | `{ channelId: "cron:{name}" }` (session のみ) | `cron/executor.ts`。詳細は後述                                                                                           |
 
+`api/routes/settings.ts` (`GET` / `PATCH` / `DELETE /settings/{id}`) は `bot/scope.ts` を使わず、`resolveParentId` で親を引いて別途スコープを組む (詳細は後述の `resolveScope()`)。親が取れないスレッドの扱いは bot 側 (`{ channelId: id, threadId: id }`) と API 側 (`{ channelId: id }`) で異なる (既存挙動。統一は別 issue)。
+
 書き込み (`setSession` / `applyPatch` / `clearScope`) は常に leaf id (`threadId ?? channelId`) に対して行われる。スレッド内で `/claw settings set` を叩いても親チャンネルのキーには触れない。
 
 ## 解決順

@@ -108,13 +108,13 @@ sequenceDiagram
 
 `for await` で `SDKMessage` を 1 件ずつ見る。各イベントは次の順で 1 つの分岐にだけ入る。
 
-| 優先 | 条件                                                                                                      | 処理                                                                                                                                         |
-| ---- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | `extractTopLevelTextDelta(event)` が文字列 (`stream_event` かつ `parent_tool_use_id` 無しの `text_delta`) | 未送出の thinking があれば強制 flush。`textBuffer` に追記し、800 文字以上なら境界 flush                                                      |
-| 2    | `showThinking` かつ `extractTopLevelThinkingDelta(event)` が文字列 (`thinking_delta`)                     | `thinkingBuffer` に追記し、1500 文字以上なら境界 flush                                                                                       |
-| 3    | `event.type === "assistant"` かつ `parent_tool_use_id` 無し                                               | thinking → text の順に強制 flush (assistant ターン 1 件ごとに別投稿へ区切る)                                                                 |
-| 4    | `event.type === "result"`                                                                                 | `resultEvent` に保持。`subtype !== "success"` なら WARN (イベント全体を JSON で記録)。`store.setSession(scope, event.session_id)` を即時保存 |
-| 5    | `event.type === "tool_progress"`                                                                          | `progress.report(tool_name, elapsed_time_seconds)`                                                                                           |
+| 優先 | 条件                                                                                                      | 処理                                                                                                                                                                                          |
+| ---- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | `extractTopLevelTextDelta(event)` が文字列 (`stream_event` かつ `parent_tool_use_id` 無しの `text_delta`) | 未送出の thinking があれば強制 flush。`textBuffer` に追記し、800 文字以上なら境界 flush                                                                                                       |
+| 2    | `showThinking` かつ `extractTopLevelThinkingDelta(event)` が文字列 (`thinking_delta`)                     | `thinkingBuffer` に追記し、1500 文字以上なら境界 flush                                                                                                                                        |
+| 3    | `event.type === "assistant"` かつ `parent_tool_use_id` 無し                                               | thinking → text の順に強制 flush (assistant ターン 1 件ごとに別投稿へ区切る)                                                                                                                  |
+| 4    | `event.type === "result"`                                                                                 | `resultEvent` に保持し `handleResultEvent()` (`claude/mod.ts`) を呼ぶ。`subtype !== "success"` なら WARN (イベント全体を JSON で記録)。`store.setSession(scope, event.session_id)` を即時保存 |
+| 5    | `event.type === "tool_progress"`                                                                          | `progress.report(tool_name, elapsed_time_seconds)`                                                                                                                                            |
 
 - `system` / `user` / サブエージェント由来 (`parent_tool_use_id` 有り) のイベントは扱わない。
 - 境界 flush: バッファ内で最後の `。` または改行までを送り、残りを保持する。境界が無い場合は何もしないが、閾値の 2 倍以上に達したら全量を強制 flush する (コードブロック・英語・URL が続くケース対策)。
@@ -124,7 +124,7 @@ sequenceDiagram
 ### 11. ループ後
 
 - thinking → text の順に最終 flush。
-- 一度もテキストを送っていなければ (`hasStreamedText` が false)、`sendResultText(resultEvent, sendChunks)` (`claude/mod.ts`) を呼ぶ。`resultEvent` が無ければ `claude stream ended without result event` を throw する。あれば `extractResultText(resultEvent)` (`result` フィールドが文字列なら `subtype` を問わず採用し、無ければ `errors` / `subtype` から組み立てた Error を throw する) の結果を `sendChunks` に渡す。cron 側の同じ組み合わせは [cron](cron.md) を参照。
+- 一度もテキストを送っていなければ (`hasStreamedText` が false)、`requireResultText(resultEvent)` (`claude/mod.ts`) で本文を取り出し `sendChunks` に渡す。`resultEvent` が無ければ `claude stream ended without result event` を throw する。取り出し自体は `extractResultText(resultEvent)` (`result` フィールドが文字列なら `subtype` を問わず採用し、無ければ `errors` / `subtype` から組み立てた Error を throw する)。cron 側の同じ組み合わせは [cron](cron.md) を参照。
 
 ### 12. エラーと後始末
 
