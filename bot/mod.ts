@@ -27,7 +27,12 @@ import {
 } from "../claude/mod.ts";
 import type { Store } from "../store/mod.ts";
 import { ApprovalManager, createCanUseTool } from "../approval/manager.ts";
-import { command } from "./commands.ts";
+import {
+  command,
+  handleSettingsSet,
+  handleSettingsShow,
+  handleSettingsUnset,
+} from "./commands.ts";
 import {
   isAuthorized,
   isAuthorizedSelfMessage,
@@ -55,11 +60,6 @@ import {
 import { join } from "jsr:@std/path@^1/join";
 import { createLogger } from "../logger.ts";
 import { SystemPromptStore } from "../claude/system-prompt.ts";
-import {
-  handleSettingsSet,
-  handleSettingsShow,
-  handleSettingsUnset,
-} from "./commands.ts";
 import { startApiServer } from "../api/server.ts";
 import type { CronRouteContext } from "../api/routes/cron.ts";
 import type { SettingsRouteContext } from "../api/routes/settings.ts";
