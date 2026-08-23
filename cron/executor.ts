@@ -13,7 +13,7 @@ import {
   askClaude,
   drainResultEvent,
   type QueryFn,
-  sendResultText,
+  requireResultText,
 } from "../claude/mod.ts";
 import type { ClaudeConfig, ClaudeDefaults } from "../config.ts";
 import type { Store } from "../store/mod.ts";
@@ -192,19 +192,21 @@ export class CronExecutor {
             JSON.stringify(event),
           ),
         setSession: job.resumeSession
-          ? (sessionId) =>
-            this.store.setSession({ channelId: sessionKey }, sessionId)
+          ? (newSessionId) =>
+            this.store.setSession({ channelId: sessionKey }, newSessionId)
           : undefined,
       });
 
-      await sendResultText(resultEvent, async (text) => {
-        // channelId 指定時のみ executor が投稿する
-        if (textChannel) {
-          for (const chunk of splitMessage(text)) {
-            await textChannel.send(chunk);
-          }
+      // requireResultText() は textChannel の有無に関わらず先に評価する。
+      // result が無い/エラーなら textChannel が無くても throw され、catch で
+      // ログされる (取得済みならエラー通知も行われる)。
+      const text = requireResultText(resultEvent);
+      // channelId 指定時のみ executor が投稿する
+      if (textChannel) {
+        for (const chunk of splitMessage(text)) {
+          await textChannel.send(chunk);
         }
-      });
+      }
 
       log.info(`cron job "${job.name}" completed`);
     } catch (error: unknown) {

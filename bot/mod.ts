@@ -23,7 +23,8 @@ import {
   askClaude,
   extractTopLevelTextDelta,
   extractTopLevelThinkingDelta,
-  sendResultText,
+  handleResultEvent,
+  requireResultText,
 } from "../claude/mod.ts";
 import type { Store } from "../store/mod.ts";
 import { ApprovalManager, createCanUseTool } from "../approval/manager.ts";
@@ -688,14 +689,16 @@ export class DiscordBot {
           } else if (event.type === "result") {
             resultEvent = event;
             // 非 success の subtype (error_max_turns 等) は Docker logs から原因を追えるよう詳細を残す。
-            if (event.subtype !== "success") {
-              log.warn(
-                `claude returned non-success subtype "${event.subtype}":`,
-                JSON.stringify(event),
-              );
-            }
-            // 非ゼロ終了でジェネレータがスローしてもセッションが残るよう即座に保存
-            await this.store.setSession(scope, event.session_id);
+            // 非ゼロ終了でジェネレータがスローしてもセッションが残るよう即座に保存する。
+            await handleResultEvent(event, {
+              onNonSuccess: (event) =>
+                log.warn(
+                  `claude returned non-success subtype "${event.subtype}":`,
+                  JSON.stringify(event),
+                ),
+              setSession: (sessionId) =>
+                this.store.setSession(scope, sessionId),
+            });
           } else if (event.type === "tool_progress") {
             await progress.report(event.tool_name, event.elapsed_time_seconds);
           }
@@ -707,7 +710,8 @@ export class DiscordBot {
 
         // stream_event がなかった場合は result.result からフォールバック。
         if (!hasStreamedText) {
-          await sendResultText(resultEvent, sendChunks);
+          const text = requireResultText(resultEvent);
+          await sendChunks(text);
         }
       } catch (error: unknown) {
         // logger は Error の stack を自動で展開する。
