@@ -25,20 +25,22 @@ import { getErrorMessage } from "../errors.ts";
 const log = createLogger("api-server");
 
 /**
- * 統合 HTTP サーバーを起動する。
+ * 統合 HTTP サーバーの Hono アプリケーションを組み立てる。
  *
- * @param port - リッスンポート。
+ * `startApiServer()` から Hono アプリの組み立てだけを切り出したもの。
+ * `Deno.serve()` を経由せずに `app.request()` で直接叩けるため、
+ * ルーティング (404 / 500 / マウント) を単体テストできる。
+ *
  * @param settingsCtx - settings ルートの依存関係コンテキスト。
  * @param healthCtx - health ルートの依存関係コンテキスト。
  * @param cronCtx - cron ルートの依存関係コンテキスト。
- * @returns Deno.HttpServer インスタンス（shutdown() で停止可能）。
+ * @returns 組み立て済みの Hono アプリケーション。
  */
-export function startApiServer(
-  port: number,
+export function createApp(
   settingsCtx: SettingsRouteContext,
   healthCtx: HealthRouteContext,
   cronCtx?: CronRouteContext,
-): Deno.HttpServer {
+): Hono {
   const app = new Hono();
 
   // リクエストログ。
@@ -67,6 +69,26 @@ export function startApiServer(
     log.error(`${c.req.method} ${c.req.path} error:`, msg);
     return c.json({ error: msg }, 500);
   });
+
+  return app;
+}
+
+/**
+ * 統合 HTTP サーバーを起動する。
+ *
+ * @param port - リッスンポート。
+ * @param settingsCtx - settings ルートの依存関係コンテキスト。
+ * @param healthCtx - health ルートの依存関係コンテキスト。
+ * @param cronCtx - cron ルートの依存関係コンテキスト。
+ * @returns Deno.HttpServer インスタンス（shutdown() で停止可能）。
+ */
+export function startApiServer(
+  port: number,
+  settingsCtx: SettingsRouteContext,
+  healthCtx: HealthRouteContext,
+  cronCtx?: CronRouteContext,
+): Deno.HttpServer {
+  const app = createApp(settingsCtx, healthCtx, cronCtx);
 
   const server = Deno.serve(
     { port, hostname: "127.0.0.1" },
