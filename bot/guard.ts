@@ -110,3 +110,26 @@ export function shouldRespond(
 
   return isMentioned;
 }
+
+/**
+ * 自 bot 自身が送信したメッセージ（自己メンション）を処理対象として認可するか判定する。
+ *
+ * `isAuthorized()` はユーザーメッセージ用であり、bot メッセージは常に拒否する。
+ * 自己メンション機能は別スコープの自 bot が起動元になるため、この専用関数で
+ * 「自 bot の user ID のみ・正しいギルド」を満たす場合のみ許可する。
+ * 他 bot のメッセージは引き続き拒否する（isAuthorized 同様 fail-closed）。
+ */
+export function isAuthorizedSelfMessage(
+  guildId: string | null,
+  authorId: string,
+  botUserId: string | null,
+  config: Config,
+): boolean {
+  if (authorId !== botUserId) {
+    return false;
+  }
+  if (guildId !== config.discord.guildId) {
+    return false;
+  }
+  return true;
+}

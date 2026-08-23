@@ -25,7 +25,7 @@
 
 > Nor does it prevent an end user from signing in to the unmodified Claude Code binary with their own Claude subscription, including where a platform hosts Claude Code as described under Can customers offer Claude Code in their products? above.
 
-2 つ目の引用が禁止しているのは、第三者開発者が自分のアプリケーションに Claude.ai ログインを組み込んで提供すること、ユーザーに代わって（on behalf of their users）Free / Pro / Max プランの資格情報経由でリクエストを流すこと、および他人の Claude.ai 資格情報・セッショントークンを収集・保管・仲介することである。本プロジェクトはサブスクリプション購入者本人がセルフホストする構成で、認証は購入者本人がコンテナ内で SDK 同梱の無改変 Claude Code バイナリに対して `claude auth login`（Anthropic 自身のサインインフロー）を実行して行い、資格情報は本人の `data/home` にのみ置かれる（他人の資格情報を扱わない）。さらに `bot/guard.ts` の `isAuthorized()` が設定された単一ギルド ID・単一ユーザー ID（本人）との完全一致を要求し、bot ユーザーおよび DM（ギルド外、`guildId` が一致しない）を拒否する。本人以外のリクエストが流れる構造になく、「他人のリクエストを代理で流す」形態には該当しない。この構造を崩さないこと。
+2 つ目の引用が禁止しているのは、第三者開発者が自分のアプリケーションに Claude.ai ログインを組み込んで提供すること、ユーザーに代わって（on behalf of their users）Free / Pro / Max プランの資格情報経由でリクエストを流すこと、および他人の Claude.ai 資格情報・セッショントークンを収集・保管・仲介することである。本プロジェクトはサブスクリプション購入者本人がセルフホストする構成で、認証は購入者本人がコンテナ内で SDK 同梱の無改変 Claude Code バイナリに対して `claude auth login`（Anthropic 自身のサインインフロー）を実行して行い、資格情報は本人の `data/home` にのみ置かれる（他人の資格情報を扱わない）。さらに `bot/guard.ts` の `isAuthorized()` が設定された単一ギルド ID・単一ユーザー ID（本人）との完全一致を要求し、bot ユーザーおよび DM（ギルド外、`guildId` が一致しない）を拒否する。本人以外のリクエストが流れる構造になく、「他人のリクエストを代理で流す」形態には該当しない。なお bot 自身の投稿による起動（CLAUDE.md の「AI to AI 自己メンション」）は `isAuthorized()` を通らず `isAuthorizedSelfMessage()` で判定するが、bot の投稿は本人のセッションまたは cron が同一ギルド内で生成したものに限られ、第三者のリクエストが流入する経路にはならない。この構造を崩さないこと。
 
 なお同節は、Agent SDK を含め Claude の機能と連携する製品・サービスを構築する開発者一般には API キー認証を求めている（2 つ目の引用の第 1 文）。本プロジェクトの利用は上記のとおり第三者への提供に当たらず、3 つ目の引用にある「無改変の Claude Code バイナリに本人のサブスクリプションでサインインする」形態に留まるという理解に基づくが、文言・解釈は変わりうるため、同ページの変更有無を定期的に確認すること。
 

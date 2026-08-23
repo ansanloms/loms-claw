@@ -1,5 +1,10 @@
 import { assertEquals } from "@std/assert";
-import { isAuthorized, resolveActive, shouldRespond } from "./guard.ts";
+import {
+  isAuthorized,
+  isAuthorizedSelfMessage,
+  resolveActive,
+  shouldRespond,
+} from "./guard.ts";
 import type { Config } from "../config.ts";
 
 const baseConfig: Config = {
@@ -363,4 +368,47 @@ Deno.test("resolveActive", async (t) => {
       );
     },
   );
+});
+
+Deno.test("isAuthorizedSelfMessage", async (t) => {
+  await t.step(
+    "自 bot ID + 正しいギルドで許可されること",
+    () => {
+      assertEquals(
+        isAuthorizedSelfMessage("guild-1", "bot-1", "bot-1", baseConfig),
+        true,
+      );
+    },
+  );
+
+  await t.step("異なるギルドは拒否されること", () => {
+    assertEquals(
+      isAuthorizedSelfMessage("guild-other", "bot-1", "bot-1", baseConfig),
+      false,
+    );
+  });
+
+  await t.step("guildId が null (DM) の場合は拒否されること", () => {
+    assertEquals(
+      isAuthorizedSelfMessage(null, "bot-1", "bot-1", baseConfig),
+      false,
+    );
+  });
+
+  await t.step(
+    "authorId が botUserId と異なる (他 bot) 場合は拒否されること",
+    () => {
+      assertEquals(
+        isAuthorizedSelfMessage("guild-1", "other-bot", "bot-1", baseConfig),
+        false,
+      );
+    },
+  );
+
+  await t.step("botUserId が null の場合は拒否されること", () => {
+    assertEquals(
+      isAuthorizedSelfMessage("guild-1", "bot-1", null, baseConfig),
+      false,
+    );
+  });
 });

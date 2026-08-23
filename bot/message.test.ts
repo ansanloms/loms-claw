@@ -7,6 +7,7 @@ import {
   type DownloadedImage,
   keepTyping,
   splitMessage,
+  stripBotMentions,
 } from "./message.ts";
 
 Deno.test("splitMessage", async (t) => {
@@ -255,5 +256,37 @@ Deno.test("cleanupImageFiles", async (t) => {
       { path: "/tmp/nonexistent-dir-12345/test.jpg", originalName: "test.jpg" },
     ];
     await cleanupImageFiles(images);
+  });
+});
+
+Deno.test("stripBotMentions", async (t) => {
+  await t.step("表示名のメンションが除去されること", () => {
+    assertEquals(
+      stripBotMentions("@loms-claw 天気教えて", ["loms-claw"]),
+      "天気教えて",
+    );
+  });
+
+  await t.step("接頭辞関係にある名前でも残骸が残らないこと", () => {
+    assertEquals(
+      stripBotMentions("@loms-claw 天気教えて", ["loms", "loms-claw"]),
+      "天気教えて",
+    );
+    assertEquals(
+      stripBotMentions("@loms-claw 天気教えて", ["loms-claw", "loms"]),
+      "天気教えて",
+    );
+  });
+
+  await t.step("複数箇所のメンションがすべて除去されること", () => {
+    assertEquals(
+      stripBotMentions("@loms 天気 @loms 教えて", ["loms"]),
+      "天気  教えて",
+    );
+  });
+
+  await t.step("名前が無い・空文字の場合は trim のみ行われること", () => {
+    assertEquals(stripBotMentions("  本文  ", []), "本文");
+    assertEquals(stripBotMentions("  本文  ", [""]), "本文");
   });
 });
