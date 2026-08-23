@@ -173,4 +173,7 @@ docker compose logs -f               # ログ確認
 ## dependabot と GitHub Actions
 
 - `.github/dependabot.yml` は 4 エントリ: `deno` (`/`)、`deno` (`/docs/api`。独自の `deno.json` / `deno.lock` を持ちルートから参照されないため分けている)、`docker` (`/`)、`github-actions` (`/`)。いずれも週次 (月曜 07:00 Asia/Tokyo)。deno の 2 エントリは minor / patch を `minor-and-patch` グループにまとめ、コミットメッセージの prefix は deno / docker が `build`、github-actions が `ci`。
-- `.github/workflows/claude.yml` は issue / PR のコメント・レビュー・issue 作成で `@claude` を含むときに `anthropics/claude-code-action@v1` を実行するワークフローのみ。テスト・lint・型チェックを回す CI ワークフローは無い (PR 前の検証チェーンはローカルで実行する。`.claude/rules/pr.md`)。
+
+### CI
+
+`.github/workflows/ci.yml` が `push` (main) / `pull_request` で走る CI。`root` (`deno task check` / `lint` / `test`。`.claude/rules/pr.md` の検証チェーンから `deno task fix` を除いたもの)、`generated` (`deno task generate` 後に `api/internal-schemas.ts` の差分を `git diff --exit-code` で検査)、`docs-api` (`docs/api` の `lint` / `check` を `deno task --cwd ./docs/api` で実行) の 3 job を並列で実行する。使う Deno バージョンは `Dockerfile` のベースイメージと揃える。
