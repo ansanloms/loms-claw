@@ -27,16 +27,12 @@ import {
   TextInputBuilder,
   TextInputStyle,
 } from "discord.js";
+import { INTERACTION_TIMEOUT_MS } from "./constants.ts";
 import { createLogger } from "../logger.ts";
 import { getErrorMessage } from "../errors.ts";
 import { DISCORD_MESSAGE_LIMIT } from "../bot/message.ts";
 
 const log = createLogger("question");
-
-/**
- * 回答タイムアウト（ミリ秒）。承認 (ApprovalManager) と同じ 5 分。
- */
-const ANSWER_TIMEOUT_MS = 5 * 60 * 1000;
 
 /**
  * 「Other (自由入力)」選択肢の select value。
@@ -270,7 +266,7 @@ export class QuestionManager {
           log.warn("failed to edit timed out message:", getErrorMessage(error));
         });
         resolve({ kind: "denied", reason: "Timed out" });
-      }, ANSWER_TIMEOUT_MS);
+      }, INTERACTION_TIMEOUT_MS);
 
       this.pending.set(requestId, {
         questions,

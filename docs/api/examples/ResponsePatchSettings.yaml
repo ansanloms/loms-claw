@@ -1,5 +1,5 @@
 model:
-  value: claude-sonnet-4-5
+  value: claude-sonnet-4-6
   source: channel
 showThinking:
   value: false

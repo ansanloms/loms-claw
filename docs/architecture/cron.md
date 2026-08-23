@@ -100,7 +100,7 @@ channelId: "{channelId}"
 
 `runJob(job)` が 1 件の実行本体で、スケジューラのコールバックと `POST /cron/run` の両方から呼ばれる。
 
-1. 並行実行ガード: `running: Set<string>` に同名ジョブがあれば WARN ログを出して return する。無ければ追加する。
+1. 並行実行ガード: `running: Set<string>` に同名ジョブがあれば WARN ログを出して return する。無ければ追加する。このガードはジョブ名単位であり、別名ジョブは同一 tick で同時に起動する。負荷集中を避けるにはジョブ定義側で `schedule` をずらす (2026-08-23 に news-* 6 本を 10 分刻みに分散)。
 2. チャンネルの事前取得: `job.channelId` があれば `client.channels.fetch()` し、`send` を持たなければ throw する。取得できたら `approvalManager.setChannel(job.channelId)` を呼ぶ。事前に取るのは、後段の catch でエラー通知先として使うため。
 3. KV の読み取り (3 つを `Promise.all` で並列):
    - session: `resumeSession` が true のときだけ `store.getSession({ channelId: "cron:{name}" })`。false なら `undefined` (毎回新規セッション)。

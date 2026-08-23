@@ -1,6 +1,5 @@
 type: object
 description: スコープ設定の削除結果。
-additionalProperties: false
 required:
   - ok
 properties:
