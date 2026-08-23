@@ -14,7 +14,7 @@ Claude (Agent SDK) の Bash ツールから `curl` 経由で呼び出す用途�
 ## エラー応答
 
 エラー時は HTTP ステータスコードと `application/json` の `{ "error": string }` を返す。
-RFC 9457 Problem Details 形式ではない。
+RFC 9457 Problem Details 形式ではない。`GET /health` のみ例外で、503 時も `{ "status": "unavailable" }` を返す。
 
 ## 補足
 

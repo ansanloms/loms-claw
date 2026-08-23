@@ -60,14 +60,14 @@ flowchart LR
 
 `compose.yaml` はリポジトリルートに置き、compose のコマンドはすべてリポジトリルートで実行する。
 
-| 項目           | 内容                                                                                                                                                                                                                                                            |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| プロジェクト名 | `loms-claw`                                                                                                                                                                                                                                                     |
-| サービス       | `bot` (`build: .`)                                                                                                                                                                                                                                              |
-| environment    | `TZ: ${TZ:-Asia/Tokyo}` のみ。値は host の `.env` から compose が読む                                                                                                                                                                                           |
-| volumes        | `./data` → `/data` の bind mount 1 つ                                                                                                                                                                                                                           |
-| healthcheck    | `curl -fsS http://127.0.0.1:$(jq -r '.claude.apiPort // 3000' ${LOMS_CLAW_CONFIG:-/data/config.json})/health` (`interval: 60s` / `timeout: 10s` / `retries: 3` / `start_period: 60s`)。エンドポイント本体は [internal-api.md](internal-api.md) の `GET /health` |
-| restart        | `unless-stopped`                                                                                                                                                                                                                                                |
+| 項目           | 内容                                                                                                                                                     |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| プロジェクト名 | `loms-claw`                                                                                                                                              |
+| サービス       | `bot` (`build: .`)                                                                                                                                       |
+| environment    | `TZ: ${TZ:-Asia/Tokyo}` のみ。値は host の `.env` から compose が読む                                                                                    |
+| volumes        | `./data` → `/data` の bind mount 1 つ                                                                                                                    |
+| healthcheck    | `jq` で `claude.apiPort` (省略時 `// 3000`) を `port` に取り、空でなければ `curl -fsS http://127.0.0.1:$port/health`。詳細は下記「healthcheck と再起動」 |
+| restart        | `unless-stopped`                                                                                                                                         |
 
 `.env` は docker compose が host 側で参照する変数 (現状 `TZ` のみ) を持つファイルで、アプリ自体は `.env` を読まない (`.env.example` のコメント)。`.env` は `.gitignore` で管理外。
 
@@ -78,6 +78,14 @@ flowchart LR
 ### healthcheck と再起動
 
 `GET /health` は Discord Gateway の全シャードの status が `Status.Ready` のときのみ `ok` (200) を返す。`bot/mod.ts` の `healthCtx.isReady` は `Client#isReady()` (一度 Ready になると切断後も戻らない) ではなく `client.ws.shards` の各 `status` を見て判定する ([internal-api.md](internal-api.md) 参照)。
+
+`compose.yaml` の healthcheck コマンド (実際にコンテナ内 shell で評価される形。compose ファイル上は `$` を `$$` でエスケープする) は次のとおり。
+
+```sh
+port=$(jq -r '.claude.apiPort // 3000' ${LOMS_CLAW_CONFIG:-/data/config.json}) && [ -n "$port" ] && curl -fsS "http://127.0.0.1:$port/health" || exit 1
+```
+
+`jq` がポート取得に失敗する (`config.json` が壊れている・存在しない等) か `port` が空なら `curl` を呼ばず `exit 1` になり unhealthy と判定される。原因は `docker inspect` の `State.Health.Log[].Output` (`jq` のエラーメッセージ) から読める。
 
 `healthcheck:` を追加したことで `docker compose ps` / `docker inspect` に unhealthy 状態が反映されるようになるが、**docker compose 単体では unhealthy になってもコンテナは自動再起動しない** (`restart: unless-stopped` の restart policy は健全性を見ず、プロセスの exit code のみを見る)。`main.ts` は `unhandledrejection` / `error` を `preventDefault()` で握りつぶすため、Discord Gateway が切断されたままでもプロセス自体は生き続け、restart は働かない。unhealthy 検知から実際の再起動まで求めるなら、次のいずれかが別途必要になる。
 

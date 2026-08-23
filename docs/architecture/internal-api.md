@@ -35,7 +35,7 @@ bot プロセス内で `127.0.0.1:{config.claude.apiPort}` に Hono アプリを
 
 ### health (`api/routes/health.ts`)
 
-注入される `HealthRouteContext` は `isReady: () => boolean` を必須で持つ。`bot/mod.ts` は `() => this.client.isReady()` (discord.js の `Client#isReady()`) を渡すため、応答は Discord Gateway の接続状態を反映する。`compose.yaml` の `healthcheck:` から `curl` で定期的に叩かれる想定 (`deployment.md` 参照)。
+注入される `HealthRouteContext` は `isReady: () => boolean` を必須で持つ。`bot/mod.ts` は `client.ws.shards` の全シャードの `status` が `Status.Ready` かどうかを渡す (discord.js の `Client#isReady()` は一度 Ready になった後の Gateway 切断を検知できないため使わない)。応答は Discord Gateway の接続状態を反映する。`compose.yaml` の `healthcheck:` から `curl` で定期的に叩かれる想定 (`deployment.md` 参照)。
 
 | メソッド / パス | リクエスト | 正常応答                 | エラー                                                  |
 | --------------- | ---------- | ------------------------ | ------------------------------------------------------- |
@@ -82,7 +82,7 @@ bot プロセス内で `127.0.0.1:{config.claude.apiPort}` に Hono アプリを
 | `CronRouteContext`     | `reloadCronJobs`  | `loadCronJobsFromDir(config.claude.cwd)` → `CronExecutor.reload(jobs)` (once ジョブのファイル削除後にも同じ関数が使われる)           |
 |                        | `runJob`          | `CronExecutor.findJob(name)` が `undefined` なら `Error("job not found: {name}")` を throw し、見つかれば `CronExecutor.runJob(job)` |
 |                        | `listJobs`        | `CronExecutor.listJobs()`                                                                                                            |
-| `HealthRouteContext`   | `isReady`         | `() => this.client.isReady()` (discord.js の `Client#isReady()`)                                                                     |
+| `HealthRouteContext`   | `isReady`         | `client.ws.shards.size > 0 && client.ws.shards.every((shard) => shard.status === Status.Ready)`                                      |
 | `SettingsRouteContext` | `store`           | `DiscordBot` が保持する `Store`                                                                                                      |
 |                        | `resolveParentId` | `DiscordBot.resolveThreadParentId(id)`                                                                                               |
 
