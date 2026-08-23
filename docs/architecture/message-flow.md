@@ -130,7 +130,7 @@ bot 側でメッセージをスレッドへ自動分離する機能は実装し�
 
 ### 12. エラーと後始末
 
-- catch: `log.error` の後、`sendChunks("Error: <msg>")` をチャンネルへ送る (送信失敗は握り潰す)。
+- catch: `log.error` (全文) の後、`sendChunks(summarizeErrorForDiscord(error))` (`errors.ts`) で定型文 + エラーメッセージの先頭 1 行 (最大 200 文字) をチャンネルへ送る。全文は `GET /logs` を参照させる (送信失敗は握り潰す)。
 - finally: ダウンロードした画像の temp ディレクトリを削除 (`cleanupImageFiles`)、進捗メッセージを削除 (`progress.cleanup`)、typing を停止 (`typingController.abort()`)。
 
 ## AI to AI 自己メンション

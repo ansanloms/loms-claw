@@ -134,6 +134,23 @@ Deno.test("validateCronJob", async (t) => {
     );
   });
 
+  await t.step(
+    "既知フィールドの型違いは is not an allowed property を含まないこと",
+    () => {
+      let message = "";
+      try {
+        validateCronJob(
+          { schedule: "0 9 * * *", maxTurns: "abc" },
+          "prompt",
+          "test.md",
+        );
+      } catch (e) {
+        message = e instanceof Error ? e.message : String(e);
+      }
+      assertEquals(message.includes("is not an allowed property"), false);
+    },
+  );
+
   await t.step("once: true で正しくパースされること", () => {
     const job = validateCronJob(
       { schedule: "0 9 * * *", once: true },
@@ -208,6 +225,19 @@ Deno.test("validateCronJob", async (t) => {
           "test.md",
         ),
       Error,
+    );
+  });
+
+  await t.step("未知のフロントマターキーがある場合はエラーになること", () => {
+    assertThrows(
+      () =>
+        validateCronJob(
+          { schedule: "0 9 * * *", chanelId: "123" },
+          "prompt",
+          "test.md",
+        ),
+      Error,
+      '"chanelId" is not an allowed property',
     );
   });
 

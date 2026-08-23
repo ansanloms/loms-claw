@@ -191,7 +191,7 @@ Deno.test("createCronRoutes", async (t) => {
   });
 
   await t.step(
-    "POST /run: 不正な JSON ボディで 500 を返すこと",
+    "POST /run: 不正な JSON ボディで 400 を返すこと",
     async () => {
       const app = new Hono();
       app.route(
@@ -200,9 +200,6 @@ Deno.test("createCronRoutes", async (t) => {
           runJob: () => Promise.resolve(),
         }),
       );
-      app.onError((err, c) => {
-        return c.json({ error: err.message }, 500);
-      });
 
       const res = await app.request("/cron/run", {
         method: "POST",
@@ -210,7 +207,9 @@ Deno.test("createCronRoutes", async (t) => {
         body: "not-json",
       });
 
-      assertEquals(res.status, 500);
+      assertEquals(res.status, 400);
+      const json = await res.json();
+      assertEquals(json.error, "invalid JSON body");
     },
   );
 });

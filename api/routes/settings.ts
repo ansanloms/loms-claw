@@ -61,7 +61,20 @@ async function resolveScope(
       channelId: id,
     };
   } catch (e) {
-    log.debug(`resolveParentId failed for ${id}, falling back to channel:`, e);
+    // cron:{name} は cron ジョブの擬似 ID で、resolveParentId (discord.js のチャンネル
+    // 解決) は設計上必ず失敗するため、想定内の失敗として debug に留める。それ以外の ID
+    // (Discord のチャンネル/スレッド ID のはず) での失敗は想定外なので warn で記録する。
+    if (id.startsWith("cron:")) {
+      log.debug(
+        `resolveParentId failed for ${id}, falling back to channel:`,
+        e,
+      );
+    } else {
+      log.warn(
+        `resolveParentId failed for ${id}, falling back to channel scope (親チャンネルの解決に失敗したためチャンネル単独スコープとして扱う):`,
+        e,
+      );
+    }
     return { channelId: id };
   }
 }
