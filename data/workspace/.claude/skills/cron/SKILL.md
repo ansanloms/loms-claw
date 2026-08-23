@@ -165,6 +165,12 @@ effort: medium
 - ファイル削除後、bot が自動的に reload を行う。エージェントが手動で `POST /cron/reload` を叩く必要は無い。
 - 1回きりのリマインダーや通知に使う。
 
+#### ファイル名の命名規則
+
+`once: true` の一時ジョブは、ファイル名を `<name>.once.md` にすること（例: `reminder.once.md`）。実行後に自動削除される前提のファイルなので、リポジトリの git 追跡対象から外している（`.gitignore` の `data/workspace/cron/*.once.md`）。ジョブ名はファイル名から `.md` を除いたものなので（`cron/loader.ts` の `validateCronJob()`）、`<name>.once.md` のジョブ名は `<name>.once` になる（`GET /cron` や手動実行の `name` にもこの形で指定する）。
+
+恒久ジョブ（`once` を付けない、または `once: false`）はこれまでどおり `<name>.md` で作り、git 追跡対象にする。
+
 例:
 
 ```markdown

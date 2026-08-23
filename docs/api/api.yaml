@@ -57,6 +57,8 @@ components:
       $ref: ./components/schemas/ResponseGetCron.yaml
     ResponseGetHealth:
       $ref: ./components/schemas/ResponseGetHealth.yaml
+    ResponseGetLogs:
+      $ref: ./components/schemas/ResponseGetLogs.yaml
     ResponsePostCronReload:
       $ref: ./components/schemas/ResponsePostCronReload.yaml
     ResponsePostCronRun:

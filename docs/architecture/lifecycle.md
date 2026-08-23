@@ -140,7 +140,7 @@ schema はトップレベル・`discord`・`claude`・`claude.defaults`・`log` 
 - 出力: 各行は `<ISO timestamp> [<LEVEL>] [<namespace>] <msg> ...args` の形式。`ERROR` は `console.error`、`WARN` は `console.warn`、`DEBUG` / `INFO` は `console.log`。timestamp は `Temporal.Now.instant().toString()`。
 - `minLevel` の適用箇所: コンソール出力のみ。リングバッファには `minLevel` に関係なく全レベルのエントリを記録する (`emit()` 内で `pushEntry()` を先に呼び、その後でレベル判定して return する)。
 - リングバッファのエントリ (`LogEntry`) は `timestamp` / `level` / `namespace` / `message` を持ち、`message` は引数を `stringifyArg()` で文字列化して連結したもの (string はそのまま、`Error` は `stack` または `name: message`、それ以外は `JSON.stringify`、失敗時は `String()`)。
-- `getLogEntries(filter?)`: 時系列順に走査し、`level` (以上)・`namespace` (前方一致)・`since` (ISO 文字列の辞書順比較) でフィルタし、末尾 `limit` 件を返す。`limit` は既定 100、1..1000 に clamp される。
+- `getLogEntries(filter?)`: 時系列順に走査し、`level` (以上)・`namespace` (前方一致)・`since` (`Temporal.Instant.compare()` による時刻比較) でフィルタし、末尾 `limit` 件を返す。`limit` は既定 100、1..1000 に clamp される。
 - 消費先は内部 HTTP API の `GET /logs` ([internal-api](internal-api.md))。
 
 `errors.ts` の `getErrorMessage(error)` は `Error` なら `message`、それ以外は `String()` を返す共通ユーティリティで、`loadConfig()` のエラーメッセージ組み立てや各ハンドラの catch で使われる。

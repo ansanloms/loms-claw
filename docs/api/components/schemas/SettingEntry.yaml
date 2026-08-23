@@ -1,6 +1,5 @@
 type: object
 description: 文字列設定値とその出所。
-additionalProperties: false
 required:
   - value
   - source
@@ -8,7 +7,7 @@ properties:
   value:
     type: string
     description: 解決された設定値。
-    example: claude-sonnet-4-5
+    example: claude-sonnet-4-6
   source:
     type: string
     description: 値の出所。thread はスレッド固有値、channel は親チャンネル値、default はグローバルデフォルト値を表す。

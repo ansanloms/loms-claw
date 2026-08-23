@@ -13,6 +13,7 @@ import {
   type Interaction,
   type Message,
   MessageFlags,
+  type RepliableInteraction,
   REST,
   Routes,
   Status,
@@ -21,13 +22,19 @@ import type { SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { Config } from "../config.ts";
 import {
   askClaude,
-  extractResultText,
   extractTopLevelTextDelta,
   extractTopLevelThinkingDelta,
+  handleResultEvent,
+  requireResultText,
 } from "../claude/mod.ts";
-import type { Store, StoreScope } from "../store/mod.ts";
+import type { Store } from "../store/mod.ts";
 import { ApprovalManager, createCanUseTool } from "../approval/manager.ts";
-import { command } from "./commands.ts";
+import {
+  command,
+  handleSettingsSet,
+  handleSettingsShow,
+  handleSettingsUnset,
+} from "./commands.ts";
 import {
   isAuthorized,
   isAuthorizedSelfMessage,
@@ -39,6 +46,8 @@ import {
   SelfMentionRateLimiter,
 } from "./ratelimit.ts";
 import { ScopeQueue } from "./queue.ts";
+import { splitAtBoundary } from "./flush.ts";
+import { scopeFromChannel } from "./scope.ts";
 import {
   appendImageReferences,
   cleanupImageFiles,
@@ -53,11 +62,6 @@ import {
 import { join } from "jsr:@std/path@^1/join";
 import { createLogger } from "../logger.ts";
 import { SystemPromptStore } from "../claude/system-prompt.ts";
-import {
-  handleSettingsSet,
-  handleSettingsShow,
-  handleSettingsUnset,
-} from "./commands.ts";
 import { startApiServer } from "../api/server.ts";
 import type { CronRouteContext } from "../api/routes/cron.ts";
 import type { HealthRouteContext } from "../api/routes/health.ts";
@@ -75,6 +79,34 @@ const log = createLogger("bot");
  */
 const SELF_MENTION_PROMPT_NOTE =
   "[AI to AI 自己メンション] この依頼は認可ユーザー本人の発話ではなく、別のチャンネル/スレッドで動いている自 bot のセッションが投稿したもの。";
+
+/**
+ * インタラクションのハンドラを実行し、失敗時にログとエフェメラル返信で揃える。
+ *
+ * button / select メニュー / Modal 送信の 3 ハンドラが同形の
+ * `try { handler } catch { log.error; if (!replied && !deferred) reply(ephemeral) }`
+ * を持っていたため、ここに集約する。ログ文言・エラー返信文言は呼び出し側から渡す
+ * (各分岐の現行の文言を変えない)。
+ */
+async function runInteraction(
+  interaction: RepliableInteraction,
+  label: string,
+  handler: () => Promise<unknown>,
+  errorMessage: string,
+): Promise<void> {
+  try {
+    await handler();
+  } catch (error: unknown) {
+    const msg = getErrorMessage(error);
+    log.error(`${label} interaction error:`, msg);
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({
+        content: errorMessage,
+        flags: MessageFlags.Ephemeral,
+      }).catch(() => {});
+    }
+  }
+}
 
 /**
  * Discord ボット。
@@ -282,52 +314,34 @@ export class DiscordBot {
   private async onInteraction(interaction: Interaction): Promise<void> {
     // ボタンインタラクション（承認/拒否、質問の Cancel）
     if (interaction.isButton()) {
-      try {
-        await this.approvalManager.handleButton(interaction);
-      } catch (error: unknown) {
-        const msg = getErrorMessage(error);
-        log.error("button interaction error:", msg);
-        if (!interaction.replied && !interaction.deferred) {
-          await interaction.reply({
-            content: "承認処理中にエラーが発生しました。",
-            flags: MessageFlags.Ephemeral,
-          }).catch(() => {});
-        }
-      }
+      await runInteraction(
+        interaction,
+        "button",
+        () => this.approvalManager.handleButton(interaction),
+        "承認処理中にエラーが発生しました。",
+      );
       return;
     }
 
     // select メニュー（AskUserQuestion の回答）
     if (interaction.isStringSelectMenu()) {
-      try {
-        await this.approvalManager.handleSelect(interaction);
-      } catch (error: unknown) {
-        const msg = getErrorMessage(error);
-        log.error("select interaction error:", msg);
-        if (!interaction.replied && !interaction.deferred) {
-          await interaction.reply({
-            content: "回答処理中にエラーが発生しました。",
-            flags: MessageFlags.Ephemeral,
-          }).catch(() => {});
-        }
-      }
+      await runInteraction(
+        interaction,
+        "select",
+        () => this.approvalManager.handleSelect(interaction),
+        "回答処理中にエラーが発生しました。",
+      );
       return;
     }
 
     // Modal 送信（AskUserQuestion の Other 自由入力）
     if (interaction.isModalSubmit()) {
-      try {
-        await this.approvalManager.handleModal(interaction);
-      } catch (error: unknown) {
-        const msg = getErrorMessage(error);
-        log.error("modal interaction error:", msg);
-        if (!interaction.replied && !interaction.deferred) {
-          await interaction.reply({
-            content: "回答処理中にエラーが発生しました。",
-            flags: MessageFlags.Ephemeral,
-          }).catch(() => {});
-        }
-      }
+      await runInteraction(
+        interaction,
+        "modal",
+        () => this.approvalManager.handleModal(interaction),
+        "回答処理中にエラーが発生しました。",
+      );
       return;
     }
 
@@ -401,16 +415,15 @@ export class DiscordBot {
     }
 
     // スコープ抽出 (反応判定で per-scope の active 上書きを引くために先に必要)。
-    // `message.channel.isThread()` は `this is ThreadChannel` の type guard だが、
-    // `message.channel` の型は元々 parentId を持つ型を含む union なので、
-    // 判定結果を isThread 変数に寄せても後続の parentId 参照で型エラーにならない。
+    // 組み立て方の詳細・型ナローイングの注意書きは scopeFromChannel 側にまとめてある。
+    const scope = scopeFromChannel(message.channel, message.channelId);
+    // shouldRespond() は raw な parentId (親が無ければ null のまま) を要求する。
+    // scope.channelId は Store 用にフォールバック済みなので代用できず、別途
+    // 抽出する。`message.channel.isThread()` は `this is ThreadChannel` の
+    // type guard で、判定結果を const に寄せても後続の parentId 参照は
+    // narrowing が効く (TS の aliased condition narrowing)。
     const isThread = message.channel.isThread();
-    const scope: StoreScope = {
-      channelId: isThread
-        ? (message.channel.parentId ?? message.channelId)
-        : message.channelId,
-      threadId: isThread ? message.channelId : undefined,
-    };
+    const parentId = isThread ? message.channel.parentId : null;
     // 承認ボタン・systemPrompt 解決・テンプレート変数は「発話があった場所」を見せたい。
     // スレッド内ならスレッド ID、通常チャンネルなら channel ID。
     const localId = scope.threadId ?? scope.channelId;
@@ -447,7 +460,7 @@ export class DiscordBot {
           message.channelId,
           this.config.discord.activeChannelIds,
           isThread,
-          isThread ? message.channel.parentId : null,
+          parentId,
           isMentioned,
           hasNonBotMentions,
           activeOverride,
@@ -625,42 +638,22 @@ export class DiscordBot {
 
         // ストリーミング応答: text_delta をバッファに蓄積し、
         // 閾値を超えたら文境界で区切って中間投稿する。
+        // 分割アルゴリズム自体は splitAtBoundary (bot/flush.ts) に切り出してある。
         const FLUSH_THRESHOLD = 800;
         let textBuffer = "";
         let hasStreamedText = false;
         let resultEvent: SDKResultMessage | undefined;
 
         const flushBuffer = async (force: boolean) => {
-          if (force) {
-            // 残り全部を投稿。
-            const text = textBuffer.trim();
-            textBuffer = "";
-            if (text) {
-              hasStreamedText = true;
-              await sendChunks(text);
-            }
+          const result = splitAtBoundary(textBuffer, FLUSH_THRESHOLD, force);
+          if (!result) {
             return;
           }
-          // 最後の文境界（。、改行）で区切って投稿。
-          const lastBoundary = Math.max(
-            textBuffer.lastIndexOf("。"),
-            textBuffer.lastIndexOf("\n"),
-          );
-          if (lastBoundary < 0) {
-            // 境界が見つからないが閾値の 2 倍を超えたら強制フラッシュ。
-            // コードブロック・英語テキスト・URL 等が連続するケースへの対策。
-            if (textBuffer.length >= FLUSH_THRESHOLD * 2) {
-              await flushBuffer(true);
-            }
-            return;
+          textBuffer = result.rest;
+          if (result.send) {
+            hasStreamedText = true;
+            await sendChunks(result.send);
           }
-          const send = textBuffer.slice(0, lastBoundary + 1).trim();
-          textBuffer = textBuffer.slice(lastBoundary + 1);
-          if (!send) {
-            return;
-          }
-          hasStreamedText = true;
-          await sendChunks(send);
         };
 
         // thinking 用バッファ。回答テキストとは独立に文境界でフラッシュする。
@@ -669,28 +662,17 @@ export class DiscordBot {
         let thinkingBuffer = "";
 
         const flushThinking = async (force: boolean) => {
-          if (force) {
-            const text = thinkingBuffer.trim();
-            thinkingBuffer = "";
-            if (text) {
-              await sendThinking(text);
-            }
-            return;
-          }
-          const lastBoundary = Math.max(
-            thinkingBuffer.lastIndexOf("。"),
-            thinkingBuffer.lastIndexOf("\n"),
+          const result = splitAtBoundary(
+            thinkingBuffer,
+            THINKING_FLUSH_THRESHOLD,
+            force,
           );
-          if (lastBoundary < 0) {
-            if (thinkingBuffer.length >= THINKING_FLUSH_THRESHOLD * 2) {
-              await flushThinking(true);
-            }
+          if (!result) {
             return;
           }
-          const send = thinkingBuffer.slice(0, lastBoundary + 1).trim();
-          thinkingBuffer = thinkingBuffer.slice(lastBoundary + 1);
-          if (send) {
-            await sendThinking(send);
+          thinkingBuffer = result.rest;
+          if (result.send) {
+            await sendThinking(result.send);
           }
         };
 
@@ -723,14 +705,16 @@ export class DiscordBot {
           } else if (event.type === "result") {
             resultEvent = event;
             // 非 success の subtype (error_max_turns 等) は Docker logs から原因を追えるよう詳細を残す。
-            if (event.subtype !== "success") {
-              log.warn(
-                `claude returned non-success subtype "${event.subtype}":`,
-                JSON.stringify(event),
-              );
-            }
-            // 非ゼロ終了でジェネレータがスローしてもセッションが残るよう即座に保存
-            await this.store.setSession(scope, event.session_id);
+            // 非ゼロ終了でジェネレータがスローしてもセッションが残るよう即座に保存する。
+            await handleResultEvent(event, {
+              onNonSuccess: (event) =>
+                log.warn(
+                  `claude returned non-success subtype "${event.subtype}":`,
+                  JSON.stringify(event),
+                ),
+              setSession: (sessionId) =>
+                this.store.setSession(scope, sessionId),
+            });
           } else if (event.type === "tool_progress") {
             await progress.report(event.tool_name, event.elapsed_time_seconds);
           }
@@ -742,10 +726,8 @@ export class DiscordBot {
 
         // stream_event がなかった場合は result.result からフォールバック。
         if (!hasStreamedText) {
-          if (!resultEvent) {
-            throw new Error("claude stream ended without result event");
-          }
-          await sendChunks(extractResultText(resultEvent));
+          const text = requireResultText(resultEvent);
+          await sendChunks(text);
         }
       } catch (error: unknown) {
         // logger は Error の stack を自動で展開する。

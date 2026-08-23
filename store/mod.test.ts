@@ -45,7 +45,7 @@ Deno.test("Store - session", async (t) => {
   await t.step("delete でセッション ID が消えること", async () => {
     await withStore({}, async (store) => {
       await store.setSession(ch("ch-1"), "session-a");
-      await store.deleteSession(ch("ch-1"));
+      await store.applyPatch(ch("ch-1"), { session: null });
       assertEquals(await store.getSession(ch("ch-1")), undefined);
     });
   });
@@ -87,7 +87,7 @@ Deno.test("Store - session", async (t) => {
       await withStore({}, async (store) => {
         await store.setSession(ch("ch-1"), "session-channel");
         await store.setSession(th("ch-1", "th-1"), "session-thread");
-        await store.deleteSession(th("ch-1", "th-1"));
+        await store.applyPatch(th("ch-1", "th-1"), { session: null });
         assertEquals(
           await store.getSession(th("ch-1", "th-1")),
           undefined,
@@ -121,7 +121,7 @@ Deno.test("Store - model", async (t) => {
     "チャンネルに set した値が defaults より優先されること",
     async () => {
       await withStore({ model: "sonnet" }, async (store) => {
-        await store.setModel(ch("ch-1"), "opus");
+        await store.applyPatch(ch("ch-1"), { model: "opus" });
         assertEquals(await store.getModel(ch("ch-1")), "opus");
       });
     },
@@ -129,8 +129,8 @@ Deno.test("Store - model", async (t) => {
 
   await t.step("delete 後は defaults に戻ること", async () => {
     await withStore({ model: "sonnet" }, async (store) => {
-      await store.setModel(ch("ch-1"), "opus");
-      await store.deleteModel(ch("ch-1"));
+      await store.applyPatch(ch("ch-1"), { model: "opus" });
+      await store.applyPatch(ch("ch-1"), { model: null });
       assertEquals(await store.getModel(ch("ch-1")), "sonnet");
     });
   });
@@ -139,7 +139,7 @@ Deno.test("Store - model", async (t) => {
     "thread に未設定なら channel の値にフォールバックすること",
     async () => {
       await withStore({ model: "sonnet" }, async (store) => {
-        await store.setModel(ch("ch-1"), "opus");
+        await store.applyPatch(ch("ch-1"), { model: "opus" });
         assertEquals(
           await store.getModel(th("ch-1", "th-1")),
           "opus",
@@ -164,8 +164,8 @@ Deno.test("Store - model", async (t) => {
     "thread に set した値が channel の値より優先されること",
     async () => {
       await withStore({ model: "sonnet" }, async (store) => {
-        await store.setModel(ch("ch-1"), "opus");
-        await store.setModel(th("ch-1", "th-1"), "haiku");
+        await store.applyPatch(ch("ch-1"), { model: "opus" });
+        await store.applyPatch(th("ch-1", "th-1"), { model: "haiku" });
         assertEquals(
           await store.getModel(th("ch-1", "th-1")),
           "haiku",
@@ -180,9 +180,9 @@ Deno.test("Store - model", async (t) => {
     "thread の delete で channel の値にフォールバックすること",
     async () => {
       await withStore({ model: "sonnet" }, async (store) => {
-        await store.setModel(ch("ch-1"), "opus");
-        await store.setModel(th("ch-1", "th-1"), "haiku");
-        await store.deleteModel(th("ch-1", "th-1"));
+        await store.applyPatch(ch("ch-1"), { model: "opus" });
+        await store.applyPatch(th("ch-1", "th-1"), { model: "haiku" });
+        await store.applyPatch(th("ch-1", "th-1"), { model: null });
         assertEquals(
           await store.getModel(th("ch-1", "th-1")),
           "opus",
@@ -206,7 +206,7 @@ Deno.test("Store - effort", async (t) => {
     "チャンネルに set した値が defaults より優先されること",
     async () => {
       await withStore({ effort: "medium" }, async (store) => {
-        await store.setEffort(ch("ch-1"), "high");
+        await store.applyPatch(ch("ch-1"), { effort: "high" });
         assertEquals(await store.getEffort(ch("ch-1")), "high");
       });
     },
@@ -214,8 +214,8 @@ Deno.test("Store - effort", async (t) => {
 
   await t.step("delete 後は defaults に戻ること", async () => {
     await withStore({ effort: "medium" }, async (store) => {
-      await store.setEffort(ch("ch-1"), "high");
-      await store.deleteEffort(ch("ch-1"));
+      await store.applyPatch(ch("ch-1"), { effort: "high" });
+      await store.applyPatch(ch("ch-1"), { effort: null });
       assertEquals(await store.getEffort(ch("ch-1")), "medium");
     });
   });
@@ -230,13 +230,13 @@ Deno.test("Store - effort", async (t) => {
           "medium",
         );
         // channel のみ
-        await store.setEffort(ch("ch-1"), "high");
+        await store.applyPatch(ch("ch-1"), { effort: "high" });
         assertEquals(
           await store.getEffort(th("ch-1", "th-1")),
           "high",
         );
         // thread が channel より優先
-        await store.setEffort(th("ch-1", "th-1"), "low");
+        await store.applyPatch(th("ch-1", "th-1"), { effort: "low" });
         assertEquals(
           await store.getEffort(th("ch-1", "th-1")),
           "low",
@@ -269,7 +269,7 @@ Deno.test("Store - showThinking", async (t) => {
     "channel 上書きが defaults より優先されること",
     async () => {
       await withStore({ showThinking: true }, async (store) => {
-        await store.setShowThinking(ch("ch-1"), false);
+        await store.applyPatch(ch("ch-1"), { showThinking: false });
         assertEquals(await store.getShowThinking(ch("ch-1")), false);
       });
     },
@@ -277,8 +277,8 @@ Deno.test("Store - showThinking", async (t) => {
 
   await t.step("delete 後は defaults に戻ること", async () => {
     await withStore({ showThinking: true }, async (store) => {
-      await store.setShowThinking(ch("ch-1"), false);
-      await store.deleteShowThinking(ch("ch-1"));
+      await store.applyPatch(ch("ch-1"), { showThinking: false });
+      await store.applyPatch(ch("ch-1"), { showThinking: null });
       assertEquals(await store.getShowThinking(ch("ch-1")), true);
     });
   });
@@ -287,8 +287,8 @@ Deno.test("Store - showThinking", async (t) => {
     "thread 値が channel / defaults より優先されること",
     async () => {
       await withStore({ showThinking: false }, async (store) => {
-        await store.setShowThinking(ch("ch-1"), false);
-        await store.setShowThinking(th("ch-1", "th-1"), true);
+        await store.applyPatch(ch("ch-1"), { showThinking: false });
+        await store.applyPatch(th("ch-1", "th-1"), { showThinking: true });
         assertEquals(await store.getShowThinking(th("ch-1", "th-1")), true);
       });
     },
@@ -298,7 +298,7 @@ Deno.test("Store - showThinking", async (t) => {
     "thread 未設定なら channel 値にフォールバックすること",
     async () => {
       await withStore({ showThinking: false }, async (store) => {
-        await store.setShowThinking(ch("ch-1"), true);
+        await store.applyPatch(ch("ch-1"), { showThinking: true });
         assertEquals(await store.getShowThinking(th("ch-1", "th-1")), true);
       });
     },
@@ -375,8 +375,8 @@ Deno.test("Store - clearScope", async (t) => {
     async () => {
       await withStore({ model: "sonnet", effort: "medium" }, async (store) => {
         await store.setSession(ch("ch-1"), "session-a");
-        await store.setModel(ch("ch-1"), "opus");
-        await store.setEffort(ch("ch-1"), "high");
+        await store.applyPatch(ch("ch-1"), { model: "opus" });
+        await store.applyPatch(ch("ch-1"), { effort: "high" });
 
         await store.clearScope(ch("ch-1"));
 
@@ -404,9 +404,9 @@ Deno.test("Store - clearScope", async (t) => {
     async () => {
       await withStore({}, async (store) => {
         await store.setSession(ch("ch-1"), "session-channel");
-        await store.setModel(ch("ch-1"), "opus");
+        await store.applyPatch(ch("ch-1"), { model: "opus" });
         await store.setSession(th("ch-1", "th-1"), "session-thread");
-        await store.setModel(th("ch-1", "th-1"), "haiku");
+        await store.applyPatch(th("ch-1", "th-1"), { model: "haiku" });
 
         await store.clearScope(th("ch-1", "th-1"));
 
@@ -448,7 +448,7 @@ Deno.test("Store - getScopeSettings", async (t) => {
     "channel 上書きの source が 'channel' になること",
     async () => {
       await withStore({ model: "sonnet" }, async (store) => {
-        await store.setModel(ch("ch-1"), "opus");
+        await store.applyPatch(ch("ch-1"), { model: "opus" });
         const s = await store.getScopeSettings(ch("ch-1"));
         assertEquals(s.model, { value: "opus", source: "channel" });
       });
@@ -478,8 +478,8 @@ Deno.test("Store - getScopeSettings", async (t) => {
     "thread スコープで thread 値があれば source が 'thread' になること",
     async () => {
       await withStore({ model: "sonnet" }, async (store) => {
-        await store.setModel(ch("ch-1"), "opus");
-        await store.setModel(th("ch-1", "th-1"), "haiku");
+        await store.applyPatch(ch("ch-1"), { model: "opus" });
+        await store.applyPatch(th("ch-1", "th-1"), { model: "haiku" });
         const s = await store.getScopeSettings(th("ch-1", "th-1"));
         assertEquals(s.model, { value: "haiku", source: "thread" });
       });
@@ -490,7 +490,7 @@ Deno.test("Store - getScopeSettings", async (t) => {
     "thread スコープで thread 未設定なら channel 値が source 'channel' で返ること",
     async () => {
       await withStore({ model: "sonnet" }, async (store) => {
-        await store.setModel(ch("ch-1"), "opus");
+        await store.applyPatch(ch("ch-1"), { model: "opus" });
         const s = await store.getScopeSettings(th("ch-1", "th-1"));
         assertEquals(s.model, { value: "opus", source: "channel" });
       });
@@ -532,7 +532,7 @@ Deno.test("Store - getScopeSettings", async (t) => {
     "showThinking の channel 上書きが source 'channel' で返ること",
     async () => {
       await withStore({ showThinking: false }, async (store) => {
-        await store.setShowThinking(ch("ch-1"), true);
+        await store.applyPatch(ch("ch-1"), { showThinking: true });
         const s = await store.getScopeSettings(ch("ch-1"));
         assertEquals(s.showThinking, { value: true, source: "channel" });
       });
@@ -566,7 +566,7 @@ Deno.test("Store - applyPatch", async (t) => {
 
   await t.step("省略したキーが変更されないこと", async () => {
     await withStore({}, async (store) => {
-      await store.setModel(ch("ch-1"), "opus");
+      await store.applyPatch(ch("ch-1"), { model: "opus" });
       await store.applyPatch(ch("ch-1"), { effort: "high" });
       assertEquals(await store.getModel(ch("ch-1")), "opus");
       assertEquals(await store.getEffort(ch("ch-1")), "high");
@@ -577,7 +577,7 @@ Deno.test("Store - applyPatch", async (t) => {
     "null を指定したキーが削除され、フォールバックへ戻ること",
     async () => {
       await withStore({ model: "sonnet" }, async (store) => {
-        await store.setModel(ch("ch-1"), "opus");
+        await store.applyPatch(ch("ch-1"), { model: "opus" });
         const s = await store.applyPatch(ch("ch-1"), { model: null });
         assertEquals(s.model, { value: "sonnet", source: "default" });
       });
@@ -618,8 +618,8 @@ Deno.test("Store - applyPatch", async (t) => {
     "空の patch を渡しても既存の設定が壊れないこと",
     async () => {
       await withStore({}, async (store) => {
-        await store.setModel(ch("ch-1"), "opus");
-        await store.setEffort(ch("ch-1"), "high");
+        await store.applyPatch(ch("ch-1"), { model: "opus" });
+        await store.applyPatch(ch("ch-1"), { effort: "high" });
         const s = await store.applyPatch(ch("ch-1"), {});
         assertEquals(s.model, { value: "opus", source: "channel" });
         assertEquals(s.effort, { value: "high", source: "channel" });
@@ -638,7 +638,7 @@ Deno.test("Store - applyPatch", async (t) => {
     "thread スコープに適用したとき、親チャンネルの設定が変わらないこと",
     async () => {
       await withStore({}, async (store) => {
-        await store.setModel(ch("ch-1"), "opus");
+        await store.applyPatch(ch("ch-1"), { model: "opus" });
         await store.applyPatch(th("ch-1", "th-1"), { model: "haiku" });
         assertEquals(await store.getModel(ch("ch-1")), "opus");
       });
@@ -649,7 +649,7 @@ Deno.test("Store - applyPatch", async (t) => {
     "thread スコープで解決すると thread → channel のフォールバックが効くこと",
     async () => {
       await withStore({}, async (store) => {
-        await store.setModel(ch("ch-1"), "opus");
+        await store.applyPatch(ch("ch-1"), { model: "opus" });
         const s = await store.applyPatch(th("ch-1", "th-1"), {
           effort: "high",
         });
