@@ -24,3 +24,8 @@ services:
       retries: 3
       start_period: 60s
     restart: unless-stopped
+    # bot/mod.ts の shutdown() は apiServer.shutdown() / client.destroy() に
+    # それぞれ最大 5 秒 (SHUTDOWN_TIMEOUT_MS) を許容するため、合計最大 10 秒
+    # かかり得る。Docker の既定 stop_grace_period (10s) では SIGKILL が
+    # 先に飛ぶ余地があるため、余裕を持たせて 15s にする。
+    stop_grace_period: 15s

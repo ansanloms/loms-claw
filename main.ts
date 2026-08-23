@@ -30,14 +30,20 @@ initLogger(config.log);
 // 親ディレクトリが存在しない可能性があるため事前に mkdir。
 // kv は起動リトライの外側で 1 度だけ open する。open / close の所有は
 // main.ts に寄せ、close() はシグナルハンドラが bot.shutdown() の後に呼ぶ。
-// KV はローカル SQLite でリトライしても回復しないため、open 失敗はここで
+// mkdir / Deno.openKv はいずれもリトライしても回復しないため、失敗はここで
 // 即座にログを出して終了する (起動リトライの対象にしない)。
-await Deno.mkdir(dirname(config.storePath), { recursive: true });
 let kv: Deno.Kv;
+let storeDirReady = false;
 try {
+  await Deno.mkdir(dirname(config.storePath), { recursive: true });
+  storeDirReady = true;
   kv = await Deno.openKv(config.storePath);
 } catch (e: unknown) {
-  log.error(`failed to open store: ${config.storePath}:`, e);
+  if (!storeDirReady) {
+    log.error(`failed to prepare store directory: ${config.storePath}:`, e);
+  } else {
+    log.error(`failed to open store: ${config.storePath}:`, e);
+  }
   Deno.exit(1);
 }
 const store = new Store(kv, config.claude.defaults);
@@ -57,13 +63,20 @@ const onSignal = () => {
   }
   shuttingDown = true;
   (async () => {
+    let failed = false;
     try {
       await bot?.shutdown();
-      store.close();
     } catch (e) {
-      log.error("shutdown failed:", e);
+      failed = true;
+      log.error("bot shutdown failed:", e);
     } finally {
-      Deno.exit(0);
+      try {
+        store.close();
+      } catch (e) {
+        failed = true;
+        log.error("store close failed:", e);
+      }
+      Deno.exit(failed ? 1 : 0);
     }
   })();
 };
