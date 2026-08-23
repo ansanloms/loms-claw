@@ -221,6 +221,7 @@ graph TD
 | `bot/ratelimit.ts` | `SelfMentionRateLimiter`: 自己メンション応答のスライディングウィンドウレート制限 (bot 全体、Temporal ベース)                                                                                                                      |
 | `bot/message.ts`   | `splitMessage()`、`keepTyping()`、`createProgressReporter()`、`stripBotMentions()`、画像添付の取得・リサイズ・後始末 (`downloadImageAttachments()` / `resizeImageIfNeeded()` / `appendImageReferences()` / `cleanupImageFiles()`) |
 | `bot/flush.ts`     | `splitAtBoundary()`: 文境界 (`。` / 改行) でのバッファ分割アルゴリズム。`bot/mod.ts` の `flushBuffer` / `flushThinking` が共有する純粋関数                                                                                        |
+| `bot/scope.ts`     | `scopeFromChannel()`: チャンネル / スレッドから `StoreScope` を組み立てる。`bot/mod.ts` と `bot/commands.ts` の両方から使う                                                                                                       |
 
 ### `claude/` — Agent SDK 連携
 

@@ -24,7 +24,7 @@ import {
   extractTopLevelTextDelta,
   extractTopLevelThinkingDelta,
 } from "../claude/mod.ts";
-import type { Store, StoreScope } from "../store/mod.ts";
+import type { Store } from "../store/mod.ts";
 import { ApprovalManager, createCanUseTool } from "../approval/manager.ts";
 import { command } from "./commands.ts";
 import {
@@ -39,6 +39,7 @@ import {
 } from "./ratelimit.ts";
 import { ScopeQueue } from "./queue.ts";
 import { splitAtBoundary } from "./flush.ts";
+import { scopeFromChannel } from "./scope.ts";
 import {
   appendImageReferences,
   cleanupImageFiles,
@@ -386,16 +387,15 @@ export class DiscordBot {
     }
 
     // スコープ抽出 (反応判定で per-scope の active 上書きを引くために先に必要)。
-    // `message.channel.isThread()` は `this is ThreadChannel` の type guard だが、
-    // `message.channel` の型は元々 parentId を持つ型を含む union なので、
-    // 判定結果を isThread 変数に寄せても後続の parentId 参照で型エラーにならない。
+    // 組み立て方の詳細・型ナローイングの注意書きは scopeFromChannel 側にまとめてある。
+    const scope = scopeFromChannel(message.channel, message.channelId);
+    // shouldRespond() は raw な parentId (親が無ければ null のまま) を要求する。
+    // scope.channelId は Store 用にフォールバック済みなので代用できず、別途
+    // 抽出する。`message.channel.isThread()` は `this is ThreadChannel` の
+    // type guard で、判定結果を const に寄せても後続の parentId 参照は
+    // narrowing が効く (TS の aliased condition narrowing)。
     const isThread = message.channel.isThread();
-    const scope: StoreScope = {
-      channelId: isThread
-        ? (message.channel.parentId ?? message.channelId)
-        : message.channelId,
-      threadId: isThread ? message.channelId : undefined,
-    };
+    const parentId = isThread ? message.channel.parentId : null;
     // 承認ボタン・systemPrompt 解決・テンプレート変数は「発話があった場所」を見せたい。
     // スレッド内ならスレッド ID、通常チャンネルなら channel ID。
     const localId = scope.threadId ?? scope.channelId;
@@ -432,7 +432,7 @@ export class DiscordBot {
           message.channelId,
           this.config.discord.activeChannelIds,
           isThread,
-          isThread ? message.channel.parentId : null,
+          parentId,
           isMentioned,
           hasNonBotMentions,
           activeOverride,
