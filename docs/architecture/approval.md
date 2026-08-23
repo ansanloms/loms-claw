@@ -45,17 +45,19 @@ Discord のボタン承認が発火するのは、上の表のとおり SDK 上�
 
 ### 状態
 
-| フィールド     | 型                                     | 用途                                                                                                                                                                                                           |
-| -------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pending`      | `Map<requestId, { resolve, timeout }>` | 応答待ちの承認リクエスト。`requestId` は `crypto.randomUUID().slice(0, 8)`                                                                                                                                     |
-| `channelId`    | `string \| null`                       | `setChannel()` で設定される共有の可変状態。チャットと cron の両方のターン開始時に上書きされるため、同時に走るターン間で共有される。`requestApproval()` に明示の `channelId` が渡された場合はそちらが優先される |
-| `questions`    | `QuestionManager`                      | `AskUserQuestion` 用。コンストラクタで同じ `Client` から生成                                                                                                                                                   |
-| `settingsPath` | `string`                               | `.claude/settings.json` の絶対パス                                                                                                                                                                             |
+| フィールド        | 型                                     | 用途                                                                                                                                                                                                           |
+| ----------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pending`         | `Map<requestId, { resolve, timeout }>` | 応答待ちの承認リクエスト。`requestId` は `crypto.randomUUID().slice(0, 8)`                                                                                                                                     |
+| `channelId`       | `string \| null`                       | `setChannel()` で設定される共有の可変状態。チャットと cron の両方のターン開始時に上書きされるため、同時に走るターン間で共有される。`requestApproval()` に明示の `channelId` が渡された場合はそちらが優先される |
+| `questions`       | `QuestionManager`                      | `AskUserQuestion` 用。コンストラクタで同じ `Client` から生成                                                                                                                                                   |
+| `settingsPath`    | `string`                               | `.claude/settings.json` の絶対パス                                                                                                                                                                             |
+| `channelResolver` | `ApprovalChannelResolver`              | `requestApproval()` のチャンネル解決 (`fetchSendable(channelId)`)。コンストラクタの `options.channelResolver` で差し替え可能 (既定は `client` から作った discord.js 実装)。テストで fake に差し替える          |
+| `timeoutMs`       | `number`                               | 承認待ちのタイムアウト。既定は `INTERACTION_TIMEOUT_MS`。コンストラクタの `options.timeoutMs` でテスト用に短縮可能                                                                                             |
 
 ### `requestApproval(toolName, toolInput, channelId?)`
 
 1. `isInAllowList(settingsPath, toolName)` が true なら即 `{ decision: "allow", reason: "Already Allowed" }`。
-2. チャンネル解決: 引数 `channelId` → `this.channelId` の順。どちらも無ければ `{ decision: "deny", reason: "No approval channel" }`。`client.channels.fetch()` で取得できない、またはテキストチャンネルでなければ `{ decision: "deny", reason: "Channel not found" }`。
+2. チャンネル解決: 引数 `channelId` → `this.channelId` の順。どちらも無ければ `{ decision: "deny", reason: "No approval channel" }`。`channelResolver.fetchSendable(channelId)` が `null` を返す (取得できない、またはテキストチャンネルでない) 場合は `{ decision: "deny", reason: "Channel not found" }`。
 3. 以下を投稿する。
    - ボタン 3 種: `approve:{requestId}` (Allow, Success) / `always:{requestId}:{toolName}` (Allow Always, Primary) / `deny:{requestId}` (Deny, Danger)
    - 本文: 1 行目に `Tool: {toolName}` (太字 + インラインコード)、`toolInput.description` があればその値、続けて `toolInput` の 2 スペース JSON ダンプを json コードフェンスで囲んだもの。ダンプは 1500 文字を超える場合 1497 文字 + `...` に切り詰める
@@ -146,10 +148,10 @@ cron で `channelId` 未指定のジョブでは、`requestApproval()` / `reques
 
 ## テスト
 
-| ファイル                    | 対象                                                                                                                                                            |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `approval/manager.test.ts`  | `createCanUseTool()` の変換表。`requestApproval` / `requestAnswers` を固定値で返す fake `ApprovalManager` を渡し、allow / deny / AskUserQuestion の各分岐を検証 |
-| `approval/question.test.ts` | 純粋関数 `parseQuestions` / `resolveSelectedLabels` / `formatAnswer` / `truncate`                                                                               |
-| `approval/settings.test.ts` | `addToSettingsAllowList` (新規作成・マージ・重複排除) と `isInAllowList` (存在・不在・JSON 不正)                                                                |
+| ファイル                    | 対象                                                                                                                                                                                                                                                                                   |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `approval/manager.test.ts`  | `createCanUseTool()` の変換表 (fake `ApprovalManager` で allow / deny / AskUserQuestion の各分岐を検証)。加えて `ApprovalManager` 本体の `requestApproval()` → `handleButton()` (承認 / 拒否 / タイムアウト / channelId 未指定) を、`ApprovalChannelResolver` を fake に差し替えて検証 |
+| `approval/question.test.ts` | 純粋関数 `parseQuestions` / `resolveSelectedLabels` / `formatAnswer` / `truncate`                                                                                                                                                                                                      |
+| `approval/settings.test.ts` | `addToSettingsAllowList` (新規作成・マージ・重複排除) と `isInAllowList` (存在・不在・JSON 不正)                                                                                                                                                                                       |
 
-discord.js に依存する `ApprovalManager` / `QuestionManager` のインタラクション処理自体は単体テストの対象外。
+`ApprovalManager` はチャンネル解決 (`client.channels.fetch()` → 送信) を `ApprovalChannelResolver` (`fetchSendable()`) に切り出してあり、コンストラクタの `options.channelResolver` で差し替えられる (既定は `client` から作った discord.js 実装)。`options.timeoutMs` で `INTERACTION_TIMEOUT_MS` (既定値は変えない) をテスト用に短縮できる。一方 `handleButton()` の引数型は discord.js の `ButtonInteraction` のまま (`QuestionManager.handleButton()` への委譲が同じ型を要求するため、`ApprovalManager` 側だけを緩めると型が合わない)。テストでは `handleButton` が実際に触るプロパティ (`customId` / `message.content` / `update` / `reply`) だけを持つ fake オブジェクトを `as unknown as ButtonInteraction` でキャストして渡す (`bot/message.test.ts` の fake チャンネルと同じ手法)。`QuestionManager` のインタラクション処理自体は引き続き単体テストの対象外。

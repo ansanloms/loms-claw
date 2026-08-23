@@ -4,7 +4,7 @@
 
 関連: [README](README.md) / [lifecycle](lifecycle.md) / [claude-integration](claude-integration.md) / [store-and-settings](store-and-settings.md) / [approval](approval.md) / [cron](cron.md) / [deployment](deployment.md)
 
-対象ソース: `bot/mod.ts`, `bot/guard.ts`, `bot/queue.ts`, `bot/ratelimit.ts`, `bot/message.ts`, `bot/commands.ts`, `claude/mod.ts` (抽出ヘルパー), `approval/manager.ts` (`createCanUseTool()` の入口)
+対象ソース: `bot/mod.ts`, `bot/guard.ts`, `bot/incoming.ts`, `bot/queue.ts`, `bot/ratelimit.ts`, `bot/message.ts`, `bot/commands.ts`, `claude/mod.ts` (抽出ヘルパー), `approval/manager.ts` (`createCanUseTool()` の入口)
 
 ## 全体像
 
@@ -45,33 +45,37 @@ sequenceDiagram
 
 ## `messageCreate` ハンドラ (`DiscordBot.onMessage`)
 
+手順 1〜3 (認可・自己メンション判定 (+ レート枠の事前判定)・スコープ抽出・反応判定) は `resolveIncomingMessage()` (`bot/incoming.ts`) に集約してある。discord.js の `Message` / `Client` には直接触れず、`DiscordBot.onMessage` が取り出した最小の値 (`IncomingMessageInput`) と、KV 読み取り・メンション判定・レート制限といった副作用を持つ処理を関数として注入する (`IncomingMessageDeps`)。内部では既存の `isAuthorized` / `isAuthorizedSelfMessage` / `shouldRespond` (`bot/guard.ts`) / `scopeFromChannel` (`bot/scope.ts`) をそのまま呼ぶ (再実装しない)。戻り値は `{ kind: "ignore"; reason }` (`"unauthorized"` / `"self-not-mentioned"` / `"rate-limited"` / `"not-responding"`) または `{ kind: "handle"; scope; localId; isSelfMessage }` の判別共用体で、`onMessage` はこれを見て早期 return するか後続処理 (ログ出力・キュー投入・Claude 呼び出し) へ進む。
+
 ### 1. 認可
 
 1. `isAuthorizedSelfMessage(message.guildId, message.author.id, botUserId, config)` (`bot/guard.ts`) で「自 bot の user ID かつ `discord.guildId` と一致」なら自己メッセージ (`isSelfMessage = true`) として後続へ進む。`botUserId` は `client.user?.id ?? null`。
-2. それ以外は `isAuthorized(message.guildId, message.author.id, message.author.bot, config)` で判定する。bot は無条件に拒否、ギルド ID と `discord.userId` の完全一致を要求する。不一致なら何もせず return。
+2. それ以外は `isAuthorized(message.guildId, message.author.id, message.author.bot, config)` で判定する。bot は無条件に拒否、ギルド ID と `discord.userId` の完全一致を要求する。不一致なら `{ kind: "ignore", reason: "unauthorized" }`。
 
-### 2. スコープ抽出
+### 2. 自己メンション判定 (+ レート枠の事前判定) とスコープ抽出
 
-`scopeFromChannel(message.channel, message.channelId)` (`bot/scope.ts`) が `StoreScope` を組み立てる: スレッドなら `{ channelId: parentId ?? message.channelId, threadId: message.channelId }`、それ以外は `{ channelId: message.channelId }`。`bot/commands.ts` の `scopeFromInteraction()` も同じ関数を使う。`localId = threadId ?? channelId` を「発話があった場所」として、キューのキー・承認ボタンの送信先・テンプレート変数 `discord.channel.id` に使う。スコープの意味は [store-and-settings](store-and-settings.md) を参照。
+- `isMentioned = message.mentions.has(client.user, opts)`。自己メッセージのときだけ `opts = { ignoreRepliedUser: true, ignoreEveryone: true, ignoreRoles: true }` を渡し、本文中の明示メンション `<@botId>` のみを数える (bot 投稿への返信ピング・@everyone・role メンションでは true にならない)。人間のメッセージは既定の判定。
+- 自己メッセージでメンションが無ければ `{ kind: "ignore", reason: "self-not-mentioned" }`。bot 自身の全投稿 (応答の分割送信・thinking・進捗・cron 投稿等) がこのハンドラを通るため、KV 読み取りの前に落とす。
+- 自己メッセージでメンションがあれば、`SelfMentionRateLimiter.isExhausted()` (`bot/ratelimit.ts`) を非消費で事前判定する。枠が尽きていれば `{ kind: "ignore", reason: "rate-limited" }` (呼び出し側の `onMessage` が WARN ログを出す)。枠は消費しない (消費は手順 8 の `tryConsume()`)。ここで落とすことで typing・添付ダウンロード等の副作用を起こさない。
+- 自己メッセージがここまで通過すれば (メンションあり・レート枠あり) `scopeFromChannel(message.channel, message.channelId)` (`bot/scope.ts`) で `StoreScope` を組み立て、`{ kind: "handle", scope, localId, isSelfMessage: true }` を返す。`scopeFromChannel` はスレッドなら `{ channelId: parentId ?? message.channelId, threadId: message.channelId }`、それ以外は `{ channelId: message.channelId }` を組み立てる。`bot/commands.ts` の `scopeFromInteraction()` も同じ関数を使う。
+
+`localId = threadId ?? channelId` を「発話があった場所」として、キューのキー・承認ボタンの送信先・テンプレート変数 `discord.channel.id` に使う。スコープの意味は [store-and-settings](store-and-settings.md) を参照。
 
 bot 側でメッセージをスレッドへ自動分離する機能は実装しない。スレッド分離はエージェントの運用フロー (チャンネル別システムプロンプトの「話題の管理」節 + `discord` / `travel-note` skill) で、ユーザ確認を取ってから行う。設定は `PATCH /settings/<threadId>` で `active: true` を入れる (2026-08-23 判断、#136)。
 
-### 3. メンション判定と反応判定
+### 3. 人間のメッセージの反応判定
 
-- `isMentioned = message.mentions.has(client.user, opts)`。自己メッセージのときだけ `opts = { ignoreRepliedUser: true, ignoreEveryone: true, ignoreRoles: true }` を渡し、本文中の明示メンション `<@botId>` のみを数える (bot 投稿への返信ピング・@everyone・role メンションでは true にならない)。人間のメッセージは既定の判定。
-- 自己メッセージでメンションが無ければここで return する。bot 自身の全投稿 (応答の分割送信・thinking・進捗・cron 投稿等) がこのハンドラを通るため、KV 読み取りの前に落とす。
-- 人間のメッセージは `hasNonBotMentions = message.mentions.users.some((u) => !u.bot)` と `store.getActive(scope)` (per-scope の上書き。未設定なら `undefined`) を求め、`shouldRespond(channelId, activeChannelIds, isThread, parentId, isMentioned, hasNonBotMentions, activeOverride)` で判定する。
-  - `shouldRespond()` は内部で `resolveActive()` を呼ぶ。`activeOverride` が boolean ならそれを採用、`undefined` なら `config.discord.activeChannelIds` に `channelId` (スレッドなら親 `parentId` も) が含まれるかで決める。
-  - active なら原則反応するが、bot へのメンションが無く他ユーザへのメンションだけがある場合は無視する。active でなければ bot メンション必須。
-- 自己メッセージには `active` を適用しない (true でもメンション必須、false でもメンションがあれば反応する)。
+人間のメッセージ (自己メッセージでない) は、スコープ抽出後に `hasNonBotMentions = message.mentions.users.some((u) => !u.bot)` と `store.getActive(scope)` (per-scope の上書き。未設定なら `undefined`) を求め、`shouldRespond(channelId, activeChannelIds, isThread, parentId, isMentioned, hasNonBotMentions, activeOverride)` で判定する。
+
+- `shouldRespond()` は内部で `resolveActive()` を呼ぶ。`activeOverride` が boolean ならそれを採用、`undefined` なら `config.discord.activeChannelIds` に `channelId` (スレッドなら親 `parentId` も) が含まれるかで決める。
+- active なら原則反応するが、bot へのメンションが無く他ユーザへのメンションだけがある場合は無視する。active でなければ bot メンション必須。
+- 反応しないと判定した場合は `{ kind: "ignore", reason: "not-responding" }`、反応する場合は `{ kind: "handle", scope, localId, isSelfMessage: false }`。
+
+自己メッセージには `active` を適用しない (true でもメンション必須、false でもメンションがあれば反応する) ため、この手順自体を通らない (手順 2 で完結する)。
 
 ### 4. プロンプト抽出
 
 `stripBotMentions(message.cleanContent, [client.user.displayName, guild.members.me.displayName])` (`bot/message.ts`) で bot 宛てメンションの展開結果 (`@表示名`) を除去する。`cleanContent` は `<@botId>` を guild ニックネーム優先の表示名に展開するため、グローバル表示名とニックネームの両方を渡し、長い名前から順に除去する。本文が空で添付も無ければ return。
-
-### 5. 自己メンションのレート枠 (事前判定)
-
-自己メッセージで `SelfMentionRateLimiter.isExhausted()` (`bot/ratelimit.ts`) が true なら WARN ログを出して return する。枠は消費しない (消費は手順 8 の `tryConsume()`)。ここで落とすことで typing・添付ダウンロード等の副作用を起こさない。
 
 ### 6. スコープ単位の直列化 (`ScopeQueue`)
 
