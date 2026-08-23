@@ -106,12 +106,12 @@ docker compose logs -f               # ログ確認
 
 実行時データは host の `data/` に集約し、丸ごとコンテナの `/data` へ bind mount する (マウントはこの 1 つだけ)。パスは host / コンテナで共通。
 
-| パス                       | 用途                                                                   | 追跡状態 (`.gitignore`)                                                                                                                                                           |
-| -------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `data/config.json`         | アプリ設定。`data/config.json.example` をコピーして作成する            | 管理外                                                                                                                                                                            |
-| `data/config.json.example` | 設定ファイルの雛形。先頭に `"$schema": "../config.schema.json"` を持つ | 追跡                                                                                                                                                                              |
-| `data/home/`               | Claude Code の設定・認証情報 (`CLAUDE_CONFIG_DIR`)                     | `data/home/*` は管理外。`.gitkeep` のみ追跡                                                                                                                                       |
-| `data/workspace/`          | エージェントワークスペース。本番の cwd                                 | `data/workspace/*` は管理外。`.claude/`、`CLAUDE.md`、`cron/` を `!` で除外解除して追跡する。`apm.yml` / `apm.lock.yaml` / `.gitignore` / `.gitkeep` は既に追跡されているため残る |
+| パス                       | 用途                                                                   | 追跡状態 (`.gitignore`)                                                                                                                                                                               |
+| -------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `data/config.json`         | アプリ設定。`data/config.json.example` をコピーして作成する            | 管理外                                                                                                                                                                                                |
+| `data/config.json.example` | 設定ファイルの雛形。先頭に `"$schema": "../config.schema.json"` を持つ | 追跡                                                                                                                                                                                                  |
+| `data/home/`               | Claude Code の設定・認証情報 (`CLAUDE_CONFIG_DIR`)                     | `data/home/*` は管理外。`.gitkeep` のみ追跡                                                                                                                                                           |
+| `data/workspace/`          | エージェントワークスペース。本番の cwd                                 | `data/workspace/*` は管理外。`.claude/`、`CLAUDE.md`、`cron/`、`apm.yml`、`apm.lock.yaml`、`.gitkeep` を `!` で除外解除して追跡する。`cron/*.once.md` は再度 ignore する (詳細は後述の「追跡対象」節) |
 
 `.gitignore` はこのほか `**/*.kv` / `**/*.kv-shm` / `**/*.kv-wal` (Deno KV。コメントによれば `storePath` 既定値が cwd 基準のため、ローカル実行ではリポジトリ直下の `.claude/` にも作られる)、`**/apm_modules/`、`**/.claude/settings.local.json`、`.env`、`coverage/` を管理外にし、`!**/.gitkeep` で `.gitkeep` は残す。
 
@@ -135,12 +135,18 @@ docker compose logs -f               # ログ確認
 | `.claude/system-prompt/`    | `DEFAULT.md` / `CHAT.md` / `CRON.md` と、チャンネル ID 名のファイルが 1 件。結合の仕組みは [claude-integration.md](claude-integration.md)                                     | 追跡   |
 | `.claude/settings.json`     | `permissions.allow` の置き場。承認フローとの関係は [approval.md](approval.md)                                                                                                 | 追跡   |
 | `.claude/skills/`           | skill 12 本 (下記)                                                                                                                                                            | 追跡   |
-| `cron/`                     | 定期実行ジョブファイル。書式と実行は [cron.md](cron.md)                                                                                                                       | 追跡   |
+| `cron/`                     | 定期実行ジョブファイル (恒久ジョブ)。書式と実行は [cron.md](cron.md)                                                                                                          | 追跡   |
+| `cron/*.once.md`            | `once: true` の一時ジョブ (実行後に自動削除される)                                                                                                                            | 管理外 |
 | `apm.yml` / `apm.lock.yaml` | APM の依存定義とロック                                                                                                                                                        | 追跡   |
-| `.gitignore`                | workspace 内の管理外定義 (`memory/`、`apm_modules/`)                                                                                                                          | 追跡   |
 | `memory/`                   | エージェントのファイルベース永続メモリ (個人データ)                                                                                                                           | 管理外 |
 | `loms-claw.kv*`             | Deno KV (`storePath` 既定値の場合は `.claude/` 配下)                                                                                                                          | 管理外 |
 | `apm_modules/`              | APM が取得したモジュール                                                                                                                                                      | 管理外 |
+
+### 追跡対象
+
+- 追跡するのは `.claude/` / `CLAUDE.md` / `cron/*.md` (恒久ジョブ) / `apm.yml` / `apm.lock.yaml`。ルート `.gitignore` が `data/workspace/*` を丸ごと ignore した上で、これらを `!` で個別に再許可している。
+- `cron/*.once.md` (`once: true` の一時ジョブ、命名規則は [cron.md](cron.md) / `data/workspace/.claude/skills/cron/SKILL.md` 参照) と `memory/` 等は追跡しない。
+- `apm.yml` に列挙された vendored skill (下表「`apm.yml` に列挙」) はこのリポジトリで直接編集しない。修正は上流 (`ansanloms/skills`) で行う。ローカルで直接編集しても次回の apm install / sync で上書きされる。
 
 ### `.claude/rules/`
 
