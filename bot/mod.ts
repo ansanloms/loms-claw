@@ -59,6 +59,7 @@ import {
 } from "./commands.ts";
 import { startApiServer } from "../api/server.ts";
 import type { CronRouteContext } from "../api/routes/cron.ts";
+import type { HealthRouteContext } from "../api/routes/health.ts";
 import type { SettingsRouteContext } from "../api/routes/settings.ts";
 import { CronExecutor } from "../cron/executor.ts";
 import { loadCronJobsFromDir } from "../cron/loader.ts";
@@ -197,9 +198,13 @@ export class DiscordBot {
           store: this.store,
           resolveParentId: (id) => this.resolveThreadParentId(id),
         };
+        const healthCtx: HealthRouteContext = {
+          isReady: () => this.client.isReady(),
+        };
         this.apiServer = startApiServer(
           this.config.claude.apiPort,
           settingsCtx,
+          healthCtx,
           cronCtx,
         );
 

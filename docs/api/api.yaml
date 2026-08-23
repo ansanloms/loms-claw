@@ -10,6 +10,8 @@ servers:
 tags:
   - name: cron
     description: cron ジョブの一覧取得・手動実行・再読み込み API。
+  - name: health
+    description: healthcheck 用 API。
   - name: logs
     description: メモリ上のリングバッファからのログ取得 API。
   - name: settings
@@ -21,6 +23,8 @@ paths:
     $ref: ./paths/cron.reload.yaml
   /cron/run:
     $ref: ./paths/cron.run.yaml
+  /health:
+    $ref: ./paths/health.yaml
   /logs:
     $ref: ./paths/logs.yaml
   /settings/default:
@@ -51,6 +55,8 @@ components:
       $ref: ./components/schemas/ResponseError.yaml
     ResponseGetCron:
       $ref: ./components/schemas/ResponseGetCron.yaml
+    ResponseGetHealth:
+      $ref: ./components/schemas/ResponseGetHealth.yaml
     ResponsePostCronReload:
       $ref: ./components/schemas/ResponsePostCronReload.yaml
     ResponsePostCronRun:

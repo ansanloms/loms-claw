@@ -10,6 +10,10 @@
 
 import { Hono } from "hono";
 import { createCronRoutes, type CronRouteContext } from "./routes/cron.ts";
+import {
+  createHealthRoutes,
+  type HealthRouteContext,
+} from "./routes/health.ts";
 import { createLogsRoutes } from "./routes/logs.ts";
 import {
   createSettingsRoutes,
@@ -25,12 +29,14 @@ const log = createLogger("api-server");
  *
  * @param port - リッスンポート。
  * @param settingsCtx - settings ルートの依存関係コンテキスト。
+ * @param healthCtx - health ルートの依存関係コンテキスト。
  * @param cronCtx - cron ルートの依存関係コンテキスト。
  * @returns Deno.HttpServer インスタンス（shutdown() で停止可能）。
  */
 export function startApiServer(
   port: number,
   settingsCtx: SettingsRouteContext,
+  healthCtx: HealthRouteContext,
   cronCtx?: CronRouteContext,
 ): Deno.HttpServer {
   const app = new Hono();
@@ -43,6 +49,7 @@ export function startApiServer(
 
   // サブルートをマウント
   app.route("/cron", createCronRoutes(cronCtx));
+  app.route("/health", createHealthRoutes(healthCtx));
   app.route("/logs", createLogsRoutes());
   app.route("/settings", createSettingsRoutes(settingsCtx));
 

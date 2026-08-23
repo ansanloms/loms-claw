@@ -291,6 +291,23 @@ export const internalSchemas = {
       }
     }
   },
+  "ResponseGetHealth": {
+    "type": "object",
+    "description": "healthcheck の結果。",
+    "required": [
+      "status"
+    ],
+    "properties": {
+      "status": {
+        "type": "string",
+        "description": "healthy なら ok、そうでなければ unavailable。",
+        "enum": [
+          "ok",
+          "unavailable"
+        ]
+      }
+    }
+  },
   "ResponsePostCronReload": {
     "type": "object",
     "description": "cron 定義の再読み込み結果。",

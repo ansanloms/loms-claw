@@ -1,0 +1,27 @@
+get:
+  operationId: getHealth
+  summary: healthcheck。
+  tags:
+    - health
+  description: HTTP サーバの応答性と Discord Gateway の接続状態を反映した healthcheck 用エンドポイント。
+  responses:
+    200:
+      description: healthy な場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseGetHealth.yaml
+          examples:
+            ok:
+              value:
+                $ref: ../examples/ResponseGetHealthOk.yaml
+    503:
+      description: unhealthy な場合 (Discord Gateway が未接続等)。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseGetHealth.yaml
+          examples:
+            unavailable:
+              value:
+                $ref: ../examples/ResponseGetHealthUnavailable.yaml

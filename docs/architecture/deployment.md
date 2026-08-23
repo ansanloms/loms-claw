@@ -54,19 +54,28 @@ flowchart LR
 
 `compose.yaml` はリポジトリルートに置き、compose のコマンドはすべてリポジトリルートで実行する。
 
-| 項目           | 内容                                                                  |
-| -------------- | --------------------------------------------------------------------- |
-| プロジェクト名 | `loms-claw`                                                           |
-| サービス       | `bot` (`build: .`)                                                    |
-| environment    | `TZ: ${TZ:-Asia/Tokyo}` のみ。値は host の `.env` から compose が読む |
-| volumes        | `./data` → `/data` の bind mount 1 つ                                 |
-| extra_hosts    | `host.docker.internal:host-gateway` (用途はリポジトリ内に記載なし)    |
-| restart        | `unless-stopped`                                                      |
-| healthcheck    | 無し                                                                  |
+| 項目           | 内容                                                                                                                                                                                                                                                  |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| プロジェクト名 | `loms-claw`                                                                                                                                                                                                                                           |
+| サービス       | `bot` (`build: .`)                                                                                                                                                                                                                                    |
+| environment    | `TZ: ${TZ:-Asia/Tokyo}` のみ。値は host の `.env` から compose が読む                                                                                                                                                                                 |
+| volumes        | `./data` → `/data` の bind mount 1 つ                                                                                                                                                                                                                 |
+| extra_hosts    | `host.docker.internal:host-gateway` (用途はリポジトリ内に記載なし)                                                                                                                                                                                    |
+| healthcheck    | `curl -fsS http://127.0.0.1:$(jq -r .claude.apiPort ${LOMS_CLAW_CONFIG:-/data/config.json})/health` (`interval: 60s` / `timeout: 10s` / `retries: 3` / `start_period: 60s`)。エンドポイント本体は [internal-api.md](internal-api.md) の `GET /health` |
+| restart        | `unless-stopped`                                                                                                                                                                                                                                      |
 
 `.env` は docker compose が host 側で参照する変数 (現状 `TZ` のみ) を持つファイルで、アプリ自体は `.env` を読まない (`.env.example` のコメント)。`.env` は `.gitignore` で管理外。
 
 マウント先を変える等の調整は `compose.override.yaml` で行う。これは任意のファイルで、リポジトリでは追跡していない。
+
+### healthcheck と再起動
+
+`healthcheck:` を追加したことで `docker compose ps` / `docker inspect` に unhealthy 状態が反映されるようになるが、**docker compose 単体では unhealthy になってもコンテナは自動再起動しない** (`restart: unless-stopped` の restart policy は健全性を見ず、プロセスの exit code のみを見る)。`main.ts` は `unhandledrejection` / `error` を `preventDefault()` で握りつぶすため、Discord Gateway が切断されたままでもプロセス自体は生き続け、restart は働かない。unhealthy 検知から実際の再起動まで求めるなら、次のいずれかが別途必要になる。
+
+- autoheal 系サイドカー ([`willfarrell/autoheal`](https://github.com/willfarrell/docker-autoheal) 等)。`docker.sock` のマウントを伴う。
+- アプリ側で Gateway 切断が一定時間続いたら自ら `Deno.exit()` する watchdog。
+
+どちらを採用するかは本 PR の対象外とし、別途判断する。
 
 ### 運用コマンド
 
@@ -93,12 +102,12 @@ docker compose logs -f               # ログ確認
 
 ## 環境変数
 
-| 変数                | 供給元                                                                                                            | 消費者                                                                                                       |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `CLAUDE_CONFIG_DIR` | Dockerfile の `ENV` (`/data/home`)                                                                                | Claude Code (既定の `~/.claude` を置き換える)                                                                |
-| `LOMS_CLAW_CONFIG`  | Dockerfile の `ENV` (`/data/config.json`)                                                                         | `config.ts` の `loadConfig()` (未設定時 `./data/config.json`)                                                |
-| `TZ`                | host の `.env` → `compose.yaml` の `environment` (`${TZ:-Asia/Tokyo}`)                                            | コンテナ全体 (cron 式のローカルタイム評価等)                                                                 |
-| `DISCORD_BOT_TOKEN` | bot プロセスが `config.discord.token` を `query()` の `env` に注入する (`claude/mod.ts` の `buildQueryOptions()`) | SDK 同梱バイナリが spawn する Bash/curl。`discord` skill が `Authorization: Bot ${DISCORD_BOT_TOKEN}` で使う |
+| 変数                | 供給元                                                                                                            | 消費者                                                                                                                                                                   |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CLAUDE_CONFIG_DIR` | Dockerfile の `ENV` (`/data/home`)                                                                                | Claude Code (既定の `~/.claude` を置き換える)                                                                                                                            |
+| `LOMS_CLAW_CONFIG`  | Dockerfile の `ENV` (`/data/config.json`)                                                                         | `config.ts` の `loadConfig()` (未設定時 `./data/config.json`)。`compose.yaml` の `healthcheck:` もこの値 (既定 `/data/config.json`) から `jq` で `claude.apiPort` を読む |
+| `TZ`                | host の `.env` → `compose.yaml` の `environment` (`${TZ:-Asia/Tokyo}`)                                            | コンテナ全体 (cron 式のローカルタイム評価等)                                                                                                                             |
+| `DISCORD_BOT_TOKEN` | bot プロセスが `config.discord.token` を `query()` の `env` に注入する (`claude/mod.ts` の `buildQueryOptions()`) | SDK 同梱バイナリが spawn する Bash/curl。`discord` skill が `Authorization: Bot ${DISCORD_BOT_TOKEN}` で使う                                                             |
 
 `buildQueryOptions()` は `Deno.env.toObject()` を展開した上で `DISCORD_BOT_TOKEN` を足して `env` に渡す (SDK は `env` を指定すると `process.env` を継承しないため)。
 
