@@ -56,7 +56,10 @@ export interface LogFilter {
   level?: LogLevel;
   /** 名前空間の前方一致フィルタ。 */
   namespace?: string;
-  /** この ISO タイムスタンプ以降のエントリのみ返す。 */
+  /**
+   * この ISO 8601 インスタント（オフセット付き）以降のエントリのみ返す。
+   * 不正な値は `RangeError` を投げる。HTTP 経由では `api/routes/logs.ts` が事前に検証する。
+   */
   since?: string;
   /** 最大取得件数（デフォルト {@link DEFAULT_LOG_LIMIT}、上限 {@link MAX_LOG_LIMIT}）。 */
   limit?: number;
@@ -131,17 +134,11 @@ export function getLogEntries(filter?: LogFilter): LogEntry[] {
     MAX_LOG_LIMIT,
   );
 
-  // since は呼び出し側 (api/routes/logs.ts) で Temporal.Instant.from() による
-  // 構文検証を済ませて渡される想定。万一パースできない値が来た場合は、
-  // 従来の (例外を投げない) 挙動に合わせてこのフィルタを無視する。
-  let sinceInstant: Temporal.Instant | undefined;
-  if (filter?.since) {
-    try {
-      sinceInstant = Temporal.Instant.from(filter.since);
-    } catch {
-      sinceInstant = undefined;
-    }
-  }
+  // since は ISO 8601 のインスタント（オフセット付き）であること。不正な値は
+  // RangeError を投げる。HTTP 経由では api/routes/logs.ts が事前に検証する。
+  const sinceInstant: Temporal.Instant | undefined = filter?.since
+    ? Temporal.Instant.from(filter.since)
+    : undefined;
 
   // 時系列順に走査するための開始位置を決定
   const count = Math.min(totalWritten, bufferCapacity);

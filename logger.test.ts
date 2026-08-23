@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertThrows } from "@std/assert";
 import { createLogger, getLogEntries } from "./logger.ts";
 
 Deno.test("createLogger", async (t) => {
@@ -168,6 +168,13 @@ Deno.test("getLogEntries", async (t) => {
       assertEquals(filtered.length, 1);
     },
   );
+
+  await t.step("since が不正な値の場合に例外を投げること", () => {
+    assertThrows(
+      () => getLogEntries({ namespace: NS, since: "not-a-date", limit: 1 }),
+      RangeError,
+    );
+  });
 
   await t.step("エントリの構造が正しいこと", () => {
     const entries = getLogEntries({ namespace: NS, limit: 1 });
