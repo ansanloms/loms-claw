@@ -27,7 +27,7 @@ Discord + Claude Agent SDK のパーソナル AI エージェント。
 
 > Anthropic does not permit third-party developers to offer Claude.ai login or to route requests through Free, Pro, or Max plan credentials on behalf of their users.
 
-後者が禁止しているのは、第三者開発者が自分のユーザーに Claude.ai ログインを提供したり、ユーザーに代わって（on behalf of their users）Free / Pro / Max プランの資格情報経由でリクエストを流すことである。本プロジェクトはサブスクリプション購入者本人がセルフホストする構成で、`bot/guard.ts` の `isAuthorized()` が設定された単一ギルド ID・単一ユーザー ID（本人）との完全一致を要求し、bot ユーザーおよび DM（ギルド外、`guildId` が一致しない）を拒否する。本人以外のリクエストが流れる構造になく、「他人のリクエストを代理で流す」形態には該当しない。この構造を崩さないこと。
+後者が禁止しているのは、第三者開発者が自分のユーザーに Claude.ai ログインを提供したり、ユーザーに代わって（on behalf of their users）Free / Pro / Max プランの資格情報経由でリクエストを流すことである。本プロジェクトはサブスクリプション購入者本人がセルフホストする構成で、`bot/guard.ts` の `isAuthorized()` が設定された単一ギルド ID・単一ユーザー ID（本人）との完全一致を要求し、bot ユーザーおよび DM（ギルド外、`guildId` が一致しない）を拒否する。本人以外のリクエストが流れる構造になく、「他人のリクエストを代理で流す」形態には該当しない。なお bot 自身の投稿による起動（後述の「AI to AI 自己メンション」）は `isAuthorized()` を通らず `isAuthorizedSelfMessage()` で判定するが、bot の投稿は本人のセッションまたは cron が同一ギルド内で生成したものに限られ、第三者のリクエストが流入する経路にはならない。この構造を崩さないこと。
 
 なお同節は、Agent SDK を含め Claude の機能と連携する製品・サービスを構築する開発者一般には API キー認証を求めている。本プロジェクトの利用は上記のとおり第三者への提供に当たらないという理解に基づくが、文言・解釈は変わりうるため、同ページの変更有無を定期的に確認すること。
 
@@ -145,9 +145,9 @@ logger.ts              名前空間付き軽量ロガー。`initLogger({ level, 
 errors.ts              getErrorMessage(): unknown なエラー値からメッセージを取り出す共通ユーティリティ。
 bot/mod.ts             DiscordBot クラス。messageCreate ハンドラ、start/shutdown。
 bot/commands.ts        スラッシュコマンド定義とハンドラ（/claw settings show|set|unset で model/effort/show_thinking/active/session を操作）。
-bot/guard.ts           isAuthorized(): ギルド ID + ユーザー ID + bot 除外の認可チェック。resolveActive(): per-scope の active 上書き (KV) と config の activeChannelIds を解決する共通ロジック。shouldRespond(): resolveActive() の結果 + mention / スレッドによる反応判定。isAuthorizedSelfMessage() / parseHopMarker() / shouldRespondToSelf(): AI to AI 自己メンション機能の認可・ホップマーカー抽出・反応判定。
+bot/guard.ts           isAuthorized(): ギルド ID + ユーザー ID + bot 除外の認可チェック。resolveActive(): per-scope の active 上書き (KV) と config の activeChannelIds を解決する共通ロジック。shouldRespond(): resolveActive() の結果 + mention / スレッドによる反応判定。isAuthorizedSelfMessage(): AI to AI 自己メンション (bot 自身の投稿) の認可判定。
 bot/queue.ts           ScopeQueue: scope (localId) 単位でメッセージ処理を直列化するキュー。応答中の scope に届いた次のメッセージを現在のターン終了後に処理する (並行 query と session 競合の防止)。
-bot/ratelimit.ts       SelfMentionRateLimiter: 自己メンション応答用のスライディングウィンドウレートリミッタ (bot 全体、Temporal ベース)。
+bot/ratelimit.ts       SelfMentionRateLimiter: 自己メンション応答用のスライディングウィンドウレートリミッタ (bot 全体、Temporal ベース)。isExhausted() で非消費の事前判定、tryConsume() で消費。
 bot/message.ts         splitMessage(): 2000 文字分割。keepTyping(): typing インジケーター維持。ProgressReporter: ツール進捗表示。
 claude/mod.ts          askClaude(): Agent SDK の query() を呼び出し SDKMessage ストリームを逐次 yield。buildQueryOptions() / normalizeEffort()。テストは queryFn DI でモック。
 claude/system-prompt.ts  SystemPromptStore: .claude/system-prompt/ 配下を起動時に読み込み、コンテキスト (chat/cron) とスコープ (channelId/threadId) に応じて結合。
@@ -211,7 +211,7 @@ data/                  実行時データ置き場。home（Claude 設定・認�
 | `{{discord.user.id}}`      | メッセージ送信者の ID           |
 | `{{discord.user.name}}`    | メッセージ送信者の名前          |
 
-注意: `{{discord.channel.id}}` / `{{discord.channel.name}}` は **発話があった場所** の ID / 名前を返す。スレッド内で発話されたメッセージでは thread の ID / 名前が入る (親チャンネルの値ではない)。`{channelId}.md` がスレッド内でフォールバック採用された場合も同様で、ファイル内の `{{discord.channel.id}}` はスレッド ID に展開される。Discord REST API で「親チャンネル」を操作したい場合は ID をハードコードするか、別途取得すること。
+注意: `{{discord.channel.id}}` / `{{discord.channel.name}}` は **発話があった場所** の ID / 名前を返す。スレッド内で発話されたメッセージでは thread の ID / 名前が入る (親チャンネルの値ではない)。`{channelId}.md` がスレッド内でフォールバック採用された場合も同様で、ファイル内の `{{discord.channel.id}}` はスレッド ID に展開される。Discord REST API で「親チャンネル」を操作したい場合は ID をハードコードするか、別途取得すること。`{{discord.user.id}}` / `{{discord.user.name}}` は、AI to AI 自己メンション起動時は認可ユーザーの値になる（後述）。
 
 使用例（`.claude/system-prompt/DEFAULT.md`）:
 
@@ -301,8 +301,8 @@ cron ジョブ用のシステムプロンプトは `.claude/system-prompt/CRON.m
 
 ### テキスト
 
-1. `messageCreate` → `isAuthorized()` で認可チェック
-2. `shouldRespond()` で反応判定（active channel / mention / 親が active channel のスレッド）。active channel の判定は `resolveActive()` に委譲しており、KV の per-scope 上書き（`/claw settings set active` 等）が config の `activeChannelIds` より優先される
+1. `messageCreate` → `isAuthorized()` で認可チェック。bot 自身の投稿は `isAuthorizedSelfMessage()` で別途判定する（後述「AI to AI 自己メンション」）
+2. `shouldRespond()` で反応判定（active channel / mention / 親が active channel のスレッド）。active channel の判定は `resolveActive()` に委譲しており、KV の per-scope 上書き（`/claw settings set active` 等）が config の `activeChannelIds` より優先される。bot 自身の投稿は本文中の明示メンションのみで判定し、`active` の値は適用しない（後述）
 3. `message.channel.isThread()` から `StoreScope { channelId, threadId? }` を抽出（thread の場合 `parentId` を `channelId`、`message.channelId` を `threadId` に入れる）
 4. `ScopeQueue.enqueue(localId)` で以降の処理を **scope 単位で直列化**。応答中の scope に届いた次のメッセージは現在のターン終了後に処理される（Claude Code が応答生成中の入力をキューに積むのと同じ挙動）。待機に入ったメッセージには ⏳ リアクションを付け、自分のターン開始時に外す。これにより同一セッションへの並行 query と session 競合を防ぐ
 5. `message.cleanContent` からプロンプト抽出（bot mention を除去）
@@ -314,29 +314,30 @@ cron ジョブ用のシステムプロンプトは `.claude/system-prompt/CRON.m
 
 ### AI to AI 自己メンション
 
-bot 自身が別チャンネル/スレッドで自分自身をメンションすると、そのスコープの独立セッションで応答する。`discord.selfMention.enabled`（既定 `false`）で有効化する。
+bot 自身が別チャンネル/スレッドで自分自身をメンションすると、そのスコープのセッション（依頼元とは別のセッション。そのスコープで人間と進行中の会話があればそのセッションを resume する）で応答する。設定項目は無く、常時有効。
 
 発火条件（すべて必須、fail-closed）:
 
 - 自 bot の user ID のみ許可。他 bot のメッセージは引き続き拒否する
-- 明示的な bot メンションが必要
-- メッセージ本文に `[hop:N]` マーカーが必要。マーカー無しの自己メッセージは無視する。active channel の全メッセージ反応（mention 不要）は自己メッセージには適用されない
+- 正しいギルド（`discord.guildId`）のメッセージであること
+- 本文中の明示的な bot メンション `<@botId>` が必要（`mentions.has()` を `ignoreRepliedUser` / `ignoreEveryone` / `ignoreRoles` 付きで評価する。bot 投稿への返信ピング・@everyone・role メンションでは発火しない）
+- `active` は自己メッセージに適用しない。`active:true` のチャンネルでも mention 必須（bot 自身の通常応答を拾ってループしない）、`active:false` でも mention があれば反応する。`active` は人間のメッセージに対する「mention 不要かどうか」だけを決める
 
 連鎖制御:
 
-- `maxHops`（既定 3）: `[hop:N]` の N がこの値を超える場合は応答しない
-- bot 全体のスライディングウィンドウレート制限（`rateLimit.maxCount` 回 / `rateLimit.windowMinutes` 分、既定 6 回 / 10 分）。超過時は無視して WARN ログを出す
-- 応答プロンプトには「現在 hop N/maxHops。続ける場合は `[hop:N+1]` を含めること」という案内が自動追記される
-- bot プロセスが送信するメッセージは Client 既定の `allowedMentions: { parse: [] }` によりメンション解決が既定で無効化されており、応答本文に `<@botId>` と `[hop:N]` が紛れても自己メンションの発火条件を満たさない（人間宛て応答のピングのみ per-send で明示許可）
+- bot 全体のスライディングウィンドウレート制限（`bot/ratelimit.ts` の定数、6 回 / 10 分）。枠が尽きていればキューに積む前に捨て（`isExhausted()`）、枠の消費は実際に query を実行する直前に行う（`tryConsume()`）。超過時は無視して WARN ログを出す。応答が無ければ次の起動も起きないため、超過で無視された連鎖はそこで途切れる（ウィンドウが空けば新たな連鎖は始められる。上限であって終端ではない）
+- discord.js Client 経由で bot プロセスが送信するメッセージ（応答・cron 投稿・承認ボタン等）は Client 既定の `allowedMentions: { parse: [], users: [discord.userId] }` により、認可ユーザー（本人）宛て以外のメンション解決が無効化されている。応答本文に `<@botId>` が紛れても自己メンションの発火条件を満たさない。本人へのピングはすべての送信で通るが、本人以外のユーザー・role・@everyone へのピングは bot プロセスからの送信では通らない（意図したトレードオフ）。Claude が `discord` skill の curl（REST API）で投稿するメッセージにはこの既定は効かない。それが意図した起動経路であり、その側の歯止めは上記レート制限のみ
+- 応答には発話者メンションプレフィックスを付けない（応答自体が再度メンション条件を満たし連鎖の火種になるのを防ぐため）
 
-kill switch:
+per-scope の停止手段は無い。連鎖を止めたい場合はレート制限に任せるか、bot を再起動する。
 
-- `discord.selfMention.enabled: false`（config 変更のため再起動が必要）
-- スコープの `/claw settings set active:false` による per-scope の停止。自己メッセージは `activeOverride` が明示的に `false` のとき無視される
+自己起動ターンのプロンプトには先頭に注記「[AI to AI 自己メンション] この依頼は認可ユーザー本人の発話ではなく、別のチャンネル/スレッドで動いている自 bot のセッションが投稿したもの。」が付く。テンプレート変数 `{{discord.user.id}}` / `{{discord.user.name}}` は bot 自身ではなく認可ユーザー（`discord.userId`）の ID / 表示名に展開される（発話者宛てメンションを指示するプロンプトが `<@botId>` を生んで連鎖の火種になるのを防ぐため）。この 2 つの組み合わせで、モデルは「依頼は AI からだが、主体は本人」と読める。
 
-応答には発話者メンションプレフィックスを付けない（応答自体が再度メンション条件を満たし連鎖の火種になるのを防ぐため）。
+ツール承認・`AskUserQuestion` は自己起動ターンでも通常どおり Discord 上で行われる（承認ボタン等はそのスコープに投稿される。本人宛てのピングは無い）。本人が見ていなければタイムアウト（5 分）で deny となり、依頼元には通知されない。
 
-使い方: 依頼元のセッションが Discord REST API（`discord` skill）で対象チャンネル/スレッドに `<@{bot の user ID}> 依頼内容 [hop:1]` を投稿する。
+注意（同一スコープへの自己メンション）: 応答中のスコープ自身に `<@botId>` を投稿すると、`ScopeQueue` により現在のターンの後ろに積まれ、同じセッションを resume して処理される。依頼元のターン内でその応答を待つと、ターンが終わらない限り処理されず `claude.timeout` まで詰まる。自己メンションは別スコープへ投げ、同一ターン内で返信を待たないこと。
+
+使い方: 依頼元のセッションが Discord REST API（`discord` skill）で対象チャンネル/スレッドに `<@{bot の user ID}> 依頼内容` を投稿する。bot の user ID は `GET /users/@me` で取得する。エージェント向けの案内は `data/workspace/CLAUDE.md` の「AI to AI 自己メンション」節にある。
 
 ### スコープと設定の解決
 

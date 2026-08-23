@@ -1,3 +1,8 @@
+/** 自己メンション応答のレート制限: ウィンドウ内の最大応答回数。 */
+export const SELF_MENTION_RATE_LIMIT_MAX_COUNT = 6;
+/** 自己メンション応答のレート制限: ウィンドウ長 (分)。 */
+export const SELF_MENTION_RATE_LIMIT_WINDOW_MINUTES = 10;
+
 /**
  * 自己メンション応答のスライディングウィンドウレートリミッタ。
  *
@@ -20,13 +25,16 @@ export class SelfMentionRateLimiter {
     this.now = now;
   }
 
+  /** 枠が尽きているか (消費しない)。キューに積む前の事前判定用。 */
+  isExhausted(): boolean {
+    this.prune(this.now());
+    return this.timestamps.length >= this.maxCount;
+  }
+
   /** 1 回分の実行枠を消費する。枠があれば true、レート超過なら false。 */
   tryConsume(): boolean {
     const current = this.now();
-    const windowStart = current.subtract({ minutes: this.windowMinutes });
-    this.timestamps = this.timestamps.filter(
-      (t) => Temporal.Instant.compare(t, windowStart) >= 0,
-    );
+    this.prune(current);
 
     if (this.timestamps.length >= this.maxCount) {
       return false;
@@ -34,5 +42,13 @@ export class SelfMentionRateLimiter {
 
     this.timestamps.push(current);
     return true;
+  }
+
+  /** ウィンドウ外のタイムスタンプを捨てる。 */
+  private prune(current: Temporal.Instant): void {
+    const windowStart = current.subtract({ minutes: this.windowMinutes });
+    this.timestamps = this.timestamps.filter(
+      (t) => Temporal.Instant.compare(t, windowStart) >= 0,
+    );
   }
 }

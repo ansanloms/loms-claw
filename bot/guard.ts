@@ -116,7 +116,7 @@ export function shouldRespond(
  *
  * `isAuthorized()` はユーザーメッセージ用であり、bot メッセージは常に拒否する。
  * 自己メンション機能は別スコープの自 bot が起動元になるため、この専用関数で
- * 「自 bot の user ID のみ・機能が有効・正しいギルド」を満たす場合のみ許可する。
+ * 「自 bot の user ID のみ・正しいギルド」を満たす場合のみ許可する。
  * 他 bot のメッセージは引き続き拒否する（isAuthorized 同様 fail-closed）。
  */
 export function isAuthorizedSelfMessage(
@@ -125,69 +125,10 @@ export function isAuthorizedSelfMessage(
   botUserId: string | null,
   config: Config,
 ): boolean {
-  if (!config.discord.selfMention.enabled) {
-    return false;
-  }
-  if (botUserId === null) {
-    return false;
-  }
   if (authorId !== botUserId) {
     return false;
   }
   if (guildId !== config.discord.guildId) {
-    return false;
-  }
-  return true;
-}
-
-/**
- * メッセージ本文から `[hop:N]` ホップマーカーを取り出す。
- *
- * 最初に見つかったマーカーの N（10 進整数）を返す。マーカーが無い、数値として
- * 解釈できない、または N が 1 未満の場合は null を返す。
- *
- * 仕様: 正規表現 `/\[hop:(\d+)\]/` の最初の一致を採用する。一致した N が 1
- * 未満なら null（それ以降のマーカーは探索しない）。数値形式でない
- * `[hop:...]`（例: `[hop:abc]`）はそもそも正規表現に一致しないため読み飛ばされ、
- * 次に一致するマーカーが採用対象になる。
- */
-export function parseHopMarker(content: string): number | null {
-  const match = content.match(/\[hop:(\d+)\]/);
-  if (!match) {
-    return null;
-  }
-  const n = Number(match[1]);
-  if (!Number.isFinite(n) || n < 1) {
-    return null;
-  }
-  return n;
-}
-
-/**
- * 自 bot 自身のメッセージに反応すべきか判定する。
- *
- * 自己メッセージは active チャンネルであっても、明示メンション + 有効な
- * `[hop:N]` マーカーの両方が無い限り反応しない（fail-closed）。マーカーが無い
- * 自己メッセージ、あるいは hop がホップ上限を超える場合は無視する。
- * `activeOverride` が明示的に false の場合は、そのスコープにおける自己メンション
- * の per-scope kill switch として働き、mention・hop の条件を満たしていても無視する。
- */
-export function shouldRespondToSelf(
-  isMentioned: boolean,
-  hop: number | null,
-  maxHops: number,
-  activeOverride: boolean | undefined,
-): boolean {
-  if (!isMentioned) {
-    return false;
-  }
-  if (hop === null) {
-    return false;
-  }
-  if (hop > maxHops) {
-    return false;
-  }
-  if (activeOverride === false) {
     return false;
   }
   return true;

@@ -30,11 +30,13 @@ import { command } from "./commands.ts";
 import {
   isAuthorized,
   isAuthorizedSelfMessage,
-  parseHopMarker,
   shouldRespond,
-  shouldRespondToSelf,
 } from "./guard.ts";
-import { SelfMentionRateLimiter } from "./ratelimit.ts";
+import {
+  SELF_MENTION_RATE_LIMIT_MAX_COUNT,
+  SELF_MENTION_RATE_LIMIT_WINDOW_MINUTES,
+  SelfMentionRateLimiter,
+} from "./ratelimit.ts";
 import { ScopeQueue } from "./queue.ts";
 import {
   appendImageReferences,
@@ -45,6 +47,7 @@ import {
   downloadImageAttachments,
   keepTyping,
   splitMessage,
+  stripBotMentions,
 } from "./message.ts";
 import { join } from "jsr:@std/path@^1/join";
 import { createLogger } from "../logger.ts";
@@ -62,6 +65,14 @@ import { loadCronJobsFromDir } from "../cron/loader.ts";
 import { getErrorMessage } from "../errors.ts";
 
 const log = createLogger("bot");
+
+/**
+ * AI to AI 自己メンションで起動したターンのプロンプト先頭に付ける注記。
+ * 発話者のテンプレート変数は認可ユーザーに差し替えるため、この注記が無いと
+ * モデルは人間の発話と区別できない。
+ */
+const SELF_MENTION_PROMPT_NOTE =
+  "[AI to AI 自己メンション] この依頼は認可ユーザー本人の発話ではなく、別のチャンネル/スレッドで動いている自 bot のセッションが投稿したもの。";
 
 /**
  * Discord ボット。
@@ -83,8 +94,8 @@ export class DiscordBot {
     this.config = config;
     this.store = store;
     this.selfMentionLimiter = new SelfMentionRateLimiter(
-      config.discord.selfMention.rateLimit.maxCount,
-      config.discord.selfMention.rateLimit.windowMinutes,
+      SELF_MENTION_RATE_LIMIT_MAX_COUNT,
+      SELF_MENTION_RATE_LIMIT_WINDOW_MINUTES,
     );
     this.systemPrompts = new SystemPromptStore(
       join(config.claude.cwd, ".claude", "system-prompt"),
@@ -96,11 +107,15 @@ export class DiscordBot {
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildMembers,
       ],
-      // bot 自身の投稿本文に `<@botId>` と `[hop:N]` が紛れても自己メンション
-      // 連鎖の発火条件を満たさないよう、送信時のメンション解決を既定で無効化
-      // する。メンションが必要な送信箇所は per-send の allowedMentions で
-      // 明示許可する（sendChunks の発話者宛てピング等）。
-      allowedMentions: { parse: [] },
+      // この discord.js Client 経由で送信する全メッセージ (応答・cron 投稿・
+      // 承認ボタン等) で、メンション解決を認可ユーザー (本人) 宛てのみに限定する。
+      // 本人へのピングは通り、bot 自身・他ユーザー・role・everyone は解決されない
+      // ため、応答本文に `<@botId>` が紛れても自己メンションの発火条件
+      // (message.mentions に自 bot が載ること) を満たさない。
+      // Claude が discord skill の curl (REST API) で直接投稿するメッセージには
+      // 効かない。それが AI to AI 自己メンションの意図した起動経路であり、
+      // その側の歯止めはレート制限 (selfMentionLimiter) が担う。
+      allowedMentions: { parse: [], users: [config.discord.userId] },
     });
     this.approvalManager = new ApprovalManager(
       this.client,
@@ -346,22 +361,19 @@ export class DiscordBot {
    * メッセージ受信時のメインハンドラ。
    */
   private async onMessage(message: Message): Promise<void> {
-    // bot 自身のメッセージは、自己メンション機能が有効な場合のみ条件付きで処理する。
-    // 他の bot / 他ユーザーは従来どおり isAuthorized() で判定する。
+    // bot 自身のメッセージは、自己メンション (別スコープの自 bot からの明示メンション)
+    // として条件付きで処理する。isAuthorizedSelfMessage() が false のメッセージ
+    // (他 bot・他ユーザー・ギルド外の自 bot) は従来どおり isAuthorized() で判定し、
+    // bot は isAuthorized() で必ず拒否される。
     const botUserId = this.client.user?.id ?? null;
-    const isSelfMessage = botUserId !== null && message.author.id === botUserId;
-    if (isSelfMessage) {
-      if (
-        !isAuthorizedSelfMessage(
-          message.guildId,
-          message.author.id,
-          botUserId,
-          this.config,
-        )
-      ) {
-        return;
-      }
-    } else if (
+    const isSelfMessage = isAuthorizedSelfMessage(
+      message.guildId,
+      message.author.id,
+      botUserId,
+      this.config,
+    );
+    if (
+      !isSelfMessage &&
       !isAuthorized(
         message.guildId,
         message.author.id,
@@ -387,57 +399,54 @@ export class DiscordBot {
     // スレッド内ならスレッド ID、通常チャンネルなら channel ID。
     const localId = scope.threadId ?? scope.channelId;
 
-    // 反応判定
+    // 反応判定。
+    // 自己メッセージでは本文中の `<@botId>` (parsedUsers 由来) だけを明示メンション
+    // とみなす。`mentions.has()` の既定判定は bot 投稿への返信ピング (gateway の
+    // mentions 配列に返信先が入る)・@everyone・bot が持つ role へのメンションでも
+    // true を返すため、ignoreRepliedUser / ignoreEveryone / ignoreRoles を指定して
+    // 除外する。人間のメッセージは従来どおり既定の `mentions.has()` で判定する。
     const isMentioned = this.client.user
-      ? message.mentions.has(this.client.user)
-      : false;
-    const hasNonBotMentions = message.mentions.users.some((u) => !u.bot);
-    const activeOverride = await this.store.getActive(scope);
-    const hop = isSelfMessage ? parseHopMarker(message.content) : null;
-    if (isSelfMessage) {
-      const { maxHops } = this.config.discord.selfMention;
-      if (!shouldRespondToSelf(isMentioned, hop, maxHops, activeOverride)) {
-        return;
-      }
-      // 全チェック通過後にのみレート枠を消費する（拒否されるメッセージで枠を浪費しない）。
-      if (!this.selfMentionLimiter.tryConsume()) {
-        log.warn(
-          `self-mention rate limit exceeded, ignoring message in ${message.channelId}`,
-        );
-        return;
-      }
-    } else if (
-      !shouldRespond(
-        message.channelId,
-        this.config.discord.activeChannelIds,
-        isThread,
-        isThread ? message.channel.parentId : null,
-        isMentioned,
-        hasNonBotMentions,
-        activeOverride,
+      ? message.mentions.has(
+        this.client.user,
+        isSelfMessage
+          ? { ignoreRepliedUser: true, ignoreEveryone: true, ignoreRoles: true }
+          : {},
       )
-    ) {
+      : false;
+    // 自己メッセージはメンションが無ければここで捨てる。bot 自身の全投稿 (応答の
+    // 分割送信・thinking・進捗・cron 投稿等) がこのハンドラを通るため、KV 読み
+    // (getActive) の前に落として無駄な I/O を避ける。
+    if (isSelfMessage && !isMentioned) {
       return;
     }
-
-    let prompt = message.cleanContent;
-    if (this.client.user) {
-      prompt = prompt.replaceAll(
-        `@${this.client.user.displayName}`,
-        "",
-      );
+    // 自己メッセージの反応判定は上の明示メンション判定で完結する。`active` は
+    // 人間のメッセージにのみ効く設定 (true なら mention 不要) であり、自己
+    // メッセージには適用しない (true でも mention 必須、false でも mention が
+    // あれば反応する)。
+    if (!isSelfMessage) {
+      const hasNonBotMentions = message.mentions.users.some((u) => !u.bot);
+      const activeOverride = await this.store.getActive(scope);
+      if (
+        !shouldRespond(
+          message.channelId,
+          this.config.discord.activeChannelIds,
+          isThread,
+          isThread ? message.channel.parentId : null,
+          isMentioned,
+          hasNonBotMentions,
+          activeOverride,
+        )
+      ) {
+        return;
+      }
     }
-    prompt = prompt.trim();
 
-    // 自己メンション起動時は、連鎖の続け方（ホップ増分）と上限をプロンプトに明示する。
-    // [hop:N] マーカー自体は cleanContent に残っているため、ここでは案内のみ追記する。
-    if (isSelfMessage && hop !== null) {
-      const { maxHops } = this.config.discord.selfMention;
-      prompt +=
-        `\n\n(AI to AI 連鎖: 現在 hop ${hop}/${maxHops}。さらに別チャンネル/スレッドへ依頼する場合は、送信メッセージに [hop:${
-          hop + 1
-        }] を含めること。上限に達している場合は新たな bot メンションを行わないこと。)`;
-    }
+    // cleanContent は `<@botId>` を guild ニックネーム優先の表示名 (`@Nick`) に
+    // 展開するため、グローバル表示名とニックネームの両方を除去対象に渡す。
+    let prompt = stripBotMentions(message.cleanContent, [
+      this.client.user?.displayName ?? "",
+      message.guild?.members.me?.displayName ?? "",
+    ]);
 
     const hasAttachments = message.attachments.size > 0;
 
@@ -447,6 +456,17 @@ export class DiscordBot {
     }
 
     const channel = message.channel as GuildTextBasedChannel;
+
+    // 自己メンションのレート枠が到着時点で既に尽きていれば、キューに積まず
+    // ここで捨てる (typing・添付ダウンロード等の副作用を起こさない)。枠の
+    // 予約はせず、消費は query 実行直前の tryConsume で行うため、busy な
+    // スコープに複数の自己メンションが積まれた場合は実行時に改めて弾かれる。
+    if (isSelfMessage && this.selfMentionLimiter.isExhausted()) {
+      log.warn(
+        `self-mention rate limit exceeded, ignoring message in ${message.channelId}`,
+      );
+      return;
+    }
 
     // bot が応答中の scope に届いたメッセージは直列キューに積み、現在のターンが
     // 終わってから同一セッションで処理する (Claude Code が応答生成中の入力を
@@ -482,6 +502,7 @@ export class DiscordBot {
       // どのチャンクでも上限ぎりぎりでメンション分が溢れない（2000 字超過しない）。
       // 自己メッセージ起動時は空文字にする: 応答冒頭に自 bot メンションを付けると、
       // 応答自体が再度メンション条件を満たし連鎖の火種になるため。
+      // 発話者 (認可ユーザー) へのピングは Client 既定の allowedMentions で通る。
       const mention = isSelfMessage ? "" : `<@${message.author.id}> `;
       const sendChunks = async (text: string): Promise<void> => {
         const chunks = splitMessage(
@@ -489,16 +510,7 @@ export class DiscordBot {
           DISCORD_MESSAGE_LIMIT - mention.length,
         );
         for (const chunk of chunks) {
-          // 人間宛て応答 (mention が空でない) は発話者へのピングを維持する
-          // 必要があるため、Client 既定の allowedMentions.parse:[] を per-send
-          // で明示上書きする。自己メッセージ起動時 (mention === "") は
-          // 既定の全抑制のままでよい。
-          await (mention
-            ? channel.send({
-              content: mention + chunk,
-              allowedMentions: { users: [message.author.id] },
-            })
-            : channel.send(mention + chunk));
+          await channel.send(mention + chunk);
         }
       };
 
@@ -530,6 +542,34 @@ export class DiscordBot {
           return;
         }
 
+        // 自己メンション応答のレート枠は、実際に query を実行する直前にのみ消費する
+        // (空プロンプト等で応答しないメッセージに枠を浪費しない)。
+        if (isSelfMessage && !this.selfMentionLimiter.tryConsume()) {
+          log.warn(
+            `self-mention rate limit exceeded, ignoring message in ${message.channelId}`,
+          );
+          return;
+        }
+
+        // 自己起動ターンでは、この依頼が人間の発話ではなく別スコープの自 bot
+        // セッションからのものだとモデルに伝える (発話者変数は本人に差し替える
+        // ため、これが無いと人間の発話と区別できない)。
+        if (isSelfMessage) {
+          prompt = `${SELF_MENTION_PROMPT_NOTE}\n\n${prompt}`;
+        }
+
+        // テンプレート変数の発話者。自己メンション起動時の message.author は自 bot
+        // だが、そのまま渡すと「発話者へメンションせよ」というプロンプト指示が
+        // `<@botId>` を生み、自己メンションの再発火 (連鎖) につながる。自己起動時は
+        // 認可ユーザー (本人) を発話者として渡す。
+        const speakerId = isSelfMessage
+          ? this.config.discord.userId
+          : message.author.id;
+        const speakerName = isSelfMessage
+          ? message.guild?.members.cache.get(speakerId)?.displayName ??
+            this.client.users.cache.get(speakerId)?.displayName ??
+            speakerId
+          : message.author.displayName;
         const [sessionId, model, effort, showThinking] = await Promise.all([
           this.store.getSession(scope),
           this.store.getModel(scope),
@@ -546,8 +586,8 @@ export class DiscordBot {
           "discord.channel.id": localId,
           "discord.channel.name": "name" in channel ? channel.name ?? "" : "",
           "discord.channel.type": isThread ? "thread" : "text",
-          "discord.user.id": message.author.id,
-          "discord.user.name": message.author.displayName,
+          "discord.user.id": speakerId,
+          "discord.user.name": speakerName,
         };
 
         const appendSystemPrompt = this.systemPrompts.resolve(

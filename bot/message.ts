@@ -228,6 +228,27 @@ export function appendImageReferences(
 }
 
 /**
+ * cleanContent 形式の本文から bot 宛てメンションの展開結果 (`@表示名`) を除去する。
+ *
+ * cleanContent は `<@botId>` を guild ニックネーム優先の表示名に展開するため、
+ * 呼び出し側はグローバル表示名とニックネームの両方を渡す。一方が他方の接頭辞に
+ * なりうる (例: `loms` と `loms-claw`) ので、長い名前から順に除去して残骸を残さない。
+ */
+export function stripBotMentions(
+  content: string,
+  botDisplayNames: Iterable<string>,
+): string {
+  const names = [...new Set(botDisplayNames)]
+    .filter((name) => name.length > 0)
+    .sort((a, b) => b.length - a.length);
+  let result = content;
+  for (const name of names) {
+    result = result.replaceAll(`@${name}`, "");
+  }
+  return result.trim();
+}
+
+/**
  * Discord のメッセージ文字数上限。
  */
 export const DISCORD_MESSAGE_LIMIT = 2000;

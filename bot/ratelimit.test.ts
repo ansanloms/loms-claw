@@ -56,4 +56,19 @@ Deno.test("SelfMentionRateLimiter", async (t) => {
     clock.advance(10);
     assertEquals(limiter.tryConsume(), false);
   });
+
+  await t.step("isExhausted が枠を消費せずに超過状態を返すこと", () => {
+    const clock = fakeClock(BASE);
+    const limiter = new SelfMentionRateLimiter(2, 10, clock.now);
+    assertEquals(limiter.isExhausted(), false);
+    assertEquals(limiter.tryConsume(), true);
+    assertEquals(limiter.isExhausted(), false);
+    assertEquals(limiter.isExhausted(), false);
+    assertEquals(limiter.tryConsume(), true);
+    assertEquals(limiter.isExhausted(), true);
+    assertEquals(limiter.tryConsume(), false);
+
+    clock.advance(11);
+    assertEquals(limiter.isExhausted(), false);
+  });
 });
