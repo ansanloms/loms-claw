@@ -58,9 +58,20 @@ export interface LogFilter {
   namespace?: string;
   /** この ISO タイムスタンプ以降のエントリのみ返す。 */
   since?: string;
-  /** 最大取得件数（デフォルト 100、最大 1000）。 */
+  /** 最大取得件数（デフォルト {@link DEFAULT_LOG_LIMIT}、上限 {@link MAX_LOG_LIMIT}）。 */
   limit?: number;
 }
+
+/**
+ * {@link getLogEntries} の `limit` に指定できる最大値。
+ * これを超える値は呼び出し側 (`api/routes/logs.ts`) で 400 として拒否する。
+ */
+export const MAX_LOG_LIMIT = 1000;
+
+/**
+ * {@link getLogEntries} の `limit` 省略時のデフォルト値。
+ */
+export const DEFAULT_LOG_LIMIT = 100;
 
 /**
  * {@link initLogger} で受け取る初期化オプション。
@@ -116,7 +127,10 @@ export function getLogEntries(filter?: LogFilter): LogEntry[] {
   const minLvl = filter?.level ? LEVEL_ORDER[filter.level] : 0;
   const ns = filter?.namespace;
   const since = filter?.since;
-  const limit = Math.min(Math.max(filter?.limit ?? 100, 1), 1000);
+  const limit = Math.min(
+    Math.max(filter?.limit ?? DEFAULT_LOG_LIMIT, 1),
+    MAX_LOG_LIMIT,
+  );
 
   // 時系列順に走査するための開始位置を決定
   const count = Math.min(totalWritten, bufferCapacity);

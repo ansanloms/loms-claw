@@ -286,6 +286,13 @@ export const internalSchemas = {
       }
     }
   },
+  "ResponseGetLogs": {
+    "type": "array",
+    "description": "ログエントリ一覧。時系列順。",
+    "items": {
+      "$ref": "#/components/schemas/LogEntry"
+    }
+  },
   "ResponsePostCronReload": {
     "type": "object",
     "description": "cron 定義の再読み込み結果。",
@@ -315,13 +322,6 @@ export const internalSchemas = {
         "type": "string",
         "description": "実行したジョブ名。"
       }
-    }
-  },
-  "ResponseGetLogs": {
-    "type": "array",
-    "description": "ログエントリ一覧。時系列順。",
-    "items": {
-      "$ref": "#/components/schemas/LogEntry"
     }
   }
 } as const;

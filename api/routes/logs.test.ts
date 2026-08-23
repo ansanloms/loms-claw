@@ -1,6 +1,7 @@
-import { assertEquals } from "@std/assert";
+import { assert, assertEquals } from "@std/assert";
 import { Hono } from "hono";
 import { createLogsRoutes } from "./logs.ts";
+import { createLogger } from "../../logger.ts";
 
 function buildApp(): Hono {
   const app = new Hono();
@@ -45,6 +46,36 @@ Deno.test("createLogsRoutes", async (t) => {
     assertEquals(json.error, "limit must be a positive integer");
   });
 
+  await t.step("GET /: limit が空文字の場合に 400 を返すこと", async () => {
+    const app = buildApp();
+    const res = await app.request("/logs?limit=");
+    assertEquals(res.status, 400);
+    const json = await res.json();
+    assertEquals(json.error, "limit must be a positive integer");
+  });
+
+  await t.step(
+    "GET /: limit が指数表記 (1e3) の場合に 400 を返すこと",
+    async () => {
+      const app = buildApp();
+      const res = await app.request("/logs?limit=1e3");
+      assertEquals(res.status, 400);
+      const json = await res.json();
+      assertEquals(json.error, "limit must be a positive integer");
+    },
+  );
+
+  await t.step(
+    "GET /: limit が 16 進表記 (0x3e8) の場合に 400 を返すこと",
+    async () => {
+      const app = buildApp();
+      const res = await app.request("/logs?limit=0x3e8");
+      assertEquals(res.status, 400);
+      const json = await res.json();
+      assertEquals(json.error, "limit must be a positive integer");
+    },
+  );
+
   await t.step("GET /: level が不正な場合に 400 を返すこと", async () => {
     const app = buildApp();
     const res = await app.request("/logs?level=TRACE");
@@ -63,4 +94,34 @@ Deno.test("createLogsRoutes", async (t) => {
     const json = await res.json();
     assertEquals(json.error, "invalid since: must be ISO 8601");
   });
+
+  await t.step(
+    "GET /: namespace と limit で絞り込んだ LogEntry の配列が返ること",
+    async () => {
+      const namespace = "logs-test-body";
+      const log = createLogger(namespace);
+      for (let i = 0; i < 5; i++) {
+        log.info(`entry ${i}`);
+      }
+
+      const app = buildApp();
+      const res = await app.request(
+        `/logs?namespace=${namespace}&limit=3`,
+      );
+      assertEquals(res.status, 200);
+      const json = await res.json();
+      assertEquals(Array.isArray(json), true);
+      assertEquals(json.length, 3);
+      for (const entry of json) {
+        assert(
+          typeof entry === "object" && entry !== null,
+          `expected object, got ${JSON.stringify(entry)}`,
+        );
+        assertEquals(typeof entry.timestamp, "string");
+        assertEquals(typeof entry.level, "string");
+        assertEquals(entry.namespace, namespace);
+        assertEquals(typeof entry.message, "string");
+      }
+    },
+  );
 });

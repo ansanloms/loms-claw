@@ -155,4 +155,10 @@ bot プロセスが停止している、またはポート番号が違うと cur
 {"error": "limit must not exceed 1000"}
 ```
 
+```json
+{"error": "limit must be a positive integer"}
+```
+
+`limit` が 1 以上の整数でない場合（空文字、`abc`、`1e3`、`0x3e8`、小数等）にこの 400 が返る。
+
 `since` の 400 は多くの場合オフセット省略が原因なので、まずそこを疑う。

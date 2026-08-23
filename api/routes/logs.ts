@@ -6,7 +6,12 @@
  */
 
 import { Hono } from "hono";
-import { getLogEntries, type LogFilter, type LogLevel } from "../../logger.ts";
+import {
+  getLogEntries,
+  type LogFilter,
+  type LogLevel,
+  MAX_LOG_LIMIT,
+} from "../../logger.ts";
 
 const VALID_LEVELS = new Set<string>(["DEBUG", "INFO", "WARN", "ERROR"]);
 
@@ -51,13 +56,16 @@ export function createLogsRoutes() {
       }
     }
 
-    if (limitParam) {
+    if (limitParam !== undefined) {
       const n = Number(limitParam);
-      if (!Number.isInteger(n) || n < 1) {
+      if (!/^\d+$/.test(limitParam) || n < 1) {
         return c.json({ error: "limit must be a positive integer" }, 400);
       }
-      if (n > 1000) {
-        return c.json({ error: "limit must not exceed 1000" }, 400);
+      if (n > MAX_LOG_LIMIT) {
+        return c.json(
+          { error: `limit must not exceed ${MAX_LOG_LIMIT}` },
+          400,
+        );
       }
       filter.limit = n;
     }
