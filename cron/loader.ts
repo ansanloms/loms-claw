@@ -56,6 +56,12 @@ const frontMatterSchema: Schema = {
   additionalProperties: false,
 };
 
+// frontMatterSchema.properties に宣言済みのフィールド名。additionalProperties エラーが
+// 本当に未知キーによるものかどうかの判定に使う（既知フィールドの型違いとの区別）。
+const KNOWN_FRONT_MATTER_FIELDS = new Set(
+  Object.keys(frontMatterSchema.properties ?? {}),
+);
+
 // shortCircuit を false にして全エラーを収集する（ajv の allErrors: true 相当）。
 const frontMatterValidator = new Validator(frontMatterSchema, "2020-12", false);
 
@@ -144,7 +150,14 @@ export function validateCronJob(
       // 別途出るため、こちらは重複を避けてスキップする。
       continue;
     } else if (err.keyword === "false") {
-      errors.push(`"${field}" is not an allowed property`);
+      // @cfworker は properties に宣言済みのフィールドがその subschema に失敗した
+      // 場合にも additionalProperties + false のエラーを instanceLocation "#/<field>"
+      // で出す。真に未知のキー (KNOWN_FRONT_MATTER_FIELDS に無い) の場合だけ
+      // 「許可されていないプロパティ」として報告し、既知フィールドの型違いは
+      // 上の type/oneOf/enum 分岐で既に報告済みなのでスキップする。
+      if (!KNOWN_FRONT_MATTER_FIELDS.has(field)) {
+        errors.push(`"${field}" is not an allowed property`);
+      }
     } else {
       errors.push(err.error);
     }
