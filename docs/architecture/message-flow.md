@@ -124,7 +124,7 @@ sequenceDiagram
 ### 11. ループ後
 
 - thinking → text の順に最終 flush。
-- 一度もテキストを送っていなければ (`hasStreamedText` が false)、`extractResultText(resultEvent)` を送る。`result` フィールドが文字列なら `subtype` を問わず採用し、無ければ `errors` / `subtype` から組み立てた Error を throw する。`resultEvent` 自体が無ければ `claude stream ended without result event` を throw する。
+- 一度もテキストを送っていなければ (`hasStreamedText` が false)、`sendResultText(resultEvent, sendChunks)` (`claude/mod.ts`) を呼ぶ。`resultEvent` が無ければ `claude stream ended without result event` を throw する。あれば `extractResultText(resultEvent)` (`result` フィールドが文字列なら `subtype` を問わず採用し、無ければ `errors` / `subtype` から組み立てた Error を throw する) の結果を `sendChunks` に渡す。cron 側の同じ組み合わせは [cron](cron.md) を参照。
 
 ### 12. エラーと後始末
 

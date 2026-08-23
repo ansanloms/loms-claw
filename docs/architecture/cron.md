@@ -109,13 +109,12 @@ channelId: "{channelId}"
 4. システムプロンプト: `systemPrompts.resolve("cron", { channelId: job.channelId ?? "" }, templateVars)`。`templateVars` はギルドレベルのみ (`discord.guild.id` / `discord.guild.name`) で、チャンネル / ユーザー変数は展開されずプレースホルダのまま残る。context が `"cron"` なので `DEFAULT.md` + `CRON.md` に加え、`job.channelId` と同名の `{channelId}.md` があればそれも結合される (スレッドは無いので thread フォールバックは起きない)。詳細は [claude-integration](claude-integration.md)。
 5. 設定の組み立て: `jobConfig` は `ClaudeConfig` を spread でコピーし、`job.maxTurns` が指定されていれば `maxTurns` だけ上書きする。`timeout = job.timeout ?? config.timeout`。
 6. `askClaude(job.prompt, { sessionId, config: jobConfig, discordToken, signal: AbortSignal.timeout(timeout), appendSystemPrompt, model, effort, canUseTool: createCanUseTool(approvalManager, job.channelId), queryFn })` を呼ぶ。`canUseTool` に渡す `channelId` は `job.channelId` で、省略時は `ApprovalManager` が `setChannel()` の最終値へフォールバックする (それも無ければ自動 deny)。承認フローは [approval](approval.md)。
-7. ストリーム消費: `for await` で `event.type === "result"` だけを拾い、`resultEvent` に保持する。`text_delta` / `thinking_delta` / `tool_progress` は読まない (ストリーミング投稿・進捗表示・thinking 表示は無い)。`subtype !== "success"` なら WARN ログ。`resumeSession` が true なら `store.setSession({ channelId: "cron:{name}" }, event.session_id)` で保存する。
-8. ストリームが `result` 無しで終わったら `claude stream ended without result event` を throw する。
-9. `extractResultText(resultEvent)` で本文を取り出し、`textChannel` があるときだけ `splitMessage()` で 2000 文字に分割して `channel.send()` する。`channelId` 省略時は投稿しない (プロンプト側で Discord REST API を叩く設計にする)。
-10. catch: ERROR ログ (`cron job "{name}" failed:`) を出し、`textChannel` が取得済みなら `[cron: {name}] Error: {message}` を送る。通知自体の失敗は握りつぶす。
-11. finally: `job.once` かつ `onceCallback` が設定されていれば `onceCallback(job.name)` を await する (失敗はログのみ)。最後に `running` から削除する。
+7. ストリーム消費: `drainResultEvent(stream, { onNonSuccess, setSession })` (`claude/mod.ts`) で `for await` を回し、`event.type === "result"` だけを拾って最後の `result` イベントを返す。`text_delta` / `thinking_delta` / `tool_progress` は読まない (ストリーミング投稿・進捗表示・thinking 表示は無い)。`subtype !== "success"` なら `onNonSuccess` で WARN ログ。`resumeSession` が true なら `setSession` から `store.setSession({ channelId: "cron:{name}" }, event.session_id)` で保存する。
+8. `sendResultText(resultEvent, send)` (`claude/mod.ts`) を呼ぶ。`result` 無しで終わっていたら `claude stream ended without result event` を throw する。あれば `extractResultText(resultEvent)` で本文を取り出し `send()` に渡す。cron の `send` は `textChannel` があるときだけ `splitMessage()` で 2000 文字に分割して `channel.send()` する (`channelId` 省略時は投稿しない。プロンプト側で Discord REST API を叩く設計にする)。
+9. catch: ERROR ログ (`cron job "{name}" failed:`) を出し、`textChannel` が取得済みなら `[cron: {name}] Error: {message}` を送る。通知自体の失敗は握りつぶす。
+10. finally: `job.once` かつ `onceCallback` が設定されていれば `onceCallback(job.name)` を await する (失敗はログのみ)。最後に `running` から削除する。
 
-`askClaude()` と `extractResultText()` は chat と共通で、cron 固有の分岐は持たない ([claude-integration](claude-integration.md))。
+`askClaude()` / `drainResultEvent()` / `sendResultText()` は chat と共通で、cron 固有の分岐は持たない ([claude-integration](claude-integration.md))。
 
 ### セッションとスコープ
 

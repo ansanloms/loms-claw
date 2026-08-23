@@ -71,6 +71,15 @@ flowchart LR
 
 消費側の使い方 (chat のバッファリングとフラッシュ、cron の `result` のみ処理) は [message-flow](message-flow.md) と [cron](cron.md) を参照。
 
+`claude/mod.ts` はさらに、chat (bot/mod.ts) と cron (`cron/executor.ts`) が個別に持っていた「`result` イベントの drain + 送信」を副作用ありの 2 関数に集約している。
+
+| 関数                                                     | 役割                                                                                                                                                                                                                                       |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `drainResultEvent(stream, { onNonSuccess, setSession })` | `SDKMessage` ストリームを走査し `result` イベントを拾う。非 success な `subtype` なら `onNonSuccess` を呼び、`setSession` があれば `event.session_id` で呼ぶ。ストリームを読み切った時点の `result` イベント (無ければ `undefined`) を返す |
+| `sendResultText(resultEvent, send)`                      | `resultEvent` が無ければ `"claude stream ended without result event"` を throw する。あれば `extractResultText()` の結果を `send()` に渡す                                                                                                 |
+
+cron は `drainResultEvent()` でストリーム全体を走査してから `sendResultText()` で送信する。chat (bot/mod.ts) は `text_delta` 等も同じループで処理する都合上、`result` イベントの捕捉自体は自前のループで行い、ストリーミングが一度も発生しなかった場合 (`hasStreamedText === false`) のフォールバックとして `sendResultText()` のみを呼ぶ。
+
 ## SystemPromptStore
 
 `claude/system-prompt.ts` の `SystemPromptStore` は、ワークスペースの `{config.claude.cwd}/.claude/system-prompt/` 配下を起動時に読み込み、`query()` の `systemPrompt.append` に渡す文字列を組み立てる。`bot/mod.ts` の `DiscordBot` コンストラクタで生成し、`start()` の先頭で `load()` を呼ぶ。cron 側 (`CronExecutor`) にも同じインスタンスが渡る。

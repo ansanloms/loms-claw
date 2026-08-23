@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { scopeFromChannel, type ScopeChannel } from "./scope.ts";
+import { type ScopeChannel, scopeFromChannel } from "./scope.ts";
 
 function threadChannel(parentId: string | null): ScopeChannel {
   return {

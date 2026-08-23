@@ -116,6 +116,61 @@ export function extractResultText(event: SDKResultMessage): string {
 }
 
 /**
+ * result イベントを `extractResultText()` で本文に変換し、`send` で送信する。
+ *
+ * `resultEvent` が無ければ `"claude stream ended without result event"` を
+ * throw する (result イベントを一度も受け取らずにストリームが終わったケース)。
+ * `send` は呼び出し側の送信関数 (Discord チャンネルへの投稿等) をそのまま渡す。
+ *
+ * chat (ストリーミング応答の非ストリーミングフォールバック) と cron の両方が
+ * 持っていた「result が無ければ throw / あれば送信」を集約する。
+ */
+export async function sendResultText(
+  resultEvent: SDKResultMessage | undefined,
+  send: (text: string) => Promise<void>,
+): Promise<void> {
+  if (!resultEvent) {
+    throw new Error("claude stream ended without result event");
+  }
+  await send(extractResultText(resultEvent));
+}
+
+/**
+ * `SDKMessage` ストリームを走査し、`result` イベントを拾う。
+ *
+ * `result` イベントに出会うたびに、非 success な `subtype` なら
+ * `options.onNonSuccess` でログし、`options.setSession` があればセッションを
+ * 保存する (`event.session_id` を渡す)。ストリームを最後まで読み切った時点の
+ * 最後の `result` イベントを返す (見つからなければ `undefined`)。
+ *
+ * cron (ストリーミング表示を行わない呼び出し元) がこの関数でストリーム全体を
+ * 走査する。chat (bot/mod.ts) は text_delta 等も同じループで扱うため、
+ * `result` イベントの捕捉は自前のループ内で行い、この関数は使わない
+ * (`sendResultText` のみ非ストリーミングフォールバックから使う)。
+ */
+export async function drainResultEvent(
+  stream: AsyncGenerator<SDKMessage>,
+  options: {
+    onNonSuccess: (event: SDKResultMessage) => void;
+    setSession?: (sessionId: string) => Promise<void>;
+  },
+): Promise<SDKResultMessage | undefined> {
+  let resultEvent: SDKResultMessage | undefined;
+  for await (const event of stream) {
+    if (event.type === "result") {
+      resultEvent = event;
+      if (event.subtype !== "success") {
+        options.onNonSuccess(event);
+      }
+      if (options.setSession) {
+        await options.setSession(event.session_id);
+      }
+    }
+  }
+  return resultEvent;
+}
+
+/**
  * SDKMessage がトップレベル (サブエージェント以外) の text_delta なら、
  * その差分テキストを返す。それ以外のイベントは `undefined` を返す。
  *

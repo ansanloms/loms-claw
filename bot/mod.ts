@@ -21,9 +21,9 @@ import type { SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { Config } from "../config.ts";
 import {
   askClaude,
-  extractResultText,
   extractTopLevelTextDelta,
   extractTopLevelThinkingDelta,
+  sendResultText,
 } from "../claude/mod.ts";
 import type { Store } from "../store/mod.ts";
 import { ApprovalManager, createCanUseTool } from "../approval/manager.ts";
@@ -707,10 +707,7 @@ export class DiscordBot {
 
         // stream_event がなかった場合は result.result からフォールバック。
         if (!hasStreamedText) {
-          if (!resultEvent) {
-            throw new Error("claude stream ended without result event");
-          }
-          await sendChunks(extractResultText(resultEvent));
+          await sendResultText(resultEvent, sendChunks);
         }
       } catch (error: unknown) {
         // logger は Error の stack を自動で展開する。

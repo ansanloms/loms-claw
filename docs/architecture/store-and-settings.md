@@ -33,11 +33,11 @@ interface StoreScope {
 }
 ```
 
-| 発話場所 / 用途 | scope                                         | 抽出箇所                                                                                                          |
-| --------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| 発話場所 / 用途 | scope                                         | 抽出箇所                                                                                                                 |
+| --------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | スレッド外      | `{ channelId }`                               | `bot/scope.ts` `scopeFromChannel()`。`bot/mod.ts` (messageCreate) と `bot/commands.ts` `scopeFromInteraction()` から呼ぶ |
-| スレッド内      | `{ channelId: parentId, threadId }`           | 同上。`parentId` が null のときは thread id 自体を `channelId` に入れる                                            |
-| cron ジョブ     | `{ channelId: "cron:{name}" }` (session のみ) | `cron/executor.ts`。詳細は後述                                                                                     |
+| スレッド内      | `{ channelId: parentId, threadId }`           | 同上。`parentId` が null のときは thread id 自体を `channelId` に入れる                                                  |
+| cron ジョブ     | `{ channelId: "cron:{name}" }` (session のみ) | `cron/executor.ts`。詳細は後述                                                                                           |
 
 書き込み (`setSession` / `applyPatch` / `clearScope`) は常に leaf id (`threadId ?? channelId`) に対して行われる。スレッド内で `/claw settings set` を叩いても親チャンネルのキーには触れない。
 
