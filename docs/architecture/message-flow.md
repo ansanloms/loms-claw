@@ -184,4 +184,4 @@ per-scope の停止手段は無い。連鎖を止めるにはレート制限に�
 | `SELF_MENTION_RATE_LIMIT_MAX_COUNT`      | `bot/ratelimit.ts`                          | 6       | 自己メンション応答の上限回数                         |
 | `SELF_MENTION_RATE_LIMIT_WINDOW_MINUTES` | `bot/ratelimit.ts`                          | 10      | 同ウィンドウ長 (分)                                  |
 | `claude.timeout`                         | `config.json`                               | 設定値  | `askClaude()` の `AbortSignal.timeout`               |
-| `APPROVAL_TIMEOUT_MS`                    | `approval/manager.ts`                       | 5 分    | 承認 / 質問の待ち時間 ([approval](approval.md))      |
+| `INTERACTION_TIMEOUT_MS`                 | `approval/constants.ts`                     | 5 分    | 承認 / 質問の待ち時間 ([approval](approval.md))      |

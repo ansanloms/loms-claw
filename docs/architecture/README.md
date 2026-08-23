@@ -96,6 +96,7 @@ graph TD
   approval[approval/manager.ts]
   question[approval/question.ts]
   asettings[approval/settings.ts]
+  aconstants[approval/constants.ts]
   server[api/server.ts]
   rcron[api/routes/cron.ts]
   rlogs[api/routes/logs.ts]
@@ -141,6 +142,8 @@ graph TD
 
   approval --> asettings
   approval --> question
+  approval --> aconstants
+  question --> aconstants
 
   server --> rcron
   server --> rlogs
@@ -237,11 +240,12 @@ graph TD
 
 ### `approval/` — ツール承認
 
-| パス                   | 役割                                                                                                                     |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `approval/manager.ts`  | `ApprovalManager`: Discord ボタンによる承認 / 拒否。`createCanUseTool()` が SDK の `canUseTool` コールバックを生成       |
-| `approval/question.ts` | `QuestionManager`: `AskUserQuestion` を select menu (+ Other 自由入力の Modal) で提示し回答を収集                        |
-| `approval/settings.ts` | `isInAllowList()` / `addToSettingsAllowList()`: ワークスペースの `.claude/settings.json` の `permissions.allow` 読み書き |
+| パス                    | 役割                                                                                                                     |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `approval/manager.ts`   | `ApprovalManager`: Discord ボタンによる承認 / 拒否。`createCanUseTool()` が SDK の `canUseTool` コールバックを生成       |
+| `approval/question.ts`  | `QuestionManager`: `AskUserQuestion` を select menu (+ Other 自由入力の Modal) で提示し回答を収集                        |
+| `approval/settings.ts`  | `isInAllowList()` / `addToSettingsAllowList()`: ワークスペースの `.claude/settings.json` の `permissions.allow` 読み書き |
+| `approval/constants.ts` | `INTERACTION_TIMEOUT_MS`: 承認ボタン・質問 UI 共通のタイムアウト定数                                                     |
 
 ### `api/` — 内部 HTTP API
 
