@@ -1,6 +1,5 @@
 type: object
 description: スコープの解決済み設定。model/effort/showThinking は thread → channel → default の順にフォールバックして解決する。session は thread と channel で独立しており、フォールバックしない。active はグローバルデフォルトを持たず、上書きが無ければフィールドごと省略される (省略は config.json の activeChannelIds による判定へフォールバックすることを意味する)。
-additionalProperties: false
 required:
   - showThinking
 properties:
