@@ -81,10 +81,21 @@ function createMockSystemPromptStore(): SystemPromptStore {
   } as unknown as SystemPromptStore;
 }
 
-/** SDKMessage を順に yield するモック queryFn。 */
-function mockQueryFn(lines: Record<string, unknown>[]): QueryFn {
+/**
+ * SDKMessage を順に yield するモック queryFn。
+ *
+ * `gate` を渡すと、最初の yield の前に `await gate` してから yield を始める。
+ * ジョブを実行中状態のままブロックさせたいテストで使う。
+ */
+function mockQueryFn(
+  lines: Record<string, unknown>[],
+  gate?: Promise<void>,
+): QueryFn {
   return (_params: Parameters<QueryFn>[0]) => {
     async function* gen(): AsyncGenerator<SDKMessage> {
+      if (gate) {
+        await gate;
+      }
       for (const line of lines) {
         yield line as unknown as SDKMessage;
       }
@@ -126,23 +137,9 @@ Deno.test("CronExecutor", async (t) => {
         const { manager } = createMockApprovalManager();
         const systemPrompts = createMockSystemPromptStore();
 
-        let resolveGate!: () => void;
-        const gate = new Promise<void>((resolve) => {
-          resolveGate = resolve;
-        });
-        const blockingQueryFn: QueryFn = (_params) => {
-          async function* gen(): AsyncGenerator<SDKMessage> {
-            await gate;
-            yield {
-              type: "result",
-              subtype: "success",
-              result: "blocked-result",
-              session_id: "blocked-session",
-              is_error: false,
-            } as unknown as SDKMessage;
-          }
-          return gen() as unknown as ReturnType<QueryFn>;
-        };
+        const { promise: gate, resolve: resolveGate } = Promise
+          .withResolvers<void>();
+        const resultText = "first-run-result";
 
         const executor = new CronExecutor(
           client as never,
@@ -153,7 +150,13 @@ Deno.test("CronExecutor", async (t) => {
           {},
           manager as never,
           systemPrompts,
-          blockingQueryFn,
+          mockQueryFn([{
+            type: "result",
+            subtype: "success",
+            result: resultText,
+            session_id: "first-run-session",
+            is_error: false,
+          }], gate),
         );
 
         const job: CronJobDef = {
@@ -165,15 +168,32 @@ Deno.test("CronExecutor", async (t) => {
 
         // 1 回目を実行開始し、running に登録された状態でブロックさせる
         const firstRun = executor.runJob(job);
-        assertEquals(executor.isRunning("test-job"), true);
+        try {
+          assertEquals(executor.isRunning("test-job"), true);
 
-        // 実行中の 2 回目はスキップされること
-        await executor.runJob(job);
-        assertEquals(sent.length, 0); // スキップされる
+          // 実行中の 2 回目はガードで即座に return すること。
+          // await で直接待つと、ガードが壊れて待ち続けた場合にテストがハング
+          // するため、タイムアウトと race させてアサーション失敗に落とす。
+          const raced = await Promise.race<string>([
+            executor.runJob(job).then(() => "returned"),
+            new Promise<string>((resolve) =>
+              setTimeout(() => resolve("timeout"), 1000)
+            ),
+          ]);
+          assertEquals(
+            raced,
+            "returned",
+            "2 回目の runJob はガードで即座に return すること",
+          );
+        } finally {
+          // アサーション失敗時も 1 回目の実行をブロックしたままにしないため、
+          // 必ずガードを解除する。
+          resolveGate();
+        }
 
         // ブロックを解除して 1 回目を完了させる
-        resolveGate();
         await firstRun;
+        assertEquals(sent.includes(resultText), true);
         assertEquals(executor.isRunning("test-job"), false);
       }),
   );

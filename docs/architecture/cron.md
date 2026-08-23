@@ -96,7 +96,7 @@ channelId: "{channelId}"
 
 ## executor (`cron/executor.ts`)
 
-`CronExecutor` は `CronScheduler` を内部に持ち、コンストラクタで discord.js `Client`、`ClaudeConfig`、ギルド ID、bot トークン、`Store`、`ClaudeDefaults`、`ApprovalManager`、`SystemPromptStore`、任意の `queryFn` (テスト用 DI) を受け取る。`start(jobs)` は `replaceAll` → `scheduler.start()`、`reload(jobs)` は `replaceAll` のみ (実行中のジョブはそのまま完了し、次の tick から新定義が効く)、`stop()` は `scheduler.stop()`。
+`CronExecutor` は `CronScheduler` を内部に持ち、コンストラクタで discord.js `Client`、`ClaudeConfig`、ギルド ID、bot トークン、`Store`、`ClaudeDefaults`、`ApprovalManager`、`SystemPromptStore`、任意の `queryFn` (テスト用 DI) を受け取る。`start(jobs)` は `replaceAll` → `scheduler.start()`、`reload(jobs)` は `replaceAll` のみ (実行中のジョブはそのまま完了し、次の tick から新定義が効く)、`stop()` は `scheduler.stop()`。`isRunning(name)` は並行実行ガード (`running: Set<string>`) の状態を読む公開メソッドで、テストから使う。
 
 `runJob(job)` が 1 件の実行本体で、スケジューラのコールバックと `POST /cron/run` の両方から呼ばれる。
 
