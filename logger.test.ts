@@ -123,6 +123,52 @@ Deno.test("getLogEntries", async (t) => {
     assertEquals(filtered.every((e) => e.timestamp >= since), true);
   });
 
+  await t.step(
+    "since がオフセット付き (+09:00) でも Temporal.Instant として正しく比較されること",
+    () => {
+      const NS4 = `test-since-offset-${crypto.randomUUID().slice(0, 8)}`;
+      silenced(() => {
+        const log = createLogger(NS4);
+        log.info("offset-test");
+      });
+      const entries = getLogEntries({ namespace: NS4, limit: 1 });
+      const entryInstant = Temporal.Instant.from(entries[0].timestamp);
+
+      // エントリの 1 秒前を +09:00 オフセット付きの文字列で表す。
+      // 文字列の辞書順比較では "+09:00" 表記の時刻は数字が大きく見えるため、
+      // 旧実装だとこのエントリは since より古いと誤判定され除外されていた。
+      const since = entryInstant.subtract({ seconds: 1 })
+        .toZonedDateTimeISO("+09:00")
+        .toString({ timeZoneName: "never" });
+
+      const filtered = getLogEntries({ namespace: NS4, since, limit: 1000 });
+      assertEquals(filtered.length, 1);
+    },
+  );
+
+  await t.step(
+    "since に小数秒が無くても、小数秒付きのより新しいエントリが返ること",
+    () => {
+      const NS5 = `test-since-fraction-${crypto.randomUUID().slice(0, 8)}`;
+      silenced(() => {
+        const log = createLogger(NS5);
+        log.info("fraction-test");
+      });
+      const entries = getLogEntries({ namespace: NS5, limit: 1 });
+      const entryInstant = Temporal.Instant.from(entries[0].timestamp);
+
+      // エントリの秒未満を切り捨てた (小数秒無しの) since を指定する。
+      // 文字列の辞書順比較では "." (0x2E) が "Z" (0x5A) より小さいため、
+      // 旧実装だと小数秒付きのエントリが since より古いと誤判定され除外されていた。
+      const since = entryInstant
+        .round({ smallestUnit: "second", roundingMode: "floor" })
+        .toString();
+
+      const filtered = getLogEntries({ namespace: NS5, since, limit: 1000 });
+      assertEquals(filtered.length, 1);
+    },
+  );
+
   await t.step("エントリの構造が正しいこと", () => {
     const entries = getLogEntries({ namespace: NS, limit: 1 });
     const entry = entries[0];

@@ -126,11 +126,22 @@ function pushEntry(entry: LogEntry): void {
 export function getLogEntries(filter?: LogFilter): LogEntry[] {
   const minLvl = filter?.level ? LEVEL_ORDER[filter.level] : 0;
   const ns = filter?.namespace;
-  const since = filter?.since;
   const limit = Math.min(
     Math.max(filter?.limit ?? DEFAULT_LOG_LIMIT, 1),
     MAX_LOG_LIMIT,
   );
+
+  // since は呼び出し側 (api/routes/logs.ts) で Temporal.Instant.from() による
+  // 構文検証を済ませて渡される想定。万一パースできない値が来た場合は、
+  // 従来の (例外を投げない) 挙動に合わせてこのフィルタを無視する。
+  let sinceInstant: Temporal.Instant | undefined;
+  if (filter?.since) {
+    try {
+      sinceInstant = Temporal.Instant.from(filter.since);
+    } catch {
+      sinceInstant = undefined;
+    }
+  }
 
   // 時系列順に走査するための開始位置を決定
   const count = Math.min(totalWritten, bufferCapacity);
@@ -148,7 +159,13 @@ export function getLogEntries(filter?: LogFilter): LogEntry[] {
     if (ns && !entry.namespace.startsWith(ns)) {
       continue;
     }
-    if (since && entry.timestamp < since) {
+    if (
+      sinceInstant &&
+      Temporal.Instant.compare(
+          Temporal.Instant.from(entry.timestamp),
+          sinceInstant,
+        ) < 0
+    ) {
       continue;
     }
     result.push(entry);
