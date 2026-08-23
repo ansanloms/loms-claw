@@ -71,6 +71,12 @@ import { getErrorMessage } from "../errors.ts";
 const log = createLogger("bot");
 
 /**
+ * shutdown() で API サーバー停止 (apiServer.shutdown()) を待つ上限 (ミリ秒)。
+ * 超過した場合は警告を出して Discord クライアント破棄へ進む。
+ */
+const SHUTDOWN_TIMEOUT_MS = 5_000;
+
+/**
  * AI to AI 自己メンションで起動したターンのプロンプト先頭に付ける注記。
  * 発話者のテンプレート変数は認可ユーザーに差し替えるため、この注記が無いと
  * モデルは人間の発話と区別できない。
@@ -247,18 +253,31 @@ export class DiscordBot {
   /**
    * bot をシャットダウンする。
    *
-   * HTTP サーバー停止 → Discord クライアント破棄の順で処理し、
-   * クライアント破棄によりイベントループが自然終了する。Store の close() は
-   * 呼び出し元 (main.ts) が bot.shutdown() の後に行う (Store の open / close
-   * は main.ts が対で所有する)。
+   * HTTP サーバー停止 (最大 SHUTDOWN_TIMEOUT_MS ms で打ち切り) → Discord
+   * クライアント破棄 (await) の順で処理する。破棄後、呼び出し元 (main.ts) が
+   * store.close() → Deno.exit(0) で明示的にプロセスを終了する (Store の
+   * open / close は main.ts が対で所有する)。
    */
   async shutdown(): Promise<void> {
     log.info("shutting down");
     this.cronExecutor?.stop();
-    await this.apiServer?.shutdown().catch((e) =>
-      log.warn("api server shutdown error:", e)
-    );
-    this.client.destroy();
+
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<void>((resolve) => {
+      timeoutId = setTimeout(() => {
+        log.warn("api server shutdown timed out; proceeding");
+        resolve();
+      }, SHUTDOWN_TIMEOUT_MS);
+    });
+    await Promise.race([
+      this.apiServer?.shutdown().catch((e) =>
+        log.warn("api server shutdown error:", e)
+      ) ?? Promise.resolve(),
+      timeout,
+    ]);
+    clearTimeout(timeoutId);
+
+    await this.client.destroy();
     log.info("shutdown sequence complete");
   }
 

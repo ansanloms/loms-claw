@@ -44,7 +44,7 @@ sequenceDiagram
 2. `loadConfig()` (`config.ts`) で設定を読み込む。失敗時は例外が投げられ、この呼び出しは後述の起動リトライの外側にあるためリトライされない。
 3. `initLogger(config.log)` (`logger.ts`) でログレベルとリングバッファ容量を適用する。この呼び出しより前に出るログ (手順 1 のハンドラ経由を含む) は `logger.ts` の既定値 (`INFO` / 1000 件) で扱われる。
 4. KV の初期化: `Deno.mkdir(dirname(config.storePath), { recursive: true })` で親ディレクトリを作り、`Deno.openKv(config.storePath)` を `try/catch` で囲んで開き、`new Store(kv, config.claude.defaults)` を生成する。KV はリトライループの外側で 1 度だけ開く。`Deno.openKv()` が失敗した場合は `log.error()` でパスとエラーを記録して `Deno.exit(1)` する (ローカル SQLite バックエンドのため起動リトライで回復する見込みが無く、リトライ対象にしない)。
-5. シグナルハンドラ: `SIGINT` / `SIGTERM` に同じ `onSignal` を登録する。1 回目は `shuttingDown = true` にして、`await bot?.shutdown()` (`bot` が未生成、すなわちリトライ待ち中なら no-op) → `store.close()` → `Deno.exit(0)` を非同期に実行する。2 回目は `Deno.exit(1)` で強制終了する。
+5. シグナルハンドラ: `SIGINT` / `SIGTERM` に同じ `onSignal` を登録する。1 回目は `shuttingDown = true` にして、`try { await bot?.shutdown(); store.close(); } catch (e) { log.error("shutdown failed:", e); } finally { Deno.exit(0); }` を非同期に実行する (`bot` が未生成、すなわちリトライ待ち中なら `shutdown()` は no-op)。`shutdown()` や `store.close()` が例外を投げても `finally` により `Deno.exit(0)` が確実に呼ばれる。2 回目は `Deno.exit(1)` で強制終了する。
 6. 起動リトライ: `MAX_RETRIES = 5`、`BASE_DELAY_MS = 3_000`。ループの先頭で `shuttingDown` を見て true ならループを抜ける (シグナル受信後に新しい試行が閉じた KV を使う経路を無くすため)。各試行で `new DiscordBot(config, store)` を生成して `await bot.start()` し、成功すればループを抜ける。失敗時は `BASE_DELAY_MS * 2^(attempt - 1)` ミリ秒 (3s, 6s, 12s, 24s) 待って再試行し、`MAX_RETRIES` 回目の失敗で `Deno.exit(1)` する。
 
 KV の open / close は `main.ts` が対で所有する。`Deno.openKv()` で開き、`onSignal` が `bot.shutdown()` の後に `store.close()` を呼ぶ。`DiscordBot.shutdown()` は Store に触れない。
@@ -88,10 +88,10 @@ cron の詳細は [cron](cron.md)、`SettingsRouteContext` の中身は [store-a
 `async shutdown(): Promise<void>`。次の順に呼ぶ。
 
 1. `this.cronExecutor?.stop()`: スケジューラの interval を止める。
-2. `await this.apiServer?.shutdown().catch((e) => log.warn(...))`: 戻り値の Promise を await する。失敗は WARN ログのみで続行する。
-3. `this.client.destroy()`: discord.js Client を破棄する。メソッドの doc コメントによると、これによりイベントループが自然終了する。
+2. `this.apiServer?.shutdown()` を `Promise.race` で `SHUTDOWN_TIMEOUT_MS` (5 秒、モジュール定数) のタイムアウトと競わせて待つ。タイムアウトした場合は `log.warn("api server shutdown timed out; proceeding")` を出して先へ進む。`shutdown()` が失敗 (reject) した場合は従来どおり `log.warn(...)` で続行する。タイマーは完了時に `clearTimeout()` する。
+3. `await this.client.destroy()`: discord.js Client を破棄し、その完了 (`Client#destroy()` が返す `Promise<void>`) を待つ。
 
-Store の `close()` はここでは呼ばない。KV の open / close は `main.ts` が対で所有するため、`main.ts` の `onSignal` が `await bot.shutdown()` の後に `store.close()` を呼ぶ。
+Store の `close()` はここでは呼ばない。KV の open / close は `main.ts` が対で所有するため、`main.ts` の `onSignal` が `client.destroy()` の完了 (`bot.shutdown()` の解決) の後に `store.close()` を呼び、続けて `Deno.exit(0)` で明示的にプロセスを終了する。
 
 `shutdown()` 自体は `Deno.exit()` を呼ばない。
 

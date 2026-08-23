@@ -57,9 +57,14 @@ const onSignal = () => {
   }
   shuttingDown = true;
   (async () => {
-    await bot?.shutdown();
-    store.close();
-    Deno.exit(0);
+    try {
+      await bot?.shutdown();
+      store.close();
+    } catch (e) {
+      log.error("shutdown failed:", e);
+    } finally {
+      Deno.exit(0);
+    }
   })();
 };
 Deno.addSignalListener("SIGINT", onSignal);
