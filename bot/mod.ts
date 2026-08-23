@@ -16,6 +16,7 @@ import {
   type RepliableInteraction,
   REST,
   Routes,
+  Status,
 } from "discord.js";
 import type { SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { Config } from "../config.ts";
@@ -63,6 +64,7 @@ import { createLogger } from "../logger.ts";
 import { SystemPromptStore } from "../claude/system-prompt.ts";
 import { startApiServer } from "../api/server.ts";
 import type { CronRouteContext } from "../api/routes/cron.ts";
+import type { HealthRouteContext } from "../api/routes/health.ts";
 import type { SettingsRouteContext } from "../api/routes/settings.ts";
 import { CronExecutor } from "../cron/executor.ts";
 import { loadCronJobsFromDir } from "../cron/loader.ts";
@@ -229,9 +231,23 @@ export class DiscordBot {
           store: this.store,
           resolveParentId: (id) => this.resolveThreadParentId(id),
         };
+        const healthCtx: HealthRouteContext = {
+          // Client#isReady() は ws.status (WebSocketManager 全体の状態) を見るが、
+          // 一度 Ready になった後は Gateway が切断されても Status.Ready のまま
+          // 戻らない (discord.js の WebSocketManager#status は constructor と
+          // triggerClientReady() でしか代入されない)。切断はシャード単位の
+          // ws.shards の各 status にしか反映されないため、ここでは全シャードの
+          // status が Status.Ready かどうかで判定する。
+          isReady: () =>
+            this.client.ws.shards.size > 0 &&
+            this.client.ws.shards.every((shard) =>
+              shard.status === Status.Ready
+            ),
+        };
         this.apiServer = startApiServer(
           this.config.claude.apiPort,
           settingsCtx,
+          healthCtx,
           cronCtx,
         );
 

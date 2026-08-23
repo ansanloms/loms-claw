@@ -6,3 +6,11 @@ data
 .git
 .claude
 coverage
+
+# 実行時に不要 (deno task generate 等の開発時のみ使う)
+docs/
+README.md
+LICENSE
+**/*.test.ts
+.github/
+compose.yaml

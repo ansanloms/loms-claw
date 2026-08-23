@@ -260,8 +260,9 @@ graph TD
 
 | パス                      | 役割                                                                                                                         |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `api/server.ts`           | `startApiServer()`: Hono アプリ作成、cron / logs / settings ルートのマウント、共通エラーハンドラ                             |
+| `api/server.ts`           | `startApiServer()`: Hono アプリ作成、cron / health / logs / settings ルートのマウント、共通エラーハンドラ                    |
 | `api/routes/cron.ts`      | `GET /cron`, `POST /cron/run`, `POST /cron/reload`。`CronRouteContext` を受け取る                                            |
+| `api/routes/health.ts`    | `GET /health`。`HealthRouteContext { isReady }` を受け取り、healthy なら 200、そうでなければ 503 を返す                      |
 | `api/routes/logs.ts`      | `GET /logs`。`logger.ts` のリングバッファからフィルタ付きで取得                                                              |
 | `api/routes/settings.ts`  | `GET /settings/default`, `GET` / `PATCH` / `DELETE /settings/:id`。`SettingsRouteContext` を受け取る                         |
 | `api/validate.ts`         | `matchesSchema()` / `schemaErrorOf()`: `internal-schemas.ts` を単一ソースに `@cfworker/json-schema` でリクエストボディを検証 |

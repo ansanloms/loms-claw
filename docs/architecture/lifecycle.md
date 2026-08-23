@@ -32,7 +32,7 @@ sequenceDiagram
         D-->>B: ClientReady
         B->>D: registerCommands() (REST PUT)
         B->>X: new CronExecutor(...) / loadCronJobsFromDir(cwd) / start(jobs)
-        B->>A: startApiServer(apiPort, settingsCtx, cronCtx)
+        B->>A: startApiServer(apiPort, settingsCtx, healthCtx, cronCtx)
         B-->>M: start() 解決
     end
 ```
@@ -75,7 +75,7 @@ KV の所有は非対称で、`main.ts` が `Deno.openKv()` で開き、`Discord
    3. `loadCronJobsFromDir(config.claude.cwd)` (`cron/loader.ts`) で `{cwd}/cron/*.md` を読み、`cronExecutor.start(jobs)` でスケジューラを開始する。`cron/` が無ければ空配列で開始する。
    4. `reloadJobs` (再読込 → `cronExecutor.reload()`) を定義し、`cronExecutor.setOnceCallback()` に once ジョブ実行後の処理 (`{cwd}/cron/{name}.md` を `Deno.remove()` → `reloadJobs()`) を登録する。削除失敗はログのみで、reload は行う。
    5. `runJobByName` (`findJob()` → `runJob()`、未登録なら throw) を定義する。
-   6. `CronRouteContext { reloadCronJobs, runJob, listJobs }` と `SettingsRouteContext { store, resolveParentId }` を組み立て、`startApiServer(config.claude.apiPort, settingsCtx, cronCtx)` (`api/server.ts`) を呼ぶ。サーバーは `127.0.0.1` にバインドされる。詳細は [internal-api](internal-api.md)。
+   6. `CronRouteContext { reloadCronJobs, runJob, listJobs }`、`SettingsRouteContext { store, resolveParentId }`、`HealthRouteContext { isReady }` を組み立て、`startApiServer(config.claude.apiPort, settingsCtx, healthCtx, cronCtx)` (`api/server.ts`) を呼ぶ。サーバーは `127.0.0.1` にバインドされる。詳細は [internal-api](internal-api.md)。
    7. `ready` Promise を resolve する。
 4. `await this.client.login(config.discord.token)`。
 5. `await ready` で上記ハンドラの完了を待ってから `start()` が解決する。

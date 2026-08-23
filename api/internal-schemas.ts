@@ -286,6 +286,23 @@ export const internalSchemas = {
       }
     }
   },
+  "ResponseGetHealth": {
+    "type": "object",
+    "description": "healthcheck の結果。",
+    "required": [
+      "status"
+    ],
+    "properties": {
+      "status": {
+        "type": "string",
+        "description": "healthy なら ok、そうでなければ unavailable。",
+        "enum": [
+          "ok",
+          "unavailable"
+        ]
+      }
+    }
+  },
   "ResponseGetLogs": {
     "type": "array",
     "description": "ログエントリ一覧。時系列順。",
