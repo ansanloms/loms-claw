@@ -232,6 +232,7 @@ graph TD
 | `bot/message.ts`   | `splitMessage()`、`keepTyping()`、`createProgressReporter()`、`stripBotMentions()`、画像添付の取得・リサイズ・後始末 (`downloadImageAttachments()` / `resizeImageIfNeeded()` / `appendImageReferences()` / `cleanupImageFiles()`) |
 | `bot/flush.ts`     | `splitAtBoundary()`: 文境界 (`。` / 改行) でのバッファ分割アルゴリズム。`bot/mod.ts` の `flushBuffer` / `flushThinking` が共有する純粋関数                                                                                        |
 | `bot/scope.ts`     | `scopeFromChannel()`: チャンネル / スレッドから `StoreScope` を組み立てる。`bot/mod.ts` と `bot/commands.ts` の両方から使う                                                                                                       |
+| `bot/incoming.ts`  | `resolveIncomingMessage()`: `onMessage` の認可 → 自己メンション判定 (+ レート制限) → スコープ抽出 → active 上書き取得 → 反応判定を切り出した判定関数。discord.js には直接触れず、`bot/mod.ts` が最小の値と関数 (deps) を渡す      |
 
 ### `claude/` — Agent SDK 連携
 
@@ -258,15 +259,15 @@ graph TD
 
 ### `api/` — 内部 HTTP API
 
-| パス                      | 役割                                                                                                                         |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `api/server.ts`           | `startApiServer()`: Hono アプリ作成、cron / health / logs / settings ルートのマウント、共通エラーハンドラ                    |
-| `api/routes/cron.ts`      | `GET /cron`, `POST /cron/run`, `POST /cron/reload`。`CronRouteContext` を受け取る                                            |
-| `api/routes/health.ts`    | `GET /health`。`HealthRouteContext { isReady }` を受け取り、healthy なら 200、そうでなければ 503 を返す                      |
-| `api/routes/logs.ts`      | `GET /logs`。`logger.ts` のリングバッファからフィルタ付きで取得                                                              |
-| `api/routes/settings.ts`  | `GET /settings/default`, `GET` / `PATCH` / `DELETE /settings/:id`。`SettingsRouteContext` を受け取る                         |
-| `api/validate.ts`         | `matchesSchema()` / `schemaErrorOf()`: `internal-schemas.ts` を単一ソースに `@cfworker/json-schema` でリクエストボディを検証 |
-| `api/internal-schemas.ts` | `docs/api` の component schema から `deno task generate` で書き出す自動生成物。`deno.json` の `exclude` 対象                 |
+| パス                      | 役割                                                                                                                                                                           |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `api/server.ts`           | `createApp()`: Hono アプリ組み立て (cron / health / logs / settings ルートのマウント、共通エラーハンドラ)。`startApiServer()` はそれを `Deno.serve()` に渡すだけの薄いラッパー |
+| `api/routes/cron.ts`      | `GET /cron`, `POST /cron/run`, `POST /cron/reload`。`CronRouteContext` を受け取る                                                                                              |
+| `api/routes/health.ts`    | `GET /health`。`HealthRouteContext { isReady }` を受け取り、healthy なら 200、そうでなければ 503 を返す                                                                        |
+| `api/routes/logs.ts`      | `GET /logs`。`logger.ts` のリングバッファからフィルタ付きで取得                                                                                                                |
+| `api/routes/settings.ts`  | `GET /settings/default`, `GET` / `PATCH` / `DELETE /settings/:id`。`SettingsRouteContext` を受け取る                                                                           |
+| `api/validate.ts`         | `matchesSchema()` / `schemaErrorOf()`: `internal-schemas.ts` を単一ソースに `@cfworker/json-schema` でリクエストボディを検証                                                   |
+| `api/internal-schemas.ts` | `docs/api` の component schema から `deno task generate` で書き出す自動生成物。`deno.json` の `exclude` 対象                                                                   |
 
 ### `cron/` — 定期実行
 

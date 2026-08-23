@@ -100,6 +100,7 @@ docker compose logs -f               # ログ確認
 - `askClaude()` は `queryFn` の DI でモック（`AsyncGenerator<SDKMessage>` を返す）を注入してテスト
 - discord.js 依存コード（`bot/mod.ts`, `approval/manager.ts`）はモック化コストが高いため、ロジックを外部関数に抽出してテストする方針
 - 実際の `query()` 実行（SDK 同梱 CLI の spawn）はインテグレーションテスト領域
+- `bot/message.ts` の `downloadImageAttachments` / `resizeImageIfNeeded`（ffprobe / ffmpeg の spawn を伴う）もインテグレーションテスト領域とし、単体テストの対象外とする
 - テスト実行: `deno task test`（カバレッジレポート付き）
 
 ### テスト命名規約

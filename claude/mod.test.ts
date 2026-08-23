@@ -10,6 +10,7 @@ import {
   drainResultEvent,
   extractResultText,
   extractTopLevelTextDelta,
+  extractTopLevelThinkingDelta,
   handleResultEvent,
   isSessionNotFoundError,
   normalizeEffort,
@@ -680,6 +681,54 @@ Deno.test("extractTopLevelTextDelta", async (t) => {
   await t.step("text_delta 以外のイベントは undefined になること", () => {
     assertEquals(
       extractTopLevelTextDelta(
+        { type: "result", subtype: "success" } as unknown as SDKMessage,
+      ),
+      undefined,
+    );
+  });
+});
+
+Deno.test("extractTopLevelThinkingDelta", async (t) => {
+  await t.step("トップレベルの thinking_delta は差分テキストを返すこと", () => {
+    assertEquals(
+      extractTopLevelThinkingDelta(
+        {
+          type: "stream_event",
+          parent_tool_use_id: null,
+          event: {
+            type: "content_block_delta",
+            index: 0,
+            delta: { type: "thinking_delta", thinking: "考え中" },
+          },
+        } as unknown as SDKMessage,
+      ),
+      "考え中",
+    );
+  });
+
+  await t.step(
+    "サブエージェント (parent_tool_use_id あり) は undefined になること",
+    () => {
+      assertEquals(
+        extractTopLevelThinkingDelta(
+          {
+            type: "stream_event",
+            parent_tool_use_id: "tool-1",
+            event: {
+              type: "content_block_delta",
+              index: 0,
+              delta: { type: "thinking_delta", thinking: "考え中" },
+            },
+          } as unknown as SDKMessage,
+        ),
+        undefined,
+      );
+    },
+  );
+
+  await t.step("thinking_delta 以外のイベントは undefined になること", () => {
+    assertEquals(
+      extractTopLevelThinkingDelta(
         { type: "result", subtype: "success" } as unknown as SDKMessage,
       ),
       undefined,

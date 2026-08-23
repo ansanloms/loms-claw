@@ -44,6 +44,47 @@ export interface ApprovalResult {
 }
 
 /**
+ * 承認ボタン付きメッセージを送信できるチャンネル (テスト用に discord.js の
+ * `GuildTextBasedChannel` から必要最小限を切り出したもの)。
+ */
+export interface ApprovalSendableChannel {
+  send(payload: {
+    content: string;
+    components: ActionRowBuilder<ButtonBuilder>[];
+  }): Promise<unknown>;
+}
+
+/**
+ * `requestApproval()` がチャンネル ID から送信先チャンネルを解決するためのインターフェース。
+ *
+ * 既定実装は discord.js の `Client` (`client.channels.fetch()`) から作るが、
+ * テストでは fake を差し替えることで discord.js に触れずに `requestApproval()`
+ * を検証できる。
+ */
+export interface ApprovalChannelResolver {
+  /**
+   * `channelId` から送信可能なチャンネルを解決する。
+   * 見つからない、またはテキストベースでない場合は `null` を返す。
+   */
+  fetchSendable(channelId: string): Promise<ApprovalSendableChannel | null>;
+}
+
+/**
+ * 実際の discord.js `Client` から {@link ApprovalChannelResolver} の既定実装を作る。
+ */
+function defaultChannelResolver(client: Client): ApprovalChannelResolver {
+  return {
+    async fetchSendable(channelId) {
+      const channel = await client.channels.fetch(channelId);
+      if (!channel || !channel.isTextBased()) {
+        return null;
+      }
+      return channel as GuildTextBasedChannel;
+    },
+  };
+}
+
+/**
  * 承認マネージャー。
  */
 export class ApprovalManager {
@@ -55,9 +96,30 @@ export class ApprovalManager {
     }
   >();
   private questions: QuestionManager;
+  private channelResolver: ApprovalChannelResolver;
+  private timeoutMs: number;
 
-  constructor(private client: Client, private settingsPath: string) {
+  /**
+   * @param client - discord.js Client。既定のチャンネル解決 (`channelResolver`
+   *   未指定時) と `QuestionManager` の生成に使う。
+   * @param settingsPath - `.claude/settings.json` の絶対パス。
+   * @param options.channelResolver - 承認メッセージの送信先解決を差し替える
+   *   場合に指定する (既定は `client` から作った discord.js 実装)。
+   * @param options.timeoutMs - 承認待ちのタイムアウト (既定は
+   *   `INTERACTION_TIMEOUT_MS`)。テストで短縮する用途。
+   */
+  constructor(
+    client: Client,
+    private settingsPath: string,
+    options?: {
+      channelResolver?: ApprovalChannelResolver;
+      timeoutMs?: number;
+    },
+  ) {
     this.questions = new QuestionManager(client);
+    this.channelResolver = options?.channelResolver ??
+      defaultChannelResolver(client);
+    this.timeoutMs = options?.timeoutMs ?? INTERACTION_TIMEOUT_MS;
   }
 
   /**
@@ -84,8 +146,8 @@ export class ApprovalManager {
       return { decision: "deny", reason: "No approval channel" };
     }
 
-    const channel = await this.client.channels.fetch(channelId);
-    if (!channel || !channel.isTextBased()) {
+    const channel = await this.channelResolver.fetchSendable(channelId);
+    if (!channel) {
       log.warn("approval channel not found:", channelId);
       return { decision: "deny", reason: "Channel not found" };
     }
@@ -113,7 +175,7 @@ export class ApprovalManager {
       ? inputDump.slice(0, 1497) + "..."
       : inputDump;
 
-    await (channel as GuildTextBasedChannel).send({
+    await channel.send({
       content: [
         `**Tool: \`${toolName}\`**`,
         ...(description ? [description] : []),
@@ -131,7 +193,7 @@ export class ApprovalManager {
         this.pending.delete(requestId);
         log.warn("approval timed out:", requestId);
         resolve({ decision: "deny", reason: "Timed out" });
-      }, INTERACTION_TIMEOUT_MS);
+      }, this.timeoutMs);
 
       this.pending.set(requestId, { resolve, timeout });
     });

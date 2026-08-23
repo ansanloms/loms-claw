@@ -35,11 +35,8 @@ import {
   handleSettingsShow,
   handleSettingsUnset,
 } from "./commands.ts";
-import {
-  isAuthorized,
-  isAuthorizedSelfMessage,
-  shouldRespond,
-} from "./guard.ts";
+import { isAuthorized } from "./guard.ts";
+import { resolveIncomingMessage } from "./incoming.ts";
 import {
   SELF_MENTION_RATE_LIMIT_MAX_COUNT,
   SELF_MENTION_RATE_LIMIT_WINDOW_MINUTES,
@@ -47,7 +44,6 @@ import {
 } from "./ratelimit.ts";
 import { ScopeQueue } from "./queue.ts";
 import { splitAtBoundary } from "./flush.ts";
-import { scopeFromChannel } from "./scope.ts";
 import {
   appendImageReferences,
   cleanupImageFiles,
@@ -436,84 +432,57 @@ export class DiscordBot {
    * メッセージ受信時のメインハンドラ。
    */
   private async onMessage(message: Message): Promise<void> {
-    // bot 自身のメッセージは、自己メンション (別スコープの自 bot からの明示メンション)
-    // として条件付きで処理する。isAuthorizedSelfMessage() が false のメッセージ
-    // (他 bot・他ユーザー・ギルド外の自 bot) は従来どおり isAuthorized() で判定し、
-    // bot は isAuthorized() で必ず拒否される。
-    const botUserId = this.client.user?.id ?? null;
-    const isSelfMessage = isAuthorizedSelfMessage(
-      message.guildId,
-      message.author.id,
-      botUserId,
-      this.config,
-    );
-    if (
-      !isSelfMessage &&
-      !isAuthorized(
-        message.guildId,
-        message.author.id,
-        message.author.bot,
-        this.config,
-      )
-    ) {
-      return;
-    }
-
-    // スコープ抽出 (反応判定で per-scope の active 上書きを引くために先に必要)。
-    // 組み立て方の詳細・型ナローイングの注意書きは scopeFromChannel 側にまとめてある。
-    const scope = scopeFromChannel(message.channel, message.channelId);
     // shouldRespond() は raw な parentId (親が無ければ null のまま) を要求する。
-    // scope.channelId は Store 用にフォールバック済みなので代用できず、別途
-    // 抽出する。`message.channel.isThread()` は `this is ThreadChannel` の
-    // type guard で、判定結果を const に寄せても後続の parentId 参照は
-    // narrowing が効く (TS の aliased condition narrowing)。
+    // `message.channel.isThread()` は `this is ThreadChannel` の type guard で、
+    // 判定結果を const に寄せても後続の parentId 参照は narrowing が効く
+    // (TS の aliased condition narrowing)。テンプレート変数 (discord.channel.type)
+    // にも使うため、resolveIncomingMessage() には渡しつつローカルにも残す。
     const isThread = message.channel.isThread();
     const parentId = isThread ? message.channel.parentId : null;
-    // 承認ボタン・systemPrompt 解決・テンプレート変数は「発話があった場所」を見せたい。
-    // スレッド内ならスレッド ID、通常チャンネルなら channel ID。
-    const localId = scope.threadId ?? scope.channelId;
 
-    // 反応判定。
-    // 自己メッセージでは本文中の `<@botId>` (parsedUsers 由来) だけを明示メンション
-    // とみなす。`mentions.has()` の既定判定は bot 投稿への返信ピング (gateway の
-    // mentions 配列に返信先が入る)・@everyone・bot が持つ role へのメンションでも
-    // true を返すため、ignoreRepliedUser / ignoreEveryone / ignoreRoles を指定して
-    // 除外する。人間のメッセージは従来どおり既定の `mentions.has()` で判定する。
-    const isMentioned = this.client.user
-      ? message.mentions.has(
-        this.client.user,
-        isSelfMessage
-          ? { ignoreRepliedUser: true, ignoreEveryone: true, ignoreRoles: true }
-          : {},
-      )
-      : false;
-    // 自己メッセージはメンションが無ければここで捨てる。bot 自身の全投稿 (応答の
-    // 分割送信・thinking・進捗・cron 投稿等) がこのハンドラを通るため、KV 読み
-    // (getActive) の前に落として無駄な I/O を避ける。
-    if (isSelfMessage && !isMentioned) {
+    // 認可 → 自己メンション判定 (+ レート制限) → スコープ抽出 → active 上書き
+    // 取得 → 反応判定の一連の分岐は bot/incoming.ts に集約してある。discord.js
+    // 依存部分 (mentions.has() / Store 読み取り / レート制限) は関数として注入する。
+    const decision = await resolveIncomingMessage(
+      {
+        guildId: message.guildId,
+        authorId: message.author.id,
+        authorIsBot: message.author.bot,
+        botUserId: this.client.user?.id ?? null,
+        channel: message.channel,
+        channelId: message.channelId,
+        isThread,
+        parentId,
+        hasNonBotMentions: message.mentions.users.some((u) => !u.bot),
+      },
+      {
+        config: this.config,
+        // 自己メッセージでは本文中の `<@botId>` (parsedUsers 由来) だけを明示
+        // メンションとみなす。`mentions.has()` の既定判定は bot 投稿への返信
+        // ピング (gateway の mentions 配列に返信先が入る)・@everyone・bot が
+        // 持つ role へのメンションでも true を返すため、呼び出し側
+        // (resolveIncomingMessage) が渡す opts で除外する。
+        isMentioned: (opts) =>
+          this.client.user
+            ? message.mentions.has(this.client.user, opts)
+            : false,
+        getActiveOverride: (scope) => this.store.getActive(scope),
+        isSelfMentionRateLimited: () => this.selfMentionLimiter.isExhausted(),
+      },
+    );
+
+    if (decision.kind === "ignore") {
+      if (decision.reason === "rate-limited") {
+        log.warn(
+          `self-mention rate limit exceeded, ignoring message in ${message.channelId}`,
+        );
+      }
       return;
     }
-    // 自己メッセージの反応判定は上の明示メンション判定で完結する。`active` は
-    // 人間のメッセージにのみ効く設定 (true なら mention 不要) であり、自己
-    // メッセージには適用しない (true でも mention 必須、false でも mention が
-    // あれば反応する)。
-    if (!isSelfMessage) {
-      const hasNonBotMentions = message.mentions.users.some((u) => !u.bot);
-      const activeOverride = await this.store.getActive(scope);
-      if (
-        !shouldRespond(
-          message.channelId,
-          this.config.discord.activeChannelIds,
-          isThread,
-          parentId,
-          isMentioned,
-          hasNonBotMentions,
-          activeOverride,
-        )
-      ) {
-        return;
-      }
-    }
+
+    // 承認ボタン・systemPrompt 解決・テンプレート変数は「発話があった場所」を見せたい。
+    // スレッド内ならスレッド ID、通常チャンネルなら channel ID。
+    const { scope, localId, isSelfMessage } = decision;
 
     // cleanContent は `<@botId>` を guild ニックネーム優先の表示名 (`@Nick`) に
     // 展開するため、グローバル表示名とニックネームの両方を除去対象に渡す。
@@ -531,16 +500,9 @@ export class DiscordBot {
 
     const channel = message.channel as GuildTextBasedChannel;
 
-    // 自己メンションのレート枠が到着時点で既に尽きていれば、キューに積まず
-    // ここで捨てる (typing・添付ダウンロード等の副作用を起こさない)。枠の
-    // 予約はせず、消費は query 実行直前の tryConsume で行うため、busy な
-    // スコープに複数の自己メンションが積まれた場合は実行時に改めて弾かれる。
-    if (isSelfMessage && this.selfMentionLimiter.isExhausted()) {
-      log.warn(
-        `self-mention rate limit exceeded, ignoring message in ${message.channelId}`,
-      );
-      return;
-    }
+    // 自己メンションのレート枠の事前判定 (isExhausted) は resolveIncomingMessage()
+    // 内で行い済み (枠の予約はせず、消費は query 実行直前の tryConsume で行うため、
+    // busy なスコープに複数の自己メンションが積まれた場合は実行時に改めて弾かれる)。
 
     // bot が応答中の scope に届いたメッセージは直列キューに積み、現在のターンが
     // 終わってから同一セッションで処理する (Claude Code が応答生成中の入力を

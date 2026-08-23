@@ -1,5 +1,5 @@
 import { assertEquals, assertThrows } from "@std/assert";
-import { createLogger, getLogEntries } from "./logger.ts";
+import { createLogger, getLogEntries, initLogger } from "./logger.ts";
 
 Deno.test("createLogger", async (t) => {
   await t.step("全メソッドが定義されていること", () => {
@@ -57,6 +57,99 @@ Deno.test("createLogger", async (t) => {
       console.warn = originalWarn;
     }
   });
+});
+
+Deno.test("initLogger", async (t) => {
+  // コンソール出力を抑制しつつ呼び出しを記録するヘルパー
+  function silencedCounting(fn: () => void): {
+    logCount: number;
+    warnCount: number;
+  } {
+    const origLog = console.log;
+    const origWarn = console.warn;
+    let logCount = 0;
+    let warnCount = 0;
+    console.log = () => {
+      logCount++;
+    };
+    console.warn = () => {
+      warnCount++;
+    };
+    try {
+      fn();
+    } finally {
+      console.log = origLog;
+      console.warn = origWarn;
+    }
+    return { logCount, warnCount };
+  }
+
+  try {
+    await t.step(
+      "level が反映され下位レベルは標準出力に出ないが、リングバッファには全レベル残ること",
+      () => {
+        initLogger({ level: "WARN", bufferSize: 1000 });
+        const NS = `test-initLogger-level-${crypto.randomUUID().slice(0, 8)}`;
+
+        const { logCount, warnCount } = silencedCounting(() => {
+          const log = createLogger(NS);
+          log.debug("d1");
+          log.info("i1");
+          log.warn("w1");
+        });
+
+        // debug/info は WARN 未満なので console.log には出力されない
+        assertEquals(logCount, 0);
+        // warn は WARN 以上なので console.warn に出力される
+        assertEquals(warnCount, 1);
+
+        // リングバッファには level に関わらず全件残る
+        const entries = getLogEntries({ namespace: NS, limit: 1000 });
+        assertEquals(entries.length, 3);
+      },
+    );
+
+    await t.step("bufferSize が 1 未満に切り詰められること", () => {
+      initLogger({ level: "INFO", bufferSize: 0 });
+      const NS = `test-initLogger-min-${crypto.randomUUID().slice(0, 8)}`;
+
+      silencedCounting(() => {
+        const log = createLogger(NS);
+        log.info("first");
+        log.info("second");
+      });
+
+      // 容量 1 に clamp されるため、最後の 1 件しか残らない
+      const entries = getLogEntries({ namespace: NS, limit: 1000 });
+      assertEquals(entries.length, 1);
+      assertEquals(entries[0].message, "second");
+    });
+
+    await t.step(
+      "10000 を超える bufferSize でもエラーにならず、大きな容量として反映されること",
+      () => {
+        initLogger({ level: "INFO", bufferSize: 20000 });
+        const NS = `test-initLogger-max-${crypto.randomUUID().slice(0, 8)}`;
+
+        silencedCounting(() => {
+          const log = createLogger(NS);
+          for (let i = 0; i < 1500; i++) {
+            log.info(`entry-${i}`);
+          }
+        });
+
+        // getLogEntries() 自体が MAX_LOG_LIMIT (1000) で返却件数を頭打ちにする
+        // ため、「10000 に clamp され 20000 にはならない」ことまでは公開 API
+        // 越しに観測できない (1000 件以上保持できていれば容量が既定の 1 件
+        // (前ステップ) から更新されたことは確認できる)。
+        const entries = getLogEntries({ namespace: NS, limit: 1000 });
+        assertEquals(entries.length, 1000);
+      },
+    );
+  } finally {
+    // 他のテストへ影響しないよう、デフォルト設定に戻す
+    initLogger({ level: "INFO", bufferSize: 1000 });
+  }
 });
 
 Deno.test("getLogEntries", async (t) => {

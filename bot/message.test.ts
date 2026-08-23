@@ -69,6 +69,27 @@ Deno.test("splitMessage", async (t) => {
     const chunks = splitMessage(text);
     assertEquals(chunks[0].length, 2000);
   });
+
+  await t.step("制限値 +1 文字のテキストは 2 チャンクに分割すること", () => {
+    const text = "a".repeat(2001);
+    const chunks = splitMessage(text);
+    assertEquals(chunks.length, 2);
+    assertEquals(chunks[0].length, 2000);
+    assertEquals(chunks[1].length, 1);
+  });
+
+  await t.step(
+    "コードフェンスをまたぐ場合は境界を考慮せず改行位置で分割すること（既存仕様）",
+    () => {
+      const before = "a".repeat(1990);
+      const text = `${before}\n\`\`\`\n${"b".repeat(500)}\n\`\`\``;
+      const chunks = splitMessage(text);
+      assertEquals(chunks.length, 2);
+      // 改行位置優先のため、コードフェンスの開始行の直後で分割される
+      assertEquals(chunks[0], `${before}\n\`\`\``);
+      assertEquals(chunks[1], `${"b".repeat(500)}\n\`\`\``);
+    },
+  );
 });
 
 Deno.test("keepTyping", async (t) => {

@@ -10,7 +10,7 @@ bot プロセス内で `127.0.0.1:{config.claude.apiPort}` に Hono アプリを
 
 ## サーバー (`api/server.ts`)
 
-`startApiServer(port, settingsCtx, healthCtx, cronCtx?)` が `Hono` アプリを組み立てて `Deno.serve({ port, hostname: "127.0.0.1" }, app.fetch)` を呼び、`Deno.HttpServer` を返す。呼び出し側 (`bot/mod.ts` の `DiscordBot.shutdown()`) がこれを保持し、停止時に `shutdown()` を呼ぶ (失敗は WARN ログに落とすだけで握りつぶす)。
+`createApp(settingsCtx, healthCtx, cronCtx?)` が `Hono` アプリの組み立て (ルートのマウント、`notFound` / `onError`) だけを行い、`startApiServer(port, settingsCtx, healthCtx, cronCtx?)` はそれを `Deno.serve({ port, hostname: "127.0.0.1" }, app.fetch)` に渡して `Deno.HttpServer` を返す薄いラッパー。呼び出し側 (`bot/mod.ts` の `DiscordBot.shutdown()`) が `Deno.HttpServer` を保持し、停止時に `shutdown()` を呼ぶ (失敗は WARN ログに落とすだけで握りつぶす)。`createApp()` を分離してあるのは、`Deno.serve()` を起動せず `app.request()` で直接ルーティング (404 / 500 / マウント) を検証できるようにするため (下記「テスト」)。
 
 | 要素           | 内容                                                                                                                                                                                       |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -132,7 +132,9 @@ flowchart LR
 
 ## テスト
 
-`api/routes/cron.test.ts` / `api/routes/health.test.ts` / `api/routes/logs.test.ts` / `api/routes/settings.test.ts` は `Deno.serve()` を起動せず、`new Hono()` に `createCronRoutes()` / `createHealthRoutes()` / `createLogsRoutes()` / `createSettingsRoutes()` をマウントして `app.request()` で直接リクエストを投げる形式。cron 側はコンテキスト関数をクロージャで差し替え、settings 側は `Deno.openKv(":memory:")` の `Store` を使う。`api/server.ts` 自体の統合テストは無い。
+`api/routes/cron.test.ts` / `api/routes/health.test.ts` / `api/routes/logs.test.ts` / `api/routes/settings.test.ts` は `Deno.serve()` を起動せず、`new Hono()` に `createCronRoutes()` / `createHealthRoutes()` / `createLogsRoutes()` / `createSettingsRoutes()` をマウントして `app.request()` で直接リクエストを投げる形式。cron 側はコンテキスト関数をクロージャで差し替え、settings 側は `Deno.openKv(":memory:")` の `Store` を使う。
+
+`api/server.test.ts` は `createApp()` が返す Hono アプリを `app.request()` で直接叩き、未定義パスの 404 (`{ error: "Not Found" }`)、マウント済みルート (`cronCtx.runJob` 等) が例外を投げた場合の共通 `onError` による 500、`/cron` / `/health` / `/logs` / `/settings` が実際にマウントされていることを検証する。`Deno.serve()` を起動する `startApiServer()` 自体 (ポートバインド) は統合テストの対象外。
 
 ## エージェント向けの利用手順
 
