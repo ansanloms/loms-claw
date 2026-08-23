@@ -68,7 +68,7 @@ export const command = new SlashCommandBuilder()
         sub
           .setName("set")
           .setDescription(
-            "Set channel-level model / effort / show_thinking (specify at least one)",
+            "Set channel-level model / effort / show_thinking / active (specify at least one)",
           )
           .addStringOption((opt) =>
             opt
@@ -120,7 +120,7 @@ export const command = new SlashCommandBuilder()
  *
  * 含む情報:
  *   - 現チャンネルの session / model / effort / active (source 付き)
- *   - グローバルデフォルト (env)
+ *   - グローバルデフォルト (config.json の claude.defaults)
  *   - cron ジョブ数 + 名前一覧
  */
 export async function handleSettingsShow(
@@ -203,10 +203,10 @@ export async function handleSettingsShow(
 }
 
 /**
- * /claw settings set — チャンネル単位で model / effort を設定する。
+ * /claw settings set — チャンネル単位で model / effort / show_thinking / active を設定する。
  *
- * model と effort は両方 optional。少なくとも片方の指定が必須。
- * 両方指定した場合は同時に保存する。
+ * 4 項目はすべて optional。model / effort / show_thinking / active の少なくとも 1 つの指定が必須。
+ * 複数指定した場合は同時に保存する。
  */
 export async function handleSettingsSet(
   interaction: ChatInputCommandInteraction,
@@ -263,13 +263,15 @@ export async function handleSettingsSet(
  *
  * 実行スコープはコマンドを叩いた場所で決まる:
  *   - スレッド内: そのスレッドの値のみ削除。親チャンネルの値は触らない。
- *     model / effort は channel → defaults へフォールバック、session は新規開始。
+ *     model / effort / show_thinking は channel → defaults へフォールバック、session は新規開始。
  *   - 通常チャンネル: そのチャンネルの値のみ削除。
  *
  * target:
- *   - "model"   → スコープの model を削除 (フォールバック先が新たな解決値)
- *   - "effort"  → スコープの effort を削除 (フォールバック先が新たな解決値)
- *   - "session" → スコープの session を削除 (会話を再開で新規セッション)
+ *   - "model"         → スコープの model を削除 (フォールバック先が新たな解決値)
+ *   - "effort"        → スコープの effort を削除 (フォールバック先が新たな解決値)
+ *   - "show_thinking" → スコープの show_thinking を削除 (フォールバック先が新たな解決値)
+ *   - "active"        → スコープの active を削除 (config の activeChannelIds へフォールバック)
+ *   - "session"       → スコープの session を削除 (会話を再開で新規セッション)
  */
 export async function handleSettingsUnset(
   interaction: ChatInputCommandInteraction,

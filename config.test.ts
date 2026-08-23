@@ -1,5 +1,6 @@
 import { assertEquals, assertStringIncludes, assertThrows } from "@std/assert";
 import { loadConfig } from "./config.ts";
+import { validateConfigFile } from "./config.schema.ts";
 
 const ENV_KEY = "LOMS_CLAW_CONFIG";
 
@@ -203,18 +204,29 @@ Deno.test("loadConfig", async (t) => {
   });
 
   await t.step(
-    "claude.verbose 未指定でも検証を通り既定値 true が補完されること（非推奨・required から除外済み）",
+    "claude.verbose が required から除外されていること（applyConfigDefaults を経由せず validateConfigFile を直接検証）",
     () => {
-      withTempConfig(
-        {
-          ...requiredFields,
-          claude: { maxTurns: 5, timeout: 60000, apiPort: 4000, defaults: {} },
+      const configWithoutVerbose = {
+        discord: {
+          token: "test-token",
+          guildId: "test-guild",
+          userId: "test-user",
+          activeChannelIds: [],
         },
-        () => {
-          const config = loadConfig();
-          assertEquals(config.claude.verbose, true);
+        storePath: ".claude/loms-claw.kv",
+        claude: {
+          maxTurns: 10,
+          timeout: 300000,
+          apiPort: 3000,
+          defaults: {},
         },
-      );
+        log: {
+          level: "INFO",
+          bufferSize: 1000,
+        },
+      };
+      const { valid } = validateConfigFile(configWithoutVerbose);
+      assertEquals(valid, true);
     },
   );
 
