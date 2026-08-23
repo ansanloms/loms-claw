@@ -45,17 +45,18 @@ Discord のボタン承認が発火するのは、上の表のとおり SDK 上�
 
 ### 状態
 
-| フィールド     | 型                                     | 用途                                                                                                                                                                                                           |
-| -------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pending`      | `Map<requestId, { resolve, timeout }>` | 応答待ちの承認リクエスト。`requestId` は `crypto.randomUUID().slice(0, 8)`                                                                                                                                     |
-| `channelId`    | `string \| null`                       | `setChannel()` で設定される共有の可変状態。チャットと cron の両方のターン開始時に上書きされるため、同時に走るターン間で共有される。`requestApproval()` に明示の `channelId` が渡された場合はそちらが優先される |
-| `questions`    | `QuestionManager`                      | `AskUserQuestion` 用。コンストラクタで同じ `Client` から生成                                                                                                                                                   |
-| `settingsPath` | `string`                               | `.claude/settings.json` の絶対パス                                                                                                                                                                             |
+| フィールド     | 型                                     | 用途                                                                       |
+| -------------- | -------------------------------------- | -------------------------------------------------------------------------- |
+| `pending`      | `Map<requestId, { resolve, timeout }>` | 応答待ちの承認リクエスト。`requestId` は `crypto.randomUUID().slice(0, 8)` |
+| `questions`    | `QuestionManager`                      | `AskUserQuestion` 用。コンストラクタで同じ `Client` から生成               |
+| `settingsPath` | `string`                               | `.claude/settings.json` の絶対パス                                         |
 
-### `requestApproval(toolName, toolInput, channelId?)`
+`channelId` を保持する共有の可変状態は無い。送信先チャンネルは呼び出し元がターンごとに `requestApproval()` / `requestAnswers()` の引数として必須で渡す。
+
+### `requestApproval(toolName, toolInput, channelId)`
 
 1. `isInAllowList(settingsPath, toolName)` が true なら即 `{ decision: "allow", reason: "Already Allowed" }`。
-2. チャンネル解決: 引数 `channelId` → `this.channelId` の順。どちらも無ければ `{ decision: "deny", reason: "No approval channel" }`。`client.channels.fetch()` で取得できない、またはテキストチャンネルでなければ `{ decision: "deny", reason: "Channel not found" }`。
+2. チャンネル解決: 引数 `channelId` が無ければ `{ decision: "deny", reason: "No approval channel" }`。`client.channels.fetch()` で取得できない、またはテキストチャンネルでなければ `{ decision: "deny", reason: "Channel not found" }`。
 3. 以下を投稿する。
    - ボタン 3 種: `approve:{requestId}` (Allow, Success) / `always:{requestId}:{toolName}` (Allow Always, Primary) / `deny:{requestId}` (Deny, Danger)
    - 本文: 1 行目に `Tool: {toolName}` (太字 + インラインコード)、`toolInput.description` があればその値、続けて `toolInput` の 2 スペース JSON ダンプを json コードフェンスで囲んだもの。ダンプは 1500 文字を超える場合 1497 文字 + `...` に切り詰める
@@ -80,7 +81,7 @@ Discord のボタン承認が発火するのは、上の表のとおり SDK 上�
 
 ## QuestionManager (`approval/question.ts`)
 
-`AskUserQuestion` は承認ではなく回答収集のツールなので、ボタン承認とは別の UI (string select + Cancel ボタン + Other 用 Modal) を使う。チャンネル解決 (`channelId ?? this.channelId`) は `ApprovalManager.requestAnswers()` が行い、以降は `QuestionManager` に委譲する。
+`AskUserQuestion` は承認ではなく回答収集のツールなので、ボタン承認とは別の UI (string select + Cancel ボタン + Other 用 Modal) を使う。`ApprovalManager.requestAnswers()` は呼び出し元から必須で受け取った `channelId` をそのまま `QuestionManager` に委譲する。
 
 ### `parseQuestions(input)`
 
@@ -132,13 +133,13 @@ SDK の `CanUseTool` を返す。`ApprovalResult` / `QuestionResult` を SDK の
 
 ## 呼び出し側
 
-| 経路                    | 場所                                | `setChannel()`                                | `createCanUseTool()` の `channelId`                                                              |
-| ----------------------- | ----------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| チャット                | `bot/mod.ts` `DiscordBot.onMessage` | `setChannel(localId)`                         | `localId` (スレッド内ならスレッド ID、そうでなければチャンネル ID)。承認 UI は発話スコープに出る |
-| cron                    | `cron/executor.ts` `CronExecutor`   | `job.channelId` があるときだけ `setChannel()` | `job.channelId` (未指定なら `undefined`)                                                         |
-| AI to AI 自己メンション | チャットと同じ経路                  | 同上                                          | 同上。承認 UI は自己起動されたスコープに出る                                                     |
+| 経路                    | 場所                                | `createCanUseTool()` の `channelId`                                                              |
+| ----------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------ |
+| チャット                | `bot/mod.ts` `DiscordBot.onMessage` | `localId` (スレッド内ならスレッド ID、そうでなければチャンネル ID)。承認 UI は発話スコープに出る |
+| cron                    | `cron/executor.ts` `CronExecutor`   | `job.channelId` (未指定なら `undefined`)                                                         |
+| AI to AI 自己メンション | チャットと同じ経路                  | 同上。承認 UI は自己起動されたスコープに出る                                                     |
 
-cron で `channelId` 未指定のジョブでは、`requestApproval()` / `requestAnswers()` は引数 `channelId` が無いため共有状態 `this.channelId` へフォールバックする。それまでに一度も `setChannel()` が呼ばれていなければ `"No approval channel"` / `"No channel to ask the user"` で deny になる。別ターンが先に `setChannel()` していれば、そのチャンネルへ承認 UI が出る。
+cron で `channelId` 未指定のジョブでは、`createCanUseTool()` に渡る `channelId` が `undefined` になり、`requestApproval()` / `requestAnswers()` はその場で `"No approval channel"` / `"No channel to ask the user"` を返して deny する。ターン間で共有される状態は無いため、他ターンの設定へフォールバックすることもない。
 
 自己メンション起動ターンでは承認ボタン・質問は通常どおりそのスコープに投稿される。承認・質問メッセージの本文はユーザーメンションを含まないため本人宛てのピングは無く、本人が見ていなければ 5 分の timeout で deny になり、依頼元には通知されない。
 

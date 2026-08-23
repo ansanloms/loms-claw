@@ -73,6 +73,38 @@ import { getErrorMessage, summarizeErrorForDiscord } from "../errors.ts";
 const log = createLogger("bot");
 
 /**
+ * shutdown() で API サーバー停止・Discord クライアント破棄それぞれを待つ上限
+ * (ミリ秒)。両ステップに個別に適用するため、shutdown() 全体の最大所要時間は
+ * この 2 倍になり得る (合計最大 10 秒。Docker 側の stop_grace_period は
+ * それに合わせて 15 秒を確保している。compose.yaml 参照)。
+ */
+const SHUTDOWN_TIMEOUT_MS = 5_000;
+
+/**
+ * `promise` を `ms` ミリ秒でタイムアウトさせるヘルパ。
+ *
+ * タイムアウトした場合は `log.warn("<label> timed out; proceeding")` を出して
+ * resolve する (reject しない、呼び出し元の処理は先へ進む)。`promise` 自体の
+ * reject は呼び出し元が事前に catch しておくこと (このヘルパは reject を
+ * 変換しない)。どちらが先に決着してもタイマーは clearTimeout する。
+ */
+async function withTimeout(
+  promise: Promise<void>,
+  ms: number,
+  label: string,
+): Promise<void> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<void>((resolve) => {
+    timeoutId = setTimeout(() => {
+      log.warn(`${label} timed out; proceeding`);
+      resolve();
+    }, ms);
+  });
+  await Promise.race([promise, timeout]);
+  clearTimeout(timeoutId);
+}
+
+/**
  * AI to AI 自己メンションで起動したターンのプロンプト先頭に付ける注記。
  * 発話者のテンプレート変数は認可ユーザーに差し替えるため、この注記が無いと
  * モデルは人間の発話と区別できない。
@@ -263,18 +295,31 @@ export class DiscordBot {
   /**
    * bot をシャットダウンする。
    *
-   * HTTP サーバー停止 → Discord クライアント破棄の順で処理し、
-   * クライアント破棄によりイベントループが自然終了する。
+   * HTTP サーバー停止 → Discord クライアント破棄 (await) の順で処理する。
+   * 両ステップとも `SHUTDOWN_TIMEOUT_MS` (5 秒) で個別に打ち切り、超過時は
+   * 警告ログを出して先へ進む (合計最大 10 秒)。`client.destroy()` の reject
+   * も WARN ログに落として続行する。破棄後、呼び出し元 (main.ts) が
+   * store.close() → Deno.exit() で明示的にプロセスを終了する (Store の
+   * open / close は main.ts が対で所有する)。
    */
-  shutdown(): void {
+  async shutdown(): Promise<void> {
     log.info("shutting down");
     this.cronExecutor?.stop();
-    // TODO: WebSocket/SSE 追加時は shutdown() を async にして await すること
-    this.apiServer?.shutdown().catch((e) =>
-      log.warn("api server shutdown error:", e)
+
+    await withTimeout(
+      this.apiServer?.shutdown().catch((e) =>
+        log.warn("api server shutdown error:", e)
+      ) ?? Promise.resolve(),
+      SHUTDOWN_TIMEOUT_MS,
+      "api server shutdown",
     );
-    this.client.destroy();
-    this.store.close();
+
+    await withTimeout(
+      this.client.destroy().catch((e) => log.warn("client destroy error:", e)),
+      SHUTDOWN_TIMEOUT_MS,
+      "client destroy",
+    );
+
     log.info("shutdown sequence complete");
   }
 
@@ -605,9 +650,6 @@ export class DiscordBot {
           this.store.getEffort(scope),
           this.store.getShowThinking(scope),
         ]);
-
-        // 承認ボタンの送信先は発話があった場所 (スレッド優先)
-        this.approvalManager.setChannel(localId);
 
         const templateVars: Record<string, string> = {
           "discord.guild.id": this.config.discord.guildId,

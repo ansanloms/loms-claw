@@ -60,14 +60,15 @@ flowchart LR
 
 `compose.yaml` はリポジトリルートに置き、compose のコマンドはすべてリポジトリルートで実行する。
 
-| 項目           | 内容                                                                                                                                                     |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| プロジェクト名 | `loms-claw`                                                                                                                                              |
-| サービス       | `bot` (`build: .`)                                                                                                                                       |
-| environment    | `TZ: ${TZ:-Asia/Tokyo}` のみ。値は host の `.env` から compose が読む                                                                                    |
-| volumes        | `./data` → `/data` の bind mount 1 つ                                                                                                                    |
-| healthcheck    | `jq` で `claude.apiPort` (省略時 `// 3000`) を `port` に取り、空でなければ `curl -fsS http://127.0.0.1:$port/health`。詳細は下記「healthcheck と再起動」 |
-| restart        | `unless-stopped`                                                                                                                                         |
+| 項目              | 内容                                                                                                                                                                                                          |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| プロジェクト名    | `loms-claw`                                                                                                                                                                                                   |
+| サービス          | `bot` (`build: .`)                                                                                                                                                                                            |
+| environment       | `TZ: ${TZ:-Asia/Tokyo}` のみ。値は host の `.env` から compose が読む                                                                                                                                         |
+| volumes           | `./data` → `/data` の bind mount 1 つ                                                                                                                                                                         |
+| healthcheck       | `jq` で `claude.apiPort` (省略時 `// 3000`) を `port` に取り、空でなければ `curl -fsS http://127.0.0.1:$port/health`。詳細は下記「healthcheck と再起動」                                                      |
+| restart           | `unless-stopped`                                                                                                                                                                                              |
+| stop_grace_period | `15s`。`bot/mod.ts` の `shutdown()` は API サーバー停止・Discord クライアント破棄それぞれに最大 5 秒 (`SHUTDOWN_TIMEOUT_MS`) を許容し合計最大 10 秒かかり得るため、Docker の既定 (10s) より余裕を持たせている |
 
 `.env` は docker compose が host 側で参照する変数 (現状 `TZ` のみ) を持つファイルで、アプリ自体は `.env` を読まない (`.env.example` のコメント)。`.env` は `.gitignore` で管理外。
 
