@@ -31,6 +31,7 @@ Discord + Claude Agent SDK のパーソナル AI エージェント。単一ギ�
 | [docs/architecture/cron.md](docs/architecture/cron.md)                             | cron ジョブファイルの形式、ローダ / スケジューラ / 実行器、once、reload                          |
 | [docs/architecture/internal-api.md](docs/architecture/internal-api.md)             | 内部 HTTP API のルート、`docs/api`（OpenAPI）から `api/internal-schemas.ts` への検証パイプライン |
 | [docs/architecture/deployment.md](docs/architecture/deployment.md)                 | Docker / compose / devcontainer、`data/` と環境変数、ワークスペース（`data/workspace/`）の構成   |
+| [docs/architecture/constants.md](docs/architecture/constants.md)                   | ハードコード定数の分類表、設定化しない方針                                                       |
 | [docs/terms-of-service.md](docs/terms-of-service.md)                               | 利用規約上の根拠・引用・経緯                                                                     |
 | [docs/api/README.md](docs/api/README.md)                                           | 内部 HTTP API の OpenAPI 定義（接続条件・エラー応答の形）                                        |
 | [data/workspace/CLAUDE.md](data/workspace/CLAUDE.md)                               | ワークスペースで動く Claude（bot の中の Claude）に向けた指示書                                   |

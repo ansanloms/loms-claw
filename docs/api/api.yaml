@@ -51,6 +51,8 @@ components:
       $ref: ./components/schemas/ResponseError.yaml
     ResponseGetCron:
       $ref: ./components/schemas/ResponseGetCron.yaml
+    ResponseGetLogs:
+      $ref: ./components/schemas/ResponseGetLogs.yaml
     ResponsePostCronReload:
       $ref: ./components/schemas/ResponsePostCronReload.yaml
     ResponsePostCronRun:

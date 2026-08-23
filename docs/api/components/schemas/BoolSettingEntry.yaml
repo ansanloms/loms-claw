@@ -1,6 +1,5 @@
 type: object
 description: boolean 設定値とその出所。
-additionalProperties: false
 required:
   - value
   - source

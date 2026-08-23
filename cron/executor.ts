@@ -9,8 +9,12 @@
  */
 
 import type { Client, GuildTextBasedChannel } from "discord.js";
-import type { SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
-import { askClaude, extractResultText, type QueryFn } from "../claude/mod.ts";
+import {
+  askClaude,
+  drainResultEvent,
+  type QueryFn,
+  requireResultText,
+} from "../claude/mod.ts";
 import type { ClaudeConfig, ClaudeDefaults } from "../config.ts";
 import type { Store } from "../store/mod.ts";
 import { type ApprovalManager, createCanUseTool } from "../approval/manager.ts";
@@ -188,34 +192,25 @@ export class CronExecutor {
         queryFn: this.queryFn,
       });
 
-      let resultEvent: SDKResultMessage | undefined;
+      const resultEvent = await drainResultEvent(stream, {
+        onNonSuccess: (event) =>
+          log.warn(
+            `cron job "${job.name}" non-success subtype "${event.subtype}":`,
+            JSON.stringify(event),
+          ),
+        setSession: job.resumeSession
+          ? (newSessionId) =>
+            this.store.setSession({ channelId: sessionKey }, newSessionId)
+          : undefined,
+      });
 
-      for await (const event of stream) {
-        if (event.type === "result") {
-          resultEvent = event;
-          if (event.subtype !== "success") {
-            log.warn(
-              `cron job "${job.name}" non-success subtype "${event.subtype}":`,
-              JSON.stringify(event),
-            );
-          }
-          if (job.resumeSession) {
-            await this.store.setSession(
-              { channelId: sessionKey },
-              event.session_id,
-            );
-          }
-        }
-      }
-
-      if (!resultEvent) {
-        throw new Error("claude stream ended without result event");
-      }
-
-      const resultText = extractResultText(resultEvent);
+      // requireResultText() は textChannel の有無に関わらず先に評価する。
+      // result が無い/エラーなら textChannel が無くても throw され、catch で
+      // ログされる (取得済みならエラー通知も行われる)。
+      const text = requireResultText(resultEvent);
       // channelId 指定時のみ executor が投稿する
       if (textChannel) {
-        for (const chunk of splitMessage(resultText)) {
+        for (const chunk of splitMessage(text)) {
           await textChannel.send(chunk);
         }
       }

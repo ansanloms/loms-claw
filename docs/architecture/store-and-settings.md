@@ -33,11 +33,13 @@ interface StoreScope {
 }
 ```
 
-| 発話場所 / 用途 | scope                                         | 抽出箇所                                                                  |
-| --------------- | --------------------------------------------- | ------------------------------------------------------------------------- |
-| スレッド外      | `{ channelId }`                               | `bot/mod.ts` (messageCreate) / `bot/commands.ts` `scopeFromInteraction()` |
-| スレッド内      | `{ channelId: parentId, threadId }`           | 同上。`parentId` が null のときは thread id 自体を `channelId` に入れる   |
-| cron ジョブ     | `{ channelId: "cron:{name}" }` (session のみ) | `cron/executor.ts`。詳細は後述                                            |
+| 発話場所 / 用途 | scope                                         | 抽出箇所                                                                                                                 |
+| --------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| スレッド外      | `{ channelId }`                               | `bot/scope.ts` `scopeFromChannel()`。`bot/mod.ts` (messageCreate) と `bot/commands.ts` `scopeFromInteraction()` から呼ぶ |
+| スレッド内      | `{ channelId: parentId, threadId }`           | 同上。`parentId` が null のときは thread id 自体を `channelId` に入れる                                                  |
+| cron ジョブ     | `{ channelId: "cron:{name}" }` (session のみ) | `cron/executor.ts`。詳細は後述                                                                                           |
+
+`api/routes/settings.ts` (`GET` / `PATCH` / `DELETE /settings/{id}`) は `bot/scope.ts` を使わず、`resolveParentId` で親を引いて別途スコープを組む (詳細は後述の `resolveScope()`)。親が取れないスレッドの扱いは bot 側 (`{ channelId: id, threadId: id }`) と API 側 (`{ channelId: id }`) で異なる (既存挙動。統一は別 issue)。
 
 書き込み (`setSession` / `applyPatch` / `clearScope`) は常に leaf id (`threadId ?? channelId`) に対して行われる。スレッド内で `/claw settings set` を叩いても親チャンネルのキーには触れない。
 
@@ -106,11 +108,11 @@ interface SettingsPatch {
 
 `kv.list({ prefix: ["channel", id] })` で leaf id 配下のキーを列挙し、1 つの `kv.atomic()` で全削除する。thread scope なら thread のキーだけ消え、親チャンネルの設定は残る。channel scope なら channel のキーだけ消え、配下スレッドの設定は残る。
 
-### 個別 setter / deleter
+### 個別 setter
 
-`setSession` は本番で使われる。`bot/mod.ts` と `cron/executor.ts` が `result` イベント受信時に `event.session_id` を保存する (ジェネレータが非ゼロ終了で throw してもセッションが残るよう、result を受け取った時点で即座に書く)。
+`setSession` のみが個別 setter として残る。`bot/mod.ts` と `cron/executor.ts` が `result` イベント受信時に `event.session_id` を保存する (ジェネレータが非ゼロ終了で throw してもセッションが残るよう、result を受け取った時点で即座に書く)。
 
-`setModel` / `setEffort` / `setShowThinking` / `deleteSession` / `deleteModel` / `deleteEffort` / `deleteShowThinking` は `store/mod.ts` に定義されているが、本番コードからは呼ばれていない (呼び出し元は `store/mod.test.ts` のみ)。本番の書き込み経路は `setSession` / `applyPatch` / `clearScope` の 3 つ。
+model / effort / showThinking / active に対する個別の setter / deleter は無く、書き込みは `setSession` / `applyPatch` / `clearScope` の 3 つに集約されている。読み取り側の thread → channel → (defaults) 解決も 4 つの getter (`getModel` / `getEffort` / `getShowThinking` / `getActive`) が共通の private ヘルパ (`resolveScoped()`) を呼ぶ形にまとまっている。
 
 ## Discord スラッシュコマンド `/claw settings`
 
@@ -124,7 +126,7 @@ interface SettingsPatch {
 
 - `set` に `session` オプションは無い。session は `unset` (削除) のみ。`SettingsPatch.session?: null` の型と一致する。
 - スラッシュコマンドのオプション名は snake_case (`show_thinking`)、Store / API のキー名は camelCase (`showThinking`)。ハンドラが `patch.showThinking` に詰め替える。他の 4 つ (`model` / `effort` / `active` / `session`) は同名。
-- `scopeFromInteraction()` は `interaction.channel.isThread()` なら `{ channelId: parentId ?? interaction.channelId, threadId: interaction.channelId }`、そうでなければ `{ channelId: interaction.channelId }` を返す。messageCreate 側のスコープ抽出と同じ規則。
+- `scopeFromInteraction()` は `interaction.channel` を `bot/scope.ts` の `scopeFromChannel()` に渡すだけの薄いラッパ。messageCreate 側 (`bot/mod.ts`) のスコープ抽出も同じ `scopeFromChannel()` を使う。
 - `show` が表示する内容:
   - 現在スコープ (Thread + parent、または Channel) の `session` / `model` / `effort` / `show_thinking` / `active`。文字列設定は `value (source)`、`active` は `resolveActive()` で求めた実効値と出所 (KV に無ければ `config activeChannelIds`)
   - グローバルデフォルト (`config.claude.defaults` の `model` / `effort` / `show_thinking`)
