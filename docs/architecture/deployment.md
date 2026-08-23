@@ -77,6 +77,8 @@ flowchart LR
 
 ### healthcheck と再起動
 
+`GET /health` は Discord Gateway の全シャードの status が `Status.Ready` のときのみ `ok` (200) を返す。`bot/mod.ts` の `healthCtx.isReady` は `Client#isReady()` (一度 Ready になると切断後も戻らない) ではなく `client.ws.shards` の各 `status` を見て判定する ([internal-api.md](internal-api.md) 参照)。
+
 `healthcheck:` を追加したことで `docker compose ps` / `docker inspect` に unhealthy 状態が反映されるようになるが、**docker compose 単体では unhealthy になってもコンテナは自動再起動しない** (`restart: unless-stopped` の restart policy は健全性を見ず、プロセスの exit code のみを見る)。`main.ts` は `unhandledrejection` / `error` を `preventDefault()` で握りつぶすため、Discord Gateway が切断されたままでもプロセス自体は生き続け、restart は働かない。unhealthy 検知から実際の再起動まで求めるなら、次のいずれかが別途必要になる。
 
 - autoheal 系サイドカー ([`willfarrell/autoheal`](https://github.com/willfarrell/docker-autoheal) 等)。`docker.sock` のマウントを伴う。

@@ -12,7 +12,13 @@ import { Hono } from "hono";
  * health ルートに注入する依存関係。
  */
 export interface HealthRouteContext {
-  /** healthy かどうかを判定する。Discord Gateway の接続状態等を返す。 */
+  /**
+   * healthy かどうかを判定する。
+   *
+   * `bot/mod.ts` は Discord Gateway の全シャードの status が Ready のときのみ
+   * true を返す (discord.js の `Client#isReady()` は一度 Ready になった後の
+   * 切断を検知できないため使わない)。
+   */
   isReady: () => boolean;
 }
 

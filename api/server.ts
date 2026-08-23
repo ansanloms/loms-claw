@@ -41,9 +41,14 @@ export function startApiServer(
 ): Deno.HttpServer {
   const app = new Hono();
 
-  // リクエストログ
+  // リクエストログ。
+  // /health は compose.yaml の healthcheck から 60 秒ごとに probe されるため、
+  // ここでログに出すとリングバッファ (logger.ts。level に関わらず全件保持) が
+  // 実際のログをすぐ押し出してしまう。probe は除外する。
   app.use(async (c, next) => {
-    log.debug(`${c.req.method} ${c.req.path}`);
+    if (c.req.path !== "/health") {
+      log.debug(`${c.req.method} ${c.req.path}`);
+    }
     await next();
   });
 
