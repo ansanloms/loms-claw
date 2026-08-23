@@ -109,7 +109,7 @@ export class ApprovalManager {
    *   `INTERACTION_TIMEOUT_MS`)。テストで短縮する用途。
    */
   constructor(
-    private client: Client,
+    client: Client,
     private settingsPath: string,
     options?: {
       channelResolver?: ApprovalChannelResolver;

@@ -309,6 +309,7 @@ Deno.test("ApprovalManager", async (t) => {
       );
 
       await new Promise((r) => setTimeout(r, 0));
+      assertEquals(sent.length, 1);
       const [, , denyId] = buttonCustomIds(sent[0].components);
       const requestId = denyId.split(":")[1];
 

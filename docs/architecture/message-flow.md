@@ -55,7 +55,7 @@ sequenceDiagram
 
 - `isMentioned = message.mentions.has(client.user, opts)`。自己メッセージのときだけ `opts = { ignoreRepliedUser: true, ignoreEveryone: true, ignoreRoles: true }` を渡し、本文中の明示メンション `<@botId>` のみを数える (bot 投稿への返信ピング・@everyone・role メンションでは true にならない)。人間のメッセージは既定の判定。
 - 自己メッセージでメンションが無ければ `{ kind: "ignore", reason: "self-not-mentioned" }`。bot 自身の全投稿 (応答の分割送信・thinking・進捗・cron 投稿等) がこのハンドラを通るため、KV 読み取りの前に落とす。
-- 自己メッセージでメンションがあれば、`SelfMentionRateLimiter.isExhausted()` (`bot/ratelimit.ts`) を非消費で事前判定する。枠が尽きていれば `{ kind: "ignore", reason: "rate-limited" }` (呼び出し側の `onMessage` が WARN ログを出す)。枠は消費しない (消費は手順 8 の `tryConsume()`)。ここで落とすことで typing・添付ダウンロード等の副作用を起こさない。
+- 自己メッセージでメンションがあれば、`SelfMentionRateLimiter.isExhausted()` (`bot/ratelimit.ts`) を非消費で事前判定する。枠が尽きていれば `{ kind: "ignore", reason: "rate-limited" }` (呼び出し側の `onMessage` が WARN ログを出す)。枠は消費しない (消費は手順 7 の `tryConsume()`)。ここで落とすことで typing・添付ダウンロード等の副作用を起こさない。
 - 自己メッセージがここまで通過すれば (メンションあり・レート枠あり) `scopeFromChannel(message.channel, message.channelId)` (`bot/scope.ts`) で `StoreScope` を組み立て、`{ kind: "handle", scope, localId, isSelfMessage: true }` を返す。`scopeFromChannel` はスレッドなら `{ channelId: parentId ?? message.channelId, threadId: message.channelId }`、それ以外は `{ channelId: message.channelId }` を組み立てる。`bot/commands.ts` の `scopeFromInteraction()` も同じ関数を使う。
 
 `localId = threadId ?? channelId` を「発話があった場所」として、キューのキー・承認ボタンの送信先・テンプレート変数 `discord.channel.id` に使う。スコープの意味は [store-and-settings](store-and-settings.md) を参照。
@@ -76,19 +76,19 @@ bot 側でメッセージをスレッドへ自動分離する機能は実装し�
 
 `stripBotMentions(message.cleanContent, [client.user.displayName, guild.members.me.displayName])` (`bot/message.ts`) で bot 宛てメンションの展開結果 (`@表示名`) を除去する。`cleanContent` は `<@botId>` を guild ニックネーム優先の表示名に展開するため、グローバル表示名とニックネームの両方を渡し、長い名前から順に除去する。本文が空で添付も無ければ return。
 
-### 6. スコープ単位の直列化 (`ScopeQueue`)
+### 5. スコープ単位の直列化 (`ScopeQueue`)
 
 `chatQueue.isBusy(localId)` を見てから `chatQueue.enqueue(localId, task)` に積む (`bot/queue.ts`)。同一 key のタスクは投入順に 1 件ずつ実行され、別 key は並行に走る。前のタスクが失敗しても後続は実行される。busy だった場合はメッセージに ⏳ リアクションを付け (fire-and-forget)、自分のターン開始時に bot 自身のリアクションを外す。`isBusy` 判定と `enqueue` の間に await を挟まないことで連投時の順序を保つ。これにより同一セッションへの並行 `query()` と session ID の競合を防ぐ。
 
 以降はキュー内のタスクとして実行される。
 
-### 7. ターン開始時の準備
+### 6. ターン開始時の準備
 
 - `keepTyping(channel, signal)`: 初回 `sendTyping()` の後、10 秒間隔で送り続け、`AbortSignal` で停止する。
 - `createProgressReporter(channel)`: `tool_progress` 用。最初の `report()` で 1 件投稿し、以降は同じメッセージを `edit()` する。3 秒未満の呼び出しはスロットルで捨てる。`cleanup()` で削除する。
 - `mention = isSelfMessage ? "" : "<@authorId> "`。`sendChunks(text)` は `splitMessage(text, DISCORD_MESSAGE_LIMIT - mention.length)` で分割してから各チャンク先頭に `mention` を付けて `channel.send()` する。`sendThinking(text)` は各行の先頭に `>` と半角スペース (Discord の引用記法) を付け、`splitMessage()` の既定上限で分割し、メンション無しで送る。
 
-### 8. 画像添付とプロンプトの確定
+### 7. 画像添付とプロンプトの確定
 
 - 添付があれば `downloadImageAttachments(message.attachments.values())`:
   - `contentType` が `image/` で始まるものだけ対象。
@@ -101,14 +101,14 @@ bot 側でメッセージをスレッドへ自動分離する機能は実装し�
 - 自己メッセージなら `tryConsume()` で枠を消費する。超過なら WARN を出して return。消費を query 直前に置くのは、応答しないメッセージで枠を浪費しないため。
 - 自己メッセージなら `SELF_MENTION_PROMPT_NOTE` (`[AI to AI 自己メンション] この依頼は認可ユーザー本人の発話ではなく、別のチャンネル/スレッドで動いている自 bot のセッションが投稿したもの。`) を空行を挟んでプロンプト先頭に付ける。
 
-### 9. 設定の取得と `askClaude()` の呼び出し
+### 8. 設定の取得と `askClaude()` の呼び出し
 
 - 発話者: 人間なら `message.author.id` / `message.author.displayName`。自己メッセージなら `config.discord.userId` と、その表示名 (guild member cache → users cache → ID の順で解決)。
 - `store.getSession / getModel / getEffort / getShowThinking` を `Promise.all` で並列取得する (解決順は [store-and-settings](store-and-settings.md))。
 - テンプレート変数 `discord.guild.id / discord.guild.name / discord.channel.id (= localId) / discord.channel.name / discord.channel.type ("thread" | "text") / discord.user.id / discord.user.name` を組み、`systemPrompts.resolve("chat", scope, vars)` で追記システムプロンプトを得る ([claude-integration](claude-integration.md))。
 - `askClaude(prompt, { sessionId, config: config.claude, discordToken: config.discord.token, signal: AbortSignal.timeout(config.claude.timeout), appendSystemPrompt, model, effort, canUseTool: createCanUseTool(approvalManager, localId) })`。`createCanUseTool()` は `AskUserQuestion` を `requestAnswers()` へ、それ以外を `requestApproval()` へ振り分ける ([approval](approval.md))。
 
-### 10. ストリーム消費
+### 9. ストリーム消費
 
 `for await` で `SDKMessage` を 1 件ずつ見る。各イベントは次の順で 1 つの分岐にだけ入る。
 
@@ -125,12 +125,12 @@ bot 側でメッセージをスレッドへ自動分離する機能は実装し�
 - `showThinking` が false のときは thinking を抽出しない。thinking が流れるかは model / effort 依存。
 - `result` 受信時に session を即保存するのは、その後ジェネレータが throw しても session を残すため。`askClaude()` 側で「resume 先が無い」エラー時に新規セッションで 1 回やり直す挙動は [claude-integration](claude-integration.md) を参照。
 
-### 11. ループ後
+### 10. ループ後
 
 - thinking → text の順に最終 flush。
 - 一度もテキストを送っていなければ (`hasStreamedText` が false)、`requireResultText(resultEvent)` (`claude/mod.ts`) で本文を取り出し `sendChunks` に渡す。`resultEvent` が無ければ `claude stream ended without result event` を throw する。取り出し自体は `extractResultText(resultEvent)` (`result` フィールドが文字列なら `subtype` を問わず採用し、無ければ `errors` / `subtype` から組み立てた Error を throw する)。cron 側の同じ組み合わせは [cron](cron.md) を参照。
 
-### 12. エラーと後始末
+### 11. エラーと後始末
 
 - catch: `log.error` (全文) の後、`sendChunks(summarizeErrorForDiscord(error))` (`errors.ts`) で定型文 + エラーメッセージの先頭 1 行 (最大 200 文字) をチャンネルへ送る。全文は `GET /logs` を参照させる (送信失敗は握り潰す)。
 - finally: ダウンロードした画像の temp ディレクトリを削除 (`cleanupImageFiles`)、進捗メッセージを削除 (`progress.cleanup`)、typing を停止 (`typingController.abort()`)。
