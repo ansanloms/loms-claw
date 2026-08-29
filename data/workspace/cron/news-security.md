@@ -1,5 +1,5 @@
 ---
-schedule: "40 8 * * *"
+schedule: "0 8 * * *"
 maxTurns: 50
 timeout: 900000
 model: "sonnet"
