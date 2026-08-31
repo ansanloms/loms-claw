@@ -259,6 +259,30 @@ function fakeButtonInteraction(customId: string): {
   };
 }
 
+/** 条件が成立するまでポーリングして待つ。上限到達で例外を投げる。 */
+async function waitFor(
+  cond: () => boolean,
+  { attempts = 100, intervalMs = 10 }: {
+    attempts?: number;
+    intervalMs?: number;
+  } = {},
+): Promise<void> {
+  for (let i = 0; i < attempts; i++) {
+    if (cond()) {
+      return;
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  if (cond()) {
+    return;
+  }
+  throw new Error(
+    `waitFor: condition not met within ${
+      attempts * intervalMs
+    } ms (attempts=${attempts}, intervalMs=${intervalMs})`,
+  );
+}
+
 Deno.test("ApprovalManager", async (t) => {
   await t.step(
     "requestApproval → handleButton (approve) で allow に解決すること",
@@ -276,8 +300,8 @@ Deno.test("ApprovalManager", async (t) => {
         "ch-1",
       );
 
-      // send() は同期的な resolve チェーンの中で呼ばれるため、次の tick で確認する
-      await new Promise((r) => setTimeout(r, 0));
+      // send() は allowlist 読み込み等の複数の await を経て呼ばれるため、送信されるまで待つ
+      await waitFor(() => sent.length === 1);
       assertEquals(sent.length, 1);
       const [approveId] = buttonCustomIds(sent[0].components);
       const requestId = approveId.split(":")[1];
@@ -308,7 +332,7 @@ Deno.test("ApprovalManager", async (t) => {
         "ch-1",
       );
 
-      await new Promise((r) => setTimeout(r, 0));
+      await waitFor(() => sent.length === 1);
       assertEquals(sent.length, 1);
       const [, , denyId] = buttonCustomIds(sent[0].components);
       const requestId = denyId.split(":")[1];
