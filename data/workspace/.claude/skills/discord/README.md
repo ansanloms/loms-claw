@@ -4,12 +4,12 @@ Discord の REST API を curl で叩いてサーバ (ギルド) を操作する 
 
 ## できること
 
-- メッセージの送信・取得・検索 (検索 API は bot に無いため、履歴を取得して jq でフィルタ)
+- メッセージの送信・取得・検索 (理由: 検索 API は bot に無いため、履歴を取得して jq でフィルタ)
 - リアクション付与
 - スレッドの作成・名前変更
 - チャンネルやメンバーの一覧・検索
 
-bot トークンは Authorization の Bot ヘッダで渡す。トークンは環境変数 `DISCORD_BOT_TOKEN` から取る。レート制限 (429) は body の `retry_after` (秒) を見て自前で待つ。
+bot トークンは Authorization の Bot ヘッダで渡す。トークンは環境変数 `DISCORD_BOT_TOKEN` から取る。レート制限 429 は body の `retry_after` (秒) を見て自前で待つ。
 
 ## 対象外
 

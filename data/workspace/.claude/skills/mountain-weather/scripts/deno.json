@@ -10,7 +10,7 @@
   "exclude": ["coverage/", "testdata/"],
   "imports": {
     "@std/assert": "jsr:@std/assert@1.0.19",
-    "gunshi": "jsr:@gunshi/gunshi@0.35.1"
+    "gunshi": "jsr:@gunshi/gunshi@0.37.1"
   },
   "tasks": {
     "fetch-index": "deno run --allow-net --allow-read cli/fetch-index.ts",

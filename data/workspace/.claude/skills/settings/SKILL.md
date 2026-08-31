@@ -6,12 +6,11 @@ user-invocable: false
 
 # 設定操作 API
 
-bot はチャンネル / スレッド単位で **model / effort / showThinking / active / session** を Deno KV に永続化している。
-Discord のスラッシュコマンド (`/claw settings`) と同じロジックを内部 API 経由で呼べる。
+bot はチャンネル/スレッド単位で **model / effort / showThinking / active / session** を Deno KV に永続化している。Discord のスラッシュコマンド (`/claw settings`) と同じロジックを内部 API 経由で呼べる。
 
-**キー名に注意**: この API の JSON キーは `showThinking` (camelCase)。Discord スラッシュコマンドのオプション名 `show_thinking` (snake_case) とは異なる。API に `show_thinking` を送ると未知キーとして 400 になる。他の 4 つ (`model` / `effort` / `active` / `session`) は両者で同名。
+**キー名に注意**: この API の JSON キーは `showThinking` (camelCase)。Discord スラッシュコマンドのオプション名 `show_thinking` (snake_case) とは異なる。API に `show_thinking` を送ると未知キーとして 400 になる。他の 4 つ (`model`/`effort`/`active`/`session`) は両者で同名。
 
-`active` は他の設定と異なり、グローバルデフォルトを持たない。上書きが無ければ `GET` のレスポンスから `active` フィールドごと省略され、`config.json` の `activeChannelIds` によるチャンネル ID リスト判定へフォールバックする (`showThinking` 等のように「未設定なら false / config の値」という単一のデフォルト値には解決できないため)。
+`active` は他の設定と異なり、グローバルデフォルトを持たない。上書きが無ければ `GET` のレスポンスから `active` フィールドごと省略され、`config.json` の `activeChannelIds` によるチャンネル ID リスト判定へフォールバックする (`showThinking` 等のように「未設定なら false/config の値」という単一のデフォルト値には解決できないため)。
 
 ## エンドポイント
 
@@ -28,7 +27,7 @@ GET    http://127.0.0.1:3000/settings/default
 
 - 通常チャンネル: `{id}` = チャンネル ID
 - スレッド: `{id}` = スレッド ID。`{id}` がスレッドかどうかはサーバが判定し、スレッドであれば thread → channel → default の順でフォールバック解決する。呼び出し側が親子関係を意識する必要はない。
-- `PATCH` / `DELETE` でスレッドを対象にする場合も、`{id}` にスレッド ID をそのまま渡せばよい。書き込み / 削除先は `threadId ?? channelId` (thread があればそれ、無ければ channel) で決まるため、それだけで正しくそのスレッドのスコープに書き込まれる (削除される)。`DELETE` でスレッド ID を指定した場合、消えるのはそのスレッドの設定だけで親チャンネルの設定は残る。
+- `PATCH`/`DELETE` でスレッドを対象にする場合も、`{id}` にスレッド ID をそのまま渡せばよい。書き込み/削除先は `threadId ?? channelId` (thread があればそれ、無ければ channel) で決まる。そのため、それだけで正しくそのスレッドのスコープに書き込まれる (削除される)。`DELETE` でスレッド ID を指定した場合、消えるのはそのスレッドの設定だけで親チャンネルの設定は残る。
 
 ## curl 使用例
 
@@ -77,7 +76,7 @@ curl -s http://127.0.0.1:3000/settings/default
 
 - キーを省略した場合: その設定は変更しない
 - キーに `null` を指定した場合: その設定を削除し、フォールバック解決へ戻す
-- 指定できるキーは `model` / `effort` / `showThinking` / `active` / `session`
+- 指定できるキーは `model`/`effort`/`showThinking`/`active`/`session`
 
 `session` は `null` による削除のみ受け付ける。任意の値を書き込むことはできない。他スコープの会話セッションを乗っ取れる経路になるため、意図的に禁止されている。会話を引き継ぎたい場合はこの API では実現できない。
 
@@ -85,13 +84,13 @@ curl -s http://127.0.0.1:3000/settings/default
 
 ## キー一覧
 
-| キー | PATCH で書けるか | GET に出るか | 取りうる値 | 未設定時のフォールバック |
-| --- | --- | --- | --- | --- |
-| `model` | ○ | `{value, source}` | モデル alias (`opus` / `sonnet` / `haiku`) またはフルネーム (`claude-sonnet-4-6` 等)。空文字は不可 | thread → channel → グローバルデフォルト |
-| `effort` | ○ | `{value, source}` | `low` / `medium` / `high` / `xhigh` / `max` のいずれか | thread → channel → グローバルデフォルト |
-| `showThinking` | ○ | `{value, source}` | `true` / `false` | thread → channel → グローバルデフォルト (最終的に `false`) |
-| `active` | ○ | `{value, source}`。上書きが無ければフィールドごと省略 | `true` / `false` | `config.json` の `activeChannelIds` によるチャンネル ID リスト判定 |
-| `session` | `null` のみ (削除専用) | **生の文字列**。未設定なら省略 | 書き込み不可 | フォールバックしない (thread と channel で独立) |
+| キー           | PATCH で書けるか       | GET に出るか                                          | 取りうる値                                                                                         | 未設定時のフォールバック                                           |
+| -------------- | ---------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `model`        | ○                      | `{value, source}`                                     | モデル alias (`opus` / `sonnet` / `haiku`) またはフルネーム (`claude-sonnet-4-6` 等)。空文字は不可 | thread → channel → グローバルデフォルト                            |
+| `effort`       | ○                      | `{value, source}`                                     | `low` / `medium` / `high` / `xhigh` / `max` のいずれか                                             | thread → channel → グローバルデフォルト                            |
+| `showThinking` | ○                      | `{value, source}`                                     | `true` / `false`                                                                                   | thread → channel → グローバルデフォルト (最終的に `false`)         |
+| `active`       | ○                      | `{value, source}`。上書きが無ければフィールドごと省略 | `true` / `false`                                                                                   | `config.json` の `activeChannelIds` によるチャンネル ID リスト判定 |
+| `session`      | `null` のみ (削除専用) | **生の文字列**。未設定なら省略                        | 書き込み不可                                                                                       | フォールバックしない (thread と channel で独立)                    |
 
 `null` はどのキーでも「上書きを削除してフォールバックへ戻す」を意味する。`session` だけは `null` 以外を受け付けない。
 
@@ -99,7 +98,7 @@ curl -s http://127.0.0.1:3000/settings/default
 
 ### `GET` / `PATCH` の `{id}` 版
 
-`model` / `effort` / `showThinking` / `active` は `{ "value": ..., "source": ... }` の形で返る。`session` だけは生の文字列。
+`model`/`effort`/`showThinking`/`active` は `{ "value": ..., "source": ... }` の形で返る。`session` だけは生の文字列。
 
 ```json
 {
@@ -117,7 +116,7 @@ curl -s http://127.0.0.1:3000/settings/default
 - `channel`: 親チャンネルの値 (`{id}` がスレッドで、thread 未設定のため channel の値を拾った場合)
 - `default`: グローバルデフォルト値
 
-`showThinking` 以外は未設定ならフィールドごと省略される。上の例は全キーが揃った場合で、実際には省略されたキーがあるほうが普通。`active` の `source` は `thread` / `channel` のみで `default` にはならない。
+`showThinking` 以外は未設定ならフィールドごと省略される。上の例は全キーが揃った場合で、実際には省略されたキーがあるほうが普通。`active` の `source` は `thread`/`channel` のみで `default` にはならない。
 
 **`active` は書き込みスコープと実効判定スコープが一致する。** スレッドに `active: true` を書けば、親チャンネルが非 active でもそのスレッドだけ全メッセージに反応する。逆にスレッドに `false` を書けば、親が active でもそのスレッドだけ mention 必須になる。
 
@@ -135,11 +134,11 @@ curl -s http://127.0.0.1:3000/settings/default
 }
 ```
 
-`model` / `effort` は `config.json` で未設定ならフィールドごと省略される。`showThinking` は必ず入る。`active` と `session` は**含まれない** (グローバルデフォルトを持たないため)。
+`model`/`effort` は `config.json` で未設定ならフィールドごと省略される。`showThinking` は必ず入る。`active` と `session` は**含まれない** (グローバルデフォルトを持たないため)。
 
 ## 典型的な使い方
 
-**スレッドを作った直後にそのスレッド固有の model を設定する**
+### スレッドを作った直後にそのスレッド固有の model を設定する
 
 `{id}` に新規スレッド ID をそのまま渡すだけでよい。
 
@@ -149,7 +148,7 @@ curl -s -X PATCH -H 'Content-Type: application/json' \
   http://127.0.0.1:3000/settings/{新規スレッドID}
 ```
 
-**現在の設定を確認してからユーザに案内する**
+### 現在の設定を確認してからユーザに案内する
 
 ```bash
 curl -s http://127.0.0.1:3000/settings/{チャンネルまたはスレッドID}
