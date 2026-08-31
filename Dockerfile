@@ -1,4 +1,4 @@
-FROM docker.io/denoland/deno:debian-2.9.5
+FROM docker.io/denoland/deno:debian-2.9.6
 
 # 実行時データは host の ./data を /data に bind mount する (compose.yaml)。
 
