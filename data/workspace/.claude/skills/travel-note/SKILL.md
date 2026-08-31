@@ -28,7 +28,7 @@ user-invocable: false
 
 - パスは `memory/travel/YYYYMMDD-<旅行概要>.md`。`YYYYMMDD` は出発日、`<旅行概要>` は行き先のスラッグ (英小文字、ハイフン区切り)。
   - 例: `memory/travel/20260501-shizuoka.md`、`memory/travel/20260608-takao.md`、`memory/travel/20260720-yakushima-trek.md`
-- スラッグは行き先の地名のローマ字を基本とする。日本語名に地形語 (〜半島・〜湖・〜山等) が含まれるならローマ字化して含める。例: `izu-oshima`、`okutama-lake`。同じ行き先の別計画と区別する必要があるときだけルート名等の修飾を足す (例: `tonotake-omoteone`)。
+- スラッグは行き先の地名のローマ字を基本とする。日本語名に地形語 (〜半島・〜湖・〜山等) が含まれるならローマ字のまま含める (英訳しない)。例: `izu-oshima`、`sagamiko`。同じ行き先の別計画と区別する必要があるときだけルート名等の修飾を足す (例: `tonotake-omoteone`)。
 - 出発日が未定の段階では `memory/travel/TBD-<旅行概要>.md` とし、日程確定時に `YYYYMMDD-` へリネームする。延期等で日程が未定に戻ったら `TBD-` へ戻す。
 - Discord スレッド名とファイル名は同じ旅行を指すよう揃える (例: `2026年5月1-3日 静岡` と `20260501-shizuoka.md`)。スレッド名の変更は discord skill で行う。Discord を操作できない文脈ではファイル側だけ更新し、スレッド名は次に Discord を操作できるときに追従させる。
 
