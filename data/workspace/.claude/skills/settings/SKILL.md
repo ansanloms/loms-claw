@@ -6,9 +6,9 @@ user-invocable: false
 
 # 設定操作 API
 
-bot はチャンネル/スレッド単位で **model / effort / showThinking / active / session** を Deno KV に永続化している。Discord のスラッシュコマンド (`/claw settings`) と同じロジックを内部 API 経由で呼べる。
+bot はチャンネル/スレッド単位で model / effort / showThinking / active / session を Deno KV に永続化している。Discord のスラッシュコマンド (`/claw settings`) と同じロジックを内部 API 経由で呼べる。
 
-**キー名に注意**: この API の JSON キーは `showThinking` (camelCase)。Discord スラッシュコマンドのオプション名 `show_thinking` (snake_case) とは異なる。API に `show_thinking` を送ると未知キーとして 400 になる。他の 4 つ (`model`/`effort`/`active`/`session`) は両者で同名。
+キー名に注意: この API の JSON キーは `showThinking` (camelCase)。Discord スラッシュコマンドのオプション名 `show_thinking` (snake_case) とは異なる。API に `show_thinking` を送ると未知キーとして 400 になる。他の 4 つ (`model`/`effort`/`active`/`session`) は両者で同名。
 
 `active` は他の設定と異なり、グローバルデフォルトを持たない。上書きが無ければ `GET` のレスポンスから `active` フィールドごと省略され、`config.json` の `activeChannelIds` によるチャンネル ID リスト判定へフォールバックする (`showThinking` 等のように「未設定なら false/config の値」という単一のデフォルト値には解決できないため)。
 
@@ -27,7 +27,10 @@ GET    http://127.0.0.1:3000/settings/default
 
 - 通常チャンネル: `{id}` = チャンネル ID
 - スレッド: `{id}` = スレッド ID。`{id}` がスレッドかどうかはサーバが判定し、スレッドであれば thread → channel → default の順でフォールバック解決する。呼び出し側が親子関係を意識する必要はない。
-- `PATCH`/`DELETE` でスレッドを対象にする場合も、`{id}` にスレッド ID をそのまま渡せばよい。書き込み/削除先は `threadId ?? channelId` (thread があればそれ、無ければ channel) で決まる。そのため、それだけで正しくそのスレッドのスコープに書き込まれる (削除される)。`DELETE` でスレッド ID を指定した場合、消えるのはそのスレッドの設定だけで親チャンネルの設定は残る。
+- `PATCH`/`DELETE` でスレッドを対象にする場合も、`{id}` にスレッド ID をそのまま渡せばよい。
+  - 書き込み/削除先は `threadId ?? channelId` (thread があればそれ、無ければ channel) で決まる。
+  - そのため、それだけで正しくそのスレッドのスコープに書き込まれる (削除される)。
+  - `DELETE` でスレッド ID を指定した場合、消えるのはそのスレッドの設定だけで親チャンネルの設定は残る。
 
 ## curl 使用例
 
@@ -118,9 +121,9 @@ curl -s http://127.0.0.1:3000/settings/default
 
 `showThinking` 以外は未設定ならフィールドごと省略される。上の例は全キーが揃った場合で、実際には省略されたキーがあるほうが普通。`active` の `source` は `thread`/`channel` のみで `default` にはならない。
 
-**`active` は書き込みスコープと実効判定スコープが一致する。** スレッドに `active: true` を書けば、親チャンネルが非 active でもそのスレッドだけ全メッセージに反応する。逆にスレッドに `false` を書けば、親が active でもそのスレッドだけ mention 必須になる。
+`active` は書き込みスコープと実効判定スコープが一致する。スレッドに `active: true` を書けば、親チャンネルが非 active でもそのスレッドだけ全メッセージに反応する。逆にスレッドに `false` を書けば、親が active でもそのスレッドだけ mention 必須になる。
 
-`PATCH` のレスポンスも `GET` と同じく実効設定 (フォールバック込み) になる。スレッドに `model` だけを `PATCH` しても、親チャンネルで設定済みの `effort` 等はレスポンスにそのまま反映される。**変更後の確認のために追加で `GET` を叩く必要は無い。**
+`PATCH` のレスポンスも `GET` と同じく実効設定 (フォールバック込み) になる。スレッドに `model` だけを `PATCH` しても、親チャンネルで設定済みの `effort` 等はレスポンスにそのまま反映される。変更後の確認のために追加で `GET` を叩く必要は無い。
 
 ### `/settings/default`
 
@@ -134,7 +137,7 @@ curl -s http://127.0.0.1:3000/settings/default
 }
 ```
 
-`model`/`effort` は `config.json` で未設定ならフィールドごと省略される。`showThinking` は必ず入る。`active` と `session` は**含まれない** (グローバルデフォルトを持たないため)。
+`model`/`effort` は `config.json` で未設定ならフィールドごと省略される。`showThinking` は必ず入る。`active` と `session` は含まれない (グローバルデフォルトを持たないため)。
 
 ## 典型的な使い方
 

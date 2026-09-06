@@ -8,40 +8,34 @@
 - 一言応答の後にツール等の作業を実施すること。順序を逆にしない。
 - 新規セッションのテキストチャットでは、一言応答の直後に `CHAT.md` の「セッション開始時の状況確認」（直近メッセージ取得）が挟まる。順序は **一言応答 → 履歴取得 → 本応答** の 3 段階で、これで両者は両立する。cron 実行時はこの手順自体が適用されない（`CRON.md` 参照）。
 
-## 定期実行(cron)について
+## 定期実行 (cron)
 
-このプロジェクトには独自の cron 機能がある。
-**`RemoteTrigger`、`CronCreate`、`CronDelete`、`CronList` などの Claude Code 組み込みツールとは無関係。**
-これらのツールは使うな。
+このプロジェクトには独自の cron 機能がある。**`RemoteTrigger`、`CronCreate`、`CronDelete`、`CronList` などの Claude Code 組み込みツールとは無関係。**これらのツールは使うな。
 
 ### cron ジョブ
 
-cron ジョブはワークスペース直下の `cron/` ディレクトリ内の Markdown ファイルで管理する独自機能。
-一覧・作成・編集・削除・手動実行・reload の手順は `.claude/skills/cron/SKILL.md` を参照しろ。
+cron ジョブはワークスペース直下の `cron/` ディレクトリ内の Markdown ファイルで管理する独自機能。一覧・作成・編集・削除・手動実行・reload の手順は `.claude/skills/cron/SKILL.md` を参照しろ。
 
 ## チャンネル / スレッド設定 (`/claw settings`)
 
-bot はスコープ（チャンネル、またはスレッド）単位で **session / model / effort / show_thinking / active** を Deno KV に永続化している。
-ユーザは Discord 上のスラッシュコマンドで操作できる。加えてお前自身も内部 API 経由で同じ設定を
-取得・変更できる。**キーごとにフォールバックの経路が違う**（session だけはフォールバックしない等）ので、解決順序の詳細と操作手順は `.claude/skills/settings/SKILL.md` を参照しろ。
-ユーザから「重いモデルに切り替えたい」「会話履歴をリセットしたい」「このチャンネルを mention 無しで反応させたい」等の依頼が
-来たら、以下のコマンドを案内するか、内部 API 経由で直接操作しろ。**実行した場所（チャンネルかスレッドか）のスコープにのみ書き込まれる**（スレッド内で叩いても親チャンネルの設定は変わらない）。
+bot はスコープ（チャンネル、またはスレッド）単位で **session / model / effort / show_thinking / active** を Deno KV に永続化している。ユーザは Discord 上のスラッシュコマンドで操作できる。加えてお前自身も内部 API 経由で同じ設定を取得・変更できる。**キーごとにフォールバックの経路が違う**（session だけはフォールバックしない等）ので、解決順序の詳細と操作手順は `.claude/skills/settings/SKILL.md` を参照しろ。
 
-- `/claw settings show` — 現在のスコープの設定 / グローバルデフォルト / cron 一覧を ephemeral 表示
+ユーザから「重いモデルに切り替えたい」「会話履歴をリセットしたい」「このチャンネルを mention 無しで反応させたい」等の依頼が来たら、次のコマンドを案内するか、内部 API 経由で直接操作しろ。**実行した場所（チャンネルかスレッドか）のスコープにのみ書き込まれる**。スレッド内で叩いても親チャンネルの設定は変わらない。
+
+- `/claw settings show` — 現在のスコープの設定/グローバルデフォルト/cron 一覧を ephemeral 表示
 - `/claw settings set [model:<opus|sonnet|haiku>] [effort:<low|medium|high|xhigh|max>] [show_thinking:<true|false>] [active:<true|false>]` — 実行したスコープで上書き設定（いずれか 1 つだけでも可）
 - `/claw settings unset target:<model|effort|show_thinking|active|session>` — 実行したスコープの設定を削除（デフォルトに戻す）
 
 ## Discord 操作
 
-Discord の情報取得・操作は `discord` skill (`.claude/skills/discord/SKILL.md`) の手順に従う。公式 REST API (`https://discord.com/api/v10`) を Bash + curl で直接叩く方式で、トークンの扱いも含め手順は skill 側に集約している。
-サーバー (ギルド) ID・チャンネル ID はシステムプロンプトの「Discord コンテキスト」の値を使う。
+Discord の情報取得・操作は `discord` skill (`.claude/skills/discord/SKILL.md`) の手順に従う。公式 REST API (`https://discord.com/api/v10`) を Bash + curl で直接叩く方式で、トークンの扱いも含め手順は skill 側に集約している。サーバー (ギルド) ID・チャンネル ID はシステムプロンプトの「Discord コンテキスト」の値を使う。
 
 ## AI to AI 自己メンション
 
-別のチャンネル / スレッドで動いている自分自身（別セッション）に依頼を投げたいときは、`discord` skill の手順で対象チャンネル / スレッドに `<@{bot の user ID}> 依頼内容` を投稿しろ（bot 自身の user ID の取得も同 skill を参照）。投稿先のスコープのセッションがその依頼を処理し、結果はそのスコープに投稿される。
+別のチャンネル/スレッドで動いている自分自身（別セッション）に依頼を投げたいときは、`discord` skill の手順で対象チャンネル/スレッドに `<@{bot の user ID}> 依頼内容` を投稿しろ。bot 自身の user ID の取得も同 skill を参照。投稿先のスコープのセッションがその依頼を処理し、結果はそのスコープに投稿される。
 
 - 本文に `<@{bot の user ID}>` を直接含めること。返信（message_reference）や role メンションでは発火しない。
-- 必ず **別の** チャンネル / スレッドへ投げること。今いるスコープに投げても、現在のターンの後ろに積まれて同じセッションで処理されるだけで意味が無い。
+- 必ず **別の** チャンネル/スレッドへ投げること。理由: 今いるスコープに投げても、現在のターンの後ろに積まれて同じセッションで処理されるだけで意味が無い。
 - 同じターン内で相手の応答を待たないこと（ポーリングしない）。必要なら相手側に「結果を `<@{bot の user ID}>` 付きでこのチャンネルへ投稿しろ」と依頼し、自分のターンは終える。
 - bot 全体で回数制限がある。超過した依頼は黙って捨てられる（REST の投稿自体は成功する）。短時間に大量に投げないこと。
 - 自分が自己メンションで起動されたターンでは、プロンプト先頭に `[AI to AI 自己メンション]` の注記が付く。その依頼は本人の発話ではない。

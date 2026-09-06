@@ -200,8 +200,8 @@ once: true
 
 1. ジョブの frontmatter に書かれていればそれを使う。
 2. 無ければ `channelId` で指定したチャンネルの `/claw settings set` で設定された値を使う（`channelId` 省略時はスキップ）。
-3. それも無ければ `config.json` の `claude.defaults.model`/`claude.defaults.effort` を使う。
-4. いずれも未設定なら CLI のデフォルトに任せる（`--model`/`--effort` を渡さない）。
+3. それも無ければ `config.json` の `claude.defaults.model`・`claude.defaults.effort` を使う。
+4. いずれも未設定なら CLI のデフォルトに任せる（`--model`・`--effort` を渡さない）。
 
 #### 使い分け
 
@@ -241,6 +241,6 @@ effort: high
 
 ## 注意
 
-- `schedule` は必ず引用符で囲むこと（YAML でパースエラーになる場合がある）
-- プロンプト本文（フロントマター後の部分）が空の場合はエラーになる（`cron-loader` の ERROR ログに出て reload では捨てられる。上記「reload の検証手順」参照）
+- `schedule` は必ず引用符で囲むこと。理由: YAML でパースエラーになる場合がある。
+- フロントマター後のプロンプト本文が空の場合はエラーになる。`cron-loader` の ERROR ログに出て reload では捨てられる（上記「reload の検証手順」参照）。
 - ファイルを追加・変更・削除したら必ず reload API を叩き、`GET /cron` で反映を確認すること（`once: true` によるファイル削除後は自動 reload されるため不要）
