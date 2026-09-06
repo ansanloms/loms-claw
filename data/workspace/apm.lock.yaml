@@ -1,11 +1,11 @@
 lockfile_version: '1'
-generated_at: '2026-08-31T20:58:55.515971+00:00'
+generated_at: '2026-09-06T13:15:24.801931+00:00'
 apm_version: 0.29.0
 dependencies:
 - repo_url: ansanloms/skills
   name: bluesky
   host: github.com
-  resolved_commit: 65180b38efc1d6351e507d756442b1e4d76832a3
+  resolved_commit: e6a208f765e4a9cf27f1f5679097744d837ff8b4
   version: unknown
   virtual_path: bluesky
   is_virtual: true
@@ -21,7 +21,7 @@ dependencies:
 - repo_url: ansanloms/skills
   name: discord
   host: github.com
-  resolved_commit: 65180b38efc1d6351e507d756442b1e4d76832a3
+  resolved_commit: e6a208f765e4a9cf27f1f5679097744d837ff8b4
   version: unknown
   virtual_path: discord
   is_virtual: true
@@ -37,7 +37,7 @@ dependencies:
 - repo_url: ansanloms/skills
   name: find-docs
   host: github.com
-  resolved_commit: 65180b38efc1d6351e507d756442b1e4d76832a3
+  resolved_commit: e6a208f765e4a9cf27f1f5679097744d837ff8b4
   version: unknown
   virtual_path: find-docs
   is_virtual: true
@@ -48,12 +48,12 @@ dependencies:
   - .claude/skills/find-docs/SKILL.md
   deployed_file_hashes:
     .claude/skills/find-docs/README.md: sha256:8a23a92a7d585461c013bfa8e54b300351a03e2f3d5bff6d1e0d4c05047cb1a6
-    .claude/skills/find-docs/SKILL.md: sha256:11373e79640331e397b22218f7cedfc24080b69265ad9f9f56c5ebb741fedd6b
-  content_hash: sha256:2e55b724275985a052b6b2ba5319f7a26ee9c1251f5139063c0ae0522d955aa4
+    .claude/skills/find-docs/SKILL.md: sha256:e8d51772cf602e46e9ae1d1d3cef2a212af5a4282b195ca4307df80e3997f07e
+  content_hash: sha256:52312f50958cb07456d7ac79ed1ba111f8bc5a806fbff2c063b524bebad0ccba
 - repo_url: ansanloms/skills
   name: jartic-traffic-jam-forecast
   host: github.com
-  resolved_commit: 65180b38efc1d6351e507d756442b1e4d76832a3
+  resolved_commit: e6a208f765e4a9cf27f1f5679097744d837ff8b4
   version: unknown
   virtual_path: jartic-traffic-jam-forecast
   is_virtual: true
@@ -69,7 +69,7 @@ dependencies:
 - repo_url: ansanloms/skills
   name: jartic-traffic-volume
   host: github.com
-  resolved_commit: 65180b38efc1d6351e507d756442b1e4d76832a3
+  resolved_commit: e6a208f765e4a9cf27f1f5679097744d837ff8b4
   version: unknown
   virtual_path: jartic-traffic-volume
   is_virtual: true
@@ -85,7 +85,7 @@ dependencies:
 - repo_url: ansanloms/skills
   name: mountain-weather
   host: github.com
-  resolved_commit: 65180b38efc1d6351e507d756442b1e4d76832a3
+  resolved_commit: e6a208f765e4a9cf27f1f5679097744d837ff8b4
   version: unknown
   virtual_path: mountain-weather
   is_virtual: true
@@ -139,7 +139,7 @@ dependencies:
 - repo_url: ansanloms/skills
   name: news-digest
   host: github.com
-  resolved_commit: 65180b38efc1d6351e507d756442b1e4d76832a3
+  resolved_commit: e6a208f765e4a9cf27f1f5679097744d837ff8b4
   version: unknown
   virtual_path: news-digest
   is_virtual: true
@@ -155,7 +155,7 @@ dependencies:
 - repo_url: ansanloms/skills
   name: yamareco
   host: github.com
-  resolved_commit: 65180b38efc1d6351e507d756442b1e4d76832a3
+  resolved_commit: e6a208f765e4a9cf27f1f5679097744d837ff8b4
   version: unknown
   virtual_path: yamareco
   is_virtual: true
@@ -249,7 +249,7 @@ deployments:
   owners:
   - ansanloms/skills/find-docs
   active_owner: ansanloms/skills/find-docs
-  content_hash: sha256:11373e79640331e397b22218f7cedfc24080b69265ad9f9f56c5ebb741fedd6b
+  content_hash: sha256:e8d51772cf602e46e9ae1d1d3cef2a212af5a4282b195ca4307df80e3997f07e
 - kind: project-relative
   target: claude
   value: .claude/skills/jartic-traffic-jam-forecast
