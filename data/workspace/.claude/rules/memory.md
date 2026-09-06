@@ -39,7 +39,7 @@ Claude Code 組み込みの auto memory（`~/.claude/projects/` 配下の memory
 
 ### memory/knowledge/（分野別の長期知識）
 
-所有ギア台帳・登山/ツーリングの教訓など、分野ごとの長期知識。1 分野 1 ファイル（gear.md/hiking.md/touring.md 等）。新しい分野が必要になったらファイルを増やし、MEMORY.md の索引に追記しろ。
+所有ギア台帳・登山/ツーリングの教訓など、分野ごとの長期知識。ファイル名は分野名を先頭に置く（gear.md / hiking.md / hiking-gear-checklist.md 等）。教訓の追記先は分野の主ファイル（hiking.md 等）。新しい分野が必要になったらファイルを増やし、MEMORY.md の索引に追記しろ。
 
 ### memory/activity.md（最近の動向）
 
@@ -56,10 +56,6 @@ Claude Code 組み込みの auto memory（`~/.claude/projects/` 配下の memory
 ### memory/travel/（旅行ノート）
 
 旅行 1 件につき 1 ノート。`travel-note` skill の手順で扱う。
-
-### memory/appendix/（参照資料）
-
-外部由来の参照資料（チェックリスト等）。MEMORY.md の索引からリンクする。
 
 ## 参照ルール
 
