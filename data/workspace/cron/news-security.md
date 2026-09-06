@@ -8,7 +8,7 @@ effort: "medium"
 
 ## 重複チェック
 
-まず以下のコマンドで #news チャンネルの直近の投稿を取得しろ。
+まず次のコマンドで #news チャンネルの直近の投稿を取得しろ。
 
 ```bash
 curl -sS "https://discord.com/api/v10/channels/1479719413396541450/messages?limit=100" \
@@ -21,7 +21,14 @@ curl -sS "https://discord.com/api/v10/channels/1479719413396541450/messages?limi
 
 ## 記事収集
 
-news-digest skill を使い、以下の引数で記事を集めろ。収集・要約のルール（優先ソースに固執しない・公開日の確認・個別 URL 必須・捏造禁止・要約 300 文字程度、RSS があればフィードを先に取得）は skill 側に従え。影響範囲が広いもの・深刻度が高いものを優先し、CVE 番号があれば要約に記載しろ。
+news-digest skill を使い、次の引数で記事を集めろ。収集・要約のルールは skill 側に従え。影響範囲が広いもの・深刻度が高いものを優先し、CVE 番号があれば要約に記載しろ。
+
+- 優先ソースに固執しない
+- 公開日の確認
+- 個別 URL 必須
+- 捏造禁止
+- 要約 300 文字程度
+- RSS があればフィードを先に取得
 
 - テーマ: 直近公開された重要な脆弱性・セキュリティアドバイザリ
 - 優先ソース:
@@ -29,24 +36,24 @@ news-digest skill を使い、以下の引数で記事を集めろ。収集・�
   - www.jpcert.or.jp（JPCERT/CC） — RSS: https://www.jpcert.or.jp/rss/jpcert-alert.rdf
   - www.ipa.go.jp（IPA）
   - www.cisa.gov（CISA KEV）
-  - socket.dev（Socket — npm/PyPI サプライチェーン）
+  - socket.dev（Socket — npm・PyPI サプライチェーン）
   - blog.phylum.io（Phylum — サプライチェーン攻撃）
   - github.com/advisories（GitHub Advisory Database）
 - 件数: 3
 - 期間: 直近 5 日
 - 除外リスト: 上の重複チェックで得た既出記事のタイトル・URL
-- 除外ソース: 以下のドメインの記事は収集・投稿しない（このジョブ固有のリスト。追加・削除はこのファイルで行う）
+- 除外ソース: 次のドメインの記事は収集・投稿しない（このジョブ固有のリスト。追加・削除はこのファイルで行う）
   - news.livedoor.com
 
 ---
 
 ## 整形・投稿
 
-news-digest skill は「タイトル / 要約 / 公開日 / 個別 URL」のラベル付き中立フォーマットで記事を返す。これを Discord 記法に整形し、**記事 1 件ごとに 1 メッセージとして Discord API で #news チャンネルに投稿しろ**。3 件あれば 3 回投稿する。このジョブに channelId は無く、executor による自動投稿は無効だ。投稿はこのジョブ自身が下記 curl で行うのが唯一の経路で、最終メッセージの中身は Discord には一切流れない。
+news-digest skill は「タイトル・要約・公開日・個別 URL」のラベル付き中立フォーマットで記事を返す。これを Discord 記法に整形し、**記事 1 件ごとに 1 メッセージとして Discord API で #news チャンネルに投稿しろ**。3 件あれば 3 回投稿する。このジョブに channelId は無く、executor による自動投稿は無効だ。投稿はこのジョブ自身が下記 curl で行うのが唯一の経路で、最終メッセージの中身は Discord には一切流れない。
 
 ### 整形
 
-各記事を以下の Discord 記法に変換する。1 記事 = 1 メッセージ。1 つのメッセージに複数記事を入れるな。
+各記事を次の Discord 記法に変換する。1 記事 = 1 メッセージ。1 つのメッセージに複数記事を入れるな。
 
 - タイトル → `## 🔓 <タイトル>`
 - 要約 → そのまま本文として記載
