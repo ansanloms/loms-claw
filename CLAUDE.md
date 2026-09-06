@@ -16,7 +16,9 @@ Discord + Claude Agent SDK のパーソナル AI エージェント。単一ギ�
 - Deno（`unstable: ["temporal", "kv"]`）
 - discord.js v14
 - Claude Agent SDK (`@anthropic-ai/claude-agent-sdk` の `query()`)
-- Hono（内部 HTTP API）、Deno KV（スコープ設定の永続化）、`@cfworker/json-schema`（設定・API・cron frontmatter の検証）
+- Hono（内部 HTTP API）
+- Deno KV（スコープ設定の永続化）
+- `@cfworker/json-schema`（設定・API・cron frontmatter の検証）
 
 ## ドキュメント索引
 
@@ -63,12 +65,12 @@ deno task generate   # docs/api の OpenAPI から api/internal-schemas.ts を�
 ```
 
 - 設定は `data/config.json`（`data/config.json.example` をコピーして必須項目を埋める）。別パスは環境変数 `LOMS_CLAW_CONFIG` で指定する。フィールド一覧は [docs/architecture/lifecycle.md](docs/architecture/lifecycle.md)。
-- `api/internal-schemas.ts` は生成物。内部 API のリクエスト / レスポンス形を変えるときは `docs/api/` の YAML を編集して `deno task generate` で再生成し、生成物もコミットする（[docs/architecture/internal-api.md](docs/architecture/internal-api.md)）。
+- `api/internal-schemas.ts` は生成物。内部 API のリクエスト/レスポンス形を変えるときは `docs/api/` の YAML を編集して `deno task generate` で再生成し、生成物もコミットする（[docs/architecture/internal-api.md](docs/architecture/internal-api.md)）。
 - PR 作成前・push 前の検証チェーンは [.claude/rules/pr.md](.claude/rules/pr.md) に従う。
 
 ## Docker
 
-`Dockerfile` / `compose.yaml` はリポジトリルートに置き、コマンドはすべてリポジトリルートで実行する。`data/` を丸ごとコンテナの `/data` へ bind mount し（マウントはこの 1 つだけ）、コンテナ内の cwd は `/data/workspace`（エージェントワークスペース）になる。
+`Dockerfile`/`compose.yaml` はリポジトリルートに置き、コマンドはすべてリポジトリルートで実行する。`data/` を丸ごとコンテナの `/data` へ bind mount する（マウントはこの 1 つだけ）。コンテナ内の cwd は `/data/workspace`（エージェントワークスペース）になる。
 
 ```bash
 docker compose build                 # ビルド
@@ -78,7 +80,7 @@ docker compose down                  # 本番停止
 docker compose logs -f               # ログ確認
 ```
 
-コンテナ内の `claude` コマンドは Agent SDK が同梱する Claude Code バイナリへの symlink で、Claude Code CLI を別途インストールはしない。開発は `.devcontainer/` で行う（本番と同じ compose プロジェクトを使うため、devcontainer 起動中は本番 bot が置き換わる）。Dockerfile の各段、環境変数（`CLAUDE_CONFIG_DIR` / `LOMS_CLAW_CONFIG` / `TZ` / `DISCORD_BOT_TOKEN`）、`data/` のレイアウトは [docs/architecture/deployment.md](docs/architecture/deployment.md)。
+コンテナ内の `claude` コマンドは Agent SDK が同梱する Claude Code バイナリへの symlink で、Claude Code CLI を別途インストールはしない。開発は `.devcontainer/` で行う（本番と同じ compose プロジェクトを使うため、devcontainer 起動中は本番 bot が置き換わる）。Dockerfile の各段、環境変数（`CLAUDE_CONFIG_DIR`/`LOMS_CLAW_CONFIG`/`TZ`/`DISCORD_BOT_TOKEN`）、`data/` のレイアウトは [docs/architecture/deployment.md](docs/architecture/deployment.md)。
 
 ## コミット規約
 
@@ -88,8 +90,8 @@ docker compose logs -f               # ログ確認
 
 ## 実装時の注意
 
-- ワークスペースの `.claude/settings.json` の `permissions.allow` に `AskUserQuestion` を入れない。SDK が `canUseTool` を呼ばず素通しし、回答が空のまま解決される（[docs/architecture/approval.md](docs/architecture/approval.md)）。
-- cron 用システムプロンプト（`CRON.md`）ではチャンネル / ユーザー固有のテンプレート変数を使わない。cron ではギルド変数しか渡されず、プレースホルダーのまま残る（[docs/architecture/claude-integration.md](docs/architecture/claude-integration.md)）。
+- ワークスペースの `.claude/settings.json` の `permissions.allow` に `AskUserQuestion` を入れない。理由: SDK が `canUseTool` を呼ばず素通しし、回答が空のまま解決される（[docs/architecture/approval.md](docs/architecture/approval.md)）。
+- cron 用システムプロンプト（`CRON.md`）ではチャンネル/ユーザー固有のテンプレート変数を使わない。理由: cron ではギルド変数しか渡されず、プレースホルダーのまま残る（[docs/architecture/claude-integration.md](docs/architecture/claude-integration.md)）。
 - 日時は `Date` ではなく Temporal を使う（`cron/match.ts`、`bot/ratelimit.ts`、`logger.ts` と同じ流儀）。
 - テストコード以外で `deno-lint-ignore` や `any` を使わない。型の絞り込みは type guard で行う。
 - 定期実行は本リポジトリ独自の cron 機能（`cron/`）であり、Claude Code 組み込みの `CronCreate` 等とは無関係。
@@ -100,13 +102,13 @@ docker compose logs -f               # ログ確認
 - `askClaude()` は `queryFn` の DI でモック（`AsyncGenerator<SDKMessage>` を返す）を注入してテスト
 - discord.js 依存コード（`bot/mod.ts`, `approval/manager.ts`）はモック化コストが高いため、ロジックを外部関数に抽出してテストする方針
 - 実際の `query()` 実行（SDK 同梱 CLI の spawn）はインテグレーションテスト領域
-- `bot/message.ts` の `downloadImageAttachments` / `resizeImageIfNeeded`（ffprobe / ffmpeg の spawn を伴う）もインテグレーションテスト領域とし、単体テストの対象外とする
+- `bot/message.ts` の `downloadImageAttachments`/`resizeImageIfNeeded`（ffprobe/ffmpeg の spawn を伴う）もインテグレーションテスト領域とし、単体テストの対象外とする
 - テスト実行: `deno task test`（カバレッジレポート付き）
 
 ### テスト命名規約
 
 - テスト名は日本語で記述する
-- `Deno.test` の名前はモジュール名 / 関数名 / クラス名（英語のまま）とし、`X - Y` のような接尾辞は付けない。複数の関数・メソッドを 1 つの `Deno.test` にまとめる場合は、step 名に `method: …こと` のプレフィックスを付けて区分する
+- `Deno.test` の名前はモジュール名/関数名/クラス名（英語のまま）とし、`X - Y` のような接尾辞は付けない。複数の関数・メソッドを 1 つの `Deno.test` にまとめる場合は、step 名に `method: …こと` のプレフィックスを付けて区分する
 - `t.step` の名前は「…こと」「…であること」の形式で記述する
 
 ```typescript

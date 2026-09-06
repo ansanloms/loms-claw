@@ -2,7 +2,7 @@
 
 bot プロセス内で `127.0.0.1:{config.claude.apiPort}` に Hono アプリを `Deno.serve()` で起動し、cron 操作・ログ取得・スコープ設定の操作を同一ポートで提供する。呼び出し側は Claude (Agent SDK のツール側) で、Bash + curl で叩く。loopback バインドのみで認証は持たない。ツール承認は SDK の `canUseTool` コールバックで in-process に処理するため HTTP では扱わず、Discord 操作は Claude が公式 REST API を直接叩くため提供しない (以前あった discord.js Client 経由の `/discord/*` ラッパーは廃止済み)。リクエスト検証は `docs/api/` の OpenAPI を単一ソースとし、そこから生成した `api/internal-schemas.ts` を `@cfworker/json-schema` で評価する。
 
-関連: [README.md](README.md) / [lifecycle.md](lifecycle.md) (起動順・ロガー) / [cron.md](cron.md) (cron の意味) / [store-and-settings.md](store-and-settings.md) (settings の意味) / [approval.md](approval.md) / [deployment.md](deployment.md)
+関連: [README.md](README.md)/[lifecycle.md](lifecycle.md) (起動順・ロガー)/[cron.md](cron.md) (cron の意味)/[store-and-settings.md](store-and-settings.md) (settings の意味)/[approval.md](approval.md)/[deployment.md](deployment.md)
 
 ## 検証・エラー応答の方針
 
@@ -10,7 +10,7 @@ bot プロセス内で `127.0.0.1:{config.claude.apiPort}` に Hono アプリを
 
 ## サーバー (`api/server.ts`)
 
-`createApp(settingsCtx, healthCtx, cronCtx?)` が `Hono` アプリの組み立て (ルートのマウント、`notFound` / `onError`) だけを行い、`startApiServer(port, settingsCtx, healthCtx, cronCtx?)` はそれを `Deno.serve({ port, hostname: "127.0.0.1" }, app.fetch)` に渡して `Deno.HttpServer` を返す薄いラッパー。呼び出し側 (`bot/mod.ts` の `DiscordBot.shutdown()`) が `Deno.HttpServer` を保持し、停止時に `shutdown()` を呼ぶ (失敗は WARN ログに落とすだけで握りつぶす)。`createApp()` を分離してあるのは、`Deno.serve()` を起動せず `app.request()` で直接ルーティング (404 / 500 / マウント) を検証できるようにするため (下記「テスト」)。
+`createApp(settingsCtx, healthCtx, cronCtx?)` が `Hono` アプリの組み立て (ルートのマウント、`notFound`/`onError`) だけを行い、`startApiServer(port, settingsCtx, healthCtx, cronCtx?)` はそれを `Deno.serve({ port, hostname: "127.0.0.1" }, app.fetch)` に渡して `Deno.HttpServer` を返す薄いラッパー。呼び出し側 (`bot/mod.ts` の `DiscordBot.shutdown()`) が `Deno.HttpServer` を保持し、停止時に `shutdown()` を呼ぶ。失敗は WARN ログに落とすだけで握りつぶす。`createApp()` を分離してあるのは、`Deno.serve()` を起動せず `app.request()` で直接ルーティング (404/500/マウント) を検証できるようにするためである。詳細は下記「テスト」を参照。
 
 | 要素           | 内容                                                                                                                                                                                       |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -75,7 +75,7 @@ bot プロセス内で `127.0.0.1:{config.claude.apiPort}` に Hono アプリを
 - 注入済みで `null` が返った: `{ channelId: id }`
 - 注入済みで throw した (未知の ID、cron の擬似 id `cron:{name}` 等): WARN ログ (「親チャンネルの解決に失敗したためチャンネル単独スコープとして扱う」旨) を出して `{ channelId: id }` へフォールバック
 
-書き込み (PATCH / DELETE) は Store の仕様どおり leaf id (`threadId ?? channelId`) 単位なので、スレッド解決の成否で書き込み先は変わらない。差が出るのは GET / PATCH の応答に含まれる解決結果 (親チャンネルへのフォールバックの有無) だけ。
+PATCH/DELETE の書き込みは Store の仕様どおり leaf id (`threadId ?? channelId`) 単位なので、スレッド解決の成否で書き込み先は変わらない。差が出るのは GET/PATCH の応答に含まれる解決結果 (親チャンネルへのフォールバックの有無) だけ。
 
 ## コンテキスト注入 (`bot/mod.ts`)
 
@@ -105,9 +105,9 @@ flowchart LR
 
 1. `docs/api/` に OpenAPI 3.1 を分割 YAML (`api.yaml` + `paths/` + `components/schemas/` + `examples/`) で書く。
 2. ルートの `deno task generate:internal` が `deno task --cwd ./docs/api bundle:json && deno task --cwd ./docs/api emit-server-schemas ../../api/internal-schemas.ts` を実行する (`deno task generate` は `generate:*` の一括)。`bundle:json` は redocly で `./dist/api.json` に bundle し、`emit-server-schemas` は `bin/emit-server-schemas.ts` でその `components.schemas` を抽出して TypeScript モジュールに書き出す。
-3. `api/internal-schemas.ts` は `export const internalSchemas = { ... } as const` の自動生成物。ルート `deno.json` の `exclude` に入っており fmt / lint / check の対象外。生成物はコミットされているため、実行時に `docs/api/dist/` は不要。
+3. `api/internal-schemas.ts` は `export const internalSchemas = { ... } as const` の自動生成物。ルート `deno.json` の `exclude` に入っており fmt/lint/check の対象外。生成物はコミットされているため、実行時に `docs/api/dist/` は不要。
 4. `api/validate.ts` は `@cfworker/json-schema` の `Validator` をスキーマ名ごとに遅延生成して `Map` にキャッシュする (draft は `"2020-12"`)。`matchesSchema(name, value)` が真偽を返し、`schemaErrorOf(name, value)` が先頭エラーを `<instanceLocation>: <error>` の形に整形する (API の 400 応答の文言)。
-5. 各ルートは `FromSchema<typeof internalSchemas["RequestXxx"]>` を返す型ガード (`isCronRunBody` / `isPatchSettingsBody`) をローカルに定義し、内部で `matchesSchema` を呼ぶ。ジェネリックな `FromSchema` は型の深さ爆発を招くため `validate.ts` 側では型ガードを提供しない、という分担 (`api/validate.ts` 冒頭コメント)。
+5. 各ルートは `FromSchema<typeof internalSchemas["RequestXxx"]>` を返す型ガード (`isCronRunBody`/`isPatchSettingsBody`) をローカルに定義し、内部で `matchesSchema` を呼ぶ。ジェネリックな `FromSchema` は型の深さ爆発を招くため `validate.ts` 側では型ガードを提供しない、という分担 (`api/validate.ts` 冒頭コメント)。
 
 型・必須・配列要素・数値範囲・余剰フィールド拒否といった「構造」はこのスキーマ検証が担い、trim や既定値補完のような OpenAPI に表現できない正規化は各ルート側に残す。
 
@@ -115,9 +115,9 @@ flowchart LR
 
 ## docs/api の位置付け
 
-- テンプレート [ansanloms/openapi-template](https://github.com/ansanloms/openapi-template) 由来の OpenAPI プロジェクト。独自の `deno.json` / `deno.lock` を持ち、ルート `deno.json` の `exclude` に `docs/api` が入っているためルートの fmt / lint / check / test には含まれない。`.github/dependabot.yml` に `/docs/api` を directory とする別エントリがあり、ルートとは独立に依存更新が追従される (理由はそのファイルのコメントに書かれている)。
+- テンプレート [ansanloms/openapi-template](https://github.com/ansanloms/openapi-template) 由来の OpenAPI プロジェクト。独自の `deno.json`/`deno.lock` を持ち、ルート `deno.json` の `exclude` に `docs/api` が入っているためルートの fmt/lint/check/test には含まれない。`.github/dependabot.yml` に `/docs/api` を directory とする別エントリがあり、ルートとは独立に依存更新が追従される (理由はそのファイルのコメントに書かれている)。
 - `api.yaml` の `info.description` は `$ref: ./README.md` で、接続条件 (127.0.0.1 固定・`claude.apiPort`・認証なし) とエラー応答の形は [docs/api/README.md](../api/README.md) が正。`servers` の URL は既定ポート 3000 を使った例。
-- `redocly.yaml` は `recommended-strict` を継承し、`info-license` / `operation-2xx-response` / `operation-4xx-response` / `no-invalid-media-type-examples` / `security-defined` を off にしている (`security-defined` は loopback 専用で認証を持たないため)。`redocly/plugins/index.ts` は inline-examples plugin のローカルラッパーで、redocly の plugins ローダがローカルファイルパスしか解決できないため import map 経由で外部ソースに解決する。
+- `redocly.yaml` は `recommended-strict` を継承し、`info-license`/`operation-2xx-response`/`operation-4xx-response`/`no-invalid-media-type-examples`/`security-defined` を off にしている (`security-defined` は loopback 専用で認証を持たないため)。`redocly/plugins/index.ts` は inline-examples plugin のローカルラッパーで、redocly の plugins ローダがローカルファイルパスしか解決できないため import map 経由で外部ソースに解決する。
 - `bin/` のスクリプト:
 
   | スクリプト               | 役割                                                                                                                                  |
@@ -128,13 +128,13 @@ flowchart LR
   | `search.ts`              | 指定 schema がどのエンドポイントから参照されているかを `$ref` を辿って表示する                                                        |
   | `sort.ts`                | `api.yaml` の `paths` と `components.schemas` のキーを並べ替えて書き戻す (schemas は Enum → Request → Response → その他の順)          |
 
-- `deno task` (docs/api 側): `lint` は `lint:deno` / `lint:textlint` / `lint:redocly` の一括、`fix` は `sort` → `fix:*` → `lint`、`build` は `dist/` のクリア → YAML bundle → `build.ts`、`dev` / `start` は `http-server` で `./` / `./dist` を配信する。
+- `deno task` (docs/api 側): `lint` は `lint:deno`/`lint:textlint`/`lint:redocly` の一括、`fix` は `sort` → `fix:*` → `lint`、`build` は `dist/` のクリア → YAML bundle → `build.ts`、`dev`/`start` は `http-server` で `./`/`./dist` を配信する。
 
 ## テスト
 
-`api/routes/cron.test.ts` / `api/routes/health.test.ts` / `api/routes/logs.test.ts` / `api/routes/settings.test.ts` は `Deno.serve()` を起動せず、`new Hono()` に `createCronRoutes()` / `createHealthRoutes()` / `createLogsRoutes()` / `createSettingsRoutes()` をマウントして `app.request()` で直接リクエストを投げる形式。cron 側はコンテキスト関数をクロージャで差し替え、settings 側は `Deno.openKv(":memory:")` の `Store` を使う。
+`api/routes/cron.test.ts`/`api/routes/health.test.ts`/`api/routes/logs.test.ts`/`api/routes/settings.test.ts` は `Deno.serve()` を起動せず、`new Hono()` に `createCronRoutes()`/`createHealthRoutes()`/`createLogsRoutes()`/`createSettingsRoutes()` をマウントして `app.request()` で直接リクエストを投げる形式。cron 側はコンテキスト関数をクロージャで差し替え、settings 側は `Deno.openKv(":memory:")` の `Store` を使う。
 
-`api/server.test.ts` は `createApp()` が返す Hono アプリを `app.request()` で直接叩き、未定義パスの 404 (`{ error: "Not Found" }`)、マウント済みルート (`cronCtx.runJob` 等) が例外を投げた場合の共通 `onError` による 500、`/cron` / `/health` / `/logs` / `/settings` が実際にマウントされていることを検証する。`Deno.serve()` を起動する `startApiServer()` 自体 (ポートバインド) は統合テストの対象外。
+`api/server.test.ts` は `createApp()` が返す Hono アプリを `app.request()` で直接叩いて次を検証する。未定義パスは 404 (`{ error: "Not Found" }`) を返す。マウント済みルート (`cronCtx.runJob` 等) が例外を投げた場合は共通 `onError` により 500 を返す。`/cron`/`/health`/`/logs`/`/settings` が実際にマウントされている。`Deno.serve()` を起動する `startApiServer()` 自体 (ポートバインド) は統合テストの対象外。
 
 ## エージェント向けの利用手順
 

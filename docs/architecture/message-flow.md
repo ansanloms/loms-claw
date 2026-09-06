@@ -1,8 +1,8 @@
 # メッセージ処理 (Discord → Claude → Discord)
 
-`bot/mod.ts` の `DiscordBot` が discord.js の `messageCreate` / `interactionCreate` を受け取り、認可・反応判定・スコープ単位の直列化・画像添付の前処理を経て `askClaude()` を呼び、ストリームを Discord へ流し込むまでの流れを記す。AI to AI 自己メンション (bot 自身の投稿で別スコープのセッションを起動する経路) の発火条件と連鎖制御、インタラクション (ボタン / select / modal / スラッシュコマンド) の振り分けも本章で扱う。
+`bot/mod.ts` の `DiscordBot` が discord.js の `messageCreate`/`interactionCreate` を受け取り、認可・反応判定・スコープ単位の直列化・画像添付の前処理を経て `askClaude()` を呼び、ストリームを Discord へ流し込むまでの流れを記す。AI to AI 自己メンション (bot 自身の投稿で別スコープのセッションを起動する経路) の発火条件と連鎖制御も本章で扱う。加えて、インタラクション (ボタン/select/modal/スラッシュコマンド) の振り分けも扱う。
 
-関連: [README](README.md) / [lifecycle](lifecycle.md) / [claude-integration](claude-integration.md) / [store-and-settings](store-and-settings.md) / [approval](approval.md) / [cron](cron.md) / [deployment](deployment.md)
+関連: [README](README.md)/[lifecycle](lifecycle.md)/[claude-integration](claude-integration.md)/[store-and-settings](store-and-settings.md)/[approval](approval.md)/[cron](cron.md)/[deployment](deployment.md)
 
 対象ソース: `bot/mod.ts`, `bot/guard.ts`, `bot/incoming.ts`, `bot/queue.ts`, `bot/ratelimit.ts`, `bot/message.ts`, `bot/commands.ts`, `claude/mod.ts` (抽出ヘルパー), `approval/manager.ts` (`createCanUseTool()` の入口)
 
@@ -44,7 +44,7 @@ sequenceDiagram
 
 ## `messageCreate` ハンドラ (`DiscordBot.onMessage`)
 
-手順 1〜3 (認可・自己メンション判定 (+ レート枠の事前判定)・スコープ抽出・反応判定) は `resolveIncomingMessage()` (`bot/incoming.ts`) に集約してある。discord.js の `Message` / `Client` には直接触れず、`DiscordBot.onMessage` が取り出した最小の値 (`IncomingMessageInput`) と、KV 読み取り・メンション判定・レート制限といった副作用を持つ処理を関数として注入する (`IncomingMessageDeps`)。内部では既存の `isAuthorized` / `isAuthorizedSelfMessage` / `shouldRespond` (`bot/guard.ts`) / `scopeFromChannel` (`bot/scope.ts`) をそのまま呼ぶ (再実装しない)。戻り値は `{ kind: "ignore"; reason }` (`"unauthorized"` / `"self-not-mentioned"` / `"rate-limited"` / `"not-responding"`) または `{ kind: "handle"; scope; localId; isSelfMessage }` の判別共用体で、`onMessage` はこれを見て早期 return するか後続処理 (ログ出力・キュー投入・Claude 呼び出し) へ進む。
+手順 1〜3 (認可・自己メンション判定 (+ レート枠の事前判定)・スコープ抽出・反応判定) は `resolveIncomingMessage()` (`bot/incoming.ts`) に集約してある。discord.js の `Message`/`Client` には直接触れず、`DiscordBot.onMessage` が取り出した最小の値 (`IncomingMessageInput`) と、KV 読み取り・メンション判定・レート制限といった副作用を持つ処理を関数として注入する (`IncomingMessageDeps`)。内部では既存の `isAuthorized`/`isAuthorizedSelfMessage`/`shouldRespond` (`bot/guard.ts`)/`scopeFromChannel` (`bot/scope.ts`) をそのまま呼ぶ (再実装しない)。戻り値は `{ kind: "ignore"; reason }` (`"unauthorized"`/`"self-not-mentioned"`/`"rate-limited"`/`"not-responding"`) または `{ kind: "handle"; scope; localId; isSelfMessage }` の判別共用体で、`onMessage` はこれを見て早期 return するか後続処理 (ログ出力・キュー投入・Claude 呼び出し) へ進む。
 
 ### 1. 認可
 
@@ -60,11 +60,11 @@ sequenceDiagram
 
 `localId = threadId ?? channelId` を「発話があった場所」として、キューのキー・承認ボタンの送信先・テンプレート変数 `discord.channel.id` に使う。スコープの意味は [store-and-settings](store-and-settings.md) を参照。
 
-bot 側でメッセージをスレッドへ自動分離する機能は実装しない。スレッド分離はエージェントの運用フロー (チャンネル別システムプロンプトの「話題の管理」節 + `discord` / `travel-note` skill) で、ユーザ確認を取ってから行う。設定は `PATCH /settings/<threadId>` で `active: true` を入れる (2026-08-23 判断、#136)。
+bot 側でメッセージをスレッドへ自動分離する機能は実装しない。スレッド分離はエージェントの運用フロー (チャンネル別システムプロンプトの「話題の管理」節 + `discord`/`travel-note` skill) で、ユーザ確認を取ってから行う。設定は `PATCH /settings/<threadId>` で `active: true` を入れる (2026-08-23 判断、#136)。
 
 ### 3. 人間のメッセージの反応判定
 
-人間のメッセージ (自己メッセージでない) は、スコープ抽出後に `hasNonBotMentions = message.mentions.users.some((u) => !u.bot)` と `store.getActive(scope)` (per-scope の上書き。未設定なら `undefined`) を求め、`shouldRespond(channelId, activeChannelIds, isThread, parentId, isMentioned, hasNonBotMentions, activeOverride)` で判定する。
+人間のメッセージ (自己メッセージでない) は、スコープ抽出後に `hasNonBotMentions = message.mentions.users.some((u) => !u.bot)` と `store.getActive(scope)` を求め、`shouldRespond(channelId, activeChannelIds, isThread, parentId, isMentioned, hasNonBotMentions, activeOverride)` で判定する。`getActive(scope)` は per-scope の上書きで、未設定なら `undefined`。
 
 - `shouldRespond()` は内部で `resolveActive()` を呼ぶ。`activeOverride` が boolean ならそれを採用、`undefined` なら `config.discord.activeChannelIds` に `channelId` (スレッドなら親 `parentId` も) が含まれるかで決める。
 - active なら原則反応するが、bot へのメンションが無く他ユーザへのメンションだけがある場合は無視する。active でなければ bot メンション必須。
@@ -95,15 +95,15 @@ bot 側でメッセージをスレッドへ自動分離する機能は実装し�
   - `fetch(att.url, { signal: AbortSignal.timeout(30_000) })` で取得。非 2xx は WARN を出してスキップ。
   - `resizeImageIfNeeded()`: `ffprobe` で幅・高さを取り、長辺が 1568 px を超える場合のみ `ffmpeg` で縮小して JPEG (`-q:v 4`) に再エンコードする。超えなければ元データのまま。
   - 最初の成功時に `Deno.makeTempDir({ prefix: "loms-claw-img-" })` を作り、`{uuid}{ext}` で保存する (縮小した場合は `.jpg`、それ以外は元の拡張子、無ければ `.bin`)。個別の失敗は WARN を出して次へ進む。
-  - `ffmpeg` / `ffprobe` は実行時依存。Dockerfile で `ffmpeg` を apt install している ([deployment](deployment.md))。
+  - `ffmpeg`/`ffprobe` は実行時依存。Dockerfile で `ffmpeg` を apt install している ([deployment](deployment.md))。
 - 1 件以上ダウンロードできたら `appendImageReferences(prompt || "この画像について説明して", images)` で `@/abs/path` を空行を挟んで末尾に付加する。
 - ここでプロンプトが空なら return (finally の後始末は走る)。
-- 自己メッセージなら `tryConsume()` で枠を消費する。超過なら WARN を出して return。消費を query 直前に置くのは、応答しないメッセージで枠を浪費しないため。
+- 自己メッセージなら `tryConsume()` で枠を消費する。超過なら WARN を出して return。消費は query 直前に置く。理由: 応答しないメッセージで枠を浪費しないため。
 - 自己メッセージなら `SELF_MENTION_PROMPT_NOTE` (`[AI to AI 自己メンション] この依頼は認可ユーザー本人の発話ではなく、別のチャンネル/スレッドで動いている自 bot のセッションが投稿したもの。`) を空行を挟んでプロンプト先頭に付ける。
 
 ### 8. 設定の取得と `askClaude()` の呼び出し
 
-- 発話者: 人間なら `message.author.id` / `message.author.displayName`。自己メッセージなら `config.discord.userId` と、その表示名 (guild member cache → users cache → ID の順で解決)。
+- 発話者: 人間なら `message.author.id`/`message.author.displayName`。自己メッセージなら `config.discord.userId` と、その表示名 (guild member cache → users cache → ID の順で解決)。
 - `store.getSession / getModel / getEffort / getShowThinking` を `Promise.all` で並列取得する (解決順は [store-and-settings](store-and-settings.md))。
 - テンプレート変数 `discord.guild.id / discord.guild.name / discord.channel.id (= localId) / discord.channel.name / discord.channel.type ("thread" | "text") / discord.user.id / discord.user.name` を組み、`systemPrompts.resolve("chat", scope, vars)` で追記システムプロンプトを得る ([claude-integration](claude-integration.md))。
 - `askClaude(prompt, { sessionId, config: config.claude, discordToken: config.discord.token, signal: AbortSignal.timeout(config.claude.timeout), appendSystemPrompt, model, effort, canUseTool: createCanUseTool(approvalManager, localId) })`。`createCanUseTool()` は `AskUserQuestion` を `requestAnswers()` へ、それ以外を `requestApproval()` へ振り分ける ([approval](approval.md))。
@@ -120,24 +120,27 @@ bot 側でメッセージをスレッドへ自動分離する機能は実装し�
 | 4    | `event.type === "result"`                                                                                 | `resultEvent` に保持し `handleResultEvent()` (`claude/mod.ts`) を呼ぶ。`subtype !== "success"` なら WARN (イベント全体を JSON で記録)。`store.setSession(scope, event.session_id)` を即時保存 |
 | 5    | `event.type === "tool_progress"`                                                                          | `progress.report(tool_name, elapsed_time_seconds)`                                                                                                                                            |
 
-- `system` / `user` / サブエージェント由来 (`parent_tool_use_id` 有り) のイベントは扱わない。
+- `system`/`user`/サブエージェント由来 (`parent_tool_use_id` 有り) のイベントは扱わない。
 - 境界 flush: バッファ内で最後の `。` または改行までを送り、残りを保持する。境界が無い場合は何もしないが、閾値の 2 倍以上に達したら全量を強制 flush する (コードブロック・英語・URL が続くケース対策)。
-- `showThinking` が false のときは thinking を抽出しない。thinking が流れるかは model / effort 依存。
-- `result` 受信時に session を即保存するのは、その後ジェネレータが throw しても session を残すため。`askClaude()` 側で「resume 先が無い」エラー時に新規セッションで 1 回やり直す挙動は [claude-integration](claude-integration.md) を参照。
+- `showThinking` が false のときは thinking を抽出しない。thinking が流れるかは model/effort 依存。
+- `result` 受信時に session を即保存する。理由: その後ジェネレータが throw しても session を残すため。`askClaude()` 側で「resume 先が無い」エラー時に新規セッションで 1 回やり直す挙動は [claude-integration](claude-integration.md) を参照。
 
 ### 10. ループ後
 
 - thinking → text の順に最終 flush。
-- 一度もテキストを送っていなければ (`hasStreamedText` が false)、`requireResultText(resultEvent)` (`claude/mod.ts`) で本文を取り出し `sendChunks` に渡す。`resultEvent` が無ければ `claude stream ended without result event` を throw する。取り出し自体は `extractResultText(resultEvent)` (`result` フィールドが文字列なら `subtype` を問わず採用し、無ければ `errors` / `subtype` から組み立てた Error を throw する)。cron 側の同じ組み合わせは [cron](cron.md) を参照。
+- 一度もテキストを送っていなければ (`hasStreamedText` が false)、`requireResultText(resultEvent)` (`claude/mod.ts`) で本文を取り出し `sendChunks` に渡す。`resultEvent` が無ければ `claude stream ended without result event` を throw する。取り出し自体は `extractResultText(resultEvent)` (`result` フィールドが文字列なら `subtype` を問わず採用し、無ければ `errors`/`subtype` から組み立てた Error を throw する)。cron 側の同じ組み合わせは [cron](cron.md) を参照。
 
 ### 11. エラーと後始末
 
 - catch: `log.error` (全文) の後、`sendChunks(summarizeErrorForDiscord(error))` (`errors.ts`) で定型文 + エラーメッセージの先頭 1 行 (最大 200 文字) をチャンネルへ送る。全文は `GET /logs` を参照させる (送信失敗は握り潰す)。
-- finally: ダウンロードした画像の temp ディレクトリを削除 (`cleanupImageFiles`)、進捗メッセージを削除 (`progress.cleanup`)、typing を停止 (`typingController.abort()`)。
+- finally: 次を行う。
+  - ダウンロードした画像の temp ディレクトリを削除 (`cleanupImageFiles`)
+  - 進捗メッセージを削除 (`progress.cleanup`)
+  - typing を停止 (`typingController.abort()`)
 
 ## AI to AI 自己メンション
 
-bot 自身が別チャンネル / スレッドに `<@botId> 依頼内容` を投稿すると、そのスコープのセッション (依頼元とは別。そのスコープで人間と進行中の会話があればそれを resume) で応答する。設定項目は無く常時有効。
+bot 自身が別チャンネル/スレッドに `<@botId> 依頼内容` を投稿すると、そのスコープのセッション (依頼元とは別。そのスコープで人間と進行中の会話があればそれを resume) で応答する。設定項目は無く常時有効。
 
 ### 発火条件 (すべて必須、fail-closed)
 
@@ -149,7 +152,7 @@ bot 自身が別チャンネル / スレッドに `<@botId> 依頼内容` を投
 
 - bot 全体のスライディングウィンドウレート制限 (`SelfMentionRateLimiter`): 直近 10 分間に 6 回まで。到着時に `isExhausted()` で事前判定 (非消費)、query 直前に `tryConsume()` で消費。超過時は WARN ログを出して無視する。枠は予約しないため、busy なスコープに複数の自己メンションが積まれた場合は実行時に改めて弾かれうる。応答が無ければ次の起動も起きないので、超過で無視された連鎖はそこで途切れる (ウィンドウが空けば新たな連鎖は始められる)。
 - discord.js `Client` の既定 `allowedMentions: { parse: [], users: [config.discord.userId] }`。bot プロセスが Client 経由で送る全メッセージ (応答・cron 投稿・承認ボタン等) では認可ユーザ宛て以外のメンション解決が無効化され、応答本文に `<@botId>` が紛れても `message.mentions` に自 bot が載らず発火条件を満たさない。Claude が `discord` skill の curl (REST API) で投稿するメッセージには効かない。それが意図した起動経路であり、その側の歯止めは上記レート制限のみ。
-- 応答に発話者メンションプレフィックスを付けない (`mention = ""`)。付けると応答自体が再度メンション条件を満たす。
+- 応答に発話者メンションプレフィックスを付けない (`mention = ""`)。理由: 付けると応答自体が再度メンション条件を満たす。
 - プロンプト先頭に `SELF_MENTION_PROMPT_NOTE` を付加し、テンプレート変数 `discord.user.id / discord.user.name` は bot 自身ではなく認可ユーザ (`config.discord.userId`) に差し替える。発話者宛てメンションを指示するプロンプトが `<@botId>` を生むのを防ぎつつ、モデルには「依頼は AI からだが主体は本人」と読ませる。
 
 per-scope の停止手段は無い。連鎖を止めるにはレート制限に任せるか bot を再起動する。ツール承認・`AskUserQuestion` は自己起動ターンでも通常どおりそのスコープに投稿され、本人が見ていなければタイムアウトで deny となり依頼元には通知されない ([approval](approval.md))。
@@ -171,7 +174,7 @@ per-scope の停止手段は無い。連鎖を止めるにはレート制限に�
 | modal 送信 (AskUserQuestion の Other 自由入力) | `interaction.isModalSubmit()`                        | `approvalManager.handleModal(interaction)`                                                                                                                                                                |
 | chat input `/claw settings show\|set\|unset`   | `isChatInputCommand()` かつ `commandName === "claw"` | `isAuthorized(guildId, user.id, user.bot, config)` を通過後、サブコマンド群 `settings` の `show` → `handleSettingsShow`、`set` → `handleSettingsSet`、`unset` → `handleSettingsUnset` (`bot/commands.ts`) |
 
-- ボタン / select / modal のハンドラが throw した場合は ERROR ログを出し、未応答なら ephemeral のエラー文言で `reply()` する。この 3 分岐は同形のため `runInteraction(interaction, label, handler, errorMessage)` (`bot/mod.ts`) に共通化してある。ログの label とエラー文言は分岐ごとに異なる (button: `"承認処理中にエラーが発生しました。"`、select / modal: `"回答処理中にエラーが発生しました。"`)。
+- ボタン/select/modal のハンドラが throw した場合は ERROR ログを出し、未応答なら ephemeral のエラー文言で `reply()` する。この 3 分岐は同形のため `runInteraction(interaction, label, handler, errorMessage)` (`bot/mod.ts`) に共通化してある。ログの label とエラー文言は分岐ごとに異なる (button: `"承認処理中にエラーが発生しました。"`、select/modal: `"回答処理中にエラーが発生しました。"`)。
 - スラッシュコマンドは `registerCommands()` で対象ギルドにのみ登録される ([lifecycle](lifecycle.md))。設定コマンドの意味は [store-and-settings](store-and-settings.md)、承認・質問の詳細は [approval](approval.md) を参照。
 
 ## 定数一覧

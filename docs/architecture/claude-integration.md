@@ -1,8 +1,8 @@
 # Claude 連携
 
-Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`) の `query()` を呼び出す層の構造。`claude/mod.ts` の `askClaude()` / `buildQueryOptions()` が `query()` に渡すオプションの組み立てとエラー処理を担い、`claude/system-prompt.ts` の `SystemPromptStore` と `claude/template.ts` の `replaceTemplateVariables()` が preset システムプロンプトへ append する文字列を作る。呼び出し側は chat (`bot/mod.ts`) と cron (`cron/executor.ts`) の 2 箇所。
+Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`) の `query()` を呼び出す層の構造。`claude/mod.ts` の `askClaude()`/`buildQueryOptions()` が `query()` に渡すオプションの組み立てとエラー処理を担い、`claude/system-prompt.ts` の `SystemPromptStore` と `claude/template.ts` の `replaceTemplateVariables()` が preset システムプロンプトへ append する文字列を作る。呼び出し側は chat (`bot/mod.ts`) と cron (`cron/executor.ts`) の 2 箇所。
 
-関連: [README](README.md) / [message-flow](message-flow.md) / [cron](cron.md) / [store-and-settings](store-and-settings.md) / [approval](approval.md) / [deployment](deployment.md)
+関連: [README](README.md)/[message-flow](message-flow.md)/[cron](cron.md)/[store-and-settings](store-and-settings.md)/[approval](approval.md)/[deployment](deployment.md)
 
 ## 全体像
 
@@ -29,10 +29,10 @@ flowchart LR
 
 `claude/mod.ts` の `askClaude(prompt, options)` は `AsyncGenerator<SDKMessage>` を返し、`query()` が返す `SDKMessage` をそのまま逐次 yield する。消費側は `message.type` で分岐する。
 
-- 引数 `options` は `ClaudeCallOptions` (`sessionId` / `appendSystemPrompt` / `model` / `effort` / `canUseTool` / `discordToken`) に `config: ClaudeConfig`、`signal?: AbortSignal`、`queryFn?: QueryFn` を加えたもの。
+- 引数 `options` は `ClaudeCallOptions` (`sessionId`/`appendSystemPrompt`/`model`/`effort`/`canUseTool`/`discordToken`) に `config: ClaudeConfig`、`signal?: AbortSignal`、`queryFn?: QueryFn` を加えたもの。
 - `signal` は内部で生成した `AbortController` に橋渡しされる (既に aborted なら即 abort、そうでなければ `abort` イベントで abort)。`askClaude()` 自身はタイムアウトを持たず、呼び出し側が `AbortSignal.timeout(...)` を渡す (chat は `config.claude.timeout`、cron は frontmatter の `timeout` があればそれ、無ければ `config.claude.timeout`)。
 - `queryFn` は `typeof query` の DI。省略時は SDK の `query`。テストではモックの `AsyncGenerator<SDKMessage>` を返す関数を注入する。
-- セッション不在時の再試行: 最初の試行が何も yield せずに失敗し、エラーメッセージが `isSessionNotFoundError()` (`"No conversation found with session ID"` を含む) に一致し、`sessionId` が指定されていた場合に限り、`resume` を外して 1 回だけやり直す。既に 1 件でも yield 済みなら再試行しない (下流の二重出力を防ぐ)。新しい `session_id` は消費側が `result` イベントから保存し直す。
+- セッション不在時の再試行: 最初の試行が何も yield せずに失敗し、エラーメッセージが `isSessionNotFoundError()` (`"No conversation found with session ID"` を含む) に一致し、`sessionId` が指定されていた場合に限り、`resume` を外して 1 回だけやり直す。既に 1 件でも yield 済みなら再試行しない。理由: 下流の二重出力を防ぐ。新しい `session_id` は消費側が `result` イベントから保存し直す。
 - それ以外の失敗: 受信したイベント種別の列 (`events received (N): ...`、0 件なら `query died before any output`) と最後のイベント (JSON を 2000 文字に切り詰め) を ERROR ログに残し、`claude query failed: <reason>` で rethrow する。
 
 ## buildQueryOptions()
@@ -61,7 +61,7 @@ flowchart LR
 
 ## ストリームイベントのヘルパ
 
-`claude/mod.ts` が消費側 (chat / cron) の重複を避けるために提供する純粋関数。
+`claude/mod.ts` が消費側 (chat/cron) の重複を避けるために提供する純粋関数。
 
 | 関数                                  | 役割                                                                                                                                                                                                                  |
 | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -87,7 +87,7 @@ cron は `drainResultEvent()` でストリーム全体を走査してから `req
 
 ### load()
 
-- `DEFAULT.md` / `CHAT.md` / `CRON.md` をそれぞれ読む (無ければ `undefined`。`trim()` して空なら `undefined`)。
+- `DEFAULT.md`/`CHAT.md`/`CRON.md` をそれぞれ読む (無ければ `undefined`。`trim()` して空なら `undefined`)。
 - 同ディレクトリの残りの `*.md` を走査し、basename (拡張子除く) をキー、`trim()` 済み本文を値として `channelPrompts` (`Map<string, string>`) に入れる。thread と channel は同一 Snowflake 名前空間で衝突しないため、1 つの Map で両方を持つ。
 - ディレクトリが無ければ INFO ログを出してスキップする。
 - 結果はメモリにキャッシュされ、`resolve()` は I/O を伴わない。ファイル変更の反映には bot の再起動が必要。
@@ -117,9 +117,9 @@ cron は `drainResultEvent()` でストリーム全体を走査してから `req
 
 注意点:
 
-- `{{discord.channel.id}}` / `{{discord.channel.name}}` はスレッド内の発話ではスレッドの ID / 名前になる。`{channelId}.md` がスレッド内でフォールバック採用された場合も同様。
-- 自己メンション起動時に `{{discord.user.*}}` を認可ユーザーに差し替えるのは、「発話者へメンションせよ」という指示が `<@botId>` を生み連鎖の火種になるのを防ぐため。
-- cron ではギルド変数のみ渡されるため、`CRON.md` にチャンネル / ユーザー変数を書くとプレースホルダーのまま残る。
+- `{{discord.channel.id}}`/`{{discord.channel.name}}` はスレッド内の発話ではスレッドの ID/名前になる。`{channelId}.md` がスレッド内でフォールバック採用された場合も同様。
+- 自己メンション起動時に `{{discord.user.*}}` を認可ユーザーに差し替える。理由:「発話者へメンションせよ」という指示が `<@botId>` を生み連鎖の火種になるのを防ぐため。
+- cron ではギルド変数のみ渡されるため、`CRON.md` にチャンネル/ユーザー変数を書くとプレースホルダーのまま残る。
 
 ## 呼び出し側の差分
 

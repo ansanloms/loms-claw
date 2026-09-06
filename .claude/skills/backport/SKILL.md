@@ -19,7 +19,10 @@ description: >-
 
 ## 前提
 
-リポジトリ直下に `.env` があり、`LOMS_CLAW_PROD_HOST` (稼働サーバの ssh host alias) と `LOMS_CLAW_PROD_PATH` (稼働サーバ上のデプロイ先ルートパス) が設定されていること。
+リポジトリ直下に `.env` があり、次の 2 つが設定されていること。
+
+- `LOMS_CLAW_PROD_HOST`: 稼働サーバの ssh host alias
+- `LOMS_CLAW_PROD_PATH`: 稼働サーバ上のデプロイ先ルートパス
 
 `.env` が無い、または上記変数が未設定の場合は、リポジトリ直下の `.env.example` を参照してユーザに設定を促すこと。
 

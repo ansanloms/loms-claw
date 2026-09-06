@@ -1,14 +1,14 @@
 # Store と設定
 
-チャンネル / スレッド単位の設定 (session / model / effort / showThinking / active) を Deno KV に永続化する `Store` (`store/mod.ts`) と、その設定を操作する 2 つの入口 (Discord スラッシュコマンド `/claw settings` と内部 HTTP API `/settings`) の構造を記述する。両入口は `Store.applyPatch()` を共有しており、スコープの決め方と解決順は Store が単一のソースとして定める。
+チャンネル/スレッド単位の設定 (session/model/effort/showThinking/active) を Deno KV に永続化する `Store` (`store/mod.ts`) と、その設定を操作する 2 つの入口の構造を記述する。2 つの入口とは Discord スラッシュコマンド `/claw settings` と内部 HTTP API `/settings` を指す。両入口は `Store.applyPatch()` を共有しており、スコープの決め方と解決順は Store が単一のソースとして定める。
 
-関連: [README.md](README.md) / [message-flow.md](message-flow.md) / [claude-integration.md](claude-integration.md) / [cron.md](cron.md) / [internal-api.md](internal-api.md) / [deployment.md](deployment.md)
+関連: [README.md](README.md)/[message-flow.md](message-flow.md)/[claude-integration.md](claude-integration.md)/[cron.md](cron.md)/[internal-api.md](internal-api.md)/[deployment.md](deployment.md)
 
 ## Store の実体
 
 - バックエンドは Deno KV (SQLite backend)。`main.ts` が `Deno.openKv(config.storePath)` で open し、`new Store(kv, config.claude.defaults)` を生成する。KV は起動リトライの外側で 1 度だけ open され、`DiscordBot.shutdown()` 内の `Store.close()` で閉じられる。
 - `config.storePath` の既定は `.claude/loms-claw.kv` (相対パスは cwd 基準。`config.schema.json` の `storePath`)。`main.ts` は open 前に親ディレクトリを `Deno.mkdir({ recursive: true })` で作る。
-- グローバルデフォルトは `config.json` の `claude.defaults` (`model` / `effort` / `showThinking`) で、`Store` のコンストラクタ引数 `StoreDefaults` として渡される。`getDefaults()` はそのコピーを返す。
+- グローバルデフォルトは `config.json` の `claude.defaults` (`model`/`effort`/`showThinking`) で、`Store` のコンストラクタ引数 `StoreDefaults` として渡される。`getDefaults()` はそのコピーを返す。
 
 ### キー配置
 
@@ -39,13 +39,13 @@ interface StoreScope {
 | スレッド内      | `{ channelId: parentId, threadId }`           | 同上。`parentId` が null のときは thread id 自体を `channelId` に入れる                                                  |
 | cron ジョブ     | `{ channelId: "cron:{name}" }` (session のみ) | `cron/executor.ts`。詳細は後述                                                                                           |
 
-`api/routes/settings.ts` (`GET` / `PATCH` / `DELETE /settings/{id}`) は `bot/scope.ts` を使わず、`resolveParentId` で親を引いて別途スコープを組む (詳細は後述の `resolveScope()`)。親が取れないスレッドの扱いは bot 側 (`{ channelId: id, threadId: id }`) と API 側 (`{ channelId: id }`) で異なる (既存挙動。統一は別 issue)。
+`api/routes/settings.ts` (`GET`/`PATCH`/`DELETE /settings/{id}`) は `bot/scope.ts` を使わず、`resolveParentId` で親を引いて別途スコープを組む (詳細は後述の `resolveScope()`)。親が取れないスレッドの扱いは bot 側 (`{ channelId: id, threadId: id }`) と API 側 (`{ channelId: id }`) で異なる。これは既存挙動で、統一は別 issue とする。
 
-書き込み (`setSession` / `applyPatch` / `clearScope`) は常に leaf id (`threadId ?? channelId`) に対して行われる。スレッド内で `/claw settings set` を叩いても親チャンネルのキーには触れない。
+`setSession`/`applyPatch`/`clearScope` による書き込みは常に leaf id (`threadId ?? channelId`) に対して行われる。スレッド内で `/claw settings set` を叩いても親チャンネルのキーには触れない。
 
 ## 解決順
 
-読み取り側 (`getModel` / `getEffort` / `getShowThinking` / `getActive` / `getSession` / `getScopeSettings`) のフォールバックはキーごとに異なる。
+読み取り側 (`getModel`/`getEffort`/`getShowThinking`/`getActive`/`getSession`/`getScopeSettings`) のフォールバックはキーごとに異なる。
 
 | キー           | 解決順                                                      | どこにも無いとき                                                                                                      |
 | -------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
@@ -77,9 +77,9 @@ interface ScopeSettings {
 }
 ```
 
-- `model` / `effort` は defaults にも無ければ `undefined`。
+- `model`/`effort` は defaults にも無ければ `undefined`。
 - `showThinking` はどこにも無くても `{ value: false, source: "default" }` を必ず返す。
-- `active` は thread / channel どちらにも上書きが無ければ `undefined` (JSON 化時はフィールドごと省略)。`source` に `default` は現れない。
+- `active` は thread/channel どちらにも上書きが無ければ `undefined` (JSON 化時はフィールドごと省略)。`source` に `default` は現れない。
 - `session` は `threadId` があれば thread の値、無ければ channel の値。thread scope で channel の session は読まない。
 - 読み取りは `kv.getMany()` で thread 5 キー + channel 5 キーを一括取得する。
 
@@ -100,8 +100,8 @@ interface SettingsPatch {
 ```
 
 - キー省略 = 触らない、`null` = そのキーを削除 (フォールバックへ戻す)、値あり = leaf id に書く。
-- すべての set / delete を 1 つの `kv.atomic()` にまとめて commit する。一部だけ適用された状態を残さない。
-- `session` は型で `null` のみ受け付ける (削除専用)。任意のセッション ID の書き込みを許すと他スコープの会話を乗っ取れるため。
+- すべての set/delete を 1 つの `kv.atomic()` にまとめて commit する。一部だけ適用された状態を残さない。
+- `session` は型で `null` のみ受け付ける (削除専用)。理由: 任意のセッション ID の書き込みを許すと他スコープの会話を乗っ取れるため。
 - 返り値は `getScopeSettings(scope)` の結果。渡した scope に `threadId` が無ければ thread のフォールバックは効かない。
 
 ### `clearScope(scope)`
@@ -112,7 +112,7 @@ interface SettingsPatch {
 
 `setSession` のみが個別 setter として残る。`bot/mod.ts` と `cron/executor.ts` が `result` イベント受信時に `event.session_id` を保存する (ジェネレータが非ゼロ終了で throw してもセッションが残るよう、result を受け取った時点で即座に書く)。
 
-model / effort / showThinking / active に対する個別の setter / deleter は無く、書き込みは `setSession` / `applyPatch` / `clearScope` の 3 つに集約されている。読み取り側の thread → channel → (defaults) 解決も 4 つの getter (`getModel` / `getEffort` / `getShowThinking` / `getActive`) が共通の private ヘルパ (`resolveScoped()`) を呼ぶ形にまとまっている。
+model/effort/showThinking/active に対する個別の setter/deleter は無く、書き込みは `setSession`/`applyPatch`/`clearScope` の 3 つに集約されている。読み取り側の thread → channel → (defaults) 解決も 4 つの getter (`getModel`/`getEffort`/`getShowThinking`/`getActive`) が共通の private ヘルパ (`resolveScoped()`) を呼ぶ形にまとまっている。
 
 ## Discord スラッシュコマンド `/claw settings`
 
@@ -125,11 +125,11 @@ model / effort / showThinking / active に対する個別の setter / deleter �
 | `unset`      | `target` (必須): `model` / `effort` / `show_thinking` / `active` / `session`                                                                           | `handleSettingsUnset()`。`applyPatch(scope, { [key]: null })`                             |
 
 - `set` に `session` オプションは無い。session は `unset` (削除) のみ。`SettingsPatch.session?: null` の型と一致する。
-- スラッシュコマンドのオプション名は snake_case (`show_thinking`)、Store / API のキー名は camelCase (`showThinking`)。ハンドラが `patch.showThinking` に詰め替える。他の 4 つ (`model` / `effort` / `active` / `session`) は同名。
+- スラッシュコマンドのオプション名は snake_case (`show_thinking`)、Store/API のキー名は camelCase (`showThinking`)。ハンドラが `patch.showThinking` に詰め替える。他の 4 つ (`model`/`effort`/`active`/`session`) は同名。
 - `scopeFromInteraction()` は `interaction.channel` を `bot/scope.ts` の `scopeFromChannel()` に渡すだけの薄いラッパ。messageCreate 側 (`bot/mod.ts`) のスコープ抽出も同じ `scopeFromChannel()` を使う。
 - `show` が表示する内容:
-  - 現在スコープ (Thread + parent、または Channel) の `session` / `model` / `effort` / `show_thinking` / `active`。文字列設定は `value (source)`、`active` は `resolveActive()` で求めた実効値と出所 (KV に無ければ `config activeChannelIds`)
-  - グローバルデフォルト (`config.claude.defaults` の `model` / `effort` / `show_thinking`)
+  - 現在スコープ (Thread + parent、または Channel) の `session`/`model`/`effort`/`show_thinking`/`active`。文字列設定は `value (source)`、`active` は `resolveActive()` で求めた実効値と出所 (KV に無ければ `config activeChannelIds`)
+  - グローバルデフォルト (`config.claude.defaults` の `model`/`effort`/`show_thinking`)
   - cron ジョブ一覧 (`CronExecutor.listJobs()` の名前と schedule。executor 未初期化なら `not initialized`)
 
 ## 内部 HTTP API `/settings`
@@ -151,17 +151,17 @@ model / effort / showThinking / active に対する個別の setter / deleter �
 2. 注入済みなら呼び出し、親 ID が返れば `{ channelId: parentId, threadId: id }`、`null` なら `{ channelId: id }`。
 3. `resolveParentId` が throw した場合 (存在しない ID、`cron:{name}` 等の擬似 id で `channels.fetch()` が失敗するケース) は握りつぶして `{ channelId: id }` へフォールバックする。`resolveThreadParentId()` 側は例外を素通しする設計。
 
-書き込み先は leaf id なので、スレッド判定の成否は PATCH / DELETE の書き込み先を変えない。差が出るのは GET / PATCH の応答 (解決結果) に thread → channel フォールバックが効くかどうかだけ。
+書き込み先は leaf id なので、スレッド判定の成否は PATCH/DELETE の書き込み先を変えない。差が出るのは GET/PATCH の応答 (解決結果) に thread → channel フォールバックが効くかどうかだけ。
 
-リクエスト / レスポンスのスキーマは `docs/api/components/schemas/ScopeSettings.yaml` と `RequestPatchSettings.yaml` が正で、`api/internal-schemas.ts` (生成物) を通じて検証と型の単一ソースになる。`RequestPatchSettings` は `additionalProperties: false` / `minProperties: 1`、`session` は `type: "null"` のみ。
+リクエスト/レスポンスのスキーマは `docs/api/components/schemas/ScopeSettings.yaml` と `RequestPatchSettings.yaml` が正で、`api/internal-schemas.ts` (生成物) を通じて検証と型の単一ソースになる。`RequestPatchSettings` は `additionalProperties: false`/`minProperties: 1`、`session` は `type: "null"` のみ。
 
 ## cron との関係
 
 `cron/executor.ts` の実行時:
 
-- session: `resumeSession: true` のジョブだけが `{ channelId: "cron:{name}" }` で `getSession()` / `setSession()` する。`false` (既定) なら読みも書きもしない。
-- model / effort: frontmatter (`job.model` / `job.effort`) → `getModel({ channelId: job.channelId })` / `getEffort({ channelId: job.channelId })` (ジョブに `channelId` がある場合のみ。Store 内で channel → defaults へフォールバック) → executor の defaults。`cron:{name}` スコープの model / effort は読まない。
-- showThinking / active は cron では参照しない。
+- session: `resumeSession: true` のジョブだけが `{ channelId: "cron:{name}" }` で `getSession()`/`setSession()` する。`false` (既定) なら読みも書きもしない。
+- model/effort: frontmatter (`job.model`/`job.effort`) → `getModel({ channelId: job.channelId })`/`getEffort({ channelId: job.channelId })` (ジョブに `channelId` がある場合のみ。Store 内で channel → defaults へフォールバック) → executor の defaults。`cron:{name}` スコープの model/effort は読まない。
+- showThinking/active は cron では参照しない。
 
 ジョブ定義と実行の詳細は [cron.md](cron.md)。
 
