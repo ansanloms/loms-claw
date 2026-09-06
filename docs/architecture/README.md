@@ -2,7 +2,7 @@
 
 loms-claw の現状のアーキテクチャを章立てで記述する正本。構成の把握に必要な全体像 (目的・技術スタック・システムコンテキスト・モジュール依存・ファイル構成) と各章への索引をこのファイルに置き、個々の仕組みは各章に分ける。ルート [CLAUDE.md](../../CLAUDE.md) は不変条件・規約・索引に絞り、仕組みの記述はこのディレクトリを参照する。記述はソースコードを正とし、コードと食い違う場合はコードが優先する。
 
-関連: [利用規約に関する注意](../terms-of-service.md) / [内部 API 定義](../api/README.md) / [CLAUDE.md](../../CLAUDE.md) / [エージェント向け指示書](../../data/workspace/CLAUDE.md)
+関連: [利用規約に関する注意](../terms-of-service.md)/[内部 API 定義](../api/README.md)/[CLAUDE.md](../../CLAUDE.md)/[エージェント向け指示書](../../data/workspace/CLAUDE.md)
 
 ## 目的
 
@@ -30,7 +30,7 @@ Discord の単一ギルド・単一ユーザ専用のパーソナル AI エー�
 | `@std/front-matter`              | cron ジョブファイルの YAML frontmatter 抽出                                                    |
 | `@std/path`, `@std/assert`       | パス操作、テストアサーション                                                                   |
 
-コンテナイメージ (`Dockerfile`) には `curl` / `jq` (Discord REST を叩く skill 用)、`ffmpeg` (添付画像のリサイズ、`bot/message.ts` の `resizeImageIfNeeded()`)、`git` / `bubblewrap` / `socat` が同梱される。
+コンテナイメージ (`Dockerfile`) には `curl`/`jq` (Discord REST を叩く skill 用)、`ffmpeg` (添付画像のリサイズ、`bot/message.ts` の `resizeImageIfNeeded()`)、`git`/`bubblewrap`/`socat` が同梱される。
 
 ## システムコンテキスト
 
@@ -67,11 +67,11 @@ flowchart LR
   client -->|送信| rest
 ```
 
-- bot プロセスは discord.js の `Client` で Gateway に接続し、`messageCreate` / `interactionCreate` を受ける (`bot/mod.ts` の `DiscordBot`)。応答・承認ボタン・cron 結果の投稿は同じ Client から送る。
+- bot プロセスは discord.js の `Client` で Gateway に接続し、`messageCreate`/`interactionCreate` を受ける (`bot/mod.ts` の `DiscordBot`)。応答・承認ボタン・cron 結果の投稿は同じ Client から送る。
 - Claude 呼び出しは `claude/mod.ts` の `askClaude()` が Agent SDK の `query()` を呼ぶ。`cwd` はプロセス起動時の `Deno.cwd()` (`config.ts` の `loadConfig()` が `claude.cwd` として注入)。本番では `/data/workspace`、devcontainer ではソースリポジトリ自身になる。
 - Claude 側からの Discord 操作は bot プロセスを経由せず、SDK 同梱バイナリが spawn する Bash + curl で Discord REST API を直接叩く。bot トークンは `claude/mod.ts` の `buildQueryOptions()` が `query()` の `env` に `DISCORD_BOT_TOKEN` として注入する。
 - 内部 HTTP API は cron 操作・ログ取得・スコープ設定の操作を `127.0.0.1` に提供し、Claude から curl で呼ばれる。ツール承認は in-process (`canUseTool` コールバック) で、HTTP では扱わない。
-- 永続化は Deno KV 1 ファイル (`config.json` の `storePath`) のみ。`main.ts` が open し、`Store` (`store/mod.ts`) 経由で bot / cron / API が共有する。
+- 永続化は Deno KV 1 ファイル (`config.json` の `storePath`) のみ。`main.ts` が open し、`Store` (`store/mod.ts`) 経由で bot/cron/API が共有する。
 
 ## モジュール依存と層構造
 
@@ -183,7 +183,7 @@ graph TD
 | ------------ | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | エントリ     | `main.ts`                                                                       | 設定読込 → ロガー初期化 → KV open → `DiscordBot` 起動 (リトライ付き)                                                               |
 | 合成ルート   | `bot/mod.ts`                                                                    | 全サブシステムを生成・接続する唯一の場所                                                                                           |
-| サブシステム | `bot/*` (mod 以外), `claude/*`, `store/mod.ts`, `approval/*`, `api/*`, `cron/*` | 各ディレクトリが 1 つの関心事を担う。ディレクトリをまたぐ参照は下記の例外のみ                                                      |
+| サブシステム | `bot/*` (mod 以外), `claude/*`, `store/mod.ts`, `approval/*`, `api/*`, `cron/*` | 各ディレクトリが 1 つの関心事を担う。ディレクトリをまたぐ参照は次の例外のみ                                                        |
 | 横断基盤     | `config.ts`, `config.schema.ts`, `config.schema.json`, `logger.ts`, `errors.ts` | 設定・ログ・エラー整形。サブシステムに依存しない (内部では `config.ts` → `config.schema.ts` / `errors.ts` / `logger.ts` (型) のみ) |
 
 サブシステム間でディレクトリをまたぐ辺は次に限られる。
@@ -192,7 +192,7 @@ graph TD
 - `cron/executor.ts` → `bot/message.ts` (`splitMessage`): 結果投稿の 2000 文字分割を bot と共有
 - `cron/loader.ts` → `claude/mod.ts` (`EFFORT_LEVELS`): frontmatter の `effort` 検証に effort の定義を共有
 - `bot/commands.ts` → `cron/executor.ts` (型のみ)
-- `api/routes/*` → `store/mod.ts` (型), `cron/types.ts` (型): API は実体を `bot/mod.ts` から `CronRouteContext` / `SettingsRouteContext` として注入される
+- `api/routes/*` → `store/mod.ts` (型), `cron/types.ts` (型): API は実体を `bot/mod.ts` から `CronRouteContext`/`SettingsRouteContext` として注入される
 - `approval/question.ts` → `bot/message.ts` (`DISCORD_MESSAGE_LIMIT`): Discord メッセージ上限を bot と共有
 
 ## ディレクトリ / ファイル構成
