@@ -20,7 +20,7 @@ Claude Code 組み込みの auto memory（`~/.claude/projects/` 配下の memory
 
 - タスク（→ memory/TODO.md）
 - 分野特化の長期知識・台帳（→ memory/knowledge/）
-- センシティブな個人情報（→ memory/PRIVATE.md）
+- センシティブな個人情報（→ memory/private/）
 - 単発の出来事（→ memory/activity.md の変化ログ）
 - コードや git 履歴から導出できる情報
 
@@ -31,9 +31,9 @@ Claude Code 組み込みの auto memory（`~/.claude/projects/` 配下の memory
 - 古くなった情報は削除または更新しろ。肥大化させるな。
 - 長くなる内容は knowledge/へ切り出して索引からリンクしろ。
 
-### memory/PRIVATE.md（センシティブな個人情報）
+### memory/private/（センシティブな個人情報）
 
-住所・身体情報・保険等。**MUST: このファイルの内容を Discord へ投稿するな。** 会話の文脈で言及が必要でも、値をそのまま出力しない。センシティブな個人情報の追加・更新はこのファイルのみに書き、他のファイルへ複製しない。
+住所・身体情報・保険等を用途別に 1 ファイルで持つ（address.md / medical.md / insurance.md 等）。**MUST: private/ の値を出力してよいのは #private チャンネル（ID 1546352020884299908）だけ。** システムプロンプトで #private と案内されていない場所では、会話の文脈で言及が必要でも値をそのまま出力せず、#private で答えると返す。センシティブな個人情報の追加・更新はこのディレクトリのファイルにのみ書き、他のファイルへ複製しない。読むときは用途に対応する 1 ファイルだけを読む。新しい用途が必要になったらファイルを増やし、MEMORY.md の索引に追記しろ。
 
 ファイルが存在しなければ、上記の MUST をファイル冒頭に記載したうえで作成しろ。
 
@@ -72,6 +72,6 @@ Claude Code 組み込みの auto memory（`~/.claude/projects/` 配下の memory
   - 分野の知識・台帳 → knowledge/
   - 単発の出来事 → activity.md の変化ログ
   - やるべき行動 → TODO.md
-  - センシティブな個人情報 → PRIVATE.md
+  - センシティブな個人情報 → private/
 - 同じ内容を複数ファイルに書かない。昇格・移動したら元の記述を消せ。
 - 定期的に MEMORY.md と knowledge/を見直し、古い・不正確な情報を整理しろ。
