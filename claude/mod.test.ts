@@ -144,7 +144,7 @@ Deno.test("buildQueryOptions", async (t) => {
 
   await t.step("systemPrompt が claude_code preset であること", () => {
     const sp = buildQueryOptions(baseConfig, {}, ac).systemPrompt;
-    if (typeof sp !== "object" || Array.isArray(sp)) {
+    if (typeof sp !== "object" || Array.isArray(sp) || sp.type !== "preset") {
       throw new Error("systemPrompt is not a preset object");
     }
     assertEquals(sp.preset, "claude_code");
@@ -157,7 +157,7 @@ Deno.test("buildQueryOptions", async (t) => {
       { appendSystemPrompt: "extra prompt" },
       ac,
     ).systemPrompt;
-    if (typeof sp !== "object" || Array.isArray(sp)) {
+    if (typeof sp !== "object" || Array.isArray(sp) || sp.type !== "preset") {
       throw new Error("systemPrompt is not a preset object");
     }
     assertEquals(sp.append, "extra prompt");
