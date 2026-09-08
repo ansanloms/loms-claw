@@ -17,6 +17,8 @@ tags: [
   登山,
 ] # 登山 / ハイキング / 観光 / キャンプ / バイクツーリング を基本に該当をすべて列挙 (収まらない形態は自由に追加してよい)
 thread: "<Discord スレッド ID>" # snowflake。必ず引用符付き。スレッドが無い間はキーごと書かない
+pin_channel: "<Discord チャンネル ID>" # snowflake。ピン投稿の投稿先。ピン投稿が無い間はキーごと書かない
+pin_messages: ["<メッセージ ID>", "<メッセージ ID>"] # snowflake の配列、投稿順。pin_channel と対で書き、無い間はキーごと書かない
 timestamp: "<YYYY-MM-DDTHH:MM:SS+09:00>" # このノートの最終更新日時。編集のたびに現在時刻へ更新
 ---
 
