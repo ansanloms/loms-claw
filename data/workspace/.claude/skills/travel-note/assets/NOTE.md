@@ -6,12 +6,14 @@ description: <概要を 1 文で>
 destination: <行き先>
 start_at: "<YYYY-MM-DDTHH:MM:SS+09:00>"
 end_at: "<YYYY-MM-DDTHH:MM:SS+09:00>"
-tags: [
-  <形態>,
-]
+tags:
+  - <形態>
 thread: "<Discord スレッド ID>"
 pin_channel: "<Discord チャンネル ID>"
-pin_messages: ["<メッセージ ID>"]
+pin_messages:
+  - "<メッセージ ID>"
+pin_packing_messages:
+  - "<メッセージ ID>"
 timestamp: "<YYYY-MM-DDTHH:MM:SS+09:00>"
 ---
 
