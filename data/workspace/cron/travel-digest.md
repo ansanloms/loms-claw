@@ -43,7 +43,7 @@ timeout: 600000
 
 ## 5. Discord ピン投稿の整合
 
-`travel-note` skill の「Discord ピン投稿」節 (本文の骨格は同 skill の `assets/PIN-SCHEDULE.md`・`assets/PIN-PACKING.md`) に従う。新規に作る場合の投稿先は travel チャンネル (ID `1259284949698088981`)。既存の組があるノートは `pin_channel` の値を使う。
+`travel-note` skill の「Discord ピン投稿」節 (本文の骨格は同 skill の `assets/PIN-SCHEDULE.md`・`assets/PIN-PACKING.md`) に従う。新規に作る場合の投稿先は、ノートに `thread` があればそのスレッド、無ければ travel チャンネル (ID `1259284949698088981`)。既存の組があるノートは `pin_channel` の値を使う。
 
 - `status` が `scheduled`/`ongoing` で `end_at` が現在より後なのに `pin_messages` が無いノート: skill の作成手順でスケジュール投稿を作り、`pin_channel`/`pin_messages` を書く。この cron ではもちもの投稿を作らない。理由: ユーザが求めたときだけ作るもの。引いた座標をノート本文に控えるのもこの cron では行わない。理由: 本文に手を入れない。
 - `status` が `planning`/`completed`/`cancelled` なのに `pin_messages` または `pin_packing_messages` が残るノート: 両方の組の全通をピン解除し、`pin_channel`/`pin_messages`/`pin_packing_messages` を削除する。投稿は消さない。
