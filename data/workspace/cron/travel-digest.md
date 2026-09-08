@@ -16,7 +16,7 @@ timeout: 600000
 
 - status が 5 値以外
 - 日時が ISO 8601 `+09:00` 形式でない
-- `thread`/`pin_channel`/`pin_messages`・`pin_packing_messages` の要素/日時の引用符欠落
+- `thread`・`pin_channel`・日時・`pin_messages` と `pin_packing_messages` の各要素の引用符欠落
 
 - 修正対象はこの列挙した形式違反のみ。値の妥当性への疑義は修正せず、最終報告に残す。疑義とみなす例: 実時刻どうしで `end_at` が `start_at` より前、日付がノート本文と明らかに矛盾。`T00:00:00+09:00` は「時刻未記録」の暫定値の慣習なので、それ自体は疑義に数えない
 - frontmatter を修正したノートは、travel-note skill の規約どおり `timestamp` も現在時刻へ更新する
@@ -34,7 +34,7 @@ timeout: 600000
 
 ## 4. PLANS.md の突合
 
-- 「行きたい場所の種」の各項目を全ノートと突合し、既にノート化されている種は PLANS.md から除去する。「ノート化されている」とは、行き先と目的の両方が同じ旅行を指すノートが存在すること (例: 「奥多摩湖 月見」ノートがあっても「奥多摩〜柳沢峠 新緑ツーリング」の種は別物として残す)。迷ったら消さない
+- 「行きたい場所の種」の各項目を全ノートと突合し、既にノート化されている種は PLANS.md から除去する。「ノート化されている」とは、行き先と目的の両方が同じ旅行を指すノートが存在すること (例:「奥多摩湖 月見」ノートがあっても「奥多摩〜柳沢峠 新緑ツーリング」の種は別物として残す)。迷ったら消さない
 - 直近 completed 5 件 (index.md のサマリと同じ範囲) の「次回への申し送り」のうち、個別の旅行を越えて繰り返し効く知見があれば「よく使う旅行情報」へ昇格する。
   - 昇格対象の例: ペース倍率の一般則・装備の定番化・施設や道路の恒常的な情報。
   - 非対象の例: 単発の TODO、特定の旅行にしか効かない注意。
@@ -45,7 +45,7 @@ timeout: 600000
 
 `travel-note` skill の「Discord ピン投稿」節 (本文の骨格は同 skill の `assets/PIN-SCHEDULE.md`・`assets/PIN-PACKING.md`) に従う。新規に作る場合の投稿先は travel チャンネル (ID `1259284949698088981`)。既存の組があるノートは `pin_channel` の値を使う。
 
-- `status` が `scheduled`/`ongoing` で `end_at` が現在より後なのに `pin_messages` が無いノート: skill の作成手順でスケジュール投稿を作り、`pin_channel`/`pin_messages` を書く。もちもの投稿はユーザが求めたときだけのものなので、この cron では作らない。引いた座標をノート本文に控えるのはこの cron では行わない (本文に手を入れないため)。
+- `status` が `scheduled`/`ongoing` で `end_at` が現在より後なのに `pin_messages` が無いノート: skill の作成手順でスケジュール投稿を作り、`pin_channel`/`pin_messages` を書く。この cron ではもちもの投稿を作らない。理由: ユーザが求めたときだけ作るもの。引いた座標をノート本文に控えるのもこの cron では行わない。理由: 本文に手を入れない。
 - `status` が `planning`/`completed`/`cancelled` なのに `pin_messages` または `pin_packing_messages` が残るノート: 両方の組の全通をピン解除し、`pin_channel`/`pin_messages`/`pin_packing_messages` を削除する。投稿は消さない。
 - `status` が `scheduled`/`ongoing` で `end_at` が現在より前のノート: status の疑義として最終報告に残す。自動で `completed` にせず、ピンも触らない。
 - 既存のピン投稿の本文は更新しない。本文の更新は会話の中で行う。
