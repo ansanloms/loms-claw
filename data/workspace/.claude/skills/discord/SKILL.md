@@ -1,7 +1,7 @@
 ---
 name: discord
 description: >-
-  Discord の REST API を curl で叩いてサーバ (ギルド) を操作する手順。メッセージの送信・取得・検索、リアクション付与、スレッドの作成・名前変更、チャンネルやメンバーの一覧・検索が対象。「Discord にメッセージを送る」「チャンネルの発言を読む」「スレッドを立てる」「スレッド名を変える」「メンバーを検索する」などで使う。
+  Discord の REST API を curl で叩いてサーバ (ギルド) を操作する手順。メッセージの送信・取得・検索、自分の投稿の編集・削除、メッセージのピン止め・解除、リアクション付与、スレッドの作成・名前変更、チャンネルやメンバーの一覧・検索が対象。「Discord にメッセージを送る」「チャンネルの発言を読む」「スレッドを立てる」「スレッド名を変える」「メンバーを検索する」「さっきの投稿を直して」「自分の投稿を消して」「この投稿をピン止めして」「ピンを外して」などで使う。
   bot トークンを Authorization の Bot ヘッダで渡し、 https://discord.com/api/v10 を叩く。トークンは環境変数 DISCORD_BOT_TOKEN から取る。メッセージ検索の API は bot に無いため、履歴を取得して jq でフィルタする。
   対象は bot トークンで操作できる範囲のサーバ機能。レート制限 (429) は自前で body の retry_after (秒) を見て待つ。ユーザ DM や OAuth が要る操作、Gateway (リアルタイム受信) は扱わない。
 ---
@@ -222,6 +222,218 @@ curl -sS -X PUT -o /dev/null -w '%{http_code}\n' \
 - カスタム絵文字は `name:id` 形式 (例: `partyparrot:123456789012345678`) を URL エンコードして渡す。
 - 成功時は `204 No Content` (body 無し)。`jq` には流さず、上の例のように `-o /dev/null -w '%{http_code}'` で状態コードを確認する (`204` なら成功)。理由: body が無い。
 
+## 自分の投稿かの判定
+
+「自分の投稿の編集」「自分の投稿の削除」の前提となる判定。API 上のルールとこの skill のポリシーを分けて述べる。
+
+- API のルール: `content` の編集は元の投稿者本人にのみ許可される。Manage Messages 権限を持っていても、他者の投稿の `content` は編集できない。
+- API のルール: 削除はギルドチャンネルであれば Manage Messages 権限で他者の投稿も削除できる。
+- この skill のポリシー: 編集・削除のどちらも bot 自身の投稿のみを対象とし、Manage Messages 権限を使って他者の投稿を操作することはしない。そのため編集・削除に入る前に必ずこの判定をする。
+
+bot 自身の ID (`GET /users/@me` の `.id`) と対象メッセージの `.author.id` を比較する。一致すれば自分の投稿、一致しなければ他者の投稿である。
+
+```bash
+ME_ID=$(curl -sS 'https://discord.com/api/v10/users/@me' \
+  -H "Authorization: Bot ${DISCORD_BOT_TOKEN}" \
+| jq -r '.id')
+
+AUTHOR_ID=$(curl -sS "https://discord.com/api/v10/channels/${CHANNEL_ID}/messages/${MESSAGE_ID}" \
+  -H "Authorization: Bot ${DISCORD_BOT_TOKEN}" \
+| jq -r '.author.id')
+
+if [ "$ME_ID" = "$AUTHOR_ID" ]; then
+  echo "自分の投稿である。編集・削除に進んでよい"
+else
+  echo "自分の投稿ではない。編集・削除は行わない" >&2
+fi
+```
+
+- `ME_ID`/`AUTHOR_ID` はこのブロック内で完結させる一時変数で、「リクエストの基本形」で述べたプレースホルダの規約 (シェル変数として使い回さない) の対象外である。理由: メッセージ送信の `JQ_STATUS` と同じく、1 回の実行単位の中でのみ使う値であり、ツール呼び出しをまたがない。
+- 一致しない場合はここで止め、対象が bot 自身の投稿ではない旨をユーザに報告する。Manage Messages 権限を持っていても、それを使って他者の投稿の編集・削除へフォールバックしない。
+- bot 自身の ID という値そのものは変わらないため、一度取得した値を同じ会話内の呼び出し側の文脈で覚えておき、以降の判定に使い回してよい。値をまだ把握していない場合は、判定のブロックごとに `GET /users/@me` を呼び直す。
+
+実レスポンス例 (取得日: 2026-09-08)。取得コマンド: `curl -sS 'https://discord.com/api/v10/users/@me' -H "Authorization: Bot ${DISCORD_BOT_TOKEN}"`
+
+```json
+{
+  "id": "552110764694175775",
+  "username": "loms-bot",
+  "avatar": "2d6a273a63a75c688515cd2baeed6c57",
+  "discriminator": "8375",
+  "public_flags": 0,
+  "flags": 0,
+  "bot": true,
+  "banner": null,
+  "accent_color": null,
+  "global_name": null,
+  "avatar_decoration_data": null,
+  "collectibles": null,
+  "display_name_styles": null,
+  "vad_colors": null,
+  "banner_color": null,
+  "clan": null,
+  "primary_guild": null,
+  "mfa_enabled": false,
+  "locale": "en-US",
+  "premium_type": 0,
+  "email": null,
+  "verified": true,
+  "bio": ""
+}
+```
+
+## 自分の投稿の編集
+
+先に「自分の投稿かの判定」を行い、自分の投稿であることを確認してから実行する。本文は「メッセージ送信」と同じくファイル経由で `jq -Rs` を使い、`content` を丸ごと置き換える。
+
+```bash
+# /tmp/discord-edit.txt は例。実際に書き込んだ絶対パスに置き換える (シェル変数にしない)
+jq -Rs '{content: .}' /tmp/discord-edit.txt > /tmp/discord-edit-body.json
+JQ_STATUS=$?
+if [ "$JQ_STATUS" -ne 0 ] || [ ! -s /tmp/discord-edit-body.json ]; then
+  echo "本文の JSON 化に失敗した (jq exit=$JQ_STATUS)。本文ファイルの有無・パスを確認する。curl は実行しない。" >&2
+else
+  curl -sS -X PATCH "https://discord.com/api/v10/channels/${CHANNEL_ID}/messages/${MESSAGE_ID}" \
+    -H "Authorization: Bot ${DISCORD_BOT_TOKEN}" \
+    -H 'Content-Type: application/json' \
+    --data @/tmp/discord-edit-body.json \
+  | jq '{id, content, edited_timestamp}'
+fi
+```
+
+- `content` は全体置換であり、既存の本文への追記・部分置換はできない。新しい本文は既存の内容を踏まえて全文を組み立てる。
+- 新しい本文が「2000 文字超の分割」で使っている 2000 文字の閾値を超える場合は編集しない。編集ではなく、その節の手順に従って新規メッセージとして分割送信する。理由: 編集時の `content` の上限は公式ドキュメントで確認できておらず、送信の閾値を上限として扱う。
+- 権限は元の投稿者本人であること (「自分の投稿かの判定」を参照)。他者の投稿は編集できない。
+
+実レスポンス例 (取得日: 2026-09-08)。取得コマンド: `jq -Rs '{content: .}' /tmp/discord-edit.txt > /tmp/discord-edit-body.json && curl -sS -X PATCH "https://discord.com/api/v10/channels/${CHANNEL_ID}/messages/${MESSAGE_ID}" -H "Authorization: Bot ${DISCORD_BOT_TOKEN}" -H 'Content-Type: application/json' --data @/tmp/discord-edit-body.json`
+
+```json
+{
+  "type": 0,
+  "content": "skill sample 2026-09-08 edited (will be deleted)",
+  "mentions": [],
+  "mention_roles": [],
+  "attachments": [],
+  "embeds": [],
+  "timestamp": "2026-09-08T12:51:51.825000+00:00",
+  "edited_timestamp": "2026-09-08T12:52:06.466928+00:00",
+  "flags": 0,
+  "components": [],
+  "id": "1546865656253779988",
+  "channel_id": "1485537910043312289",
+  "author": {
+    "id": "552110764694175775",
+    "username": "loms-bot",
+    "bot": true,
+    "…": "…"
+  },
+  "pinned": false,
+  "mention_everyone": false,
+  "tts": false
+}
+```
+
+トップレベルのフィールドはすべて実際の応答通り。`author` の内側のフィールドだけを省略した (残りは「自分の投稿かの判定」節のサンプルと同じ形)。
+
+編集前は `edited_timestamp` が `null`、編集後は編集時刻の ISO 8601 文字列になる。`content` は指定した新しい本文にそのまま置き換わっている。
+
+## 自分の投稿の削除
+
+先に「自分の投稿かの判定」を行い、自分の投稿であることを確認してから実行する。削除は取り消せないため、この判定を省略しない。
+
+```bash
+curl -sS -X DELETE -o /dev/null -w '%{http_code}\n' \
+  "https://discord.com/api/v10/channels/${CHANNEL_ID}/messages/${MESSAGE_ID}" \
+  -H "Authorization: Bot ${DISCORD_BOT_TOKEN}"
+```
+
+- 成功時は `204 No Content` (body 無し)。`jq` には流さず、「リアクション付与」と同様に `-o /dev/null -w '%{http_code}'` で状態コードを確認する。
+- 権限は元の投稿者本人であること (「自分の投稿かの判定」を参照)。他者の投稿をギルドチャンネルで削除するには Manage Messages 権限が要るが、この skill は自分の投稿の削除のみを対象とする。
+- 削除後に同じ `message_id` を取得すると `404 Not Found` になる。
+
+実レスポンス例 (取得日: 2026-09-08)。取得コマンド: `curl -sS -X DELETE -o /dev/null -w '%{http_code}\n' "https://discord.com/api/v10/channels/${CHANNEL_ID}/messages/${MESSAGE_ID}" -H "Authorization: Bot ${DISCORD_BOT_TOKEN}"`
+
+```text
+204
+```
+
+削除後に同じメッセージを `GET` した応答 (取得日: 2026-09-08)。取得コマンド: `curl -sS "https://discord.com/api/v10/channels/${CHANNEL_ID}/messages/${MESSAGE_ID}" -H "Authorization: Bot ${DISCORD_BOT_TOKEN}"`
+
+```json
+{
+  "message": "Unknown Message",
+  "code": 10008
+}
+```
+
+## ピン止め・解除
+
+対象メッセージは自分の投稿に限らない。`PIN_MESSAGES` 権限があれば他者の投稿もピン止め・解除できる。
+
+```bash
+# ピン止め
+curl -sS -X PUT -o /dev/null -w '%{http_code}\n' \
+  "https://discord.com/api/v10/channels/${CHANNEL_ID}/messages/pins/${MESSAGE_ID}" \
+  -H "Authorization: Bot ${DISCORD_BOT_TOKEN}"
+
+# 解除
+curl -sS -X DELETE -o /dev/null -w '%{http_code}\n' \
+  "https://discord.com/api/v10/channels/${CHANNEL_ID}/messages/pins/${MESSAGE_ID}" \
+  -H "Authorization: Bot ${DISCORD_BOT_TOKEN}"
+```
+
+- 成功時はどちらも `204 No Content` (body 無し)。`-o /dev/null -w '%{http_code}'` で状態コードを確認する。
+- 権限は `PIN_MESSAGES`。以前は Manage Messages 権限がピン止めも兼ねていたが、2026-01-12 に後方互換が終了し、以降は Manage Messages だけを持つ招待では `403` になる。出典: Discord API change-log (https://github.com/discord/discord-api-docs/blob/main/developers/change-log.mdx) の Pin Permission Split。ピン止めができない場合、bot の招待・ロールに `PIN_MESSAGES` が付与されているかを確認する。
+
+実レスポンス例 (取得日: 2026-09-08)。取得コマンド: `curl -sS -X PUT -o /dev/null -w '%{http_code}\n' "https://discord.com/api/v10/channels/${CHANNEL_ID}/messages/pins/${MESSAGE_ID}" -H "Authorization: Bot ${DISCORD_BOT_TOKEN}"`
+
+```text
+204
+```
+
+解除も同じ形で `204` が返る (取得日: 2026-09-08、コマンドはメソッドを `DELETE` に変えたのみ)。
+
+## ピン一覧
+
+```bash
+curl -sS "https://discord.com/api/v10/channels/${CHANNEL_ID}/messages/pins?limit=50" \
+  -H "Authorization: Bot ${DISCORD_BOT_TOKEN}" \
+| jq -r '.items[] | {message_id: .message.id, pinned_at, author: .message.author.username, content: .message.content}'
+```
+
+- 応答は配列ではなく `{"items": [...], "has_more": bool}` のオブジェクト。各要素は `pinned_at` と `message` を持つ。`pinned_at` はピン止め日時、`message` はメッセージオブジェクト全体である。
+- `limit` は 1〜50。
+- `has_more` が `true` なら未取得のピンが残っている。続きは取得済み要素の `pinned_at` のうち最も古い値を `before` に渡して取得する (`before` は ISO 8601 タイムスタンプ)。
+- 権限は View Channel。Read Message History が無いと、ピンが 1 件も返らない (エラーではなく空の一覧になる)。
+
+実レスポンス例 (取得日: 2026-09-08)。取得コマンド: `curl -sS "https://discord.com/api/v10/channels/${CHANNEL_ID}/messages/pins?limit=50" -H "Authorization: Bot ${DISCORD_BOT_TOKEN}"`
+
+```json
+{
+  "items": [
+    {
+      "pinned_at": "2026-09-08T12:52:12.560000+00:00",
+      "message": {
+        "id": "1546865656253779988",
+        "channel_id": "1485537910043312289",
+        "content": "skill sample 2026-09-08 edited (will be deleted)",
+        "author": {
+          "id": "552110764694175775",
+          "username": "loms-bot",
+          "bot": true,
+          "…": "…"
+        },
+        "pinned": true,
+        "…": "…"
+      }
+    }
+  ],
+  "has_more": false
+}
+```
+
+`message` の実体は「単一メッセージ取得」で見た応答と同じ形のメッセージオブジェクト (`author` の内側と、`mentions`/`embeds`/`timestamp` 等のトップレベルの他フィールドを省略した抜粋)。この時点でチャンネル内のピンはこの 1 件のみだったため、他者のピン止めメッセージは含まれていない。
+
 ## スレッド作成 (チャンネル直下)
 
 開始メッセージを持たない新規スレッドを作る。`type` が必須。
@@ -376,6 +588,8 @@ fi
 
 - **401 Unauthorized**: トークンが無効・失効している。前提条件のトークン入手手順に従い、ユーザに再設定を依頼する。再試行しても直らない。
 - **403 Forbidden**: 権限不足、または bot が対象サーバ/チャンネルにいない (各操作の説明を参照)。再試行しても直らない。
+  - 編集・削除は「自分の投稿かの判定」で他者の投稿と分かった時点で止めるため、通常はここに到達しない。判定を経ずに他者の投稿へ `PATCH`/`DELETE` を叩くと `403` になる。
+  - ピン止め・解除は `PIN_MESSAGES` 権限が無いと `403` になる。Manage Messages 権限だけでは通らない (経緯は「ピン止め・解除」を参照)。
 - **404 Not Found**: 指定した `guild_id`/`channel_id`/`message_id` が存在しないか、bot からアクセスできない。ID を疑い、呼び出し側のコンテキストと突き合わせる。推測で別の ID を試さない。
 - **429 Too Many Requests**: 上記のレート制限を参照。
 - **5xx (500/502/503/504)**: Discord 側の一時的な障害。数秒待って 1〜2 回まで再試行し、直らなければユーザに報告する (無限リトライしない)。
