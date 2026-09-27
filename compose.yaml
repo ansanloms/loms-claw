@@ -5,6 +5,9 @@ services:
     build: .
     environment:
       TZ: ${TZ:-Asia/Tokyo}
+      GOOGLE_HEALTH_CLIENT_ID: ${GOOGLE_HEALTH_CLIENT_ID:-}
+      GOOGLE_HEALTH_CLIENT_SECRET: ${GOOGLE_HEALTH_CLIENT_SECRET:-}
+      GOOGLE_HEALTH_TOKEN_PATH: ${GOOGLE_HEALTH_TOKEN_PATH:-/data/home/google-health/token.json}
     volumes:
       - type: bind
         source: ./data

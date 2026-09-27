@@ -124,12 +124,15 @@ docker compose logs -f               # ログ確認
 
 ## 環境変数
 
-| 変数                | 供給元                                                                                                            | 消費者                                                                                                                                                                                                                                           |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `CLAUDE_CONFIG_DIR` | Dockerfile の `ENV` (`/data/home`)                                                                                | Claude Code (既定の `~/.claude` を置き換える)                                                                                                                                                                                                    |
-| `LOMS_CLAW_CONFIG`  | Dockerfile の `ENV` (`/data/config.json`)                                                                         | `config.ts` の `loadConfig()` (未設定時 `./data/config.json`)。`compose.yaml` の `healthcheck:` もこの値 (既定 `/data/config.json`) から `jq` で `claude.apiPort` を読む (未指定時は `// 3000` で `config.schema.json` の既定値にフォールバック) |
-| `TZ`                | host の `.env` → `compose.yaml` の `environment` (`${TZ:-Asia/Tokyo}`)                                            | コンテナ全体 (cron 式のローカルタイム評価等)                                                                                                                                                                                                     |
-| `DISCORD_BOT_TOKEN` | bot プロセスが `config.discord.token` を `query()` の `env` に注入する (`claude/mod.ts` の `buildQueryOptions()`) | SDK 同梱バイナリが spawn する Bash/curl。`discord` skill が `Authorization: Bot ${DISCORD_BOT_TOKEN}` で使う                                                                                                                                     |
+| 変数                          | 供給元                                                                                                                | 消費者                                                                                                                                                                                                                                           |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CLAUDE_CONFIG_DIR`           | Dockerfile の `ENV` (`/data/home`)                                                                                    | Claude Code (既定の `~/.claude` を置き換える)                                                                                                                                                                                                    |
+| `LOMS_CLAW_CONFIG`            | Dockerfile の `ENV` (`/data/config.json`)                                                                             | `config.ts` の `loadConfig()` (未設定時 `./data/config.json`)。`compose.yaml` の `healthcheck:` もこの値 (既定 `/data/config.json`) から `jq` で `claude.apiPort` を読む (未指定時は `// 3000` で `config.schema.json` の既定値にフォールバック) |
+| `TZ`                          | host の `.env` → `compose.yaml` の `environment` (`${TZ:-Asia/Tokyo}`)                                                | コンテナ全体 (cron 式のローカルタイム評価等)                                                                                                                                                                                                     |
+| `DISCORD_BOT_TOKEN`           | bot プロセスが `config.discord.token` を `query()` の `env` に注入する (`claude/mod.ts` の `buildQueryOptions()`)     | SDK 同梱バイナリが spawn する Bash/curl。`discord` skill が `Authorization: Bot ${DISCORD_BOT_TOKEN}` で使う                                                                                                                                     |
+| `GOOGLE_HEALTH_CLIENT_ID`     | host の `.env` → `compose.yaml` の `environment` (`${GOOGLE_HEALTH_CLIENT_ID:-}`)                                     | ワークスペースの `google-health` skill (`query()` の `env` 経由)                                                                                                                                                                                 |
+| `GOOGLE_HEALTH_CLIENT_SECRET` | host の `.env` → `compose.yaml` の `environment` (`${GOOGLE_HEALTH_CLIENT_SECRET:-}`)                                 | ワークスペースの `google-health` skill (`query()` の `env` 経由)                                                                                                                                                                                 |
+| `GOOGLE_HEALTH_TOKEN_PATH`    | host の `.env` → `compose.yaml` の `environment` (`${GOOGLE_HEALTH_TOKEN_PATH:-/data/home/google-health/token.json}`) | ワークスペースの `google-health` skill (`query()` の `env` 経由)                                                                                                                                                                                 |
 
 `buildQueryOptions()` は `Deno.env.toObject()` を展開した上で `DISCORD_BOT_TOKEN` を足して `env` に渡す (SDK は `env` を指定すると `process.env` を継承しないため)。
 
@@ -168,12 +171,13 @@ docker compose logs -f               # ログ確認
 
 実行時データは host の `data/` に集約し、丸ごとコンテナの `/data` へ bind mount する (マウントはこの 1 つだけ)。パスは host/コンテナで共通。
 
-| パス                       | 用途                                                                   | 追跡状態 (`.gitignore`)                                                                                                                                                                               |
-| -------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `data/config.json`         | アプリ設定。`data/config.json.example` をコピーして作成する            | 管理外                                                                                                                                                                                                |
-| `data/config.json.example` | 設定ファイルの雛形。先頭に `"$schema": "../config.schema.json"` を持つ | 追跡                                                                                                                                                                                                  |
-| `data/home/`               | Claude Code の設定・認証情報 (`CLAUDE_CONFIG_DIR`)                     | `data/home/*` は管理外。`.gitkeep` のみ追跡                                                                                                                                                           |
-| `data/workspace/`          | エージェントワークスペース。本番の cwd                                 | `data/workspace/*` は管理外。`.claude/`、`CLAUDE.md`、`cron/`、`apm.yml`、`apm.lock.yaml`、`.gitkeep` を `!` で除外解除して追跡する。`cron/*.once.md` は再度 ignore する (詳細は後述の「追跡対象」節) |
+| パス                                 | 用途                                                                                        | 追跡状態 (`.gitignore`)                                                                                                                                                                               |
+| ------------------------------------ | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `data/config.json`                   | アプリ設定。`data/config.json.example` をコピーして作成する                                 | 管理外                                                                                                                                                                                                |
+| `data/config.json.example`           | 設定ファイルの雛形。先頭に `"$schema": "../config.schema.json"` を持つ                      | 追跡                                                                                                                                                                                                  |
+| `data/home/`                         | Claude Code の設定・認証情報 (`CLAUDE_CONFIG_DIR`)                                          | `data/home/*` は管理外。`.gitkeep` のみ追跡                                                                                                                                                           |
+| `data/home/google-health/token.json` | Google Health API のトークン (`GOOGLE_HEALTH_TOKEN_PATH` の既定値)。初回認可時に bot が作る | `data/home/*` に含まれ管理外                                                                                                                                                                          |
+| `data/workspace/`                    | エージェントワークスペース。本番の cwd                                                      | `data/workspace/*` は管理外。`.claude/`、`CLAUDE.md`、`cron/`、`apm.yml`、`apm.lock.yaml`、`.gitkeep` を `!` で除外解除して追跡する。`cron/*.once.md` は再度 ignore する (詳細は後述の「追跡対象」節) |
 
 `.gitignore` はこのほか `**/*.kv`/`**/*.kv-shm`/`**/*.kv-wal` (Deno KV。コメントによれば `storePath` 既定値が cwd 基準のため、ローカル実行ではリポジトリ直下の `.claude/` にも作られる)、`**/apm_modules/`、`**/.claude/settings.local.json`、`.env`、`coverage/` を管理外にし、`!**/.gitkeep` で `.gitkeep` は残す。
 
@@ -196,7 +200,7 @@ docker compose logs -f               # ログ確認
 | `.claude/rules/*.md`        | エージェントに常時読み込ませるルール (下表)                                                                                                                                   | 追跡   |
 | `.claude/system-prompt/`    | `DEFAULT.md` / `CHAT.md` / `CRON.md` と、チャンネル ID 名のファイルが 1 件。結合の仕組みは [claude-integration.md](claude-integration.md)                                     | 追跡   |
 | `.claude/settings.json`     | `permissions.allow` の置き場。承認フローとの関係は [approval.md](approval.md)                                                                                                 | 追跡   |
-| `.claude/skills/`           | skill 12 本 (下記)                                                                                                                                                            | 追跡   |
+| `.claude/skills/`           | skill 13 本 (下記)                                                                                                                                                            | 追跡   |
 | `cron/`                     | 定期実行ジョブファイル (恒久ジョブ)。書式と実行は [cron.md](cron.md)                                                                                                          | 追跡   |
 | `cron/*.once.md`            | `once: true` の一時ジョブ (実行後に自動削除される)                                                                                                                            | 管理外 |
 | `apm.yml` / `apm.lock.yaml` | APM の依存定義とロック                                                                                                                                                        | 追跡   |
@@ -222,12 +226,12 @@ docker compose logs -f               # ログ確認
 
 ### `.claude/skills/`
 
-12 本のうち 8 本は `apm.yml` の `dependencies.apm` に `ansanloms/skills/<name>` として列挙されており、`apm.lock.yaml` にそれぞれのエントリを持つ。残り 4 本は `apm.yml` に無く、このリポジトリで直接管理する。
+13 本のうち 9 本は `apm.yml` の `dependencies.apm` に `ansanloms/skills/<name>` として列挙されており、`apm.lock.yaml` にそれぞれのエントリを持つ。残り 4 本は `apm.yml` に無く、このリポジトリで直接管理する。
 
-| 区分                    | skill                                                                                                                                    |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `apm.yml` に列挙 (8 本) | `find-docs`, `yamareco`, `discord`, `jartic-traffic-jam-forecast`, `jartic-traffic-volume`, `bluesky`, `news-digest`, `mountain-weather` |
-| ローカル管理 (4 本)     | `cron`, `logs`, `settings`, `travel-note`                                                                                                |
+| 区分                    | skill                                                                                                                                                     |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apm.yml` に列挙 (9 本) | `find-docs`, `yamareco`, `discord`, `jartic-traffic-jam-forecast`, `jartic-traffic-volume`, `bluesky`, `news-digest`, `mountain-weather`, `google-health` |
+| ローカル管理 (4 本)     | `cron`, `logs`, `settings`, `travel-note`                                                                                                                 |
 
 ## .worktreeinclude
 

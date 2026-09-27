@@ -4,14 +4,15 @@ description: APM project for claude-workspace
 author: ansanloms
 dependencies:
   apm:
-  - ansanloms/skills/find-docs
-  - ansanloms/skills/yamareco
-  - ansanloms/skills/discord
-  - ansanloms/skills/jartic-traffic-jam-forecast
-  - ansanloms/skills/jartic-traffic-volume
-  - ansanloms/skills/bluesky
-  - ansanloms/skills/news-digest
-  - ansanloms/skills/mountain-weather
+    - ansanloms/skills/find-docs
+    - ansanloms/skills/yamareco
+    - ansanloms/skills/discord
+    - ansanloms/skills/jartic-traffic-jam-forecast
+    - ansanloms/skills/jartic-traffic-volume
+    - ansanloms/skills/bluesky
+    - ansanloms/skills/news-digest
+    - ansanloms/skills/mountain-weather
+    - ansanloms/skills/google-health
   mcp: []
 includes: auto
 scripts: {}

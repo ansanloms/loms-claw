@@ -1,0 +1,82 @@
+{
+  "version": "5",
+  "specifiers": {
+    "jsr:@aireone/deno-lint-curly@*": "0.2.0",
+    "jsr:@gunshi/gunshi@0.37.1": "0.37.1",
+    "jsr:@std/assert@1.0.19": "1.0.19",
+    "jsr:@std/internal@^1.0.12": "1.0.14",
+    "jsr:@std/internal@^1.0.14": "1.0.14",
+    "jsr:@std/path@1.1.6": "1.1.6",
+    "npm:@gunshi/plugin-global@0.37.1": "0.37.1",
+    "npm:@gunshi/plugin-i18n@0.37.1": "0.37.1_@gunshi+plugin-global@0.37.1",
+    "npm:@gunshi/plugin-renderer@0.37.1": "0.37.1_@gunshi+plugin-i18n@0.37.1_@gunshi+plugin-global@0.37.1",
+    "npm:args-tokens@~0.28.1": "0.28.2"
+  },
+  "jsr": {
+    "@aireone/deno-lint-curly@0.2.0": {
+      "integrity": "c182ea5d2ed999c06ffa88a21aac2aed3cf0d14a1128d7fad3034337f7822b48"
+    },
+    "@gunshi/gunshi@0.37.1": {
+      "integrity": "99769d56874e0812f42514b939c7c1b37b74fc0e3e391ace41b4e323be2330b6",
+      "dependencies": [
+        "npm:@gunshi/plugin-global",
+        "npm:@gunshi/plugin-i18n",
+        "npm:@gunshi/plugin-renderer",
+        "npm:args-tokens"
+      ]
+    },
+    "@std/assert@1.0.19": {
+      "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
+      "dependencies": [
+        "jsr:@std/internal@^1.0.12"
+      ]
+    },
+    "@std/internal@1.0.14": {
+      "integrity": "291516b3d4c35024d6ffbc0a9df5bf4c64116e05b50012cf846710152d2ffdf7"
+    },
+    "@std/path@1.1.6": {
+      "integrity": "c68485c2a4dfbb5ae3cc74fae4e8c4e5d874cf8a8ed12927917235c758b46cbe",
+      "dependencies": [
+        "jsr:@std/internal@^1.0.14"
+      ]
+    }
+  },
+  "npm": {
+    "@gunshi/plugin-global@0.37.1": {
+      "integrity": "sha512-GndppCdsIoDxJny6b5dw1hhT8gIpV8GLdK9okwibbsUqQcOhD0Ptz4v+qQxvDnQUuu+z2x2/p/BdXPTxWuoxDw==",
+      "dependencies": [
+        "@gunshi/plugin"
+      ]
+    },
+    "@gunshi/plugin-i18n@0.37.1_@gunshi+plugin-global@0.37.1": {
+      "integrity": "sha512-K5L5IDeaD5JIGEPn4Wcl0cXyPggmmtj4sSQwCsqzAYc30VfJu+BQscoEt7wIoJ3UR6gnjY7BJh5dxGcmBcUvaA==",
+      "dependencies": [
+        "@gunshi/plugin",
+        "@gunshi/plugin-global"
+      ],
+      "optionalPeers": [
+        "@gunshi/plugin-global"
+      ]
+    },
+    "@gunshi/plugin-renderer@0.37.1_@gunshi+plugin-i18n@0.37.1_@gunshi+plugin-global@0.37.1": {
+      "integrity": "sha512-G25KDRpw4ki9/jguQJ9Kaq7AntFEofAhIjC7dyKheU/TjMozwSxVzDsceogXyHcYZLvx0+7d4i8oeI5VZiYQRA==",
+      "dependencies": [
+        "@gunshi/plugin",
+        "@gunshi/plugin-i18n"
+      ]
+    },
+    "@gunshi/plugin@0.37.1": {
+      "integrity": "sha512-ljjBaL15jCwX6tEtWRdmAQ/y/svGcMZa5mVhMPgXFeQFQ++srK/x5dx8uchQFrE2MTqaFhMMjNK9AQowCyRv9A=="
+    },
+    "args-tokens@0.28.2": {
+      "integrity": "sha512-8vwmYY0d34G+/6MdBDmL3oV1FdY8HApRz/EO0PpdjAn5mEFuV1Hsr5DVrDh9EnlGMBgdaBFN/WcyczLeCumydw=="
+    }
+  },
+  "workspace": {
+    "dependencies": [
+      "jsr:@gunshi/gunshi@0.37.1",
+      "jsr:@std/assert@1.0.19",
+      "jsr:@std/path@1.1.6"
+    ]
+  }
+}

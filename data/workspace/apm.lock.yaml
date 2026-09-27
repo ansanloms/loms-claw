@@ -168,6 +168,68 @@ dependencies:
     .claude/skills/yamareco/README.md: sha256:937764aaeb1614b7a2720c55e74ff6cc34bbede20402cbe2979ebe8782ee116f
     .claude/skills/yamareco/SKILL.md: sha256:bcd5879ba2363e3671d30a3868b37e1aa89d5d08c6cc44c1f7e82a631fc52ddf
   content_hash: sha256:1b9f761b61418a405bfc8f8359b0bb57019bfccb3b3b83faeda8300f18876d16
+- repo_url: ansanloms/skills
+  name: google-health
+  host: github.com
+  resolved_commit: e4990a84425a0eb603c2118fe7c044678b017cac
+  version: unknown
+  virtual_path: google-health
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .claude/skills/google-health
+  - .claude/skills/google-health/README.md
+  - .claude/skills/google-health/SKILL.md
+  - .claude/skills/google-health/scripts/.gitignore
+  - .claude/skills/google-health/scripts/cli/auth-url.ts
+  - .claude/skills/google-health/scripts/cli/auth.ts
+  - .claude/skills/google-health/scripts/cli/daily-rollup.ts
+  - .claude/skills/google-health/scripts/cli/datapoints.ts
+  - .claude/skills/google-health/scripts/cli/token-status.ts
+  - .claude/skills/google-health/scripts/cli/token.ts
+  - .claude/skills/google-health/scripts/deno.json
+  - .claude/skills/google-health/scripts/deno.lock
+  - .claude/skills/google-health/scripts/lib/api.test.ts
+  - .claude/skills/google-health/scripts/lib/api.ts
+  - .claude/skills/google-health/scripts/lib/auth-server.test.ts
+  - .claude/skills/google-health/scripts/lib/auth-server.ts
+  - .claude/skills/google-health/scripts/lib/civil.test.ts
+  - .claude/skills/google-health/scripts/lib/civil.ts
+  - .claude/skills/google-health/scripts/lib/config.test.ts
+  - .claude/skills/google-health/scripts/lib/config.ts
+  - .claude/skills/google-health/scripts/lib/filter.test.ts
+  - .claude/skills/google-health/scripts/lib/filter.ts
+  - .claude/skills/google-health/scripts/lib/oauth.test.ts
+  - .claude/skills/google-health/scripts/lib/oauth.ts
+  - .claude/skills/google-health/scripts/lib/token-file.test.ts
+  - .claude/skills/google-health/scripts/lib/token-file.ts
+  deployed_file_hashes:
+    .claude/skills/google-health/README.md: sha256:2929fdd2c79917b998c74d89b81e963586921f09e417ed0375ff1ca4093d13db
+    .claude/skills/google-health/SKILL.md: sha256:6c3dde4bf7c9595c03864cb53fe6b28f42cd1486cc00e0031fe7036d76adb791
+    .claude/skills/google-health/scripts/.gitignore: sha256:5c5daf48fdf4db42e16c29b5b3de54984bafe0c2ff367a186ca97f1d4ed48290
+    .claude/skills/google-health/scripts/cli/auth-url.ts: sha256:a3c156c90c261bdd3ae7c41416fea6010de80d5be675737032805a07c30592a2
+    .claude/skills/google-health/scripts/cli/auth.ts: sha256:33eed1a47e89b165d0b8738a4c6db1c411503354df5845f4411b370dc02e2ea4
+    .claude/skills/google-health/scripts/cli/daily-rollup.ts: sha256:1eb7fbfcc4f893f0da52b9bc44393fe50be174e3c4d86f03eab94b0c54e48538
+    .claude/skills/google-health/scripts/cli/datapoints.ts: sha256:b199a8601be7ee0fc5621158db0b4dd79c90e759da1709dac1bac08afc9bf949
+    .claude/skills/google-health/scripts/cli/token-status.ts: sha256:e5bd5b1e692fa0684c0aaecfc4db3cda12e121f522ee15a602966f146962b34e
+    .claude/skills/google-health/scripts/cli/token.ts: sha256:acdb88eea0e89cafe5555a0a5d61d61205c689504b0665b50c443a886d8c7b0f
+    .claude/skills/google-health/scripts/deno.json: sha256:a830408ccad2ac253791035674074a220bcfadcbec60a10d7778d411a6a9c01d
+    .claude/skills/google-health/scripts/deno.lock: sha256:c2af56eb4afb25cb10c361f1df7062d801af25e3faf6a5c79cadd5cd1c0bfa30
+    .claude/skills/google-health/scripts/lib/api.test.ts: sha256:a6d42c72adc0f2ccfabc85efbd6394feffee8ccab8a4631c2b28d20358af836d
+    .claude/skills/google-health/scripts/lib/api.ts: sha256:634a8af4f137857ab4da7bba2ef09867618dcb54951ee62532a7ead83abb7acd
+    .claude/skills/google-health/scripts/lib/auth-server.test.ts: sha256:6f69ec945bc60f8b0f711b60072de689e2a31a4395df7b626b424bde912d907e
+    .claude/skills/google-health/scripts/lib/auth-server.ts: sha256:432e4d01eb9301602ca587bb3102ab3611899cd1d787ab077ca0dc52f6d44cfe
+    .claude/skills/google-health/scripts/lib/civil.test.ts: sha256:aad16781b61ac93a4a8ca666c77ad0febf25f95cf98499f29d2e7f056813504e
+    .claude/skills/google-health/scripts/lib/civil.ts: sha256:20a0defc847202442ac5726d7c1214b2be9118bad6a94a740b31664bdea0c9db
+    .claude/skills/google-health/scripts/lib/config.test.ts: sha256:7e5130a22ebee209ad8d974759d5bcd4bfc19922fd903e7d64654bbaf4ba989c
+    .claude/skills/google-health/scripts/lib/config.ts: sha256:7733fb8071a80d426034358966ece9b8c034267c803eeb419b790eef896a5b7a
+    .claude/skills/google-health/scripts/lib/filter.test.ts: sha256:0e695166c76a3705c06ffec64494f590a36589e6557c99f98570cd57b7b45085
+    .claude/skills/google-health/scripts/lib/filter.ts: sha256:7dda1906c2feb343a6ec2598b21c05cac3e7415b9398ccb6028f1c2b48a523f9
+    .claude/skills/google-health/scripts/lib/oauth.test.ts: sha256:ed0b745d6c1c551ba5c5aee7d5d169f1a510b90c485a8a021e6a3f18c3d51574
+    .claude/skills/google-health/scripts/lib/oauth.ts: sha256:d063a8a22176f0e291568819a26d504e10c0eda51f368fc5a793c16639e1651b
+    .claude/skills/google-health/scripts/lib/token-file.test.ts: sha256:4abd38a346618a278103ee29d9fdbb15f4a827d1242748a6ffbbc9b637701039
+    .claude/skills/google-health/scripts/lib/token-file.ts: sha256:3ce4191ac47868b4f5187fbdb8ee5c4e5b33891491aa03e55dd96760a9b7b07d
+  content_hash: sha256:487aacf3dbde9aafd3f47d7a6637ea6e6092c324bc97c2d3f2bbd8a7bf3106f8
 deployments:
 - kind: project-relative
   target: claude
@@ -250,6 +312,240 @@ deployments:
   - ansanloms/skills/find-docs
   active_owner: ansanloms/skills/find-docs
   content_hash: sha256:e8d51772cf602e46e9ae1d1d3cef2a212af5a4282b195ca4307df80e3997f07e
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/README.md
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:2929fdd2c79917b998c74d89b81e963586921f09e417ed0375ff1ca4093d13db
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:6c3dde4bf7c9595c03864cb53fe6b28f42cd1486cc00e0031fe7036d76adb791
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/scripts/.gitignore
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:5c5daf48fdf4db42e16c29b5b3de54984bafe0c2ff367a186ca97f1d4ed48290
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/scripts/cli/auth-url.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:a3c156c90c261bdd3ae7c41416fea6010de80d5be675737032805a07c30592a2
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/scripts/cli/auth.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:33eed1a47e89b165d0b8738a4c6db1c411503354df5845f4411b370dc02e2ea4
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/scripts/cli/daily-rollup.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:1eb7fbfcc4f893f0da52b9bc44393fe50be174e3c4d86f03eab94b0c54e48538
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/scripts/cli/datapoints.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:b199a8601be7ee0fc5621158db0b4dd79c90e759da1709dac1bac08afc9bf949
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/scripts/cli/token-status.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:e5bd5b1e692fa0684c0aaecfc4db3cda12e121f522ee15a602966f146962b34e
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/scripts/cli/token.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:acdb88eea0e89cafe5555a0a5d61d61205c689504b0665b50c443a886d8c7b0f
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/scripts/deno.json
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:a830408ccad2ac253791035674074a220bcfadcbec60a10d7778d411a6a9c01d
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/scripts/deno.lock
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:c2af56eb4afb25cb10c361f1df7062d801af25e3faf6a5c79cadd5cd1c0bfa30
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/scripts/lib/api.test.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:a6d42c72adc0f2ccfabc85efbd6394feffee8ccab8a4631c2b28d20358af836d
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/scripts/lib/api.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:634a8af4f137857ab4da7bba2ef09867618dcb54951ee62532a7ead83abb7acd
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/scripts/lib/auth-server.test.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:6f69ec945bc60f8b0f711b60072de689e2a31a4395df7b626b424bde912d907e
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/scripts/lib/auth-server.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:432e4d01eb9301602ca587bb3102ab3611899cd1d787ab077ca0dc52f6d44cfe
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/scripts/lib/civil.test.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:aad16781b61ac93a4a8ca666c77ad0febf25f95cf98499f29d2e7f056813504e
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/scripts/lib/civil.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:20a0defc847202442ac5726d7c1214b2be9118bad6a94a740b31664bdea0c9db
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/scripts/lib/config.test.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:7e5130a22ebee209ad8d974759d5bcd4bfc19922fd903e7d64654bbaf4ba989c
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/scripts/lib/config.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:7733fb8071a80d426034358966ece9b8c034267c803eeb419b790eef896a5b7a
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/scripts/lib/filter.test.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:0e695166c76a3705c06ffec64494f590a36589e6557c99f98570cd57b7b45085
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/scripts/lib/filter.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:7dda1906c2feb343a6ec2598b21c05cac3e7415b9398ccb6028f1c2b48a523f9
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/scripts/lib/oauth.test.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:ed0b745d6c1c551ba5c5aee7d5d169f1a510b90c485a8a021e6a3f18c3d51574
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/scripts/lib/oauth.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:d063a8a22176f0e291568819a26d504e10c0eda51f368fc5a793c16639e1651b
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/scripts/lib/token-file.test.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:4abd38a346618a278103ee29d9fdbb15f4a827d1242748a6ffbbc9b637701039
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/scripts/lib/token-file.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:3ce4191ac47868b4f5187fbdb8ee5c4e5b33891491aa03e55dd96760a9b7b07d
 - kind: project-relative
   target: claude
   value: .claude/skills/jartic-traffic-jam-forecast
