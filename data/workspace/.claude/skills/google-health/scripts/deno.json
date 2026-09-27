@@ -1,0 +1,34 @@
+{
+  "$schema": "https://raw.githubusercontent.com/denoland/deno/refs/heads/main/cli/schemas/config-file.v1.json",
+  "fmt": {
+    "proseWrap": "preserve"
+  },
+  "lint": {
+    "rules": { "tags": ["recommended"] },
+    "plugins": ["jsr:@aireone/deno-lint-curly"]
+  },
+  "exclude": ["coverage/"],
+  "imports": {
+    "@std/assert": "jsr:@std/assert@1.0.19",
+    "@std/path": "jsr:@std/path@1.1.6",
+    "gunshi": "jsr:@gunshi/gunshi@0.37.1"
+  },
+  "tasks": {
+    "auth": "deno run --allow-net=127.0.0.1,oauth2.googleapis.com --allow-env=GOOGLE_HEALTH_CLIENT_ID,GOOGLE_HEALTH_CLIENT_SECRET,GOOGLE_HEALTH_TOKEN_PATH --allow-read=$GOOGLE_HEALTH_TOKEN_PATH,$GOOGLE_HEALTH_TOKEN_PATH.tmp --allow-write=$GOOGLE_HEALTH_TOKEN_PATH,$GOOGLE_HEALTH_TOKEN_PATH.tmp cli/auth.ts",
+    "auth-url": "deno run --allow-env=GOOGLE_HEALTH_CLIENT_ID cli/auth-url.ts",
+    "token": "deno run --allow-net=oauth2.googleapis.com --allow-env=GOOGLE_HEALTH_CLIENT_ID,GOOGLE_HEALTH_CLIENT_SECRET,GOOGLE_HEALTH_TOKEN_PATH --allow-read=$GOOGLE_HEALTH_TOKEN_PATH.tmp --allow-write=$GOOGLE_HEALTH_TOKEN_PATH,$GOOGLE_HEALTH_TOKEN_PATH.tmp cli/token.ts",
+    "token-status": "deno run --allow-env=GOOGLE_HEALTH_TOKEN_PATH --allow-read=$GOOGLE_HEALTH_TOKEN_PATH cli/token-status.ts",
+    "datapoints": "deno run --allow-net=oauth2.googleapis.com,health.googleapis.com --allow-env=GOOGLE_HEALTH_CLIENT_ID,GOOGLE_HEALTH_CLIENT_SECRET,GOOGLE_HEALTH_TOKEN_PATH --allow-read=$GOOGLE_HEALTH_TOKEN_PATH,$GOOGLE_HEALTH_TOKEN_PATH.tmp --allow-write=$GOOGLE_HEALTH_TOKEN_PATH,$GOOGLE_HEALTH_TOKEN_PATH.tmp cli/datapoints.ts",
+    "daily-rollup": "deno run --allow-net=oauth2.googleapis.com,health.googleapis.com --allow-env=GOOGLE_HEALTH_CLIENT_ID,GOOGLE_HEALTH_CLIENT_SECRET,GOOGLE_HEALTH_TOKEN_PATH --allow-read=$GOOGLE_HEALTH_TOKEN_PATH,$GOOGLE_HEALTH_TOKEN_PATH.tmp --allow-write=$GOOGLE_HEALTH_TOKEN_PATH,$GOOGLE_HEALTH_TOKEN_PATH.tmp cli/daily-rollup.ts",
+    "lint": "deno lint && deno check && deno fmt --check",
+    "fix": "deno lint --fix && deno fmt",
+    "test": "deno test -A --parallel --shuffle --coverage"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
+  }
+}
