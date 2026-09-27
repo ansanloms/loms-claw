@@ -77,7 +77,9 @@ Deno.test("runAuthServer: state が不一致な /?code= は 400 を返して lis
       received.push(code);
       return Promise.resolve();
     },
-    timeoutMs: 50,
+    // このテストはタイムアウトの発火自体を検証しないため、既定 (5 分) のままにする。
+    // 短い timeoutMs を設定すると、後続の goodRes fetch より先にタイムアウトが発火して
+    // server.shutdown() が走り、goodRes が接続エラーになる (並列実行時の負荷でこの間隔が伸びると顕在化する)。
   });
   const boundPort = await port;
 
@@ -131,7 +133,8 @@ Deno.test("runAuthServer: state パラメータ自体が無い /?code= も 400 �
     exchangeCode: () => {
       throw new Error("呼ばれてはいけない");
     },
-    timeoutMs: 50,
+    // 並列実行時の負荷で badRes fetch がずれ込んでも誤発火しないよう、余裕を持った値にする。
+    timeoutMs: 1000,
   });
   const boundPort = await port;
 
@@ -152,7 +155,8 @@ Deno.test("runAuthServer: code・error のどちらも来なければ timeoutMs 
     exchangeCode: () => {
       throw new Error("呼ばれてはいけない");
     },
-    timeoutMs: 20,
+    // 並列実行時の負荷でも誤って早期に発火しないよう、余裕を持った値にする。
+    timeoutMs: 1000,
   });
   await port;
 

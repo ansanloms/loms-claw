@@ -32,6 +32,9 @@ export type FilterFieldEntry =
  *   つまり --from/--to は起床時刻 (interval の終端) で切られる。
  * - heart-rate・weight・body-fat (いずれも sample 型) は sample_time.physical_time (RFC3339 のみ) が通る
  *   (weight・body-fat は 2026-09-27 実測、Health Planet アプリが Health Connect に書いたデータ)。
+ * - nutrition-log は exercise と同じ傾向で、開始基準の日付 (civil_start_time) のみ通る。
+ *   start_time・end_time・civil_end_time はいずれも 400 (INVALID_DATA_POINT_FILTER_DATA_TYPE_MEMBER、2026-09-27 実測)。
+ *   pageSize は 25 (exercise・sleep と同じ Session 型) ではなく 10000 が通った (2026-09-27 実測)。
  *
  * pageSize は公式リファレンス (https://developers.google.com/health/reference/rest/v4/users.dataTypes.dataPoints/list)
  * の既定は 1440・最大は 10000 (exercise・sleep は既定・最大とも 25)。ただし heart-rate は
@@ -82,14 +85,33 @@ export const DATA_TYPE_FILTER_FIELDS: Readonly<
     rfc3339Member: "end_time",
     pageSize: 25,
   },
+  "nutrition-log": {
+    kind: "interval",
+    field: "nutrition_log",
+    dateMember: "civil_start_time",
+    pageSize: 10000,
+  },
   "heart-rate": { kind: "sample", field: "heart_rate", pageSize: 10000 },
   "weight": { kind: "sample", field: "weight", pageSize: 10000 },
   "body-fat": { kind: "sample", field: "body_fat", pageSize: 10000 },
 };
 
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
-const RFC3339_RE =
+/** RFC3339 の日時形式 (rollup サブコマンドの --from/--to 検証でも再利用する)。 */
+export const RFC3339_RE =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
+
+/**
+ * label (--from/--to) の値を Date.parse し、ミリ秒値を返す。
+ * 形式が一致していても 2026-13-01T00:00:00Z のような実在しない日時は Date.parse が NaN を返すため、ここで検出する。
+ */
+function assertRealDateTime(label: "--from" | "--to", value: string): number {
+  const ms = Date.parse(value);
+  if (Number.isNaN(ms)) {
+    throw new Error(`${label} が実在する日時ではない: ${value}`);
+  }
+  return ms;
+}
 
 type ValueFormat = "date" | "rfc3339";
 
@@ -133,7 +155,9 @@ export function buildFilter(
       `--from/--to は同じ形式 (どちらも YYYY-MM-DD かどちらも RFC3339) で指定する: from=${from}, to=${to}`,
     );
   }
-  if (Date.parse(from) >= Date.parse(to)) {
+  const fromMs = assertRealDateTime("--from", from);
+  const toMs = assertRealDateTime("--to", to);
+  if (fromMs >= toMs) {
     throw new Error(
       `--from は --to より前でなければならない (exclusive): from=${from} が to=${to} 以降になっている`,
     );
@@ -161,4 +185,28 @@ export function buildFilter(
   }
 
   return `${entry.field}.interval.${member} >= "${from}" AND ${entry.field}.interval.${member} < "${to}"`;
+}
+
+/**
+ * rollup サブコマンドの --from/--to (RFC3339 必須) を検査する。
+ * 日付形式・不正な文字列 (RFC3339_RE に一致しない)、および from >= to はリクエスト前にエラーにする。
+ */
+export function validateRfc3339Range(from: string, to: string): void {
+  if (!RFC3339_RE.test(from)) {
+    throw new Error(
+      `--from は RFC3339 で指定する (例: 2026-04-20T00:00:00Z): ${from}`,
+    );
+  }
+  if (!RFC3339_RE.test(to)) {
+    throw new Error(
+      `--to は RFC3339 で指定する (例: 2026-04-20T00:00:00Z): ${to}`,
+    );
+  }
+  const fromMs = assertRealDateTime("--from", from);
+  const toMs = assertRealDateTime("--to", to);
+  if (fromMs >= toMs) {
+    throw new Error(
+      `--from は --to より前でなければならない (exclusive): from=${from} が to=${to} 以降になっている`,
+    );
+  }
 }

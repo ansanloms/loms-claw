@@ -1,5 +1,9 @@
 import { assertEquals, assertThrows } from "@std/assert";
-import { buildFilter, DATA_TYPE_FILTER_FIELDS } from "./filter.ts";
+import {
+  buildFilter,
+  DATA_TYPE_FILTER_FIELDS,
+  validateRfc3339Range,
+} from "./filter.ts";
 
 Deno.test("buildFilter: interval 型 (RFC3339) は snake_case.interval.start_time で組み立てる", () => {
   const filter = buildFilter(
@@ -58,6 +62,25 @@ Deno.test("buildFilter: exercise は日付 (civil_start_time) のみ通り、RFC
   );
 });
 
+Deno.test("buildFilter: nutrition-log は日付 (civil_start_time) のみ通り、RFC3339 はエラー", () => {
+  const filter = buildFilter("nutrition-log", "2026-03-03", "2026-03-04");
+  assertEquals(
+    filter,
+    `nutrition_log.interval.civil_start_time >= "2026-03-03" AND nutrition_log.interval.civil_start_time < "2026-03-04"`,
+  );
+
+  assertThrows(
+    () =>
+      buildFilter(
+        "nutrition-log",
+        "2026-03-03T00:00:00Z",
+        "2026-03-04T00:00:00Z",
+      ),
+    Error,
+    "日付",
+  );
+});
+
 Deno.test("buildFilter: sample 型は sample_time.physical_time (RFC3339) で組み立て、日付形式はエラーになる", () => {
   for (
     const { dataType, field } of [
@@ -108,6 +131,29 @@ Deno.test("buildFilter: 存在しない日付 (2026-02-31) はエラー", () => 
   );
 });
 
+Deno.test("buildFilter: 形式は一致していても実在しない日時 (13 月) はエラー (RFC3339)", () => {
+  assertThrows(
+    () =>
+      buildFilter(
+        "heart-rate",
+        "2026-13-01T00:00:00Z",
+        "2026-04-21T00:00:00Z",
+      ),
+    Error,
+    "実在する日時ではない",
+  );
+  assertThrows(
+    () =>
+      buildFilter(
+        "heart-rate",
+        "2026-04-20T00:00:00Z",
+        "2026-13-01T00:00:00Z",
+      ),
+    Error,
+    "実在する日時ではない",
+  );
+});
+
 Deno.test("buildFilter: from >= to (日付) はエラー (exclusive、どちらが逆かを書く)", () => {
   assertThrows(
     () => buildFilter("steps", "2026-04-21", "2026-04-20"),
@@ -147,6 +193,7 @@ Deno.test("DATA_TYPE_FILTER_FIELDS: exercise・sleep の pageSize は 25、そ�
       "heart-rate",
       "weight",
       "body-fat",
+      "nutrition-log",
     ]
   ) {
     assertEquals(DATA_TYPE_FILTER_FIELDS[dataType].pageSize, 10000);
@@ -161,5 +208,59 @@ Deno.test("buildFilter: 未対応の dataType はエラー", () => {
     () => buildFilter("unknown-type", "2026-04-20", "2026-04-21"),
     Error,
     "未対応",
+  );
+});
+
+Deno.test("validateRfc3339Range: 不正な文字列はエラー", () => {
+  assertThrows(
+    () => validateRfc3339Range("not-a-date", "2026-04-21T00:00:00Z"),
+    Error,
+    "RFC3339",
+  );
+});
+
+Deno.test("validateRfc3339Range: 日付形式 (YYYY-MM-DD) は RFC3339 でないのでエラー", () => {
+  assertThrows(
+    () => validateRfc3339Range("2026-04-20", "2026-04-21"),
+    Error,
+    "RFC3339",
+  );
+});
+
+Deno.test("validateRfc3339Range: from >= to はエラー", () => {
+  assertThrows(
+    () =>
+      validateRfc3339Range(
+        "2026-04-21T00:00:00Z",
+        "2026-04-20T00:00:00Z",
+      ),
+    Error,
+    "exclusive",
+  );
+  assertThrows(
+    () =>
+      validateRfc3339Range(
+        "2026-04-20T00:00:00Z",
+        "2026-04-20T00:00:00Z",
+      ),
+    Error,
+    "exclusive",
+  );
+});
+
+Deno.test("validateRfc3339Range: from/to とも RFC3339 で from < to なら通る", () => {
+  validateRfc3339Range("2026-04-20T00:00:00Z", "2026-04-21T00:00:00Z");
+});
+
+Deno.test("validateRfc3339Range: 形式は一致していても実在しない日時 (13 月) はエラー", () => {
+  assertThrows(
+    () => validateRfc3339Range("2026-13-01T00:00:00Z", "2026-04-21T00:00:00Z"),
+    Error,
+    "実在する日時ではない",
+  );
+  assertThrows(
+    () => validateRfc3339Range("2026-04-20T00:00:00Z", "2026-13-01T00:00:00Z"),
+    Error,
+    "実在する日時ではない",
   );
 });

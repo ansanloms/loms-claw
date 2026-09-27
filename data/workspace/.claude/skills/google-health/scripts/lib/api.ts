@@ -18,14 +18,25 @@ export class HttpError extends Error {
   }
 }
 
-/** 非 2xx レスポンスを検査し、HTTP ステータスと生ボディを含む例外を投げる。 */
-async function ensureOk(res: Response, label: string): Promise<string> {
+/**
+ * 非 2xx レスポンスを検査し、HTTP ステータスと生ボディを含む例外を投げる。
+ * メッセージは `<METHOD> <url> 失敗 (HTTP n)` の形にする。GET だけは従来どおり `<url> 取得失敗` の意味を保つ
+ * (書き込み系メソッドで「取得失敗」と出ると実態と食い違うため)。
+ */
+async function ensureOk(
+  res: Response,
+  method: string,
+  url: string,
+): Promise<string> {
   const text = await res.text();
   if (!res.ok) {
+    const label = method === "GET"
+      ? `${url} 取得失敗`
+      : `${method} ${url} 失敗`;
     throw new HttpError(
       res.status,
       text,
-      `${label} 取得失敗 (HTTP ${res.status}): ${text}`,
+      `${label} (HTTP ${res.status}): ${text}`,
     );
   }
   return text;
@@ -76,6 +87,29 @@ function extractPage(
   };
 }
 
+/**
+ * 任意の HTTP メソッドで 1 リクエストを送り、レスポンス本文 (生テキスト) を返す。
+ * body を渡すと JSON として送る (Content-Type: application/json)。非 2xx は ensureOk と同じ扱い (HttpError、
+ * HTTP ステータスと生ボディを保持) にする。ページネーションを伴わない get・create・update・batch-delete から使う。
+ */
+export async function request(
+  url: string,
+  accessToken: string,
+  method: string,
+  body: Record<string, unknown> | undefined,
+  fetchFn: typeof fetch = fetch,
+): Promise<string> {
+  const res = await fetchFn(url, {
+    method,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+    },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
+  return await ensureOk(res, method, url);
+}
+
 /** GET でページネーション (query の pageToken) を辿り、指定のキー配下の配列を全ページ結合して返す。 */
 export async function getPaginated(
   url: string,
@@ -93,7 +127,7 @@ export async function getPaginated(
     const res = await fetchFn(u, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
-    const text = await ensureOk(res, u.toString());
+    const text = await ensureOk(res, "GET", u.toString());
     const page = extractPage(text, arrayKey);
     items.push(...page.items);
     if (page.nextPageToken === undefined) {
@@ -124,7 +158,7 @@ export async function postPaginated(
       },
       body: JSON.stringify(reqBody),
     });
-    const text = await ensureOk(res, url);
+    const text = await ensureOk(res, "POST", url);
     const page = extractPage(text, arrayKey);
     items.push(...page.items);
     if (page.nextPageToken === undefined) {

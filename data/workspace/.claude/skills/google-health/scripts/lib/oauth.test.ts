@@ -29,8 +29,8 @@ Deno.test("buildAuthUrl: client_id・redirect_uri・response_type・access_type�
   assertEquals(url.searchParams.get("state"), "state-value");
 });
 
-Deno.test("DEFAULT_SCOPES: 既定スコープは 3 つ", () => {
-  assertEquals(DEFAULT_SCOPES.length, 3);
+Deno.test("DEFAULT_SCOPES: 既定スコープは 4 系統 × readonly/writeonly の 8 つ", () => {
+  assertEquals(DEFAULT_SCOPES.length, 8);
 });
 
 Deno.test("generateState: 64 文字の hex 文字列で、呼ぶたびに異なる値になる", () => {

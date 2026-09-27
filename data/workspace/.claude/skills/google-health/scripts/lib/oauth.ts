@@ -6,11 +6,16 @@
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 
-/** 既定スコープ (issue #77 のデータ型表に対応する 3 種)。 */
+/** 既定スコープ (4 系統 (activity_and_fitness・health_metrics_and_measurements・sleep・nutrition) × readonly/writeonly の 8 種)。 */
 export const DEFAULT_SCOPES: readonly string[] = [
   "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly",
+  "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.writeonly",
   "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly",
+  "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.writeonly",
   "https://www.googleapis.com/auth/googlehealth.sleep.readonly",
+  "https://www.googleapis.com/auth/googlehealth.sleep.writeonly",
+  "https://www.googleapis.com/auth/googlehealth.nutrition.readonly",
+  "https://www.googleapis.com/auth/googlehealth.nutrition.writeonly",
 ];
 
 export type AuthUrlParams = {
