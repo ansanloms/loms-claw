@@ -1,3 +1,3 @@
 schedule: "0 21 * * *"
-command: "cron/scripts/google-health-token-check.sh"
+command: "sh cron/scripts/google-health-token-check.sh"
 channelId: "1552474919693062184"
