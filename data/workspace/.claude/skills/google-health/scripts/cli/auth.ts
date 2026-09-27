@@ -30,7 +30,7 @@ const command = define({
       short: "s",
       multiple: true,
       description:
-        "取得スコープ (繰り返し指定可。省略時は activity_and_fitness・health_metrics_and_measurements・sleep の readonly 3 種)",
+        "取得スコープ (繰り返し指定可。省略時は activity_and_fitness・health_metrics_and_measurements・sleep・nutrition の readonly/writeonly 計 8 種)",
     },
   },
   run: async (ctx) => {
