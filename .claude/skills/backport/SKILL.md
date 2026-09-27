@@ -2,7 +2,10 @@
 name: backport
 description: >-
   稼働サーバ (本番) の実データをローカルの clone へ取り込みたいとき、または backport したいと言われたときに使う。
+  引数に稼働サーバの ssh host alias とデプロイ先ルートパスを取る。
   `data/config.json` の差分表示と `data/workspace` の rsync 同期を行う。
+argument-hint: "[host] [path]"
+arguments: [host, path]
 ---
 
 # 本番データの backport
@@ -17,18 +20,18 @@ description: >-
 - 「本番の状態を取り込みたい」
 - 「稼働サーバの状態を確認したい」
 
-## 前提
+## 引数
 
-リポジトリ直下に `.env` があり、次の 2 つが設定されていること。
+呼び出し時の引数で稼働サーバの接続先を受け取る (`/backport <host> <path>`)。
 
-- `LOMS_CLAW_PROD_HOST`: 稼働サーバの ssh host alias
-- `LOMS_CLAW_PROD_PATH`: 稼働サーバ上のデプロイ先ルートパス
+- host: `$host` (稼働サーバの ssh host alias。例: `~/.ssh/config` の Host エントリ名)
+- path: `$path` (稼働サーバ上のデプロイ先ルートパス。例: `/opt/services/loms-claw`)
 
-`.env` が無い、または上記変数が未設定の場合は、リポジトリ直下の `.env.example` を参照してユーザに設定を促すこと。
+上のどちらかが空 (引数が渡されていない) なら、手順に入る前にユーザに値を問う。推測で埋めない。
 
 ## 手順
 
-1. `.env` を読み、`LOMS_CLAW_PROD_HOST` と `LOMS_CLAW_PROD_PATH` の値を確認する。以降のコマンド例の `<host>` `<path>` はこれらの実際の値に置き換えて実行すること。
+1. 「引数」節の host / path を確定する。以降のコマンド例の `<host>` `<path>` はこれらの実際の値に置き換えて実行すること。
 2. `data/config.json` の差分を表示する (書き込みはしない)。
    ```sh
    diff -u data/config.json <(ssh <host> cat <path>/data/config.json)
