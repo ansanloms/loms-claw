@@ -19,6 +19,7 @@
     "@anthropic-ai/claude-agent-sdk": "npm:@anthropic-ai/claude-agent-sdk@0.3.275",
     "hono": "jsr:@hono/hono@4.13.8",
     "@std/front-matter": "jsr:@std/front-matter@1.0.9",
+    "@std/yaml": "jsr:@std/yaml@1.2.0",
     "discord.js": "npm:discord.js@14.27.0",
     "@std/assert": "jsr:@std/assert@1.0.19",
     "@std/path": "jsr:@std/path@1.1.6",
