@@ -69,6 +69,7 @@ Deno.test("createCronRoutes", async (t) => {
       createCronRoutes({
         listJobs: () => [
           {
+            kind: "prompt",
             name: "job1",
             schedule: "0 9 * * *",
             prompt: "test",
@@ -76,9 +77,10 @@ Deno.test("createCronRoutes", async (t) => {
             once: false,
           },
           {
+            kind: "command",
             name: "job2",
             schedule: "0 18 * * *",
-            prompt: "test2",
+            command: "echo hello",
             once: true,
           },
         ],
@@ -90,9 +92,11 @@ Deno.test("createCronRoutes", async (t) => {
     const json = await res.json();
     assertEquals(json.jobs.length, 2);
     assertEquals(json.jobs[0].name, "job1");
+    assertEquals(json.jobs[0].kind, "prompt");
     assertEquals(json.jobs[0].channelId, "123");
     assertEquals(json.jobs[0].once, false);
     assertEquals(json.jobs[1].name, "job2");
+    assertEquals(json.jobs[1].kind, "command");
     assertEquals(json.jobs[1].channelId, undefined);
     assertEquals(json.jobs[1].once, true);
   });

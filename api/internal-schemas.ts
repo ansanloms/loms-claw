@@ -35,12 +35,21 @@ export const internalSchemas = {
     "description": "登録済み cron ジョブ。",
     "required": [
       "name",
-      "schedule"
+      "schedule",
+      "kind"
     ],
     "properties": {
       "name": {
         "type": "string",
         "description": "ジョブ名。ファイル名から決定する。"
+      },
+      "kind": {
+        "type": "string",
+        "enum": [
+          "prompt",
+          "command"
+        ],
+        "description": "ジョブの種別。prompt は本文を Claude に渡す `.md`、command は `sh -c` で実行する `.yaml`。"
       },
       "schedule": {
         "type": "string",

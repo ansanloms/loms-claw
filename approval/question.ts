@@ -31,6 +31,7 @@ import { INTERACTION_TIMEOUT_MS } from "./constants.ts";
 import { createLogger } from "../logger.ts";
 import { getErrorMessage } from "../errors.ts";
 import { DISCORD_MESSAGE_LIMIT } from "../bot/message.ts";
+import { isRecord } from "../guards.ts";
 
 const log = createLogger("question");
 
@@ -82,13 +83,6 @@ const MAX_QUESTIONS = 4;
  * 1 つの select に載せられる選択肢の上限 (Discord 上限 25 - Other 1 件)。
  */
 const MAX_OPTIONS = 24;
-
-/**
- * unknown 値がプレーンなオブジェクト (Record) であるか判定する type guard。
- */
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 /**
  * `canUseTool` が受け取った AskUserQuestion の入力から質問一覧を取り出す。

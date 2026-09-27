@@ -1,7 +1,8 @@
 import { assertEquals } from "@std/assert";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { CronExecutor } from "./executor.ts";
-import type { CronJobDef } from "./types.ts";
+import type { CommandResult, RunCommandFn } from "./executor.ts";
+import type { CronCommandJob, CronJobDef } from "./types.ts";
 import { Store } from "../store/mod.ts";
 import type { QueryFn } from "../claude/mod.ts";
 import type { SystemPromptStore } from "../claude/system-prompt.ts";
@@ -150,6 +151,56 @@ function canUseToolQueryFn(): QueryFn {
   };
 }
 
+/**
+ * 固定の CommandResult を返す mock RunCommandFn。
+ *
+ * 受け取った `command`/`cwd` を calls に記録する。
+ * - `waitForAbort: true`: `signal` が abort されるまで待ってから resolve する
+ *   （resolve 経路の timeout テストで使う）。
+ * - `rejectOnAbort: true`: `signal` が abort されるまで待ってから、本番の
+ *   `runShellCommand` と同じ `Error("command timed out")` で reject する
+ *   （reject 経路の timeout テストで使う）。
+ * - `rejectWith`: 呼び出し即座に指定エラーで reject する
+ *   （abort によらない失敗のテストで使う）。
+ */
+function mockRunCommandFn(
+  result: CommandResult,
+  options: {
+    waitForAbort?: boolean;
+    rejectOnAbort?: boolean;
+    rejectWith?: Error;
+  } = {},
+): { fn: RunCommandFn; calls: { command: string; cwd: string }[] } {
+  const calls: { command: string; cwd: string }[] = [];
+  const fn: RunCommandFn = (command, { cwd, signal }) => {
+    calls.push({ command, cwd });
+    if (options.rejectWith) {
+      return Promise.reject(options.rejectWith);
+    }
+    if (options.rejectOnAbort) {
+      return new Promise<CommandResult>((_resolve, reject) => {
+        const rejectTimeout = () => reject(new Error("command timed out"));
+        if (signal.aborted) {
+          rejectTimeout();
+          return;
+        }
+        signal.addEventListener("abort", rejectTimeout);
+      });
+    }
+    if (!options.waitForAbort) {
+      return Promise.resolve(result);
+    }
+    return new Promise<CommandResult>((resolve) => {
+      if (signal.aborted) {
+        resolve(result);
+        return;
+      }
+      signal.addEventListener("abort", () => resolve(result));
+    });
+  };
+  return { fn, calls };
+}
+
 const TEST_CONFIG = {
   maxTurns: 10,
   timeout: 30000,
@@ -191,6 +242,7 @@ Deno.test("CronExecutor", async (t) => {
         );
 
         const job: CronJobDef = {
+          kind: "prompt",
           name: "test-job",
           schedule: "0 0 * * *",
           prompt: "hello",
@@ -253,6 +305,7 @@ Deno.test("CronExecutor", async (t) => {
         );
 
         const job: CronJobDef = {
+          kind: "prompt",
           name: "bad-channel-job",
           schedule: "0 0 * * *",
           prompt: "hello",
@@ -288,7 +341,13 @@ Deno.test("CronExecutor", async (t) => {
         );
 
         const jobs: CronJobDef[] = [
-          { name: "j1", schedule: "0 9 * * *", prompt: "test", channelId: "1" },
+          {
+            kind: "prompt",
+            name: "j1",
+            schedule: "0 9 * * *",
+            prompt: "test",
+            channelId: "1",
+          },
         ];
 
         executor.start(jobs);
@@ -319,6 +378,7 @@ Deno.test("CronExecutor", async (t) => {
 
         executor.start([
           {
+            kind: "prompt",
             name: "old",
             schedule: "0 9 * * *",
             prompt: "test",
@@ -328,6 +388,7 @@ Deno.test("CronExecutor", async (t) => {
 
         executor.reload([
           {
+            kind: "prompt",
             name: "new",
             schedule: "0 18 * * *",
             prompt: "test2",
@@ -372,6 +433,7 @@ Deno.test("CronExecutor", async (t) => {
         );
 
         const job: CronJobDef = {
+          kind: "prompt",
           name: "resume-job",
           schedule: "0 0 * * *",
           prompt: "hello",
@@ -407,6 +469,7 @@ Deno.test("CronExecutor", async (t) => {
         );
 
         const job: CronJobDef = {
+          kind: "prompt",
           name: "no-resume-job",
           schedule: "0 0 * * *",
           prompt: "hello",
@@ -448,6 +511,7 @@ Deno.test("CronExecutor", async (t) => {
         });
 
         const job: CronJobDef = {
+          kind: "prompt",
           name: "once-job",
           schedule: "0 0 * * *",
           prompt: "hello",
@@ -486,6 +550,7 @@ Deno.test("CronExecutor", async (t) => {
         });
 
         const job: CronJobDef = {
+          kind: "prompt",
           name: "normal-job",
           schedule: "0 0 * * *",
           prompt: "hello",
@@ -519,14 +584,25 @@ Deno.test("CronExecutor", async (t) => {
         );
 
         const jobs: CronJobDef[] = [
-          { name: "j1", schedule: "0 9 * * *", prompt: "test1" },
-          { name: "j2", schedule: "0 18 * * *", prompt: "test2" },
+          {
+            kind: "prompt",
+            name: "j1",
+            schedule: "0 9 * * *",
+            prompt: "test1",
+          },
+          {
+            kind: "prompt",
+            name: "j2",
+            schedule: "0 18 * * *",
+            prompt: "test2",
+          },
         ];
 
         executor.start(jobs);
 
         assertEquals(executor.findJob("j1")?.name, "j1");
-        assertEquals(executor.findJob("j2")?.prompt, "test2");
+        const j2 = executor.findJob("j2");
+        assertEquals(j2?.kind === "prompt" ? j2.prompt : undefined, "test2");
         assertEquals(executor.findJob("nonexistent"), undefined);
         assertEquals(executor.listJobs().length, 2);
 
@@ -556,6 +632,7 @@ Deno.test("CronExecutor", async (t) => {
 
         // setOnceCallback を呼ばない
         const job: CronJobDef = {
+          kind: "prompt",
           name: "once-no-callback",
           schedule: "0 0 * * *",
           prompt: "hello",
@@ -598,6 +675,7 @@ Deno.test("CronExecutor", async (t) => {
         });
 
         const job: CronJobDef = {
+          kind: "prompt",
           name: "once-running-check",
           schedule: "0 0 * * *",
           prompt: "hello",
@@ -635,6 +713,7 @@ Deno.test("CronExecutor", async (t) => {
         );
 
         const job: CronJobDef = {
+          kind: "prompt",
           name: "approval-job",
           schedule: "0 0 * * *",
           prompt: "hello",
@@ -668,6 +747,7 @@ Deno.test("CronExecutor", async (t) => {
         );
 
         const job: CronJobDef = {
+          kind: "prompt",
           name: "approval-job-no-channel",
           schedule: "0 0 * * *",
           prompt: "hello",
@@ -676,6 +756,556 @@ Deno.test("CronExecutor", async (t) => {
         await executor.runJob(job);
 
         assertEquals(calls, [{ channelId: undefined }]);
+      }),
+  );
+
+  await t.step(
+    "command job: exit 0 + stdout ありで channelId に投稿されること",
+    () =>
+      withStore(async (store) => {
+        const { channel, sent } = createMockChannel();
+        const client = createMockClient(channel);
+        const { manager } = createMockApprovalManager();
+        const systemPrompts = createMockSystemPromptStore();
+        const { fn } = mockRunCommandFn({
+          code: 0,
+          stdout: "command result",
+          stderr: "",
+        });
+
+        const executor = new CronExecutor(
+          client as never,
+          TEST_CONFIG,
+          "guild-1",
+          "test-token",
+          store,
+          {},
+          manager as never,
+          systemPrompts,
+          undefined,
+          fn,
+        );
+
+        const job: CronCommandJob = {
+          kind: "command",
+          name: "command-job",
+          schedule: "0 0 * * *",
+          command: "echo hello",
+          channelId: "ch-cmd",
+        };
+
+        await executor.runJob(job);
+
+        assertEquals(sent, ["command result"]);
+      }),
+  );
+
+  await t.step(
+    "command job: stdout が空なら投稿されないこと",
+    () =>
+      withStore(async (store) => {
+        const { channel, sent } = createMockChannel();
+        const client = createMockClient(channel);
+        const { manager } = createMockApprovalManager();
+        const systemPrompts = createMockSystemPromptStore();
+        const { fn } = mockRunCommandFn({ code: 0, stdout: "", stderr: "" });
+
+        const executor = new CronExecutor(
+          client as never,
+          TEST_CONFIG,
+          "guild-1",
+          "test-token",
+          store,
+          {},
+          manager as never,
+          systemPrompts,
+          undefined,
+          fn,
+        );
+
+        const job: CronCommandJob = {
+          kind: "command",
+          name: "command-job-empty",
+          schedule: "0 0 * * *",
+          command: "true",
+          channelId: "ch-cmd",
+        };
+
+        await executor.runJob(job);
+
+        assertEquals(sent, []);
+      }),
+  );
+
+  await t.step(
+    "command job: channelId 無しなら投稿されず runCommandFn は呼ばれること",
+    () =>
+      withStore(async (store) => {
+        const client = createMockClient(null);
+        const { manager } = createMockApprovalManager();
+        const systemPrompts = createMockSystemPromptStore();
+        const { fn, calls } = mockRunCommandFn({
+          code: 0,
+          stdout: "command result",
+          stderr: "",
+        });
+
+        const executor = new CronExecutor(
+          client as never,
+          TEST_CONFIG,
+          "guild-1",
+          "test-token",
+          store,
+          {},
+          manager as never,
+          systemPrompts,
+          undefined,
+          fn,
+        );
+
+        const job: CronCommandJob = {
+          kind: "command",
+          name: "command-job-no-channel",
+          schedule: "0 0 * * *",
+          command: "echo hello",
+        };
+
+        await executor.runJob(job);
+
+        assertEquals(calls.length, 1);
+      }),
+  );
+
+  await t.step(
+    "command job: 非 0 終了でエラー通知が送られ、runJob 自体は throw しないこと",
+    () =>
+      withStore(async (store) => {
+        const { channel, sent } = createMockChannel();
+        const client = createMockClient(channel);
+        const { manager } = createMockApprovalManager();
+        const systemPrompts = createMockSystemPromptStore();
+        const { fn } = mockRunCommandFn({
+          code: 1,
+          stdout: "",
+          stderr: "boom",
+        });
+
+        const executor = new CronExecutor(
+          client as never,
+          TEST_CONFIG,
+          "guild-1",
+          "test-token",
+          store,
+          {},
+          manager as never,
+          systemPrompts,
+          undefined,
+          fn,
+        );
+
+        const job: CronCommandJob = {
+          kind: "command",
+          name: "command-job-fail",
+          schedule: "0 0 * * *",
+          command: "false",
+          channelId: "ch-cmd",
+        };
+
+        await executor.runJob(job);
+
+        assertEquals(sent.length, 1);
+        assertEquals(sent[0].startsWith("[cron: command-job-fail] "), true);
+      }),
+  );
+
+  await t.step(
+    "command job: 非 0 終了時に stdout があっても通知文面に混ざらないこと",
+    () =>
+      withStore(async (store) => {
+        const { channel, sent } = createMockChannel();
+        const client = createMockClient(channel);
+        const { manager } = createMockApprovalManager();
+        const systemPrompts = createMockSystemPromptStore();
+        const { fn } = mockRunCommandFn({
+          code: 1,
+          stdout: "leaked stdout content",
+          stderr: "boom",
+        });
+
+        const executor = new CronExecutor(
+          client as never,
+          TEST_CONFIG,
+          "guild-1",
+          "test-token",
+          store,
+          {},
+          manager as never,
+          systemPrompts,
+          undefined,
+          fn,
+        );
+
+        const job: CronCommandJob = {
+          kind: "command",
+          name: "command-job-fail-stdout",
+          schedule: "0 0 * * *",
+          command: "false",
+          channelId: "ch-cmd",
+        };
+
+        await executor.runJob(job);
+
+        assertEquals(sent.length, 1);
+        assertEquals(
+          sent[0],
+          "[cron: command-job-fail-stdout] 処理に失敗した。詳細はログ (`GET /logs`) を参照\ncommand exited with code 1: boom",
+        );
+        assertEquals(sent[0].includes("leaked stdout content"), false);
+      }),
+  );
+
+  await t.step(
+    "command job: once: true で onceCallback がジョブ名で呼ばれること",
+    () =>
+      withStore(async (store) => {
+        const client = createMockClient(null);
+        const { manager } = createMockApprovalManager();
+        const systemPrompts = createMockSystemPromptStore();
+        const { fn } = mockRunCommandFn({ code: 0, stdout: "", stderr: "" });
+
+        const executor = new CronExecutor(
+          client as never,
+          TEST_CONFIG,
+          "guild-1",
+          "test-token",
+          store,
+          {},
+          manager as never,
+          systemPrompts,
+          undefined,
+          fn,
+        );
+
+        const calledWith: string[] = [];
+        executor.setOnceCallback((name: string) => {
+          calledWith.push(name);
+          return Promise.resolve();
+        });
+
+        const job: CronCommandJob = {
+          kind: "command",
+          name: "command-once-job",
+          schedule: "0 0 * * *",
+          command: "true",
+          once: true,
+        };
+
+        await executor.runJob(job);
+
+        assertEquals(calledWith, ["command-once-job"]);
+      }),
+  );
+
+  await t.step(
+    "command job: signal の abort を待ってから返すモックが timeout 1ms で timeout エラーとして通知されること",
+    () =>
+      withStore(async (store) => {
+        const { channel, sent } = createMockChannel();
+        const client = createMockClient(channel);
+        const { manager } = createMockApprovalManager();
+        const systemPrompts = createMockSystemPromptStore();
+        const { fn } = mockRunCommandFn(
+          { code: 0, stdout: "should not be posted", stderr: "" },
+          { waitForAbort: true },
+        );
+
+        const executor = new CronExecutor(
+          client as never,
+          TEST_CONFIG,
+          "guild-1",
+          "test-token",
+          store,
+          {},
+          manager as never,
+          systemPrompts,
+          undefined,
+          fn,
+        );
+
+        const job: CronCommandJob = {
+          kind: "command",
+          name: "command-job-timeout",
+          schedule: "0 0 * * *",
+          command: "sleep 10",
+          channelId: "ch-cmd",
+          timeout: 1,
+        };
+
+        await executor.runJob(job);
+
+        assertEquals(sent.length, 1);
+        assertEquals(
+          sent[0].includes("command timed out after 1ms"),
+          true,
+        );
+      }),
+  );
+
+  await t.step(
+    "command job: signal の abort を待って reject するモックが timeout 1ms で timeout エラーとして通知されること",
+    () =>
+      withStore(async (store) => {
+        const { channel, sent } = createMockChannel();
+        const client = createMockClient(channel);
+        const { manager } = createMockApprovalManager();
+        const systemPrompts = createMockSystemPromptStore();
+        const { fn } = mockRunCommandFn(
+          { code: 0, stdout: "should not be posted", stderr: "" },
+          { rejectOnAbort: true },
+        );
+
+        const executor = new CronExecutor(
+          client as never,
+          TEST_CONFIG,
+          "guild-1",
+          "test-token",
+          store,
+          {},
+          manager as never,
+          systemPrompts,
+          undefined,
+          fn,
+        );
+
+        const job: CronCommandJob = {
+          kind: "command",
+          name: "command-job-timeout-reject",
+          schedule: "0 0 * * *",
+          command: "sleep 10",
+          channelId: "ch-cmd",
+          timeout: 1,
+        };
+
+        await executor.runJob(job);
+
+        assertEquals(sent.length, 1);
+        assertEquals(
+          sent[0].includes("command timed out after 1ms"),
+          true,
+        );
+      }),
+  );
+
+  await t.step(
+    "command job: abort していない reject はそのままのメッセージで通知されること",
+    () =>
+      withStore(async (store) => {
+        const { channel, sent } = createMockChannel();
+        const client = createMockClient(channel);
+        const { manager } = createMockApprovalManager();
+        const systemPrompts = createMockSystemPromptStore();
+        const { fn } = mockRunCommandFn(
+          { code: 0, stdout: "", stderr: "" },
+          { rejectWith: new Error("spawn failed") },
+        );
+
+        const executor = new CronExecutor(
+          client as never,
+          TEST_CONFIG,
+          "guild-1",
+          "test-token",
+          store,
+          {},
+          manager as never,
+          systemPrompts,
+          undefined,
+          fn,
+        );
+
+        const job: CronCommandJob = {
+          kind: "command",
+          name: "command-job-spawn-fail",
+          schedule: "0 0 * * *",
+          command: "echo hello",
+          channelId: "ch-cmd",
+        };
+
+        await executor.runJob(job);
+
+        assertEquals(sent.length, 1);
+        assertEquals(sent[0].includes("spawn failed"), true);
+        assertEquals(sent[0].includes("command timed out"), false);
+      }),
+  );
+
+  await t.step(
+    "command job: cwd に config.cwd が渡ること",
+    () =>
+      withStore(async (store) => {
+        const client = createMockClient(null);
+        const { manager } = createMockApprovalManager();
+        const systemPrompts = createMockSystemPromptStore();
+        const { fn, calls } = mockRunCommandFn({
+          code: 0,
+          stdout: "",
+          stderr: "",
+        });
+
+        const executor = new CronExecutor(
+          client as never,
+          TEST_CONFIG,
+          "guild-1",
+          "test-token",
+          store,
+          {},
+          manager as never,
+          systemPrompts,
+          undefined,
+          fn,
+        );
+
+        const job: CronCommandJob = {
+          kind: "command",
+          name: "command-job-cwd",
+          schedule: "0 0 * * *",
+          command: "pwd",
+        };
+
+        await executor.runJob(job);
+
+        assertEquals(calls, [{ command: "pwd", cwd: TEST_CONFIG.cwd }]);
+      }),
+  );
+
+  await t.step(
+    "command job: 2000 文字超の stdout が分割投稿されること",
+    () =>
+      withStore(async (store) => {
+        const { channel, sent } = createMockChannel();
+        const client = createMockClient(channel);
+        const { manager } = createMockApprovalManager();
+        const systemPrompts = createMockSystemPromptStore();
+        const longOutput = "a".repeat(2500);
+        const { fn } = mockRunCommandFn({
+          code: 0,
+          stdout: longOutput,
+          stderr: "",
+        });
+
+        const executor = new CronExecutor(
+          client as never,
+          TEST_CONFIG,
+          "guild-1",
+          "test-token",
+          store,
+          {},
+          manager as never,
+          systemPrompts,
+          undefined,
+          fn,
+        );
+
+        const job: CronCommandJob = {
+          kind: "command",
+          name: "command-job-long",
+          schedule: "0 0 * * *",
+          command: "echo long",
+          channelId: "ch-cmd",
+        };
+
+        await executor.runJob(job);
+
+        assertEquals(sent.length > 1, true);
+        assertEquals(sent.join(""), longOutput);
+      }),
+  );
+
+  await t.step(
+    "command job: 4000 文字超の stdout が切り詰められ注記が付くこと",
+    () =>
+      withStore(async (store) => {
+        const { channel, sent } = createMockChannel();
+        const client = createMockClient(channel);
+        const { manager } = createMockApprovalManager();
+        const systemPrompts = createMockSystemPromptStore();
+        const overLimitOutput = "b".repeat(4500);
+        const { fn } = mockRunCommandFn({
+          code: 0,
+          stdout: overLimitOutput,
+          stderr: "",
+        });
+
+        const executor = new CronExecutor(
+          client as never,
+          TEST_CONFIG,
+          "guild-1",
+          "test-token",
+          store,
+          {},
+          manager as never,
+          systemPrompts,
+          undefined,
+          fn,
+        );
+
+        const job: CronCommandJob = {
+          kind: "command",
+          name: "command-job-truncated",
+          schedule: "0 0 * * *",
+          command: "echo huge",
+          channelId: "ch-cmd",
+        };
+
+        await executor.runJob(job);
+
+        const posted = sent.join("");
+        assertEquals(posted.includes("b".repeat(4000)), true);
+        assertEquals(posted.includes("... (truncated, 4500 chars)"), true);
+        assertEquals(posted.length < overLimitOutput.length, true);
+      }),
+  );
+
+  await t.step(
+    "command job: 4000 文字ちょうどの stdout は切り詰められないこと",
+    () =>
+      withStore(async (store) => {
+        const { channel, sent } = createMockChannel();
+        const client = createMockClient(channel);
+        const { manager } = createMockApprovalManager();
+        const systemPrompts = createMockSystemPromptStore();
+        const exactOutput = "c".repeat(4000);
+        const { fn } = mockRunCommandFn({
+          code: 0,
+          stdout: exactOutput,
+          stderr: "",
+        });
+
+        const executor = new CronExecutor(
+          client as never,
+          TEST_CONFIG,
+          "guild-1",
+          "test-token",
+          store,
+          {},
+          manager as never,
+          systemPrompts,
+          undefined,
+          fn,
+        );
+
+        const job: CronCommandJob = {
+          kind: "command",
+          name: "command-job-exact-limit",
+          schedule: "0 0 * * *",
+          command: "echo exact",
+          channelId: "ch-cmd",
+        };
+
+        await executor.runJob(job);
+
+        const posted = sent.join("");
+        assertEquals(posted, exactOutput);
+        assertEquals(posted.includes("truncated"), false);
       }),
   );
 });

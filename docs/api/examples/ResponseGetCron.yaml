@@ -1,8 +1,14 @@
 jobs:
-  - name: news
+  - name: news.md
+    kind: prompt
     schedule: 0 9 * * *
     channelId: "1234567890123456789"
     once: false
-  - name: reminder
+  - name: reminder.md
+    kind: prompt
     schedule: 30 18 * * 5
     once: true
+  - name: check.yaml
+    kind: command
+    schedule: "*/30 * * * *"
+    once: false

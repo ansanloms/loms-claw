@@ -229,7 +229,7 @@ export class DiscordBot {
           const filePath = join(
             this.config.claude.cwd,
             "cron",
-            `${jobName}.md`,
+            jobName,
           );
           try {
             await Deno.remove(filePath);

@@ -1,6 +1,6 @@
 # 定期実行 (cron)
 
-ワークスペース直下の `cron/*.md` (YAML フロントマター + 本文プロンプト) で定義したジョブを、bot プロセス内のスケジューラが分単位で評価し、マッチしたら `askClaude()` を実行して結果を Discord へ投稿する仕組み。`cron/` ディレクトリが存在しなければ cron 機能は無効になる (ジョブ 0 件でスケジューラだけが動く)。Claude Code 組み込みの `CronCreate`/`CronDelete`/`CronList`/`RemoteTrigger` とは無関係で、ジョブの管理はファイル操作と内部 HTTP API で行う。
+ワークスペース直下の `cron/*.md` (prompt ジョブ、YAML フロントマター + 本文プロンプト) と `cron/*.yaml` (command ジョブ、`sh -c` で実行するコマンド) で定義したジョブを、bot プロセス内のスケジューラが分単位で評価し、マッチしたら prompt ジョブは `askClaude()` を、command ジョブはコマンドを実行して結果を Discord へ投稿する仕組み。`cron/` ディレクトリが存在しなければ cron 機能は無効になる (ジョブ 0 件でスケジューラだけが動く)。Claude Code 組み込みの `CronCreate`/`CronDelete`/`CronList`/`RemoteTrigger` とは無関係で、ジョブの管理はファイル操作と内部 HTTP API で行う。
 
 関連: [README](README.md)/[lifecycle](lifecycle.md)/[claude-integration](claude-integration.md)/[store-and-settings](store-and-settings.md)/[approval](approval.md)/[internal-api](internal-api.md)/[deployment](deployment.md)
 
@@ -8,15 +8,15 @@
 
 ## 構成要素
 
-| ファイル             | シンボル                                      | 役割                                                                            |
-| -------------------- | --------------------------------------------- | ------------------------------------------------------------------------------- |
-| `cron/types.ts`      | `CronJobDef`                                  | ジョブ定義の型。loader の出力、scheduler / executor の入力                      |
-| `cron/match.ts`      | `parseCronExpression()` / `matchesCron()`     | 5 フィールド cron 式のパースとローカルタイムでのマッチ判定                      |
-| `cron/loader.ts`     | `loadCronJobsFromDir()` / `validateCronJob()` | `cron/` 走査、フロントマター抽出、JSON Schema 検証                              |
-| `cron/scheduler.ts`  | `CronScheduler`                               | 60 秒 tick で全ジョブを評価し、マッチしたジョブのコールバックを呼ぶ             |
-| `cron/executor.ts`   | `CronExecutor`                                | scheduler を保持し、ジョブ 1 件の実行 (`askClaude()` → Discord 投稿) を担う     |
-| `bot/mod.ts`         | `DiscordBot.start()`                          | `ClientReady` で executor を生成・起動し、reload / run / list を API へ配線する |
-| `api/routes/cron.ts` | `createCronRoutes()` / `CronRouteContext`     | `GET /cron` / `POST /cron/run` / `POST /cron/reload`                            |
+| ファイル             | シンボル                                      | 役割                                                                                                                       |
+| -------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `cron/types.ts`      | `CronJobDef`                                  | ジョブ定義の型 (`kind` で判別する `CronPromptJob` / `CronCommandJob` の union)。loader の出力、scheduler / executor の入力 |
+| `cron/match.ts`      | `parseCronExpression()` / `matchesCron()`     | 5 フィールド cron 式のパースとローカルタイムでのマッチ判定                                                                 |
+| `cron/loader.ts`     | `loadCronJobsFromDir()` / `validateCronJob()` | `cron/` 走査、フロントマター抽出、JSON Schema 検証                                                                         |
+| `cron/scheduler.ts`  | `CronScheduler`                               | 60 秒 tick で全ジョブを評価し、マッチしたジョブのコールバックを呼ぶ                                                        |
+| `cron/executor.ts`   | `CronExecutor`                                | scheduler を保持し、ジョブ 1 件の実行 (`askClaude()` → Discord 投稿) を担う                                                |
+| `bot/mod.ts`         | `DiscordBot.start()`                          | `ClientReady` で executor を生成・起動し、reload / run / list を API へ配線する                                            |
+| `api/routes/cron.ts` | `createCronRoutes()` / `CronRouteContext`     | `GET /cron` / `POST /cron/run` / `POST /cron/reload`                                                                       |
 
 ## 全体の流れ
 
@@ -27,15 +27,24 @@ flowchart LR
   M -- yes --> R[CronExecutor.runJob]
   R --> G{running に<br/>同名あり?}
   G -- yes --> S[skip]
-  G -- no --> A[askClaude]
+  G -- no --> K{job.kind}
+  K -- prompt --> A[askClaude]
+  K -- command --> C["sh -c job.command"]
   A --> E[result イベント]
+  C --> E2[stdout / stderr]
   E --> D[channelId 指定時<br/>splitMessage → channel.send]
+  E2 --> D
   E --> O[once なら<br/>onceCallback]
+  E2 --> O
 ```
 
 ## ジョブファイル
 
-`cron/{name}.md`。ジョブ名はファイル名から `.md` を除いたもの (`validateCronJob()`)。フロントマターが `CronJobDef` のメタデータ、本文 (trim 後) がプロンプトになる。
+`cron/{name}.md` (prompt ジョブ) または `cron/{name}.yaml` (command ジョブ)。ジョブ名はファイル名そのもの (拡張子込み、`validateCronJob()`/`validateCommandJob()`)。`.yml` は対象外。
+
+### prompt ジョブ (`.md`)
+
+フロントマターが `CronPromptJob` のメタデータ、本文 (trim 後) がプロンプトになる。
 
 最小例:
 
@@ -48,7 +57,7 @@ channelId: "{channelId}"
 今日の予定を要約して。
 ```
 
-### フロントマターのフィールド
+#### フロントマターのフィールド
 
 `cron/loader.ts` の `frontMatterSchema` (JSON Schema、`@cfworker/json-schema` で検証) が受け付けるキーは次のとおり。
 
@@ -67,13 +76,44 @@ channelId: "{channelId}"
 - 本文が空 (trim 後に空文字) のファイルは検証エラーになる。エラーメッセージは `prompt body is empty` である。
 - `channelId` は YAML で引用符なしに書くと数値として読まれるため、型は `string | number` の `oneOf` で受け、`CronJobDef.channelId` へは文字列として格納する。
 
+### command ジョブ (`.yaml`)
+
+ファイル全体が `CronCommandJob` のメタデータになる (フロントマター / 本文の区別は無い)。`command` を `sh -c` で実行し、標準出力を結果として扱う。
+
+最小例:
+
+```yaml
+schedule: "0 9 * * *"
+command: "cron/scripts/check.sh"
+```
+
+#### フィールド
+
+`cron/loader.ts` の `commandSchema` (JSON Schema、`@cfworker/json-schema` で検証) が受け付けるキーは次のとおり。
+
+| フィールド  | 必須 | 型                  | 既定                    | 説明                                            |
+| ----------- | ---- | ------------------- | ----------------------- | ----------------------------------------------- |
+| `schedule`  | yes  | string (1 文字以上) | —                       | prompt ジョブと同じ                             |
+| `command`   | yes  | string (1 文字以上) | —                       | `sh -c` に渡すコマンド文字列                    |
+| `channelId` | no   | string \| number    | —                       | prompt ジョブと同じ (結果の投稿先)              |
+| `timeout`   | no   | number (ms)         | `config.claude.timeout` | コマンド実行の `AbortSignal.timeout()` のミリ秒 |
+| `once`      | no   | boolean             | `false`                 | prompt ジョブと同じ                             |
+
+- `additionalProperties: false` のため、`maxTurns`/`model`/`effort` 等 prompt ジョブ専用のキーを書くと検証エラーになる。
+- 判断が必要な処理は prompt ジョブ (Claude) に任せ、command ジョブは定型処理 (固定のチェック・通知等) に使う想定。
+- 複雑なロジックは `cron/scripts/{name}.sh` に外出しし、`command` からはそれを呼ぶだけにする運用を推奨する (`command: "cron/scripts/check.sh"`)。
+
 ## loader (`cron/loader.ts`)
 
-`loadCronJobsFromDir(workspaceDir)` は `join(workspaceDir, "cron")` を `Deno.readDir()` で走査し、`.md` のファイルだけを対象にする。各ファイルは `@std/front-matter/yaml` の `extract()` で `attrs`/`body` に分け、`validateCronJob(attrs, body.trim(), filename)` で `CronJobDef` に変換する。
+`loadCronJobsFromDir(workspaceDir)` は `join(workspaceDir, "cron")` を `Deno.readDir()` で走査し、`.md` と `.yaml` のファイルを対象にする (`.yml` は対象外)。
+
+- `.md`: `@std/front-matter/yaml` の `extract()` で `attrs`/`body` に分け、`validateCronJob(attrs, body.trim(), filename)` で `CronPromptJob` に変換する。
+- `.yaml`: `@std/yaml` の `parse()` でファイル全体をパースし、`validateCommandJob(parsed, filename)` で `CronCommandJob` に変換する。`parse()` の戻り値がオブジェクトでない (配列・スカラー等) 場合は `validateCommandJob()` が `"yaml must be an object"` を throw する。
+
+`validateCronJob()`/`validateCommandJob()` はどちらもスキーマ不適合時に `@cfworker` のエラーを共通のヘルパー `formatSchemaErrors()` で人間向けメッセージ (`"schedule" is required and must be a non-empty string` 等) に変換し、複数のエラーを `"; "` で連結して 1 つの `Error` として throw する。`shortCircuit: false` で全エラーを収集している。
 
 - ディレクトリが無い (`Deno.errors.NotFound`) 場合は INFO ログを出して空配列を返す。それ以外の読み取りエラーは throw する。
-- ファイル単位の失敗 (YAML 構文エラー、スキーマ不適合、cron 式の構文エラー、本文空) は `cron-loader` 名前空間に ERROR ログを出してそのファイルを skip し、残りのファイルの読み込みを続ける。このため `POST /cron/reload` はファイルの失敗があっても `{ "ok": true }` を返す (reload の戻りは登録の成否を表さない)。登録結果の確認手順は cron skill と [internal-api](internal-api.md) を参照。
-- `validateCronJob()` はスキーマ不適合時に `@cfworker` のエラーを人間向けメッセージ (`"schedule" is required and must be a non-empty string` 等) に変換し、複数のエラーを `"; "` で連結して 1 つの `Error` として throw する。`shortCircuit: false` で全エラーを収集している。
+- ファイル単位の失敗 (YAML 構文エラー、スキーマ不適合、cron 式の構文エラー、prompt ジョブの本文空、command ジョブの yaml がオブジェクトでない) は `cron-loader` 名前空間に ERROR ログを出してそのファイルを skip し、残りのファイルの読み込みを続ける。このため `POST /cron/reload` はファイルの失敗があっても `{ "ok": true }` を返す (reload の戻りは登録の成否を表さない)。登録結果の確認手順は cron skill と [internal-api](internal-api.md) を参照。
 
 ## match (`cron/match.ts`)
 
@@ -96,29 +136,44 @@ channelId: "{channelId}"
 
 ## executor (`cron/executor.ts`)
 
-`CronExecutor` は `CronScheduler` を内部に持ち、コンストラクタで discord.js `Client`、`ClaudeConfig`、ギルド ID、bot トークン、`Store`、`ClaudeDefaults`、`ApprovalManager`、`SystemPromptStore`、任意の `queryFn` (テスト用 DI) を受け取る。`start(jobs)` は `replaceAll` → `scheduler.start()`、`reload(jobs)` は `replaceAll` のみ (実行中のジョブはそのまま完了し、次の tick から新定義が効く)、`stop()` は `scheduler.stop()`。`isRunning(name)` は並行実行ガード (`running: Set<string>`) の状態を読む公開メソッドで、テストから使う。
+`CronExecutor` は `CronScheduler` を内部に持ち、コンストラクタで discord.js `Client`、`ClaudeConfig`、ギルド ID、bot トークン、`Store`、`ClaudeDefaults`、`ApprovalManager`、`SystemPromptStore`、任意の `queryFn` (テスト用 DI)、`runCommandFn` (`RunCommandFn`、既定は `runShellCommand`。テスト用 DI) を受け取る。`start(jobs)` は `replaceAll` → `scheduler.start()`、`reload(jobs)` は `replaceAll` のみ (実行中のジョブはそのまま完了し、次の tick から新定義が効く)、`stop()` は `scheduler.stop()`。`isRunning(name)` は並行実行ガード (`running: Set<string>`) の状態を読む公開メソッドで、テストから使う。
 
-`runJob(job)` が 1 件の実行本体で、スケジューラのコールバックと `POST /cron/run` の両方から呼ばれる。
+`runJob(job)` が 1 件の実行本体で、スケジューラのコールバックと `POST /cron/run` の両方から呼ばれる。共通処理の後、`job.kind` で `runPromptJob()`/`runCommandJob()` (どちらも private) に分岐する。
 
 1. 並行実行ガード: `running: Set<string>` に同名ジョブがあれば WARN ログを出して return する。無ければ追加する。このガードはジョブ名単位であり、別名ジョブは同一 tick で同時に起動する。
    - news-* 6 本は 8:00 に揃えて同時起動させている。2026-08-23 に 10 分刻みへ分散したが、分散前 (2026-08-23 以前) の同時起動でも負荷集中は見られなかったため、2026-08-29 に 8:00 へ戻した。
    - 負荷集中が問題になる場合はジョブ定義側で `schedule` をずらす。
-2. チャンネルの事前取得: `job.channelId` があれば `client.channels.fetch()` し、`send` を持たなければ throw する。理由: 後段の catch でエラー通知先として使う。
-3. KV の読み取り (3 つを `Promise.all` で並列):
+2. チャンネルの事前取得: `job.channelId` があれば `client.channels.fetch()` し、`send` を持たなければ throw する。理由: 後段の catch でエラー通知先として使う。prompt / command 両方で共通。
+3. `job.kind === "command"` なら `runCommandJob(job, textChannel)`、それ以外 (`"prompt"`) なら `runPromptJob(job, textChannel)` を await する。
+4. catch: ERROR ログ (`cron job "{name}" failed:`、全文) を出す。`textChannel` が取得済みなら `[cron: {name}]` + `summarizeErrorForDiscord(error)` (`errors.ts`、定型文 + エラーメッセージの先頭 1 行を要約したもの) を送る。通知自体の失敗は握りつぶす。
+5. finally: `job.once` かつ `onceCallback` が設定されていれば `onceCallback(job.name)` を await する (失敗はログのみ)。最後に `running` から削除する。
+
+### `runPromptJob()`
+
+1. KV の読み取り (3 つを `Promise.all` で並列):
    - session: `resumeSession` が true のときだけ `store.getSession({ channelId: "cron:{name}" })`。false なら `undefined` (毎回新規セッション)。
    - model/effort: `job.channelId` があるときだけ `store.getModel({ channelId: job.channelId })`/`store.getEffort({ channelId: job.channelId })`。つまり **投稿先チャンネルのスコープ設定** を読む (`cron:{name}` スコープではない)。`channelId` 省略時はどちらも `undefined`。
    - 解決順は `job.model ?? channelModel ?? defaults.model`、effort も同様 (frontmatter → チャンネル設定 → `config.claude.defaults`)。いずれも無ければ `askClaude()` に渡さず、SDK 既定に任せる。スコープ解決の一般論は [store-and-settings](store-and-settings.md)。
-4. システムプロンプト: `systemPrompts.resolve("cron", { channelId: job.channelId ?? "" }, templateVars)`。context が `"cron"` なので `DEFAULT.md` + `CRON.md` に加え、`job.channelId` と同名の `{channelId}.md` があればそれも結合される (スレッドは無いので thread フォールバックは起きない)。
+2. システムプロンプト: `systemPrompts.resolve("cron", { channelId: job.channelId ?? "" }, templateVars)`。context が `"cron"` なので `DEFAULT.md` + `CRON.md` に加え、`job.channelId` と同名の `{channelId}.md` があればそれも結合される (スレッドは無いので thread フォールバックは起きない)。
    - `templateVars` はギルドレベルのみ (`discord.guild.id`/`discord.guild.name`) で、チャンネル/ユーザー変数は展開されずプレースホルダのまま残る。
    - 詳細は [claude-integration](claude-integration.md)。
-5. 設定の組み立て: `jobConfig` は `ClaudeConfig` を spread でコピーし、`job.maxTurns` が指定されていれば `maxTurns` だけ上書きする。`timeout = job.timeout ?? config.timeout`。
-6. `askClaude(job.prompt, { sessionId, config: jobConfig, discordToken, signal: AbortSignal.timeout(timeout), appendSystemPrompt, model, effort, canUseTool: createCanUseTool(approvalManager, job.channelId), queryFn })` を呼ぶ。`canUseTool` に渡す `channelId` は `job.channelId` で、省略時は `undefined` となり `ApprovalManager` は自動 deny する (共有状態へのフォールバックは無い)。承認フローは [approval](approval.md)。
-7. ストリーム消費: `drainResultEvent(stream, { onNonSuccess, setSession })` (`claude/mod.ts`) で `for await` を回し、`event.type === "result"` イベントごとに `handleResultEvent()` (非 success なら `onNonSuccess` で WARN ログ、`setSession` があれば `event.session_id` で呼ぶ) を呼び、最後の `result` イベントを返す。`text_delta`/`thinking_delta`/`tool_progress` は読まない (ストリーミング投稿・進捗表示・thinking 表示は無い)。`resumeSession` が true なら `setSession` から `store.setSession({ channelId: "cron:{name}" }, newSessionId)` で保存する。
-8. `requireResultText(resultEvent)` (`claude/mod.ts`) で本文を取り出す。`result` 無しで終わっていたら `claude stream ended without result event` を throw する (`textChannel` の有無に関わらず、この呼び出しがコード上先に評価されるため必ず throw される)。取り出せたら `textChannel` があるときだけ `splitMessage()` で 2000 文字に分割して `channel.send()` する (`channelId` 省略時は投稿しない。プロンプト側で Discord REST API を叩く設計にする)。
-9. catch: ERROR ログ (`cron job "{name}" failed:`、全文) を出す。`textChannel` が取得済みなら `[cron: {name}]` + `summarizeErrorForDiscord(error)` (`errors.ts`、定型文 + エラーメッセージの先頭 1 行を要約したもの) を送る。通知自体の失敗は握りつぶす。
-10. finally: `job.once` かつ `onceCallback` が設定されていれば `onceCallback(job.name)` を await する (失敗はログのみ)。最後に `running` から削除する。
+3. 設定の組み立て: `jobConfig` は `ClaudeConfig` を spread でコピーし、`job.maxTurns` が指定されていれば `maxTurns` だけ上書きする。`timeout = job.timeout ?? config.timeout`。
+4. `askClaude(job.prompt, { sessionId, config: jobConfig, discordToken, signal: AbortSignal.timeout(timeout), appendSystemPrompt, model, effort, canUseTool: createCanUseTool(approvalManager, job.channelId), queryFn })` を呼ぶ。`canUseTool` に渡す `channelId` は `job.channelId` で、省略時は `undefined` となり `ApprovalManager` は自動 deny する (共有状態へのフォールバックは無い)。承認フローは [approval](approval.md)。
+5. ストリーム消費: `drainResultEvent(stream, { onNonSuccess, setSession })` (`claude/mod.ts`) で `for await` を回し、`event.type === "result"` イベントごとに `handleResultEvent()` (非 success なら `onNonSuccess` で WARN ログ、`setSession` があれば `event.session_id` で呼ぶ) を呼び、最後の `result` イベントを返す。`text_delta`/`thinking_delta`/`tool_progress` は読まない (ストリーミング投稿・進捗表示・thinking 表示は無い)。`resumeSession` が true なら `setSession` から `store.setSession({ channelId: "cron:{name}" }, newSessionId)` で保存する。
+6. `requireResultText(resultEvent)` (`claude/mod.ts`) で本文を取り出す。`result` 無しで終わっていたら `claude stream ended without result event` を throw する (`textChannel` の有無に関わらず、この呼び出しがコード上先に評価されるため必ず throw される)。取り出せたら `textChannel` があるときだけ `splitMessage()` で 2000 文字に分割して `channel.send()` する (`channelId` 省略時は投稿しない。プロンプト側で Discord REST API を叩く設計にする)。
 
 `askClaude()`/`drainResultEvent()`/`requireResultText()` は chat と共通で、cron 固有の分岐は持たない ([claude-integration](claude-integration.md))。
+
+### `runCommandJob()`
+
+KV (session / model / effort)・システムプロンプト・承認には触れない。
+
+1. `timeout = job.timeout ?? config.timeout`、`signal = AbortSignal.timeout(timeout)`。
+2. `runCommandFn(job.command, { cwd: config.cwd, signal })` を try/catch で囲んで await する。既定実装 `runShellCommand` は `Deno.Command("sh", { args: ["-c", command], cwd, signal, stdout: "piped", stderr: "piped" }).spawn()` で起動し、`child.output()` と「`signal` の abort で reject する Promise」を `Promise.race` する。`signal` の abort は `sh` に SIGTERM を送るだけで、`sh` が起動した子プロセスは残りうる (孫プロセスが stdout/stderr の pipe を握ったままだと `output()` が返らない)。長時間動く子プロセスを起動するスクリプトは、自前で `trap` 等の後始末をすること。abort 時は `child.kill("SIGTERM")` を呼んで素の `Error("command timed out")` で reject し、`stdout`/`stderr` は `TextDecoder` で文字列化して返す。
+3. `runCommandFn` が reject した場合、`signal.aborted` なら (`runShellCommand` の素のメッセージを) `command timed out after {timeout}ms` で throw し直す。`signal.aborted` でなければ元のエラーをそのまま throw する。resolve した場合も `signal.aborted` なら (モックが resolve で abort を模す経路向けに) 同じく `command timed out after {timeout}ms` を throw する。reject / resolve のどちらの経路でも、abort 時は文書化された `command timed out after {timeout}ms` が Discord とログに出る。
+4. `result.code !== 0` なら、`result.stdout` が空でなければ ERROR ログ (`cron job "{name}" stdout:` + 全文) を出したうえで、`command exited with code {code}: {stderr の先頭行}\n{stderr 全文}` を throw する (先頭行が `summarizeErrorForDiscord()` 経由で Discord の要約に、全文が ERROR ログに載る)。
+5. `result.stderr` が空でなければ (成功時でも) WARN ログに出す。
+6. `result.stdout.trim()` (以下 `output`) が `MAX_COMMAND_OUTPUT_CHARS` (`4000`) を超える場合、先頭 4000 文字に切り詰めて末尾に `\n... (truncated, {元の文字数} chars)` を付ける (ログには全量を出すが、Discord へは切り詰め後を投稿する)。`output` が空でなく `textChannel` があれば `splitMessage()` で分割して `channel.send()` する。空、または `textChannel` が無ければ投稿しない。
 
 ### セッションとスコープ
 
@@ -129,6 +184,8 @@ channelId: "{channelId}"
 | システムプロンプト     | `{ channelId: job.channelId ?? "" }` (context `cron`) | `{channelId}.md` が cron 実行にも適用される                                         |
 | 承認 / AskUserQuestion | `job.channelId`                                       | 省略時は `undefined` となり自動 deny (共有状態へのフォールバックは無い)             |
 
+command ジョブ (`runCommandJob()`) はこの表のいずれにも触れない。session / model / effort の KV も、システムプロンプトも、承認 (`ApprovalManager`) も参照・更新しない。
+
 ## 起動と API の配線 (`bot/mod.ts`)
 
 `DiscordBot.start()` の `ClientReady` ハンドラ内で、スラッシュコマンド登録の後に次を行う。起動順全体は [lifecycle](lifecycle.md)。
@@ -136,7 +193,7 @@ channelId: "{channelId}"
 1. `new CronExecutor(client, config.claude, config.discord.guildId, config.discord.token, store, config.claude.defaults, approvalManager, systemPrompts)`。
 2. `loadCronJobsFromDir(config.claude.cwd)` → `cronExecutor.start(jobs)`。`config.claude.cwd` はワークスペースルート (本番は `/data/workspace`、devcontainer では `/app`。[deployment](deployment.md))。
 3. `reloadJobs = () => loadCronJobsFromDir(cwd) → cronExecutor.reload(jobs)` を定義する。
-4. `cronExecutor.setOnceCallback()` で once 後処理を登録する: `join(cwd, "cron", "{name}.md")` を `Deno.remove()` し (失敗は ERROR ログ)、続けて `reloadJobs()` を呼ぶ。エージェント側の手動 reload は不要。
+4. `cronExecutor.setOnceCallback()` で once 後処理を登録する: `join(cwd, "cron", name)` (`name` は拡張子込みのファイル名) を `Deno.remove()` し (失敗は ERROR ログ)、続けて `reloadJobs()` を呼ぶ。エージェント側の手動 reload は不要。
 5. `runJobByName(name)`: `cronExecutor.findJob(name)` が無ければ `job not found: {name}` を throw、あれば `runJob(job)` を await する。
 6. `CronRouteContext { reloadCronJobs: reloadJobs, runJob: runJobByName, listJobs: () => cronExecutor.listJobs() }` を `startApiServer(config.claude.apiPort, settingsCtx, healthCtx, cronCtx)` に渡す。
 
@@ -148,11 +205,11 @@ channelId: "{channelId}"
 
 `createCronRoutes(ctx)` が Hono サブアプリを返し、`api/server.ts` が `/cron` にマウントする。`ctx` の各関数が未注入なら 503 (`cron not available`/`cron reload not available`) を返す。リクエスト/レスポンスの正は `docs/api/paths/cron*.yaml` と、そこから生成した `api/internal-schemas.ts`。詳細は [internal-api](internal-api.md)。
 
-| エンドポイント      | 入力               | 出力                                                                              |
-| ------------------- | ------------------ | --------------------------------------------------------------------------------- |
-| `GET /cron`         | —                  | `{ jobs: [{ name, schedule, channelId?, once }] }` (`channelId` は未指定なら省略) |
-| `POST /cron/run`    | `{ name: string }` | `{ ok: true, name }`。`name` 不正は 400、未登録は 404 (`job not found: ...`)      |
-| `POST /cron/reload` | —                  | `{ ok: true }` (ファイル単位の読み込み失敗があっても 200)                         |
+| エンドポイント      | 入力               | 出力                                                                                    |
+| ------------------- | ------------------ | --------------------------------------------------------------------------------------- |
+| `GET /cron`         | —                  | `{ jobs: [{ name, kind, schedule, channelId?, once }] }` (`channelId` は未指定なら省略) |
+| `POST /cron/run`    | `{ name: string }` | `{ ok: true, name }`。`name` 不正は 400、未登録は 404 (`job not found: ...`)            |
+| `POST /cron/reload` | —                  | `{ ok: true }` (ファイル単位の読み込み失敗があっても 200)                               |
 
 `POST /cron/run` は `runJob()` の完了まで await するため、レスポンスはジョブの実行が終わってから返る。実行中の同名ジョブがあればガードにより skip され、その場合も 200 が返る。
 

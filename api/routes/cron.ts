@@ -46,6 +46,7 @@ export function createCronRoutes(ctx: CronRouteContext = {}) {
     }
     const jobs = ctx.listJobs().map((j) => ({
       name: j.name,
+      kind: j.kind,
       schedule: j.schedule,
       channelId: j.channelId,
       once: j.once,

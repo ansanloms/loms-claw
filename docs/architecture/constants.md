@@ -22,6 +22,7 @@
 | ログ取得件数の clamp                                    | `logger.ts`             | `Math.min(Math.max(filter?.limit ?? 100, 1), 1000)` | 現状維持 (ローカル定数)                                                                                                    | `GET /logs` の取得件数上限                                                                                               |
 | `DISCORD_MESSAGE_LIMIT`                                 | `bot/message.ts`        | `2000`                                              | 現状維持 (ローカル定数)                                                                                                    | Discord のメッセージ文字数上限                                                                                           |
 | `2000` リテラル (Discord 文字数上限)                    | `approval/question.ts`  | `2000`                                              | 別 PR で対応 ([#128](https://github.com/ansanloms/loms-claw/issues/128): `2000` リテラルの `DISCORD_MESSAGE_LIMIT` 参照化) | `bot/message.ts` の `DISCORD_MESSAGE_LIMIT` と同じ値を独立に書いている                                                   |
+| `MAX_COMMAND_OUTPUT_CHARS`                              | `cron/executor.ts`      | `4000`                                              | 現状維持 (ローカル定数)                                                                                                    | command ジョブの stdout 投稿の切り詰め上限 (Discord 2 通分)。大量出力で `channel.send()` が連発するのを防ぐ              |
 
 ## 設定化を見送ったもの
 

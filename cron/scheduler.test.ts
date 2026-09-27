@@ -4,6 +4,7 @@ import type { CronJobDef } from "./types.ts";
 
 function makeJob(name: string, schedule: string): CronJobDef {
   return {
+    kind: "prompt",
     name,
     schedule,
     prompt: "test",
@@ -133,7 +134,13 @@ Deno.test("CronScheduler", async (t) => {
       const scheduler = new CronScheduler((job) => triggered.push(job.name));
 
       scheduler.replaceAll([
-        { name: "bad", schedule: "invalid", prompt: "x", channelId: "1" },
+        {
+          kind: "prompt",
+          name: "bad",
+          schedule: "invalid",
+          prompt: "x",
+          channelId: "1",
+        },
         makeJob("good", "* * * * *"),
       ]);
 

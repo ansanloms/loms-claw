@@ -41,7 +41,7 @@ reload は不正なジョブファイル（YAML フロントマターの構文�
 curl -s -X POST http://127.0.0.1:3000/cron/reload
 
 # 2. 登録確認（jobs はオブジェクトの配列。jq '.jobs[]' で見る）
-curl -s http://127.0.0.1:3000/cron | jq '.jobs[] | select(.name == "news")'
+curl -s http://127.0.0.1:3000/cron | jq '.jobs[] | select(.name == "news.md")'
 
 # 3. 見つからなければ原因調査
 curl -s 'http://127.0.0.1:3000/logs?namespace=cron-loader&level=ERROR'
@@ -59,12 +59,24 @@ curl -s 'http://127.0.0.1:3000/logs?namespace=cron-loader&level=ERROR'
 {
   "jobs": [
     {
-      "name": "news",
+      "name": "news.md",
+      "kind": "prompt",
       "schedule": "0 9 * * *",
       "channelId": "1234567890123456789",
       "once": false
     },
-    { "name": "reminder", "schedule": "30 18 * * 5", "once": true }
+    {
+      "name": "reminder.md",
+      "kind": "prompt",
+      "schedule": "30 18 * * 5",
+      "once": true
+    },
+    {
+      "name": "check.yaml",
+      "kind": "command",
+      "schedule": "*/30 * * * *",
+      "once": false
+    }
   ]
 }
 ```
@@ -80,13 +92,13 @@ curl -s 'http://127.0.0.1:3000/logs?namespace=cron-loader&level=ERROR'
 #### 成功（200）
 
 ```json
-{ "ok": true, "name": "news" }
+{ "ok": true, "name": "news.md" }
 ```
 
 #### ジョブが見つからない場合（404）
 
 ```json
-{ "error": "job not found: news" }
+{ "error": "job not found: news.md" }
 ```
 
 #### リクエストボディが不正な場合（400、`name` 未指定等）
@@ -119,7 +131,7 @@ curl -s 'http://127.0.0.1:3000/logs?namespace=cron-loader&level=ERROR'
 
 ## フォーマット
 
-YAML フロントマターとマークダウン本文で構成する。ジョブ名はファイル名（拡張子除く）から自動決定される。
+YAML フロントマターとマークダウン本文で構成する。ジョブ名はファイル名そのもの（拡張子込み）から自動決定される。
 
 ```markdown
 ---
@@ -171,7 +183,7 @@ effort: medium
 
 #### ファイル名の命名規則
 
-`once: true` の一時ジョブは、ファイル名を `<name>.once.md` にすること（例: `reminder.once.md`）。実行後に自動削除される前提のファイルなので、リポジトリの git 追跡対象から外している（`.gitignore` の `data/workspace/cron/*.once.md`）。ジョブ名はファイル名から `.md` を除いたもの（`cron/loader.ts` の `validateCronJob()`）なので、`<name>.once.md` のジョブ名は `<name>.once` になる。`GET /cron` や手動実行の `name` にもこの形で指定する。
+`once: true` の一時ジョブは、ファイル名を `<name>.once.md` にすること（例: `reminder.once.md`）。実行後に自動削除される前提のファイルなので、リポジトリの git 追跡対象から外している（`.gitignore` の `data/workspace/cron/*.once.md`）。ジョブ名はファイル名そのもの（`cron/loader.ts` の `validateCronJob()`）なので、`<name>.once.md` のジョブ名も `<name>.once.md` になる。`GET /cron` や手動実行の `name` にもこの形（拡張子込み）で指定する。
 
 恒久ジョブ（`once` を付けない、または `once: false`）はこれまでどおり `<name>.md` で作り、git 追跡対象にする。
 
@@ -221,6 +233,48 @@ effort: high
 
 ニュース要約: 直近24時間の重要記事を5件まとめろ。
 ```
+
+## command ジョブ (`.yaml`)
+
+ここまでの `.md` ファイルは Claude にプロンプトを渡す「prompt ジョブ」。判断が要らない定型処理（固定のチェック・通知等）は、Claude を介さず `sh -c` でコマンドを直接実行する「command ジョブ」（`cron/{name}.yaml`）で書ける方が軽い。
+
+### フォーマット
+
+YAML ファイル 1 つがそのままジョブ定義になる（フロントマター/本文の区別は無い）。
+
+```yaml
+schedule: "0 9 * * *"
+command: "cron/scripts/check.sh"
+channelId: "1234567890123456789"
+```
+
+### フィールド
+
+| フィールド  | 必須 | 型      | デフォルト | 説明                             |
+| ----------- | ---- | ------- | ---------- | -------------------------------- |
+| `schedule`  | yes  | string  | —          | cron 式（prompt ジョブと同じ）   |
+| `command`   | yes  | string  | —          | `sh -c` に渡すコマンド文字列     |
+| `channelId` | no   | string  | —          | 結果の投稿先チャンネル ID        |
+| `timeout`   | no   | number  | 300000     | タイムアウト（ミリ秒）           |
+| `once`      | no   | boolean | `false`    | `true` で 1 回実行後にファイル自動削除 |
+
+`maxTurns`/`resumeSession`/`model`/`effort` 等 prompt ジョブ専用のフィールドは command ジョブには無い（書くと `additionalProperties` エラーになる）。
+
+### 実行の仕組み
+
+- `command` は `sh` (bash ではない) で実行される。bash の機能（配列・`[[ ]]` 等）が要るなら `command: "bash cron/scripts/check.sh"` のように明示的に `bash` を呼び出すこと。
+- タイムアウト時、`signal` の SIGTERM は `sh` プロセスに送られるだけで、`sh` が起動した子プロセスは残りうる。長時間動く子プロセスを起動するスクリプトは、自前で `trap` 等の後始末をすること。
+- 標準出力 (`stdout`) の有無で投稿を制御する。`stdout` が空でなく `channelId` が指定されていれば、その内容がそのまま（`splitMessage()` で 2000 文字ごとに分割されて）投稿される。`stdout` が空、または `channelId` 省略時は投稿されない。`stdout` (trim 後) が 4000 文字を超える場合は先頭 4000 文字に切り詰められ、末尾に `... (truncated, N chars)` の注記が付く（ログには全量が出る）。
+- 終了コードが 0 以外なら失敗として扱われ、`channelId` があれば `[cron: {name}] ...` の形でエラー通知が投稿される（標準エラー出力 (`stderr`) の先頭行が通知に、全文がログに載る）。
+- KV (session/model/effort)・システムプロンプト・ツール承認は一切関与しない。
+
+### ロジックの置き場所
+
+`command` フィールドに複雑なシェルスクリプトを直接書かず、ロジックは `cron/scripts/{name}.sh` に置いて `command` からはそれを呼ぶだけにすること（例: `command: "cron/scripts/check.sh"`）。理由: YAML の 1 行に収める必要が無くなり、シェルスクリプトとして構文チェック・単体実行がしやすくなる。
+
+### `.once.yaml` の命名規則
+
+`once: true` の一時 command ジョブも、prompt ジョブの `.once.md` と同じ規則に従う。ファイル名を `<name>.once.yaml` にすること（例: `check.once.yaml`）。実行後に自動削除される前提のファイルなので、git 追跡対象から外している（`.gitignore` の `data/workspace/cron/*.once.yaml`）。ジョブ名はファイル名そのものなので、`<name>.once.yaml` のジョブ名も `<name>.once.yaml` になる。
 
 ## cron 式の書き方
 
