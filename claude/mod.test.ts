@@ -3,7 +3,8 @@ import type {
   SDKMessage,
   SDKResultMessage,
 } from "@anthropic-ai/claude-agent-sdk";
-import { assertEquals, assertRejects, assertThrows } from "@std/assert";
+import assert from "node:assert/strict";
+import { errorWith } from "../test-helpers.ts";
 import type { ClaudeConfig } from "../config.ts";
 import {
   askClaude,
@@ -108,19 +109,19 @@ function resultMessage(sessionId: string): SDKMessage {
 
 describe("normalizeEffort", () => {
   test("対応する effort をそのまま返すこと", () => {
-    assertEquals(normalizeEffort("low"), "low");
-    assertEquals(normalizeEffort("high"), "high");
-    assertEquals(normalizeEffort("xhigh"), "xhigh");
-    assertEquals(normalizeEffort("max"), "max");
+    assert.deepStrictEqual(normalizeEffort("low"), "low");
+    assert.deepStrictEqual(normalizeEffort("high"), "high");
+    assert.deepStrictEqual(normalizeEffort("xhigh"), "xhigh");
+    assert.deepStrictEqual(normalizeEffort("max"), "max");
   });
 
   test("非対応の値は undefined になること", () => {
-    assertEquals(normalizeEffort("ultra"), undefined);
+    assert.deepStrictEqual(normalizeEffort("ultra"), undefined);
   });
 
   test("未指定は undefined になること", () => {
-    assertEquals(normalizeEffort(undefined), undefined);
-    assertEquals(normalizeEffort(""), undefined);
+    assert.deepStrictEqual(normalizeEffort(undefined), undefined);
+    assert.deepStrictEqual(normalizeEffort(""), undefined);
   });
 });
 
@@ -129,18 +130,18 @@ describe("buildQueryOptions", () => {
 
   test("settingSources に user / project を含むこと", () => {
     const opts = buildQueryOptions(baseConfig, {}, ac);
-    assertEquals(opts.settingSources, ["user", "project"]);
+    assert.deepStrictEqual(opts.settingSources, ["user", "project"]);
   });
 
   test("includePartialMessages が true であること", () => {
     const opts = buildQueryOptions(baseConfig, {}, ac);
-    assertEquals(opts.includePartialMessages, true);
+    assert.deepStrictEqual(opts.includePartialMessages, true);
   });
 
   test("cwd / maxTurns が config から設定されること", () => {
     const opts = buildQueryOptions(baseConfig, {}, ac);
-    assertEquals(opts.cwd, "/workspace");
-    assertEquals(opts.maxTurns, 10);
+    assert.deepStrictEqual(opts.cwd, "/workspace");
+    assert.deepStrictEqual(opts.maxTurns, 10);
   });
 
   test("systemPrompt が claude_code preset であること", () => {
@@ -148,8 +149,8 @@ describe("buildQueryOptions", () => {
     if (typeof sp !== "object" || Array.isArray(sp) || sp.type !== "preset") {
       throw new Error("systemPrompt is not a preset object");
     }
-    assertEquals(sp.preset, "claude_code");
-    assertEquals(sp.append, undefined);
+    assert.deepStrictEqual(sp.preset, "claude_code");
+    assert.deepStrictEqual(sp.append, undefined);
   });
 
   test("appendSystemPrompt 指定時に append されること", () => {
@@ -161,7 +162,7 @@ describe("buildQueryOptions", () => {
     if (typeof sp !== "object" || Array.isArray(sp) || sp.type !== "preset") {
       throw new Error("systemPrompt is not a preset object");
     }
-    assertEquals(sp.append, "extra prompt");
+    assert.deepStrictEqual(sp.append, "extra prompt");
   });
 
   test("sessionId 指定時に resume が設定されること", () => {
@@ -170,12 +171,12 @@ describe("buildQueryOptions", () => {
       { sessionId: "session-123" },
       ac,
     );
-    assertEquals(opts.resume, "session-123");
+    assert.deepStrictEqual(opts.resume, "session-123");
   });
 
   test("sessionId 未指定時は resume を含まないこと", () => {
     const opts = buildQueryOptions(baseConfig, {}, ac);
-    assertEquals(opts.resume, undefined);
+    assert.deepStrictEqual(opts.resume, undefined);
   });
 
   test("model / effort が設定されること", () => {
@@ -184,13 +185,13 @@ describe("buildQueryOptions", () => {
       { model: "opus", effort: "high" },
       ac,
     );
-    assertEquals(opts.model, "opus");
-    assertEquals(opts.effort, "high");
+    assert.deepStrictEqual(opts.model, "opus");
+    assert.deepStrictEqual(opts.effort, "high");
   });
 
   test("非対応の effort は設定されないこと", () => {
     const opts = buildQueryOptions(baseConfig, { effort: "ultra" }, ac);
-    assertEquals(opts.effort, undefined);
+    assert.deepStrictEqual(opts.effort, undefined);
   });
 
   test("canUseTool 指定時に設定されること", () => {
@@ -202,7 +203,7 @@ describe("buildQueryOptions", () => {
       },
       ac,
     );
-    assertEquals(typeof opts.canUseTool, "function");
+    assert.deepStrictEqual(typeof opts.canUseTool, "function");
   });
 
   test("discordToken 指定時に env へ DISCORD_BOT_TOKEN が注入されること", () => {
@@ -211,12 +212,12 @@ describe("buildQueryOptions", () => {
       { discordToken: "bot-token-xyz" },
       ac,
     );
-    assertEquals(opts.env?.DISCORD_BOT_TOKEN, "bot-token-xyz");
+    assert.deepStrictEqual(opts.env?.DISCORD_BOT_TOKEN, "bot-token-xyz");
   });
 
   test("discordToken 未指定時は env に DISCORD_BOT_TOKEN を含まないこと", () => {
     const opts = buildQueryOptions(baseConfig, {}, ac);
-    assertEquals(opts.env?.DISCORD_BOT_TOKEN, undefined);
+    assert.deepStrictEqual(opts.env?.DISCORD_BOT_TOKEN, undefined);
   });
 });
 
@@ -245,9 +246,9 @@ describe("askClaude", () => {
       collected.push(event);
     }
 
-    assertEquals(collected.length, 2);
-    assertEquals(collected[0].type, "system");
-    assertEquals(collected[1].type, "result");
+    assert.deepStrictEqual(collected.length, 2);
+    assert.deepStrictEqual(collected[0].type, "system");
+    assert.deepStrictEqual(collected[1].type, "result");
   });
 
   test("queryFn に prompt と options が渡されること", async () => {
@@ -277,12 +278,12 @@ describe("askClaude", () => {
       void _;
     }
 
-    assertEquals(capturedPrompt, "hello");
-    assertEquals(capturedResume, "prev-session");
+    assert.deepStrictEqual(capturedPrompt, "hello");
+    assert.deepStrictEqual(capturedResume, "prev-session");
   });
 
   test("queryFn の例外を診断付きで再 throw すること", async () => {
-    await assertRejects(
+    await assert.rejects(
       async () => {
         for await (const _ of askClaude("hello", {
           config: baseConfig,
@@ -291,8 +292,7 @@ describe("askClaude", () => {
           void _;
         }
       },
-      Error,
-      "claude query failed: boom",
+      errorWith(Error, "claude query failed: boom"),
     );
   });
 
@@ -316,10 +316,10 @@ describe("askClaude", () => {
     }
 
     // 1 回目は resume あり、2 回目 (再試行) は resume 無し
-    assertEquals(resumes, ["stale-session", undefined]);
+    assert.deepStrictEqual(resumes, ["stale-session", undefined]);
     // 再試行側の result イベントが yield されること
-    assertEquals(collected.length, 1);
-    assertEquals(collected[0].type, "result");
+    assert.deepStrictEqual(collected.length, 1);
+    assert.deepStrictEqual(collected[0].type, "result");
   });
 
   test("再試行は 1 回限りで、再び失敗すれば throw すること", async () => {
@@ -329,7 +329,7 @@ describe("askClaude", () => {
       () => calls++,
     );
 
-    await assertRejects(
+    await assert.rejects(
       async () => {
         for await (const _ of askClaude("hello", {
           config: baseConfig,
@@ -339,18 +339,17 @@ describe("askClaude", () => {
           void _;
         }
       },
-      Error,
-      "claude query failed:",
+      errorWith(Error, "claude query failed:"),
     );
     // 初回 + 再試行の 2 回で打ち切られること
-    assertEquals(calls, 2);
+    assert.deepStrictEqual(calls, 2);
   });
 
   test("session-not-found 以外のエラーでは再試行しないこと", async () => {
     let calls = 0;
     const queryFn = sequencedQueryFn([{ throw: "boom" }], () => calls++);
 
-    await assertRejects(
+    await assert.rejects(
       async () => {
         for await (const _ of askClaude("hello", {
           config: baseConfig,
@@ -360,10 +359,9 @@ describe("askClaude", () => {
           void _;
         }
       },
-      Error,
-      "claude query failed: boom",
+      errorWith(Error, "claude query failed: boom"),
     );
-    assertEquals(calls, 1);
+    assert.deepStrictEqual(calls, 1);
   });
 
   test("既に yield 済みなら session-not-found でも再試行しないこと", async () => {
@@ -385,7 +383,7 @@ describe("askClaude", () => {
     );
 
     const collected: SDKMessage[] = [];
-    await assertRejects(
+    await assert.rejects(
       async () => {
         for await (const event of askClaude("hello", {
           config: baseConfig,
@@ -395,18 +393,17 @@ describe("askClaude", () => {
           collected.push(event);
         }
       },
-      Error,
-      "claude query failed:",
+      errorWith(Error, "claude query failed:"),
     );
     // yield 済みのイベントは消費側に届いた上で throw、再試行はしない
-    assertEquals(collected.length, 1);
-    assertEquals(calls, 1);
+    assert.deepStrictEqual(collected.length, 1);
+    assert.deepStrictEqual(calls, 1);
   });
 });
 
 describe("isSessionNotFoundError", () => {
   test("session 不在メッセージを検出すること", () => {
-    assertEquals(
+    assert.deepStrictEqual(
       isSessionNotFoundError(
         "Claude Code returned an error result: No conversation found with session ID: abc",
       ),
@@ -415,14 +412,17 @@ describe("isSessionNotFoundError", () => {
   });
 
   test("無関係なエラーは false になること", () => {
-    assertEquals(isSessionNotFoundError("boom"), false);
-    assertEquals(isSessionNotFoundError("rate limit exceeded"), false);
+    assert.deepStrictEqual(isSessionNotFoundError("boom"), false);
+    assert.deepStrictEqual(
+      isSessionNotFoundError("rate limit exceeded"),
+      false,
+    );
   });
 });
 
 describe("extractResultText", () => {
   test("result が文字列なら subtype を問わず返すこと", () => {
-    assertEquals(
+    assert.deepStrictEqual(
       extractResultText({
         type: "result",
         subtype: "success",
@@ -433,7 +433,7 @@ describe("extractResultText", () => {
       "応答テキスト",
     );
     // non-success でも result があれば採用する。
-    assertEquals(
+    assert.deepStrictEqual(
       extractResultText({
         type: "result",
         subtype: "error_max_turns",
@@ -446,7 +446,7 @@ describe("extractResultText", () => {
   });
 
   test("result が無い場合は errors / subtype 付きで throw すること", () => {
-    assertThrows(
+    assert.throws(
       () =>
         extractResultText({
           type: "result",
@@ -454,8 +454,7 @@ describe("extractResultText", () => {
           session_id: "sess-1",
           is_error: true,
         } as unknown as SDKResultMessage),
-      Error,
-      "claude returned error: error_max_turns",
+      errorWith(Error, "claude returned error: error_max_turns"),
     );
   });
 });
@@ -482,8 +481,8 @@ describe("handleResultEvent", () => {
         },
       },
     );
-    assertEquals(nonSuccessCalled, false);
-    assertEquals(capturedSessionId, "sess-1");
+    assert.deepStrictEqual(nonSuccessCalled, false);
+    assert.deepStrictEqual(capturedSessionId, "sess-1");
   });
 
   test("非 success では onNonSuccess が呼ばれること", async () => {
@@ -501,7 +500,7 @@ describe("handleResultEvent", () => {
         },
       },
     );
-    assertEquals(capturedEvent?.subtype, "error_max_turns");
+    assert.deepStrictEqual(capturedEvent?.subtype, "error_max_turns");
   });
 
   test("setSession 未指定でも動くこと", async () => {
@@ -520,7 +519,7 @@ describe("handleResultEvent", () => {
         },
       },
     );
-    assertEquals(nonSuccessCalled, false);
+    assert.deepStrictEqual(nonSuccessCalled, false);
   });
 });
 
@@ -551,7 +550,7 @@ describe("drainResultEvent", () => {
       onNonSuccess: () => {},
     });
 
-    assertEquals(
+    assert.deepStrictEqual(
       (resultEvent as unknown as SDKResultMessage | undefined)?.session_id,
       "sess-2",
     );
@@ -562,21 +561,20 @@ describe("drainResultEvent", () => {
       streamOf([{ type: "system", subtype: "init" } as SDKMessage]),
       { onNonSuccess: () => {} },
     );
-    assertEquals(resultEvent, undefined);
+    assert.deepStrictEqual(resultEvent, undefined);
   });
 });
 
 describe("requireResultText", () => {
   test("resultEvent が undefined なら throw すること", () => {
-    assertThrows(
+    assert.throws(
       () => requireResultText(undefined),
-      Error,
-      "claude stream ended without result event",
+      errorWith(Error, "claude stream ended without result event"),
     );
   });
 
   test("success なら本文を返すこと", () => {
-    assertEquals(
+    assert.deepStrictEqual(
       requireResultText({
         type: "result",
         subtype: "success",
@@ -591,7 +589,7 @@ describe("requireResultText", () => {
 
 describe("extractTopLevelTextDelta", () => {
   test("トップレベルの text_delta は差分テキストを返すこと", () => {
-    assertEquals(
+    assert.deepStrictEqual(
       extractTopLevelTextDelta({
         type: "stream_event",
         parent_tool_use_id: null,
@@ -606,7 +604,7 @@ describe("extractTopLevelTextDelta", () => {
   });
 
   test("サブエージェント (parent_tool_use_id あり) は undefined になること", () => {
-    assertEquals(
+    assert.deepStrictEqual(
       extractTopLevelTextDelta({
         type: "stream_event",
         parent_tool_use_id: "tool-1",
@@ -621,7 +619,7 @@ describe("extractTopLevelTextDelta", () => {
   });
 
   test("text_delta 以外のイベントは undefined になること", () => {
-    assertEquals(
+    assert.deepStrictEqual(
       extractTopLevelTextDelta({
         type: "result",
         subtype: "success",
@@ -633,7 +631,7 @@ describe("extractTopLevelTextDelta", () => {
 
 describe("extractTopLevelThinkingDelta", () => {
   test("トップレベルの thinking_delta は差分テキストを返すこと", () => {
-    assertEquals(
+    assert.deepStrictEqual(
       extractTopLevelThinkingDelta({
         type: "stream_event",
         parent_tool_use_id: null,
@@ -648,7 +646,7 @@ describe("extractTopLevelThinkingDelta", () => {
   });
 
   test("サブエージェント (parent_tool_use_id あり) は undefined になること", () => {
-    assertEquals(
+    assert.deepStrictEqual(
       extractTopLevelThinkingDelta({
         type: "stream_event",
         parent_tool_use_id: "tool-1",
@@ -663,7 +661,7 @@ describe("extractTopLevelThinkingDelta", () => {
   });
 
   test("thinking_delta 以外のイベントは undefined になること", () => {
-    assertEquals(
+    assert.deepStrictEqual(
       extractTopLevelThinkingDelta({
         type: "result",
         subtype: "success",

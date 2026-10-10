@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import { describe, test } from "node:test";
-import { assert, assertEquals } from "@std/assert";
+import assert from "node:assert/strict";
 import { Hono } from "hono";
 import { Store, type StoreDefaults } from "../../store/mod.ts";
 import { createSettingsRoutes } from "./settings.ts";
@@ -23,7 +23,7 @@ async function withApp(
 
 /** エラー応答が ResponseError スキーマ相当の形をしていることを検証する。 */
 function assertErrorBody(body: unknown): void {
-  assert(
+  assert.ok(
     typeof body === "object" &&
       body !== null &&
       "error" in body &&
@@ -37,8 +37,8 @@ describe("createSettingsRoutes", () => {
   test("GET /settings/default: defaults が返ること", async () => {
     await withApp({ model: "sonnet", effort: "medium" }, async (app) => {
       const res = await app.request("/settings/default");
-      assertEquals(res.status, 200);
-      assertEquals(await res.json(), {
+      assert.deepStrictEqual(res.status, 200);
+      assert.deepStrictEqual(await res.json(), {
         model: "sonnet",
         effort: "medium",
         showThinking: false,
@@ -49,21 +49,27 @@ describe("createSettingsRoutes", () => {
   test("GET /settings/default: showThinking が未設定でも false で返ること", async () => {
     await withApp({}, async (app) => {
       const res = await app.request("/settings/default");
-      assertEquals(res.status, 200);
+      assert.deepStrictEqual(res.status, 200);
       const json = (await res.json()) as Record<string, unknown>;
-      assertEquals(json.showThinking, false);
-      assertEquals(json.model, undefined);
-      assertEquals(json.effort, undefined);
+      assert.deepStrictEqual(json.showThinking, false);
+      assert.deepStrictEqual(json.model, undefined);
+      assert.deepStrictEqual(json.effort, undefined);
     });
   });
 
   test("GET /settings/:id: 未設定のスコープでもデフォルト解決の結果が返ること", async () => {
     await withApp({ model: "sonnet" }, async (app) => {
       const res = await app.request("/settings/ch-1");
-      assertEquals(res.status, 200);
+      assert.deepStrictEqual(res.status, 200);
       const json = (await res.json()) as Record<string, unknown>;
-      assertEquals(json.model, { value: "sonnet", source: "default" });
-      assertEquals(json.showThinking, { value: false, source: "default" });
+      assert.deepStrictEqual(json.model, {
+        value: "sonnet",
+        source: "default",
+      });
+      assert.deepStrictEqual(json.showThinking, {
+        value: false,
+        source: "default",
+      });
     });
   });
 
@@ -76,12 +82,15 @@ describe("createSettingsRoutes", () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ model: "opus" }),
         });
-        assertEquals(patchRes.status, 200);
+        assert.deepStrictEqual(patchRes.status, 200);
 
         const res = await app.request("/settings/th-1");
-        assertEquals(res.status, 200);
+        assert.deepStrictEqual(res.status, 200);
         const json = (await res.json()) as Record<string, unknown>;
-        assertEquals(json.model, { value: "opus", source: "channel" });
+        assert.deepStrictEqual(json.model, {
+          value: "opus",
+          source: "channel",
+        });
       },
       (id) => Promise.resolve(id === "th-1" ? "ch-1" : null),
     );
@@ -97,7 +106,7 @@ describe("createSettingsRoutes", () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ effort: "high" }),
         });
-        assertEquals(parentPatch.status, 200);
+        assert.deepStrictEqual(parentPatch.status, 200);
 
         // スレッドに model を書き込む。応答は thread と channel のフォールバックを
         // 含めた実効設定になるはず。
@@ -106,10 +115,13 @@ describe("createSettingsRoutes", () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ model: "opus" }),
         });
-        assertEquals(res.status, 200);
+        assert.deepStrictEqual(res.status, 200);
         const json = (await res.json()) as Record<string, unknown>;
-        assertEquals(json.model, { value: "opus", source: "thread" });
-        assertEquals(json.effort, { value: "high", source: "channel" });
+        assert.deepStrictEqual(json.model, { value: "opus", source: "thread" });
+        assert.deepStrictEqual(json.effort, {
+          value: "high",
+          source: "channel",
+        });
       },
       (id) => Promise.resolve(id === "th-1" ? "ch-1" : null),
     );
@@ -128,9 +140,9 @@ describe("createSettingsRoutes", () => {
         });
 
         const res = await app.request("/settings/th-1");
-        assertEquals(res.status, 200);
+        assert.deepStrictEqual(res.status, 200);
         const json = (await res.json()) as Record<string, unknown>;
-        assertEquals(json.model, undefined);
+        assert.deepStrictEqual(json.model, undefined);
       },
       () => Promise.resolve(null),
     );
@@ -141,9 +153,12 @@ describe("createSettingsRoutes", () => {
       { model: "sonnet" },
       async (app) => {
         const res = await app.request("/settings/th-1");
-        assertEquals(res.status, 200);
+        assert.deepStrictEqual(res.status, 200);
         const json = (await res.json()) as Record<string, unknown>;
-        assertEquals(json.model, { value: "sonnet", source: "default" });
+        assert.deepStrictEqual(json.model, {
+          value: "sonnet",
+          source: "default",
+        });
       },
       () => Promise.reject(new Error("channel fetch failed")),
     );
@@ -156,10 +171,10 @@ describe("createSettingsRoutes", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model: "opus", effort: "high" }),
       });
-      assertEquals(res.status, 200);
+      assert.deepStrictEqual(res.status, 200);
       const json = (await res.json()) as Record<string, unknown>;
-      assertEquals(json.model, { value: "opus", source: "channel" });
-      assertEquals(json.effort, { value: "high", source: "channel" });
+      assert.deepStrictEqual(json.model, { value: "opus", source: "channel" });
+      assert.deepStrictEqual(json.effort, { value: "high", source: "channel" });
     });
   });
 
@@ -176,9 +191,12 @@ describe("createSettingsRoutes", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model: null }),
       });
-      assertEquals(res.status, 200);
+      assert.deepStrictEqual(res.status, 200);
       const json = (await res.json()) as Record<string, unknown>;
-      assertEquals(json.model, { value: "sonnet", source: "default" });
+      assert.deepStrictEqual(json.model, {
+        value: "sonnet",
+        source: "default",
+      });
     });
   });
 
@@ -189,7 +207,7 @@ describe("createSettingsRoutes", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       });
-      assertEquals(res.status, 400);
+      assert.deepStrictEqual(res.status, 400);
       assertErrorBody(await res.json());
     });
   });
@@ -201,14 +219,14 @@ describe("createSettingsRoutes", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model: "opus", unknownKey: "x" }),
       });
-      assertEquals(res.status, 400);
+      assert.deepStrictEqual(res.status, 400);
       assertErrorBody(await res.json());
 
       // 拒否されたリクエストが部分的に適用されていないことを確かめる。
       const after = (await (
         await app.request("/settings/ch-1")
       ).json()) as Record<string, unknown>;
-      assertEquals(after.model, undefined);
+      assert.deepStrictEqual(after.model, undefined);
     });
   });
 
@@ -219,13 +237,13 @@ describe("createSettingsRoutes", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ session: "session-a" }),
       });
-      assertEquals(res.status, 400);
+      assert.deepStrictEqual(res.status, 400);
       assertErrorBody(await res.json());
 
       const after = (await (
         await app.request("/settings/ch-1")
       ).json()) as Record<string, unknown>;
-      assertEquals(after.session, undefined);
+      assert.deepStrictEqual(after.session, undefined);
     });
   });
 
@@ -236,7 +254,7 @@ describe("createSettingsRoutes", () => {
         headers: { "Content-Type": "application/json" },
         body: "not-json",
       });
-      assertEquals(res.status, 400);
+      assert.deepStrictEqual(res.status, 400);
       assertErrorBody(await res.json());
     });
   });
@@ -248,9 +266,9 @@ describe("createSettingsRoutes", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ active: true }),
       });
-      assertEquals(res.status, 200);
+      assert.deepStrictEqual(res.status, 200);
       const json = (await res.json()) as Record<string, unknown>;
-      assertEquals(json.active, { value: true, source: "channel" });
+      assert.deepStrictEqual(json.active, { value: true, source: "channel" });
     });
   });
 
@@ -267,19 +285,19 @@ describe("createSettingsRoutes", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ active: null }),
       });
-      assertEquals(res.status, 200);
+      assert.deepStrictEqual(res.status, 200);
       const json = (await res.json()) as Record<string, unknown>;
-      assertEquals(json.active, undefined);
+      assert.deepStrictEqual(json.active, undefined);
     });
   });
 
   test("GET /settings/:id: 未設定なら active がフィールドごと省略されること", async () => {
     await withApp({}, async (app) => {
       const res = await app.request("/settings/ch-1");
-      assertEquals(res.status, 200);
+      assert.deepStrictEqual(res.status, 200);
       const json = (await res.json()) as Record<string, unknown>;
-      assertEquals(json.active, undefined);
-      assertEquals("active" in json, false);
+      assert.deepStrictEqual(json.active, undefined);
+      assert.deepStrictEqual("active" in json, false);
     });
   });
 
@@ -294,12 +312,12 @@ describe("createSettingsRoutes", () => {
       const res = await app.request("/settings/ch-1", {
         method: "DELETE",
       });
-      assertEquals(res.status, 200);
-      assertEquals(await res.json(), { ok: true });
+      assert.deepStrictEqual(res.status, 200);
+      assert.deepStrictEqual(await res.json(), { ok: true });
 
       const getRes = await app.request("/settings/ch-1");
       const json = (await getRes.json()) as Record<string, unknown>;
-      assertEquals(json.model, undefined);
+      assert.deepStrictEqual(json.model, undefined);
     });
   });
 
@@ -320,7 +338,7 @@ describe("createSettingsRoutes", () => {
 
       const res = await app.request("/settings/ch-1");
       const json = (await res.json()) as Record<string, unknown>;
-      assertEquals(json.model, { value: "opus", source: "channel" });
+      assert.deepStrictEqual(json.model, { value: "opus", source: "channel" });
     });
   });
 
@@ -342,16 +360,22 @@ describe("createSettingsRoutes", () => {
         const delRes = await app.request("/settings/th-1", {
           method: "DELETE",
         });
-        assertEquals(delRes.status, 200);
+        assert.deepStrictEqual(delRes.status, 200);
 
         const res = await app.request("/settings/ch-1");
         const json = (await res.json()) as Record<string, unknown>;
-        assertEquals(json.model, { value: "opus", source: "channel" });
+        assert.deepStrictEqual(json.model, {
+          value: "opus",
+          source: "channel",
+        });
 
         // スレッドの設定は消え、親チャンネルへフォールバックした値が返る。
         const threadRes = await app.request("/settings/th-1");
         const threadJson = (await threadRes.json()) as Record<string, unknown>;
-        assertEquals(threadJson.model, { value: "opus", source: "channel" });
+        assert.deepStrictEqual(threadJson.model, {
+          value: "opus",
+          source: "channel",
+        });
       },
       (id) => Promise.resolve(id === "th-1" ? "ch-1" : null),
     );

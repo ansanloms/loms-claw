@@ -1,15 +1,15 @@
 import { Temporal } from "@js-temporal/polyfill";
 import { after, before, describe, test } from "node:test";
-import { assertEquals, assertThrows } from "@std/assert";
+import assert from "node:assert/strict";
 import { createLogger, getLogEntries, initLogger } from "./logger.ts";
 
 describe("createLogger", () => {
   test("全メソッドが定義されていること", () => {
     const log = createLogger("test");
-    assertEquals(typeof log.debug, "function");
-    assertEquals(typeof log.info, "function");
-    assertEquals(typeof log.warn, "function");
-    assertEquals(typeof log.error, "function");
+    assert.deepStrictEqual(typeof log.debug, "function");
+    assert.deepStrictEqual(typeof log.info, "function");
+    assert.deepStrictEqual(typeof log.warn, "function");
+    assert.deepStrictEqual(typeof log.error, "function");
   });
 
   test("info が console.log に出力すること", () => {
@@ -19,12 +19,12 @@ describe("createLogger", () => {
     try {
       const log = createLogger("ns");
       log.info("hello", "world");
-      assertEquals(calls.length, 1);
+      assert.deepStrictEqual(calls.length, 1);
       const output = calls[0].join(" ");
-      assertEquals(output.includes("[INFO ]"), true);
-      assertEquals(output.includes("[ns]"), true);
-      assertEquals(output.includes("hello"), true);
-      assertEquals(output.includes("world"), true);
+      assert.deepStrictEqual(output.includes("[INFO ]"), true);
+      assert.deepStrictEqual(output.includes("[ns]"), true);
+      assert.deepStrictEqual(output.includes("hello"), true);
+      assert.deepStrictEqual(output.includes("world"), true);
     } finally {
       console.log = originalLog;
     }
@@ -37,9 +37,9 @@ describe("createLogger", () => {
     try {
       const log = createLogger("ns");
       log.error("fail");
-      assertEquals(calls.length, 1);
+      assert.deepStrictEqual(calls.length, 1);
       const output = calls[0].join(" ");
-      assertEquals(output.includes("[ERROR]"), true);
+      assert.deepStrictEqual(output.includes("[ERROR]"), true);
     } finally {
       console.error = originalError;
     }
@@ -52,9 +52,9 @@ describe("createLogger", () => {
     try {
       const log = createLogger("ns");
       log.warn("caution");
-      assertEquals(calls.length, 1);
+      assert.deepStrictEqual(calls.length, 1);
       const output = calls[0].join(" ");
-      assertEquals(output.includes("[WARN ]"), true);
+      assert.deepStrictEqual(output.includes("[WARN ]"), true);
     } finally {
       console.warn = originalWarn;
     }
@@ -103,13 +103,13 @@ describe("initLogger", () => {
     });
 
     // debug/info は WARN 未満なので console.log には出力されない
-    assertEquals(logCount, 0);
+    assert.deepStrictEqual(logCount, 0);
     // warn は WARN 以上なので console.warn に出力される
-    assertEquals(warnCount, 1);
+    assert.deepStrictEqual(warnCount, 1);
 
     // リングバッファには level に関わらず全件残る
     const entries = getLogEntries({ namespace: NS, limit: 1000 });
-    assertEquals(entries.length, 3);
+    assert.deepStrictEqual(entries.length, 3);
   });
 
   test("bufferSize が 1 未満に切り詰められること", () => {
@@ -124,8 +124,8 @@ describe("initLogger", () => {
 
     // 容量 1 に clamp されるため、最後の 1 件しか残らない
     const entries = getLogEntries({ namespace: NS, limit: 1000 });
-    assertEquals(entries.length, 1);
-    assertEquals(entries[0].message, "second");
+    assert.deepStrictEqual(entries.length, 1);
+    assert.deepStrictEqual(entries[0].message, "second");
   });
 
   test("10000 を超える bufferSize でもエラーにならず、大きな容量として反映されること", () => {
@@ -144,7 +144,7 @@ describe("initLogger", () => {
     // 越しに観測できない (1000 件以上保持できていれば容量が既定の 1 件
     // (前ステップ) から更新されたことは確認できる)。
     const entries = getLogEntries({ namespace: NS, limit: 1000 });
-    assertEquals(entries.length, 1000);
+    assert.deepStrictEqual(entries.length, 1000);
   });
 });
 
@@ -183,7 +183,7 @@ describe("getLogEntries", () => {
 
   test("namespace フィルタで対象エントリのみ返すこと", () => {
     const entries = getLogEntries({ namespace: NS, limit: 1000 });
-    assertEquals(entries.length, 5);
+    assert.deepStrictEqual(entries.length, 5);
   });
 
   test("level フィルタで指定レベル以上のみ返すこと", () => {
@@ -192,8 +192,8 @@ describe("getLogEntries", () => {
       level: "WARN",
       limit: 1000,
     });
-    assertEquals(entries.length, 2);
-    assertEquals(
+    assert.deepStrictEqual(entries.length, 2);
+    assert.deepStrictEqual(
       entries.every((e) => e.level === "WARN" || e.level === "ERROR"),
       true,
     );
@@ -201,9 +201,9 @@ describe("getLogEntries", () => {
 
   test("limit で件数を制限できること", () => {
     const entries = getLogEntries({ namespace: NS, limit: 2 });
-    assertEquals(entries.length, 2);
+    assert.deepStrictEqual(entries.length, 2);
     // 最新の2件が返る
-    assertEquals(entries[1].message, "i2");
+    assert.deepStrictEqual(entries[1].message, "i2");
   });
 
   test("since で時刻以降のみ返すこと", () => {
@@ -211,7 +211,7 @@ describe("getLogEntries", () => {
     // 2番目のエントリのタイムスタンプを since に指定
     const since = all[1].timestamp;
     const filtered = getLogEntries({ namespace: NS, since, limit: 1000 });
-    assertEquals(
+    assert.deepStrictEqual(
       filtered.every(
         (e) =>
           Temporal.Instant.compare(
@@ -241,7 +241,7 @@ describe("getLogEntries", () => {
       .toString({ timeZoneName: "never" });
 
     const filtered = getLogEntries({ namespace: NS4, since, limit: 1000 });
-    assertEquals(filtered.length, 1);
+    assert.deepStrictEqual(filtered.length, 1);
   });
 
   test("since に小数秒が無くても、小数秒付きのより新しいエントリが返ること", () => {
@@ -261,11 +261,11 @@ describe("getLogEntries", () => {
       .toString();
 
     const filtered = getLogEntries({ namespace: NS5, since, limit: 1000 });
-    assertEquals(filtered.length, 1);
+    assert.deepStrictEqual(filtered.length, 1);
   });
 
   test("since が不正な値の場合に例外を投げること", () => {
-    assertThrows(
+    assert.throws(
       () => getLogEntries({ namespace: NS, since: "not-a-date", limit: 1 }),
       RangeError,
     );
@@ -274,10 +274,10 @@ describe("getLogEntries", () => {
   test("エントリの構造が正しいこと", () => {
     const entries = getLogEntries({ namespace: NS, limit: 1 });
     const entry = entries[0];
-    assertEquals(typeof entry.timestamp, "string");
-    assertEquals(typeof entry.level, "string");
-    assertEquals(entry.namespace, NS);
-    assertEquals(typeof entry.message, "string");
+    assert.deepStrictEqual(typeof entry.timestamp, "string");
+    assert.deepStrictEqual(typeof entry.level, "string");
+    assert.deepStrictEqual(entry.namespace, NS);
+    assert.deepStrictEqual(typeof entry.message, "string");
   });
 
   test("引数を含むメッセージが文字列化されること", () => {
@@ -287,8 +287,8 @@ describe("getLogEntries", () => {
       log.info("msg", { key: "val" });
     });
     const entries = getLogEntries({ namespace: NS2, limit: 1 });
-    assertEquals(entries[0].message.includes("msg"), true);
-    assertEquals(entries[0].message.includes('"key"'), true);
+    assert.deepStrictEqual(entries[0].message.includes("msg"), true);
+    assert.deepStrictEqual(entries[0].message.includes('"key"'), true);
   });
 
   test("Error の stack が展開されること", () => {
@@ -298,9 +298,12 @@ describe("getLogEntries", () => {
       log.error("boom:", new Error("explicit failure"));
     });
     const entries = getLogEntries({ namespace: NS3, limit: 1 });
-    assertEquals(entries[0].message.includes("boom:"), true);
-    assertEquals(entries[0].message.includes("explicit failure"), true);
+    assert.deepStrictEqual(entries[0].message.includes("boom:"), true);
+    assert.deepStrictEqual(
+      entries[0].message.includes("explicit failure"),
+      true,
+    );
     // stack に最低限ファイル名が含まれること
-    assertEquals(entries[0].message.includes("logger.test.ts"), true);
+    assert.deepStrictEqual(entries[0].message.includes("logger.test.ts"), true);
   });
 });

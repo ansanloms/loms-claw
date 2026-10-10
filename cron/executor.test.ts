@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { describe, test } from "node:test";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
-import { assertEquals } from "@std/assert";
+import assert from "node:assert/strict";
 import type { QueryFn } from "../claude/mod.ts";
 import type { SystemPromptStore } from "../claude/system-prompt.ts";
 import { Store } from "../store/mod.ts";
@@ -259,7 +259,7 @@ describe("CronExecutor", () => {
       // 1 回目を実行開始し、running に登録された状態でブロックさせる
       const firstRun = executor.runJob(job);
       try {
-        assertEquals(executor.isRunning("test-job"), true);
+        assert.deepStrictEqual(executor.isRunning("test-job"), true);
 
         // 実行中の 2 回目はガードで即座に return すること。
         // await で直接待つと、ガードが壊れて待ち続けた場合にテストがハング
@@ -272,7 +272,7 @@ describe("CronExecutor", () => {
           }),
         ]);
         clearTimeout(timeoutId);
-        assertEquals(
+        assert.deepStrictEqual(
           raced,
           "returned",
           "2 回目の runJob はガードで即座に return すること",
@@ -285,9 +285,9 @@ describe("CronExecutor", () => {
 
       // ブロックを解除して 1 回目を完了させる
       await firstRun;
-      assertEquals(sent.includes(resultText), true);
-      assertEquals(sent.length, 1); // 2 回目は何も投稿しない
-      assertEquals(executor.isRunning("test-job"), false);
+      assert.deepStrictEqual(sent.includes(resultText), true);
+      assert.deepStrictEqual(sent.length, 1); // 2 回目は何も投稿しない
+      assert.deepStrictEqual(executor.isRunning("test-job"), false);
     }));
 
   test("チャンネルが見つからない場合にエラー処理されること", () =>
@@ -319,7 +319,7 @@ describe("CronExecutor", () => {
       await executor.runJob(job);
 
       // running Set から除去されていること
-      assertEquals(executor.isRunning("bad-channel-job"), false);
+      assert.deepStrictEqual(executor.isRunning("bad-channel-job"), false);
     }));
 
   test("start/stop でスケジューラが制御されること", () =>
@@ -400,7 +400,7 @@ describe("CronExecutor", () => {
   test("セッションキーが cron:{name} 形式であること", () =>
     withStore(async (store) => {
       await store.setSession({ channelId: "cron:my-job" }, "session-abc");
-      assertEquals(
+      assert.deepStrictEqual(
         await store.getSession({ channelId: "cron:my-job" }),
         "session-abc",
       );
@@ -433,7 +433,7 @@ describe("CronExecutor", () => {
       };
 
       await executor.runJob(job);
-      assertEquals(
+      assert.deepStrictEqual(
         await store.getSession({ channelId: "cron:resume-job" }),
         "session-xyz",
       );
@@ -466,7 +466,7 @@ describe("CronExecutor", () => {
       };
 
       await executor.runJob(job);
-      assertEquals(
+      assert.deepStrictEqual(
         await store.getSession({ channelId: "cron:no-resume-job" }),
         undefined,
       );
@@ -505,7 +505,7 @@ describe("CronExecutor", () => {
       };
 
       await executor.runJob(job);
-      assertEquals(calledWith, ["once-job"]);
+      assert.deepStrictEqual(calledWith, ["once-job"]);
     }));
 
   test("once: false のジョブではコールバックが呼ばれないこと", () =>
@@ -541,7 +541,7 @@ describe("CronExecutor", () => {
       };
 
       await executor.runJob(job);
-      assertEquals(calledWith, []);
+      assert.deepStrictEqual(calledWith, []);
     }));
 
   test("findJob / listJobs でジョブが取得できること", () =>
@@ -580,11 +580,14 @@ describe("CronExecutor", () => {
 
       executor.start(jobs);
 
-      assertEquals(executor.findJob("j1")?.name, "j1");
+      assert.deepStrictEqual(executor.findJob("j1")?.name, "j1");
       const j2 = executor.findJob("j2");
-      assertEquals(j2?.kind === "prompt" ? j2.prompt : undefined, "test2");
-      assertEquals(executor.findJob("nonexistent"), undefined);
-      assertEquals(executor.listJobs().length, 2);
+      assert.deepStrictEqual(
+        j2?.kind === "prompt" ? j2.prompt : undefined,
+        "test2",
+      );
+      assert.deepStrictEqual(executor.findJob("nonexistent"), undefined);
+      assert.deepStrictEqual(executor.listJobs().length, 2);
 
       executor.stop();
     }));
@@ -620,7 +623,7 @@ describe("CronExecutor", () => {
       await executor.runJob(job);
 
       // running からクリアされていること
-      assertEquals(executor.isRunning("once-no-callback"), false);
+      assert.deepStrictEqual(executor.isRunning("once-no-callback"), false);
     }));
 
   test("once ジョブ実行後に running がコールバック完了後にクリアされること", () =>
@@ -659,9 +662,9 @@ describe("CronExecutor", () => {
       await executor.runJob(job);
 
       // コールバック実行中は running に含まれていた
-      assertEquals(runningDuringCallback, true);
+      assert.deepStrictEqual(runningDuringCallback, true);
       // 完了後はクリアされている
-      assertEquals(executor.isRunning("once-running-check"), false);
+      assert.deepStrictEqual(executor.isRunning("once-running-check"), false);
     }));
 
   test("cron ジョブの承認リクエストが job.channelId 宛に送られること", () =>
@@ -693,7 +696,7 @@ describe("CronExecutor", () => {
 
       await executor.runJob(job);
 
-      assertEquals(calls, [{ channelId: "ch-approval" }]);
+      assert.deepStrictEqual(calls, [{ channelId: "ch-approval" }]);
     }));
 
   test("channelId の無いジョブでは undefined が渡ること", () =>
@@ -723,7 +726,7 @@ describe("CronExecutor", () => {
 
       await executor.runJob(job);
 
-      assertEquals(calls, [{ channelId: undefined }]);
+      assert.deepStrictEqual(calls, [{ channelId: undefined }]);
     }));
 
   test("command job: exit 0 + stdout ありで channelId に投稿されること", () =>
@@ -761,7 +764,7 @@ describe("CronExecutor", () => {
 
       await executor.runJob(job);
 
-      assertEquals(sent, ["command result"]);
+      assert.deepStrictEqual(sent, ["command result"]);
     }));
 
   test("command job: stdout が空なら投稿されないこと", () =>
@@ -795,7 +798,7 @@ describe("CronExecutor", () => {
 
       await executor.runJob(job);
 
-      assertEquals(sent, []);
+      assert.deepStrictEqual(sent, []);
     }));
 
   test("command job: channelId 無しなら投稿されず runCommandFn は呼ばれること", () =>
@@ -831,7 +834,7 @@ describe("CronExecutor", () => {
 
       await executor.runJob(job);
 
-      assertEquals(calls.length, 1);
+      assert.deepStrictEqual(calls.length, 1);
     }));
 
   test("command job: 非 0 終了でエラー通知が送られ、runJob 自体は throw しないこと", () =>
@@ -869,8 +872,11 @@ describe("CronExecutor", () => {
 
       await executor.runJob(job);
 
-      assertEquals(sent.length, 1);
-      assertEquals(sent[0].startsWith("[cron: command-job-fail] "), true);
+      assert.deepStrictEqual(sent.length, 1);
+      assert.deepStrictEqual(
+        sent[0].startsWith("[cron: command-job-fail] "),
+        true,
+      );
     }));
 
   test("command job: 非 0 終了時に stdout があっても通知文面に混ざらないこと", () =>
@@ -908,12 +914,12 @@ describe("CronExecutor", () => {
 
       await executor.runJob(job);
 
-      assertEquals(sent.length, 1);
-      assertEquals(
+      assert.deepStrictEqual(sent.length, 1);
+      assert.deepStrictEqual(
         sent[0],
         "[cron: command-job-fail-stdout] 処理に失敗した。詳細はログ (`GET /logs`) を参照\ncommand exited with code 1: boom",
       );
-      assertEquals(sent[0].includes("leaked stdout content"), false);
+      assert.deepStrictEqual(sent[0].includes("leaked stdout content"), false);
     }));
 
   test("command job: once: true で onceCallback がジョブ名で呼ばれること", () =>
@@ -952,7 +958,7 @@ describe("CronExecutor", () => {
 
       await executor.runJob(job);
 
-      assertEquals(calledWith, ["command-once-job"]);
+      assert.deepStrictEqual(calledWith, ["command-once-job"]);
     }));
 
   test("command job: signal の abort を待ってから返すモックが timeout 1ms で timeout エラーとして通知されること", () =>
@@ -990,8 +996,11 @@ describe("CronExecutor", () => {
 
       await executor.runJob(job);
 
-      assertEquals(sent.length, 1);
-      assertEquals(sent[0].includes("command timed out after 1ms"), true);
+      assert.deepStrictEqual(sent.length, 1);
+      assert.deepStrictEqual(
+        sent[0].includes("command timed out after 1ms"),
+        true,
+      );
     }));
 
   test("command job: signal の abort を待って reject するモックが timeout 1ms で timeout エラーとして通知されること", () =>
@@ -1029,8 +1038,11 @@ describe("CronExecutor", () => {
 
       await executor.runJob(job);
 
-      assertEquals(sent.length, 1);
-      assertEquals(sent[0].includes("command timed out after 1ms"), true);
+      assert.deepStrictEqual(sent.length, 1);
+      assert.deepStrictEqual(
+        sent[0].includes("command timed out after 1ms"),
+        true,
+      );
     }));
 
   test("command job: abort していない reject はそのままのメッセージで通知されること", () =>
@@ -1067,9 +1079,9 @@ describe("CronExecutor", () => {
 
       await executor.runJob(job);
 
-      assertEquals(sent.length, 1);
-      assertEquals(sent[0].includes("spawn failed"), true);
-      assertEquals(sent[0].includes("command timed out"), false);
+      assert.deepStrictEqual(sent.length, 1);
+      assert.deepStrictEqual(sent[0].includes("spawn failed"), true);
+      assert.deepStrictEqual(sent[0].includes("command timed out"), false);
     }));
 
   test("command job: cwd に config.cwd が渡ること", () =>
@@ -1105,7 +1117,7 @@ describe("CronExecutor", () => {
 
       await executor.runJob(job);
 
-      assertEquals(calls, [{ command: "pwd", cwd: TEST_CONFIG.cwd }]);
+      assert.deepStrictEqual(calls, [{ command: "pwd", cwd: TEST_CONFIG.cwd }]);
     }));
 
   test("command job: 2000 文字超の stdout が分割投稿されること", () =>
@@ -1144,8 +1156,8 @@ describe("CronExecutor", () => {
 
       await executor.runJob(job);
 
-      assertEquals(sent.length > 1, true);
-      assertEquals(sent.join(""), longOutput);
+      assert.deepStrictEqual(sent.length > 1, true);
+      assert.deepStrictEqual(sent.join(""), longOutput);
     }));
 
   test("command job: 4000 文字超の stdout が切り詰められ注記が付くこと", () =>
@@ -1185,9 +1197,12 @@ describe("CronExecutor", () => {
       await executor.runJob(job);
 
       const posted = sent.join("");
-      assertEquals(posted.includes("b".repeat(4000)), true);
-      assertEquals(posted.includes("... (truncated, 4500 chars)"), true);
-      assertEquals(posted.length < overLimitOutput.length, true);
+      assert.deepStrictEqual(posted.includes("b".repeat(4000)), true);
+      assert.deepStrictEqual(
+        posted.includes("... (truncated, 4500 chars)"),
+        true,
+      );
+      assert.deepStrictEqual(posted.length < overLimitOutput.length, true);
     }));
 
   test("command job: 4000 文字ちょうどの stdout は切り詰められないこと", () =>
@@ -1227,7 +1242,7 @@ describe("CronExecutor", () => {
       await executor.runJob(job);
 
       const posted = sent.join("");
-      assertEquals(posted, exactOutput);
-      assertEquals(posted.includes("truncated"), false);
+      assert.deepStrictEqual(posted, exactOutput);
+      assert.deepStrictEqual(posted.includes("truncated"), false);
     }));
 });

@@ -1,7 +1,7 @@
 import { describe, test } from "node:test";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { assertEquals } from "@std/assert";
+import assert from "node:assert/strict";
 import { join } from "@std/path/join";
 import { addToSettingsAllowList, isInAllowList } from "./settings.ts";
 
@@ -16,7 +16,7 @@ describe("addToSettingsAllowList", () => {
     );
 
     const result = JSON.parse(await readFile(settingsPath, "utf8"));
-    assertEquals(result, {
+    assert.deepStrictEqual(result, {
       permissions: {
         allow: ["mcp__claude_ai_Gmail__search_threads"],
       },
@@ -34,7 +34,7 @@ describe("addToSettingsAllowList", () => {
     await addToSettingsAllowList(settingsPath, "Bash(git status)");
 
     const result = JSON.parse(await readFile(settingsPath, "utf8"));
-    assertEquals(result, {
+    assert.deepStrictEqual(result, {
       env: { LOG_LEVEL: "debug" },
       permissions: {
         allow: ["Bash(git status)"],
@@ -57,7 +57,7 @@ describe("addToSettingsAllowList", () => {
     await addToSettingsAllowList(settingsPath, "Edit");
 
     const result = JSON.parse(await readFile(settingsPath, "utf8"));
-    assertEquals(result, {
+    assert.deepStrictEqual(result, {
       permissions: {
         allow: ["Read", "Edit"],
         deny: ["Bash(rm *)"],
@@ -73,7 +73,7 @@ describe("addToSettingsAllowList", () => {
     await addToSettingsAllowList(settingsPath, "Read");
 
     const result = JSON.parse(await readFile(settingsPath, "utf8"));
-    assertEquals(result.permissions.allow, ["Read"]);
+    assert.deepStrictEqual(result.permissions.allow, ["Read"]);
   });
 });
 
@@ -86,7 +86,7 @@ describe("isInAllowList", () => {
       JSON.stringify({ permissions: { allow: ["Read", "Bash"] } }),
     );
 
-    assertEquals(await isInAllowList(settingsPath, "Bash"), true);
+    assert.deepStrictEqual(await isInAllowList(settingsPath, "Bash"), true);
   });
 
   test("allow list に含まれないツールで false を返すこと", async () => {
@@ -97,14 +97,14 @@ describe("isInAllowList", () => {
       JSON.stringify({ permissions: { allow: ["Read"] } }),
     );
 
-    assertEquals(await isInAllowList(settingsPath, "Bash"), false);
+    assert.deepStrictEqual(await isInAllowList(settingsPath, "Bash"), false);
   });
 
   test("ファイルが存在しない場合に false を返すこと", async () => {
     const dir = await mkdtemp(join(tmpdir(), "loms-claw-test-"));
     const settingsPath = join(dir, "nonexistent.json");
 
-    assertEquals(await isInAllowList(settingsPath, "Read"), false);
+    assert.deepStrictEqual(await isInAllowList(settingsPath, "Read"), false);
   });
 
   test("JSON が不正な場合に false を返すこと", async () => {
@@ -112,7 +112,7 @@ describe("isInAllowList", () => {
     const settingsPath = join(dir, "settings.json");
     await writeFile(settingsPath, "not json");
 
-    assertEquals(await isInAllowList(settingsPath, "Read"), false);
+    assert.deepStrictEqual(await isInAllowList(settingsPath, "Read"), false);
   });
 
   test("permissions.allow が存在しない場合に false を返すこと", async () => {
@@ -120,6 +120,6 @@ describe("isInAllowList", () => {
     const settingsPath = join(dir, "settings.json");
     await writeFile(settingsPath, JSON.stringify({ env: {} }));
 
-    assertEquals(await isInAllowList(settingsPath, "Read"), false);
+    assert.deepStrictEqual(await isInAllowList(settingsPath, "Read"), false);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, test } from "node:test";
-import { assertEquals } from "@std/assert";
+import assert from "node:assert/strict";
 import { Hono } from "hono";
 import { createHealthRoutes } from "./health.ts";
 
@@ -10,8 +10,8 @@ describe("health routes", () => {
 
     const res = await app.request("/health");
 
-    assertEquals(res.status, 200);
-    assertEquals(await res.json(), { status: "ok" });
+    assert.deepStrictEqual(res.status, 200);
+    assert.deepStrictEqual(await res.json(), { status: "ok" });
   });
 
   test("GET /: isReady が false の場合に 503 で status: unavailable を返すこと", async () => {
@@ -20,7 +20,7 @@ describe("health routes", () => {
 
     const res = await app.request("/health");
 
-    assertEquals(res.status, 503);
-    assertEquals(await res.json(), { status: "unavailable" });
+    assert.deepStrictEqual(res.status, 503);
+    assert.deepStrictEqual(await res.json(), { status: "unavailable" });
   });
 });

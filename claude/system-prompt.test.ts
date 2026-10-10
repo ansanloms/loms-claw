@@ -6,7 +6,7 @@ import {
   writeFile as writeTextFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { assertEquals } from "@std/assert";
+import assert from "node:assert/strict";
 import { join } from "@std/path/join";
 import { type PromptScope, SystemPromptStore } from "./system-prompt.ts";
 
@@ -45,7 +45,7 @@ describe("SystemPromptStore", () => {
     await withTempDir(async (dir) => {
       const store = new SystemPromptStore(join(dir, "nonexistent"));
       await store.load();
-      assertEquals(store.resolve("chat", ch("ch-1")), undefined);
+      assert.deepStrictEqual(store.resolve("chat", ch("ch-1")), undefined);
     });
   });
 
@@ -54,7 +54,10 @@ describe("SystemPromptStore", () => {
       await writeFile(dir, "DEFAULT.md", "default prompt");
       const store = new SystemPromptStore(dir);
       await store.load();
-      assertEquals(store.resolve("chat", ch("ch-1")), "default prompt");
+      assert.deepStrictEqual(
+        store.resolve("chat", ch("ch-1")),
+        "default prompt",
+      );
     });
   });
 
@@ -64,7 +67,7 @@ describe("SystemPromptStore", () => {
       await writeFile(dir, "CHAT.md", "chat specific");
       const store = new SystemPromptStore(dir);
       await store.load();
-      assertEquals(
+      assert.deepStrictEqual(
         store.resolve("chat", ch("ch-1")),
         "default\n\nchat specific",
       );
@@ -77,7 +80,7 @@ describe("SystemPromptStore", () => {
       await writeFile(dir, "ch-123.md", "channel specific");
       const store = new SystemPromptStore(dir);
       await store.load();
-      assertEquals(
+      assert.deepStrictEqual(
         store.resolve("chat", ch("ch-123")),
         "default\n\nchannel specific",
       );
@@ -91,7 +94,7 @@ describe("SystemPromptStore", () => {
       await writeFile(dir, "ch-456.md", "channel");
       const store = new SystemPromptStore(dir);
       await store.load();
-      assertEquals(
+      assert.deepStrictEqual(
         store.resolve("chat", ch("ch-456")),
         "default\n\nchat\n\nchannel",
       );
@@ -104,7 +107,7 @@ describe("SystemPromptStore", () => {
       await writeFile(dir, "CHAT.md", "chat");
       const store = new SystemPromptStore(dir);
       await store.load();
-      assertEquals(store.resolve("chat", ch("ch-1")), "chat");
+      assert.deepStrictEqual(store.resolve("chat", ch("ch-1")), "chat");
     });
   });
 
@@ -115,8 +118,8 @@ describe("SystemPromptStore", () => {
       await store.load();
       // 同期呼び出し（Promise ではない）
       const result = store.resolve("chat", ch("ch-1"));
-      assertEquals(typeof result, "string");
-      assertEquals(result, "sync test");
+      assert.deepStrictEqual(typeof result, "string");
+      assert.deepStrictEqual(result, "sync test");
     });
   });
 
@@ -133,7 +136,7 @@ describe("SystemPromptStore", () => {
         "discord.guild.name": "test-guild",
         "discord.channel.id": "ch-1",
       });
-      assertEquals(result, "Guild: test-guild Channel: ch-1");
+      assert.deepStrictEqual(result, "Guild: test-guild Channel: ch-1");
     });
   });
 
@@ -143,7 +146,7 @@ describe("SystemPromptStore", () => {
       await writeFile(dir, "CRON.md", "cron specific");
       const store = new SystemPromptStore(dir);
       await store.load();
-      assertEquals(
+      assert.deepStrictEqual(
         store.resolve("cron", ch("ch-1")),
         "default\n\ncron specific",
       );
@@ -155,7 +158,7 @@ describe("SystemPromptStore", () => {
       await writeFile(dir, "CHAT.md", "chat only");
       const store = new SystemPromptStore(dir);
       await store.load();
-      assertEquals(store.resolve("cron", ch("ch-1")), undefined);
+      assert.deepStrictEqual(store.resolve("cron", ch("ch-1")), undefined);
     });
   });
 
@@ -165,7 +168,7 @@ describe("SystemPromptStore", () => {
       const store = new SystemPromptStore(dir);
       await store.load();
       // "CRON" はチャンネル ID として扱われない
-      assertEquals(store.resolve("chat", ch("CRON")), undefined);
+      assert.deepStrictEqual(store.resolve("chat", ch("CRON")), undefined);
     });
   });
 
@@ -175,7 +178,7 @@ describe("SystemPromptStore", () => {
       const store = new SystemPromptStore(dir);
       await store.load();
       const result = store.resolve("chat", ch("ch-1"));
-      assertEquals(result, "ID: {{discord.channel.id}}");
+      assert.deepStrictEqual(result, "ID: {{discord.channel.id}}");
     });
   });
 
@@ -187,7 +190,7 @@ describe("SystemPromptStore", () => {
       await writeFile(dir, "ch-parent.md", "parent channel prompt");
       const store = new SystemPromptStore(dir);
       await store.load();
-      assertEquals(
+      assert.deepStrictEqual(
         store.resolve("chat", th("ch-parent", "thread-1")),
         "default\n\nparent channel prompt",
       );
@@ -201,7 +204,7 @@ describe("SystemPromptStore", () => {
       await writeFile(dir, "thread-1.md", "thread specific prompt");
       const store = new SystemPromptStore(dir);
       await store.load();
-      assertEquals(
+      assert.deepStrictEqual(
         store.resolve("chat", th("ch-parent", "thread-1")),
         "default\n\nthread specific prompt",
       );
@@ -213,7 +216,7 @@ describe("SystemPromptStore", () => {
       await writeFile(dir, "DEFAULT.md", "default");
       const store = new SystemPromptStore(dir);
       await store.load();
-      assertEquals(
+      assert.deepStrictEqual(
         store.resolve("chat", th("ch-parent", "thread-1")),
         "default",
       );
@@ -227,7 +230,7 @@ describe("SystemPromptStore", () => {
       const store = new SystemPromptStore(dir);
       await store.load();
       // channel スコープ ("thread-1" 自体を channelId として渡したわけではない)
-      assertEquals(store.resolve("chat", ch("ch-other")), "default");
+      assert.deepStrictEqual(store.resolve("chat", ch("ch-other")), "default");
     });
   });
 
@@ -246,7 +249,7 @@ describe("SystemPromptStore", () => {
       const result = store.resolve("chat", th("ch-parent", "thread-1"), {
         "discord.channel.id": "thread-1",
       });
-      assertEquals(result, "default\n\nChannel ID: thread-1");
+      assert.deepStrictEqual(result, "default\n\nChannel ID: thread-1");
     });
   });
 
@@ -257,7 +260,7 @@ describe("SystemPromptStore", () => {
       // 空文字をキーとした .md は存在しないので何も追加で乗らない
       const store = new SystemPromptStore(dir);
       await store.load();
-      assertEquals(store.resolve("cron", ch("")), "default\n\ncron");
+      assert.deepStrictEqual(store.resolve("cron", ch("")), "default\n\ncron");
     });
   });
 });

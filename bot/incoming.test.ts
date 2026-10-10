@@ -1,5 +1,5 @@
 import { describe, test } from "node:test";
-import { assertEquals } from "@std/assert";
+import assert from "node:assert/strict";
 import type { Config } from "../config.ts";
 import {
   type IncomingMessageDeps,
@@ -75,7 +75,10 @@ describe("resolveIncomingMessage", () => {
       { ...baseInput, guildId: "guild-other" },
       deps,
     );
-    assertEquals(decision, { kind: "ignore", reason: "unauthorized" });
+    assert.deepStrictEqual(decision, {
+      kind: "ignore",
+      reason: "unauthorized",
+    });
   });
 
   test("通常メンションで処理対象 (handle, isSelfMessage: false) になること", async () => {
@@ -84,9 +87,9 @@ describe("resolveIncomingMessage", () => {
     if (decision.kind !== "handle") {
       throw new Error("expected handle decision");
     }
-    assertEquals(decision.isSelfMessage, false);
-    assertEquals(decision.scope, { channelId: "ch-1" });
-    assertEquals(decision.localId, "ch-1");
+    assert.deepStrictEqual(decision.isSelfMessage, false);
+    assert.deepStrictEqual(decision.scope, { channelId: "ch-1" });
+    assert.deepStrictEqual(decision.localId, "ch-1");
   });
 
   test("active チャンネルでは mention 無しでも処理対象になること", async () => {
@@ -95,7 +98,7 @@ describe("resolveIncomingMessage", () => {
       { ...baseInput, channelId: "ch-active-1", channel: fakeChannel(false) },
       deps,
     );
-    assertEquals(decision.kind, "handle");
+    assert.deepStrictEqual(decision.kind, "handle");
   });
 
   test("active チャンネル配下のスレッドでは mention 無しでも処理対象になること", async () => {
@@ -113,11 +116,11 @@ describe("resolveIncomingMessage", () => {
     if (decision.kind !== "handle") {
       throw new Error("expected handle decision");
     }
-    assertEquals(decision.scope, {
+    assert.deepStrictEqual(decision.scope, {
       channelId: "ch-active-1",
       threadId: "thread-1",
     });
-    assertEquals(decision.localId, "thread-1");
+    assert.deepStrictEqual(decision.localId, "thread-1");
   });
 
   test("自己メンションでレート制限超過の場合は無視すること", async () => {
@@ -129,7 +132,10 @@ describe("resolveIncomingMessage", () => {
       { ...baseInput, authorId: "bot-1", authorIsBot: true },
       deps,
     );
-    assertEquals(decision, { kind: "ignore", reason: "rate-limited" });
+    assert.deepStrictEqual(decision, {
+      kind: "ignore",
+      reason: "rate-limited",
+    });
   });
 
   test("自己メンションでレート制限に掛からなければ処理対象 (isSelfMessage: true) になること", async () => {
@@ -144,9 +150,9 @@ describe("resolveIncomingMessage", () => {
     if (decision.kind !== "handle") {
       throw new Error("expected handle decision");
     }
-    assertEquals(decision.isSelfMessage, true);
+    assert.deepStrictEqual(decision.isSelfMessage, true);
     // 自己メッセージでは active 上書き (KV 読み取り) を引かない
-    assertEquals(calls.getActiveOverride.length, 0);
+    assert.deepStrictEqual(calls.getActiveOverride.length, 0);
   });
 
   test("自己メンションで mention が無い場合は無視すること", async () => {
@@ -155,12 +161,18 @@ describe("resolveIncomingMessage", () => {
       { ...baseInput, authorId: "bot-1", authorIsBot: true },
       deps,
     );
-    assertEquals(decision, { kind: "ignore", reason: "self-not-mentioned" });
+    assert.deepStrictEqual(decision, {
+      kind: "ignore",
+      reason: "self-not-mentioned",
+    });
   });
 
   test("mention 無し・非 active チャンネルは応答不要として無視すること", async () => {
     const { deps } = baseDeps({ isMentioned: () => false });
     const decision = await resolveIncomingMessage(baseInput, deps);
-    assertEquals(decision, { kind: "ignore", reason: "not-responding" });
+    assert.deepStrictEqual(decision, {
+      kind: "ignore",
+      reason: "not-responding",
+    });
   });
 });

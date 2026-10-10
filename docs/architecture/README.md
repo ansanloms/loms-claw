@@ -28,7 +28,7 @@ Discord の単一ギルド・単一ユーザ専用のパーソナル AI エー�
 | `@cfworker/json-schema`            | `config.json`・内部 API リクエストボディ・cron frontmatter の構造検証                                                                     |
 | `json-schema-to-ts`                | 内部 API の schema から TypeScript 型を導出 (`FromSchema`)                                                                                |
 | `@std/front-matter`, `@std/yaml`   | cron ジョブファイルの YAML frontmatter 抽出とパース                                                                                       |
-| `@std/path`, `@std/assert`         | パス操作、テストアサーション                                                                                                              |
+| `@std/path`                        | パス操作                                                                                                                                  |
 
 コンテナイメージ (`Dockerfile`) には `curl`/`jq` (Discord REST を叩く skill 用)、`ffmpeg` (添付画像のリサイズ、`bot/message.ts` の `resizeImageIfNeeded()`)、`git`/`bubblewrap`/`socat` が同梱される。
 
@@ -209,6 +209,7 @@ graph TD
 | `config.schema.ts`    | `@cfworker/json-schema` の `Validator` で検証。`applyConfigDefaults()` が schema の `default` を補完                                                                                                                                                                |
 | `logger.ts`           | 名前空間付きロガー。`initLogger()` / `createLogger()` / `getLogEntries()`。リングバッファで直近ログを保持                                                                                                                                                           |
 | `errors.ts`           | `getErrorMessage()`: unknown なエラー値からメッセージを取り出す。`isNotFoundError()`: ENOENT 判定                                                                                                                                                                   |
+| `test-helpers.ts`     | テスト用ヘルパ。`errorWith()`: `assert.throws` / `assert.rejects` 向けにエラークラスと message 部分一致を検証する validator を返す (カバレッジ対象外)                                                                                                               |
 | `package.json`        | 依存と scripts (`start` / `dev` / `test` / `check` / `lint` / `fix` / `generate`)。`package-lock.json` が lockfile、`.npmrc` が `@std/*` を取る JSR 互換レジストリの設定                                                                                            |
 | `tsconfig.json`       | `tsc --noEmit` の設定 (`check` タスク)。`erasableSyntaxOnly` で Node の型除去が受け付けない構文を検出する。`types` は `node`                                                                                                                                        |
 | `.oxlintrc.json`      | oxlint 設定 (`lint` / `fix` タスク)。`curly` を error にし、`data/`, `docs/api`, `api/internal-schemas.ts`, `.claude/` を除外                                                                                                                                       |
