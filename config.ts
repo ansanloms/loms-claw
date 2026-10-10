@@ -7,13 +7,14 @@
  * パスは `LOMS_CLAW_CONFIG` 環境変数で上書き可能（デフォルト: `./data/config.json`）。
  */
 
-import type { LogLevel } from "./logger.ts";
+import { readFileSync } from "node:fs";
 import {
   applyConfigDefaults,
   formatConfigErrors,
   validateConfigFile,
 } from "./config.schema.ts";
 import { getErrorMessage } from "./errors.ts";
+import type { LogLevel } from "./logger.ts";
 
 /**
  * Claude のグローバルデフォルト。チャンネル単位の上書きが無いときに使われる。
@@ -37,7 +38,7 @@ export interface ClaudeConfig {
   timeout: number;
   /** 内部 API サーバーのポート（cron + ログ + 設定 (settings)）。 */
   apiPort: number;
-  /** `query()` の作業ディレクトリ。実行時に `Deno.cwd()` が注入される。 */
+  /** `query()` の作業ディレクトリ。実行時に `process.cwd()` が注入される。 */
   cwd: string;
   /** Claude のグローバルデフォルト (model / effort / showThinking)。 */
   defaults: ClaudeDefaults;
@@ -73,7 +74,7 @@ export interface DiscordConfig {
 export interface Config {
   /** Discord 接続・認可関連の設定。 */
   discord: DiscordConfig;
-  /** 永続化ストア (Deno KV / SQLite) のファイルパス。 */
+  /** 永続化ストア (SQLite) のファイルパス。 */
   storePath: string;
   /** Claude 呼び出し (Agent SDK query()) 設定。 */
   claude: ClaudeConfig;
@@ -97,11 +98,11 @@ export interface ConfigFile extends Omit<Config, "claude"> {
  * @throws ファイルが存在しない、JSON パースに失敗、スキーマ検証に失敗した場合。
  */
 export function loadConfig(): Config {
-  const path = Deno.env.get("LOMS_CLAW_CONFIG") ?? "./data/config.json";
+  const path = process.env.LOMS_CLAW_CONFIG ?? "./data/config.json";
 
   let text: string;
   try {
-    text = Deno.readTextFileSync(path);
+    text = readFileSync(path, "utf8");
   } catch (e) {
     const msg = getErrorMessage(e);
     throw new Error(`failed to read config file (${path}): ${msg}`);
@@ -132,7 +133,7 @@ export function loadConfig(): Config {
     ...rest,
     claude: {
       ...rest.claude,
-      cwd: Deno.cwd(),
+      cwd: process.cwd(),
     },
   };
 }

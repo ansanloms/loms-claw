@@ -1,4 +1,9 @@
-FROM docker.io/denoland/deno:debian-2.9.7
+FROM docker.io/node:24-bookworm-slim
+
+# workspace の skill / cron (google-health, mountain-weather, find-docs) と
+# docs/api の `generate` が Deno を使うため、Deno バイナリを同梱する。
+# skill が Deno を離れたら外す (issue #190)。
+COPY --from=docker.io/denoland/deno:bin-2.9.7 /deno /usr/local/bin/deno
 
 # 実行時データは host の ./data を /data に bind mount する (compose.yaml)。
 
@@ -25,31 +30,25 @@ EOF
 
 WORKDIR /app
 
-COPY deno.json deno.lock ./
+COPY package.json package-lock.json .npmrc ./
 
 # Agent SDK が同梱する Claude Code バイナリを PATH に出す
 # (実行時は SDK が自動解決する。symlink は初回認証 `claude auth login` 等の手動操作用)
 RUN <<EOF
 	set -e
-	deno install
+	npm ci --omit=dev
 	case "$(dpkg --print-architecture)" in
 		amd64) sdk_arch="x64" ;;
 		arm64) sdk_arch="arm64" ;;
 		*) echo "unsupported architecture" >&2; exit 1 ;;
 	esac
-	ln -sf "${DENO_DIR%/}"/npm/registry.npmjs.org/@anthropic-ai/claude-agent-sdk-linux-${sdk_arch}/*/claude /usr/local/bin/claude
+	ln -sf /app/node_modules/@anthropic-ai/claude-agent-sdk-linux-${sdk_arch}/claude /usr/local/bin/claude
 	claude --version
-	# glibc イメージでは musl 用バイナリ (約 230MB) は使われないため削除する。
-	# パッケージディレクトリ自体を消すと deno が起動時に再ダウンロードするため、
-	# バイナリファイルのみ削除する (パッケージの存在チェックはディレクトリ単位)。
-	rm -f "${DENO_DIR%/}"/npm/registry.npmjs.org/@anthropic-ai/claude-agent-sdk-linux-*-musl/*/claude
 EOF
 
 COPY . .
 
 # 実行時の cwd はエージェントワークスペース (/data/workspace) にする。
 # コードはイメージ焼き込みの /app を絶対パスで参照する。
-# 権限フラグは deno.json の start タスクと揃えること
-# (deno task は deno.json のあるディレクトリを cwd にするためここでは使えない)。
 WORKDIR /data/workspace
-CMD ["deno", "run", "--allow-env", "--allow-sys", "--allow-ffi", "--allow-read", "--allow-write", "--allow-net", "--allow-run", "/app/main.ts"]
+CMD ["node", "/app/main.ts"]

@@ -1,3 +1,5 @@
+import { Temporal } from "@js-temporal/polyfill";
+import { describe, test } from "node:test";
 import { assertEquals } from "@std/assert";
 import { SelfMentionRateLimiter } from "./ratelimit.ts";
 
@@ -16,8 +18,8 @@ function fakeClock(start: Temporal.Instant) {
   };
 }
 
-Deno.test("SelfMentionRateLimiter", async (t) => {
-  await t.step("上限未満の連続 tryConsume が許可されること", () => {
+describe("SelfMentionRateLimiter", () => {
+  test("上限未満の連続 tryConsume が許可されること", () => {
     const clock = fakeClock(BASE);
     const limiter = new SelfMentionRateLimiter(3, 10, clock.now);
     assertEquals(limiter.tryConsume(), true);
@@ -25,7 +27,7 @@ Deno.test("SelfMentionRateLimiter", async (t) => {
     assertEquals(limiter.tryConsume(), true);
   });
 
-  await t.step("上限到達後のウィンドウ内 tryConsume が拒否されること", () => {
+  test("上限到達後のウィンドウ内 tryConsume が拒否されること", () => {
     const clock = fakeClock(BASE);
     const limiter = new SelfMentionRateLimiter(2, 10, clock.now);
     assertEquals(limiter.tryConsume(), true);
@@ -33,7 +35,7 @@ Deno.test("SelfMentionRateLimiter", async (t) => {
     assertEquals(limiter.tryConsume(), false);
   });
 
-  await t.step("ウィンドウ経過後に再び許可されること", () => {
+  test("ウィンドウ経過後に再び許可されること", () => {
     const clock = fakeClock(BASE);
     const limiter = new SelfMentionRateLimiter(2, 10, clock.now);
     assertEquals(limiter.tryConsume(), true);
@@ -44,7 +46,7 @@ Deno.test("SelfMentionRateLimiter", async (t) => {
     assertEquals(limiter.tryConsume(), true);
   });
 
-  await t.step("ウィンドウ境界ちょうどではまだ拒否されること", () => {
+  test("ウィンドウ境界ちょうどではまだ拒否されること", () => {
     const clock = fakeClock(BASE);
     const limiter = new SelfMentionRateLimiter(2, 10, clock.now);
     assertEquals(limiter.tryConsume(), true);
@@ -57,7 +59,7 @@ Deno.test("SelfMentionRateLimiter", async (t) => {
     assertEquals(limiter.tryConsume(), false);
   });
 
-  await t.step("isExhausted が枠を消費せずに超過状態を返すこと", () => {
+  test("isExhausted が枠を消費せずに超過状態を返すこと", () => {
     const clock = fakeClock(BASE);
     const limiter = new SelfMentionRateLimiter(2, 10, clock.now);
     assertEquals(limiter.isExhausted(), false);

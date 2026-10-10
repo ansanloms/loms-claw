@@ -4,11 +4,12 @@
   "service": "bot",
   "workspaceFolder": "/app",
   "overrideCommand": true,
+  "postCreateCommand": "npm ci",
   "customizations": {
     "vscode": {
-      "extensions": ["denoland.vscode-deno"],
+      "extensions": ["oxc.oxc-vscode"],
       "settings": {
-        "deno.enable": true
+        "editor.defaultFormatter": "oxc.oxc-vscode"
       }
     }
   }

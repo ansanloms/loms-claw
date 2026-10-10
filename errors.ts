@@ -24,8 +24,20 @@ const DISCORD_ERROR_SUMMARY_MAX_LENGTH = 200;
 export function summarizeErrorForDiscord(error: unknown): string {
   const message = getErrorMessage(error);
   const firstLine = message.split(/\r?\n/)[0];
-  const truncated = firstLine.length > DISCORD_ERROR_SUMMARY_MAX_LENGTH
-    ? firstLine.slice(0, DISCORD_ERROR_SUMMARY_MAX_LENGTH)
-    : firstLine;
+  const truncated =
+    firstLine.length > DISCORD_ERROR_SUMMARY_MAX_LENGTH
+      ? firstLine.slice(0, DISCORD_ERROR_SUMMARY_MAX_LENGTH)
+      : firstLine;
   return `処理に失敗した。詳細はログ (\`GET /logs\`) を参照\n${truncated}`;
+}
+
+/**
+ * ファイルシステム操作の「存在しない」エラー (`ENOENT`) かどうかを判定する。
+ *
+ * `node:fs` 系 API は `code` プロパティ付きのエラーを投げる。
+ */
+export function isNotFoundError(e: unknown): boolean {
+  return (
+    typeof e === "object" && e !== null && "code" in e && e.code === "ENOENT"
+  );
 }

@@ -1,20 +1,27 @@
 # Store と設定
 
-チャンネル/スレッド単位の設定 (session/model/effort/showThinking/active) を Deno KV に永続化する `Store` (`store/mod.ts`) と、その設定を操作する 2 つの入口の構造を記述する。2 つの入口とは Discord スラッシュコマンド `/claw settings` と内部 HTTP API `/settings` を指す。両入口は `Store.applyPatch()` を共有しており、スコープの決め方と解決順は Store が単一のソースとして定める。
+チャンネル/スレッド単位の設定 (session/model/effort/showThinking/active) を SQLite (`node:sqlite`) に永続化する `Store` (`store/mod.ts`) と、その設定を操作する 2 つの入口の構造を記述する。2 つの入口とは Discord スラッシュコマンド `/claw settings` と内部 HTTP API `/settings` を指す。両入口は `Store.applyPatch()` を共有しており、スコープの決め方と解決順は Store が単一のソースとして定める。
 
 関連: [README.md](README.md)/[message-flow.md](message-flow.md)/[claude-integration.md](claude-integration.md)/[cron.md](cron.md)/[internal-api.md](internal-api.md)/[deployment.md](deployment.md)
 
 ## Store の実体
 
-- バックエンドは Deno KV (SQLite backend)。`main.ts` が `Deno.openKv(config.storePath)` で open し、`new Store(kv, config.claude.defaults)` を生成する。KV は起動リトライの外側で 1 度だけ open され、`DiscordBot.shutdown()` 内の `Store.close()` で閉じられる。
-- `config.storePath` の既定は `.claude/loms-claw.kv` (相対パスは cwd 基準。`config.schema.json` の `storePath`)。`main.ts` は open 前に親ディレクトリを `Deno.mkdir({ recursive: true })` で作る。
+- バックエンドは SQLite (`node:sqlite`)。`main.ts` が `openStoreDatabase(config.storePath)` (`store/mod.ts`) で open し (内部で `new DatabaseSync(path, { timeout: 5000 })`。`timeout` は他プロセスがロックを持つ間の待ち時間 (ミリ秒)。続けて `PRAGMA journal_mode = WAL`。`scripts/import-kv.ts` も同じ関数を使う)、`new Store(db, config.claude.defaults)` を生成する。`Store` のコンストラクタはまず `sqlite_master` を読み、テーブルが 1 つ以上あるのに `settings` が無い DB (旧 Deno KV ファイル等) を `store file is not a loms-claw database (old Deno KV file?)` で拒否する。拒否は `main.ts` で `failed to open store: ...` のログと `process.exit(1)` になる。ガードを通ったら `settings` テーブルを `CREATE TABLE IF NOT EXISTS` で作る。DB は起動リトライの外側で 1 度だけ open され、`main.ts` の `onSignal` が `bot.shutdown()` の成否に関わらず `Store.close()` で閉じる (`DiscordBot.shutdown()` は Store に触れない)。 読み書きに使う SQL はコンストラクタで 1 度だけ `prepare` して `StatementSync` をフィールドに持つ。読み取った行は type guard で検査し、形が合わなければ `store: unexpected row shape for ...` を投げる (Store が書く値は常に string なので、不一致はストアの破損)。`isEmpty()` は `settings` が空かを返す (起動時の旧 KV ファイル検知用)。
+- `config.storePath` の既定は `.claude/loms-claw.sqlite` (相対パスは cwd 基準。`config.schema.json` の `storePath`)。`main.ts` は open 前に親ディレクトリを `mkdir({ recursive: true })` で作る。
 - グローバルデフォルトは `config.json` の `claude.defaults` (`model`/`effort`/`showThinking`) で、`Store` のコンストラクタ引数 `StoreDefaults` として渡される。`getDefaults()` はそのコピーを返す。
 
-### キー配置
+### テーブル配置
 
+```sql
+CREATE TABLE IF NOT EXISTS settings (
+  id TEXT NOT NULL,
+  field TEXT NOT NULL,
+  value TEXT NOT NULL,
+  PRIMARY KEY (id, field)
+)
 ```
-["channel", id, field] -> string
-```
+
+1 設定 = 1 行。旧 KV のキー `["channel", id, field]` は `(id, field)` 行に対応する。
 
 | 要素    | 値                                                                                                                         |
 | ------- | -------------------------------------------------------------------------------------------------------------------------- |
@@ -63,7 +70,7 @@ flowchart LR
   C -.->|active のみ| A["undefined → resolveActive()<br/>activeChannelIds 判定"]
 ```
 
-`resolveActive(channelId, activeChannelIds, isThread, parentId, override)` は `override` (KV の値) が boolean ならそれを返し、`undefined` なら `activeChannelIds.includes(channelId) || (isThread && activeChannelIds.includes(parentId))` を返す。スレッドでは親チャンネル ID もリスト判定の対象になる。KV で `false` を明示すると config で active なチャンネルでも mention 必須へ落ちる。`bot/mod.ts` は人間のメッセージに対してのみ `getActive(scope)` を引いて `shouldRespond()` に渡す (bot 自身の投稿には `active` を適用しない。詳細は [message-flow.md](message-flow.md))。
+`resolveActive(channelId, activeChannelIds, isThread, parentId, override)` は `override` (ストアの値) が boolean ならそれを返し、`undefined` なら `activeChannelIds.includes(channelId) || (isThread && activeChannelIds.includes(parentId))` を返す。スレッドでは親チャンネル ID もリスト判定の対象になる。ストアで `false` を明示すると config で active なチャンネルでも mention 必須へ落ちる。`bot/mod.ts` は人間のメッセージに対してのみ `getActive(scope)` を引いて `shouldRespond()` に渡す (bot 自身の投稿には `active` を適用しない。詳細は [message-flow.md](message-flow.md))。
 
 ### `getScopeSettings(scope)` の返り値
 
@@ -81,7 +88,7 @@ interface ScopeSettings {
 - `showThinking` はどこにも無くても `{ value: false, source: "default" }` を必ず返す。
 - `active` は thread/channel どちらにも上書きが無ければ `undefined` (JSON 化時はフィールドごと省略)。`source` に `default` は現れない。
 - `session` は `threadId` があれば thread の値、無ければ channel の値。thread scope で channel の session は読まない。
-- 読み取りは `kv.getMany()` で thread 5 キー + channel 5 キーを一括取得する。
+- `getScopeSettings` は `SELECT id, field, value FROM settings WHERE id IN (...)` の 1 クエリで thread と channel の行をまとめて読み (thread 無しなら `id = ?` 相当)、`id` ごとの Map に積んでから解決する。個別の getter (`getModel` 等) は `WHERE id = $id AND field = $field` の 1 行読み。
 
 ## 書き込み API
 
@@ -100,13 +107,13 @@ interface SettingsPatch {
 ```
 
 - キー省略 = 触らない、`null` = そのキーを削除 (フォールバックへ戻す)、値あり = leaf id に書く。
-- すべての set/delete を 1 つの `kv.atomic()` にまとめて commit する。一部だけ適用された状態を残さない。
+- すべての set/delete を 1 つのトランザクション (`BEGIN` / `COMMIT`、例外時は `ROLLBACK`) にまとめる。パッチが空なら `BEGIN` しない。一部だけ適用された状態を残さない。
 - `session` は型で `null` のみ受け付ける (削除専用)。理由: 任意のセッション ID の書き込みを許すと他スコープの会話を乗っ取れるため。
 - 返り値は `getScopeSettings(scope)` の結果。渡した scope に `threadId` が無ければ thread のフォールバックは効かない。
 
 ### `clearScope(scope)`
 
-`kv.list({ prefix: ["channel", id] })` で leaf id 配下のキーを列挙し、1 つの `kv.atomic()` で全削除する。thread scope なら thread のキーだけ消え、親チャンネルの設定は残る。channel scope なら channel のキーだけ消え、配下スレッドの設定は残る。
+`DELETE FROM settings WHERE id = $id` の 1 文で leaf id の行を全削除する。thread scope なら thread のキーだけ消え、親チャンネルの設定は残る。channel scope なら channel のキーだけ消え、配下スレッドの設定は残る。
 
 ### 個別 setter
 
@@ -128,7 +135,7 @@ model/effort/showThinking/active に対する個別の setter/deleter は無く�
 - スラッシュコマンドのオプション名は snake_case (`show_thinking`)、Store/API のキー名は camelCase (`showThinking`)。ハンドラが `patch.showThinking` に詰め替える。他の 4 つ (`model`/`effort`/`active`/`session`) は同名。
 - `scopeFromInteraction()` は `interaction.channel` を `bot/scope.ts` の `scopeFromChannel()` に渡すだけの薄いラッパ。messageCreate 側 (`bot/mod.ts`) のスコープ抽出も同じ `scopeFromChannel()` を使う。
 - `show` が表示する内容:
-  - 現在スコープ (Thread + parent、または Channel) の `session`/`model`/`effort`/`show_thinking`/`active`。文字列設定は `value (source)`、`active` は `resolveActive()` で求めた実効値と出所 (KV に無ければ `config activeChannelIds`)
+  - 現在スコープ (Thread + parent、または Channel) の `session`/`model`/`effort`/`show_thinking`/`active`。文字列設定は `value (source)`、`active` は `resolveActive()` で求めた実効値と出所 (ストアに無ければ `config activeChannelIds`)
   - グローバルデフォルト (`config.claude.defaults` の `model`/`effort`/`show_thinking`)
   - cron ジョブ一覧 (`CronExecutor.listJobs()` の名前と schedule。executor 未初期化なら `not initialized`)
 
@@ -167,4 +174,4 @@ model/effort/showThinking/active に対する個別の setter/deleter は無く�
 
 ## テスト
 
-`store/mod.test.ts` は `Deno.openKv(":memory:")` で開いたインメモリ KV を `Store` に渡して実コードを通す (モック無し)。各 step で新しい KV を開き、終了時に `kv.close()` する。
+`store/mod.test.ts` は `new DatabaseSync(":memory:")` で開いたインメモリ DB を `Store` に渡して実コードを通す (モック無し)。各 test で新しい DB を開き、終了時に `db.close()` する。

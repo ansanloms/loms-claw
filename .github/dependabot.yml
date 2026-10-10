@@ -1,6 +1,6 @@
 version: 2
 updates:
-  - package-ecosystem: "deno"
+  - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
@@ -15,7 +15,7 @@ updates:
           - "minor"
           - "patch"
 
-  # docs/api は独自の deno.json / deno.lock を持ち、ルートの deno.json からは
+  # docs/api は独自の deno.json / deno.lock を持ち、ルートの package.json からは
   # 参照されない。エントリを分けないと追従されず、テンプレート
   # (ansanloms/openapi-template) との差が開き続ける。
   - package-ecosystem: "deno"

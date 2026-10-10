@@ -41,8 +41,8 @@
     },
     "storePath": {
       "type": "string",
-      "default": ".claude/loms-claw.kv",
-      "description": "session / model / effort / showThinking / active を保存する Deno KV ファイルのパス。相対パスは cwd 基準。"
+      "default": ".claude/loms-claw.sqlite",
+      "description": "永続化ストア (SQLite) のファイルパス。相対パスは cwd 基準。"
     },
     "claude": {
       "type": "object",

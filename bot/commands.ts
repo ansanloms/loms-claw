@@ -14,13 +14,13 @@ import {
 } from "discord.js";
 import type { ClaudeDefaults } from "../config.ts";
 import type { CronExecutor } from "../cron/executor.ts";
+import { createLogger } from "../logger.ts";
 import type {
   ScopeSettingEntry,
   SettingsPatch,
   Store,
   StoreScope,
 } from "../store/mod.ts";
-import { createLogger } from "../logger.ts";
 import { resolveActive } from "./guard.ts";
 import { scopeFromChannel } from "./scope.ts";
 
@@ -63,7 +63,7 @@ export const command = new SlashCommandBuilder()
           .setName("show")
           .setDescription(
             "Show channel settings (channel config, defaults, cron)",
-          )
+          ),
       )
       .addSubcommand((sub) =>
         sub
@@ -76,20 +76,20 @@ export const command = new SlashCommandBuilder()
               .setName("model")
               .setDescription("Model alias for this channel")
               .setRequired(false)
-              .addChoices(...MODEL_CHOICES)
+              .addChoices(...MODEL_CHOICES),
           )
           .addStringOption((opt) =>
             opt
               .setName("effort")
               .setDescription("Effort level for this channel")
               .setRequired(false)
-              .addChoices(...EFFORT_CHOICES)
+              .addChoices(...EFFORT_CHOICES),
           )
           .addBooleanOption((opt) =>
             opt
               .setName("show_thinking")
               .setDescription("Show thinking (reasoning) in this channel")
-              .setRequired(false)
+              .setRequired(false),
           )
           .addBooleanOption((opt) =>
             opt
@@ -97,8 +97,8 @@ export const command = new SlashCommandBuilder()
               .setDescription(
                 "Respond to all messages in this channel (no mention required)",
               )
-              .setRequired(false)
-          )
+              .setRequired(false),
+          ),
       )
       .addSubcommand((sub) =>
         sub
@@ -111,9 +111,9 @@ export const command = new SlashCommandBuilder()
               .setName("target")
               .setDescription("Which setting to clear")
               .setRequired(true)
-              .addChoices(...UNSET_TARGET_CHOICES)
-          )
-      )
+              .addChoices(...UNSET_TARGET_CHOICES),
+          ),
+      ),
   );
 
 /**
@@ -300,16 +300,14 @@ export async function handleSettingsUnset(
     case "show_thinking":
       await store.applyPatch(scope, { showThinking: null });
       await interaction.reply({
-        content:
-          `Show_thinking unset for this ${scopeLabel} (fallback applies).`,
+        content: `Show_thinking unset for this ${scopeLabel} (fallback applies).`,
         flags: MessageFlags.Ephemeral,
       });
       break;
     case "active":
       await store.applyPatch(scope, { active: null });
       await interaction.reply({
-        content:
-          `Active unset for this ${scopeLabel} (config activeChannelIds applies).`,
+        content: `Active unset for this ${scopeLabel} (config activeChannelIds applies).`,
         flags: MessageFlags.Ephemeral,
       });
       break;
@@ -334,9 +332,7 @@ export async function handleSettingsUnset(
   );
 }
 
-function formatSetting(
-  entry: ScopeSettingEntry | undefined,
-): string {
+function formatSetting(entry: ScopeSettingEntry | undefined): string {
   if (!entry) {
     return "(unset; SDK default applies)";
   }

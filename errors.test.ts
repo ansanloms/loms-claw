@@ -1,19 +1,20 @@
+import { describe, test } from "node:test";
 import { assertEquals } from "@std/assert";
 import { getErrorMessage, summarizeErrorForDiscord } from "./errors.ts";
 
-Deno.test("getErrorMessage", async (t) => {
-  await t.step("Error インスタンスの message を返すこと", () => {
+describe("getErrorMessage", () => {
+  test("Error インスタンスの message を返すこと", () => {
     assertEquals(getErrorMessage(new Error("boom")), "boom");
   });
 
-  await t.step("Error 以外の値は String() で文字列化されること", () => {
+  test("Error 以外の値は String() で文字列化されること", () => {
     assertEquals(getErrorMessage("plain string"), "plain string");
     assertEquals(getErrorMessage(42), "42");
   });
 });
 
-Deno.test("summarizeErrorForDiscord", async (t) => {
-  await t.step("単一行の短いメッセージがそのまま含まれること", () => {
+describe("summarizeErrorForDiscord", () => {
+  test("単一行の短いメッセージがそのまま含まれること", () => {
     const result = summarizeErrorForDiscord(new Error("boom"));
     assertEquals(
       result,
@@ -21,7 +22,7 @@ Deno.test("summarizeErrorForDiscord", async (t) => {
     );
   });
 
-  await t.step("複数行メッセージは先頭 1 行だけが使われること", () => {
+  test("複数行メッセージは先頭 1 行だけが使われること", () => {
     const result = summarizeErrorForDiscord(
       new Error("first line\nsecond line\nthird line"),
     );
@@ -31,7 +32,7 @@ Deno.test("summarizeErrorForDiscord", async (t) => {
     );
   });
 
-  await t.step("200 文字を超える先頭行は 200 文字に切られること", () => {
+  test("200 文字を超える先頭行は 200 文字に切られること", () => {
     const longLine = "a".repeat(250);
     const result = summarizeErrorForDiscord(new Error(longLine));
     const [, summarizedLine] = result.split("\n");
@@ -39,7 +40,7 @@ Deno.test("summarizeErrorForDiscord", async (t) => {
     assertEquals(summarizedLine, "a".repeat(200));
   });
 
-  await t.step("Error 以外の値でも要約されること", () => {
+  test("Error 以外の値でも要約されること", () => {
     const result = summarizeErrorForDiscord("plain error value");
     assertEquals(
       result,

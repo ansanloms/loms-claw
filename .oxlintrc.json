@@ -1,0 +1,31 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc"],
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {
+    "curly": "error",
+    "typescript/no-explicit-any": "error",
+    "prefer-const": "error"
+  },
+  "overrides": [
+    {
+      "files": ["**/*.test.ts"],
+      "rules": {
+        "typescript/no-explicit-any": "off"
+      }
+    }
+  ],
+  "env": {
+    "builtin": true
+  },
+  "ignorePatterns": [
+    "data/",
+    "docs/api/",
+    "coverage/",
+    "api/internal-schemas.ts",
+    "scripts/dump-kv.ts",
+    ".claude/"
+  ]
+}

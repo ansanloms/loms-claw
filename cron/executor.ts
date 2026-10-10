@@ -8,22 +8,23 @@
  * @module
  */
 
+import { spawn } from "node:child_process";
 import type { Client, GuildTextBasedChannel } from "discord.js";
+import { type ApprovalManager, createCanUseTool } from "../approval/manager.ts";
+import { splitMessage } from "../bot/message.ts";
 import {
   askClaude,
   drainResultEvent,
   type QueryFn,
   requireResultText,
 } from "../claude/mod.ts";
-import type { ClaudeConfig, ClaudeDefaults } from "../config.ts";
-import type { Store } from "../store/mod.ts";
-import { type ApprovalManager, createCanUseTool } from "../approval/manager.ts";
 import type { SystemPromptStore } from "../claude/system-prompt.ts";
-import { splitMessage } from "../bot/message.ts";
+import type { ClaudeConfig, ClaudeDefaults } from "../config.ts";
+import { summarizeErrorForDiscord } from "../errors.ts";
 import { createLogger } from "../logger.ts";
+import type { Store } from "../store/mod.ts";
 import { CronScheduler } from "./scheduler.ts";
 import type { CronCommandJob, CronJobDef, CronPromptJob } from "./types.ts";
-import { summarizeErrorForDiscord } from "../errors.ts";
 
 const log = createLogger("cron");
 
@@ -57,8 +58,8 @@ export type RunCommandFn = (
  * `sh -c` でコマンドを実行する既定の `RunCommandFn` 実装。
  *
  * `signal` の abort は `sh` プロセスに SIGTERM を送るだけで、`sh` が起動した
- * 孫プロセスが stdout/stderr の pipe を握ったまま残っていると `output()` が
- * 返らない。そのため `spawn()` で起動し、`child.output()` と「`signal` の
+ * 孫プロセスが stdout/stderr の pipe を握ったまま残っていると出力の読み取りが
+ * 返らない。そのため `spawn()` で起動し、出力の読み取りと「`signal` の
  * abort で reject する Promise」を `Promise.race` する。abort 側が勝ったら
  * `child.kill("SIGTERM")` を呼んで（`sh` 自体は終了させる）reject する。
  */
@@ -66,13 +67,29 @@ export const runShellCommand: RunCommandFn = async (
   command,
   { cwd, signal },
 ) => {
-  const child = new Deno.Command("sh", {
-    args: ["-c", command],
+  const child = spawn("sh", ["-c", command], {
     cwd,
-    signal,
-    stdout: "piped",
-    stderr: "piped",
-  }).spawn();
+    stdio: ["inherit", "pipe", "pipe"],
+  });
+  const stdoutChunks: Buffer[] = [];
+  const stderrChunks: Buffer[] = [];
+  child.stdout.on("data", (chunk: Buffer) => stdoutChunks.push(chunk));
+  child.stderr.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
+  const finished = new Promise<{
+    code: number;
+    stdout: string;
+    stderr: string;
+  }>((resolve, reject) => {
+    child.on("error", reject);
+    child.on("close", (code) => {
+      resolve({
+        // code が null になるのはシグナルで終了したとき。-1 として返す。
+        code: code ?? -1,
+        stdout: Buffer.concat(stdoutChunks).toString("utf8"),
+        stderr: Buffer.concat(stderrChunks).toString("utf8"),
+      });
+    });
+  });
 
   let rejectOnAbort!: (error: Error) => void;
   const abortedPromise = new Promise<never>((_, reject) => {
@@ -95,16 +112,7 @@ export const runShellCommand: RunCommandFn = async (
   }
 
   try {
-    const { code, stdout, stderr } = await Promise.race([
-      child.output(),
-      abortedPromise,
-    ]);
-    const decoder = new TextDecoder();
-    return {
-      code,
-      stdout: decoder.decode(stdout),
-      stderr: decoder.decode(stderr),
-    };
+    return await Promise.race([finished, abortedPromise]);
   } finally {
     signal.removeEventListener("abort", handleAbort);
   }
@@ -120,20 +128,40 @@ export class CronExecutor {
   private running = new Set<string>();
   private scheduler: CronScheduler;
   private onceCallback?: (jobName: string) => Promise<void>;
+  private readonly client: Client;
+  private readonly config: ClaudeConfig;
+  private readonly guildId: string;
+  /** discord skill の curl に渡す bot トークン (query() env へ注入)。 */
+  private readonly discordToken: string;
+  private readonly store: Store;
+  private readonly defaults: ClaudeDefaults;
+  private readonly approvalManager: ApprovalManager;
+  private readonly systemPrompts: SystemPromptStore;
+  private readonly queryFn?: QueryFn;
+  private readonly runCommandFn: RunCommandFn;
 
   constructor(
-    private readonly client: Client,
-    private readonly config: ClaudeConfig,
-    private readonly guildId: string,
-    /** discord skill の curl に渡す bot トークン (query() env へ注入)。 */
-    private readonly discordToken: string,
-    private readonly store: Store,
-    private readonly defaults: ClaudeDefaults,
-    private readonly approvalManager: ApprovalManager,
-    private readonly systemPrompts: SystemPromptStore,
-    private readonly queryFn?: QueryFn,
-    private readonly runCommandFn: RunCommandFn = runShellCommand,
+    client: Client,
+    config: ClaudeConfig,
+    guildId: string,
+    discordToken: string,
+    store: Store,
+    defaults: ClaudeDefaults,
+    approvalManager: ApprovalManager,
+    systemPrompts: SystemPromptStore,
+    queryFn?: QueryFn,
+    runCommandFn: RunCommandFn = runShellCommand,
   ) {
+    this.client = client;
+    this.config = config;
+    this.guildId = guildId;
+    this.discordToken = discordToken;
+    this.store = store;
+    this.defaults = defaults;
+    this.approvalManager = approvalManager;
+    this.systemPrompts = systemPrompts;
+    this.queryFn = queryFn;
+    this.runCommandFn = runCommandFn;
     this.scheduler = new CronScheduler((job) => this.runJob(job));
   }
 
@@ -325,7 +353,7 @@ export class CronExecutor {
         ),
       setSession: job.resumeSession
         ? (newSessionId) =>
-          this.store.setSession({ channelId: sessionKey }, newSessionId)
+            this.store.setSession({ channelId: sessionKey }, newSessionId)
         : undefined,
     });
 
@@ -390,9 +418,10 @@ export class CronExecutor {
     let output = result.stdout.trim();
     if (output.length > MAX_COMMAND_OUTPUT_CHARS) {
       const originalLength = output.length;
-      output = `${
-        output.slice(0, MAX_COMMAND_OUTPUT_CHARS)
-      }\n... (truncated, ${originalLength} chars)`;
+      output = `${output.slice(
+        0,
+        MAX_COMMAND_OUTPUT_CHARS,
+      )}\n... (truncated, ${originalLength} chars)`;
     }
     if (output && textChannel) {
       for (const chunk of splitMessage(output)) {

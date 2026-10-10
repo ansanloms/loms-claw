@@ -1,11 +1,12 @@
+import { describe, test } from "node:test";
 import { assertEquals } from "@std/assert";
+import type { Config } from "../config.ts";
 import {
   isAuthorized,
   isAuthorizedSelfMessage,
   resolveActive,
   shouldRespond,
 } from "./guard.ts";
-import type { Config } from "../config.ts";
 
 const baseConfig: Config = {
   discord: {
@@ -28,383 +29,268 @@ const baseConfig: Config = {
   },
 };
 
-Deno.test("isAuthorized", async (t) => {
-  await t.step("正しいギルド・ユーザーで許可されること", () => {
+describe("isAuthorized", () => {
+  test("正しいギルド・ユーザーで許可されること", () => {
     assertEquals(isAuthorized("guild-1", "user-1", false, baseConfig), true);
   });
 
-  await t.step("bot ユーザーは拒否されること", () => {
+  test("bot ユーザーは拒否されること", () => {
     assertEquals(isAuthorized("guild-1", "user-1", true, baseConfig), false);
   });
 
-  await t.step("異なるギルドは拒否されること", () => {
+  test("異なるギルドは拒否されること", () => {
     assertEquals(
       isAuthorized("guild-other", "user-1", false, baseConfig),
       false,
     );
   });
 
-  await t.step("異なるユーザーは拒否されること", () => {
+  test("異なるユーザーは拒否されること", () => {
     assertEquals(
       isAuthorized("guild-1", "user-other", false, baseConfig),
       false,
     );
   });
 
-  await t.step("ギルドが null (DM) の場合は拒否されること", () => {
+  test("ギルドが null (DM) の場合は拒否されること", () => {
     assertEquals(isAuthorized(null, "user-1", false, baseConfig), false);
   });
 });
 
 const activeChannels = ["ch-active-1", "ch-active-2"];
 
-Deno.test("shouldRespond", async (t) => {
-  await t.step("active channel では反応すること", () => {
+describe("shouldRespond", () => {
+  test("active channel では反応すること", () => {
     assertEquals(
       shouldRespond("ch-active-1", activeChannels, false, null, false, false),
       true,
     );
   });
 
-  await t.step("非 active channel で mention なしの場合は無視すること", () => {
+  test("非 active channel で mention なしの場合は無視すること", () => {
     assertEquals(
       shouldRespond("ch-other", activeChannels, false, null, false, false),
       false,
     );
   });
 
-  await t.step("非 active channel で mention ありの場合は反応すること", () => {
+  test("非 active channel で mention ありの場合は反応すること", () => {
     assertEquals(
       shouldRespond("ch-other", activeChannels, false, null, true, false),
       true,
     );
   });
 
-  await t.step("スレッドで mention ありの場合は反応すること", () => {
+  test("スレッドで mention ありの場合は反応すること", () => {
     assertEquals(
       shouldRespond("thread-1", activeChannels, true, "ch-other", true, false),
       true,
     );
   });
 
-  await t.step("親チャンネルが null のスレッドでは無視すること", () => {
+  test("親チャンネルが null のスレッドでは無視すること", () => {
     assertEquals(
       shouldRespond("thread-1", activeChannels, true, null, false, false),
       false,
     );
   });
 
-  await t.step(
-    "activeChannelIds が空で mention ありの場合は反応すること",
-    () => {
-      assertEquals(
-        shouldRespond("ch-any", [], false, null, true, false),
-        true,
-      );
-    },
-  );
+  test("activeChannelIds が空で mention ありの場合は反応すること", () => {
+    assertEquals(shouldRespond("ch-any", [], false, null, true, false), true);
+  });
 
-  await t.step(
-    "activeChannelIds が空で mention なしの場合は無視すること",
-    () => {
-      assertEquals(
-        shouldRespond("ch-any", [], false, null, false, false),
-        false,
-      );
-    },
-  );
+  test("activeChannelIds が空で mention なしの場合は無視すること", () => {
+    assertEquals(shouldRespond("ch-any", [], false, null, false, false), false);
+  });
 
   // active channel 配下のスレッドも自動応答する (話題分離用途)
-  await t.step(
-    "active channel のスレッドは mention 無しでも反応すること",
-    () => {
-      assertEquals(
-        shouldRespond(
-          "thread-1",
-          activeChannels,
-          true,
-          "ch-active-1",
-          false,
-          false,
-        ),
+  test("active channel のスレッドは mention 無しでも反応すること", () => {
+    assertEquals(
+      shouldRespond(
+        "thread-1",
+        activeChannels,
         true,
-      );
-    },
-  );
-
-  await t.step(
-    "active channel のスレッドは mention ありでも反応すること",
-    () => {
-      assertEquals(
-        shouldRespond(
-          "thread-1",
-          activeChannels,
-          true,
-          "ch-active-1",
-          true,
-          false,
-        ),
-        true,
-      );
-    },
-  );
-
-  await t.step(
-    "active channel のスレッドで bot mention なし + 他ユーザーメンションありの場合は無視すること",
-    () => {
-      assertEquals(
-        shouldRespond(
-          "thread-1",
-          activeChannels,
-          true,
-          "ch-active-1",
-          false,
-          true,
-        ),
+        "ch-active-1",
         false,
-      );
-    },
-  );
-
-  await t.step(
-    "親が非 active なスレッドは mention 必須であること",
-    () => {
-      assertEquals(
-        shouldRespond(
-          "thread-1",
-          activeChannels,
-          true,
-          "ch-other",
-          false,
-          false,
-        ),
         false,
-      );
-    },
-  );
+      ),
+      true,
+    );
+  });
 
-  await t.step(
-    "スレッド ID 自体が activeChannelIds に含まれる場合は親が非 active でも反応すること",
-    () => {
-      assertEquals(
-        shouldRespond(
-          "thread-1",
-          ["thread-1"],
-          true,
-          "ch-other",
-          false,
-          false,
-        ),
+  test("active channel のスレッドは mention ありでも反応すること", () => {
+    assertEquals(
+      shouldRespond(
+        "thread-1",
+        activeChannels,
         true,
-      );
-    },
-  );
+        "ch-active-1",
+        true,
+        false,
+      ),
+      true,
+    );
+  });
 
-  await t.step(
-    "active channel で bot メンションのみの場合は反応すること",
-    () => {
-      assertEquals(
-        shouldRespond(
-          "ch-active-1",
-          activeChannels,
-          false,
-          null,
-          true,
-          false,
-        ),
+  test("active channel のスレッドで bot mention なし + 他ユーザーメンションありの場合は無視すること", () => {
+    assertEquals(
+      shouldRespond(
+        "thread-1",
+        activeChannels,
         true,
-      );
-    },
-  );
+        "ch-active-1",
+        false,
+        true,
+      ),
+      false,
+    );
+  });
+
+  test("親が非 active なスレッドは mention 必須であること", () => {
+    assertEquals(
+      shouldRespond("thread-1", activeChannels, true, "ch-other", false, false),
+      false,
+    );
+  });
+
+  test("スレッド ID 自体が activeChannelIds に含まれる場合は親が非 active でも反応すること", () => {
+    assertEquals(
+      shouldRespond("thread-1", ["thread-1"], true, "ch-other", false, false),
+      true,
+    );
+  });
+
+  test("active channel で bot メンションのみの場合は反応すること", () => {
+    assertEquals(
+      shouldRespond("ch-active-1", activeChannels, false, null, true, false),
+      true,
+    );
+  });
 
   // 他ユーザーメンション判定
-  await t.step(
-    "active channel で bot メンションなし + 他ユーザーメンションありの場合は無視すること",
-    () => {
-      assertEquals(
-        shouldRespond(
-          "ch-active-1",
-          activeChannels,
-          false,
-          null,
-          false,
-          true,
-        ),
+  test("active channel で bot メンションなし + 他ユーザーメンションありの場合は無視すること", () => {
+    assertEquals(
+      shouldRespond("ch-active-1", activeChannels, false, null, false, true),
+      false,
+    );
+  });
+
+  test("active channel で bot メンション + 他ユーザーメンションありの場合は反応すること", () => {
+    assertEquals(
+      shouldRespond("ch-active-1", activeChannels, false, null, true, true),
+      true,
+    );
+  });
+
+  test("非 active channel では他ユーザーメンションに関係なく mention で反応すること", () => {
+    assertEquals(
+      shouldRespond("ch-other", activeChannels, false, null, true, true),
+      true,
+    );
+  });
+
+  test("非 active channel で override が true なら mention 無しでも反応すること", () => {
+    assertEquals(
+      shouldRespond(
+        "ch-other",
+        activeChannels,
         false,
-      );
-    },
-  );
-
-  await t.step(
-    "active channel で bot メンション + 他ユーザーメンションありの場合は反応すること",
-    () => {
-      assertEquals(
-        shouldRespond(
-          "ch-active-1",
-          activeChannels,
-          false,
-          null,
-          true,
-          true,
-        ),
-        true,
-      );
-    },
-  );
-
-  await t.step(
-    "非 active channel では他ユーザーメンションに関係なく mention で反応すること",
-    () => {
-      assertEquals(
-        shouldRespond("ch-other", activeChannels, false, null, true, true),
-        true,
-      );
-    },
-  );
-
-  await t.step(
-    "非 active channel で override が true なら mention 無しでも反応すること",
-    () => {
-      assertEquals(
-        shouldRespond(
-          "ch-other",
-          activeChannels,
-          false,
-          null,
-          false,
-          false,
-          true,
-        ),
-        true,
-      );
-    },
-  );
-
-  await t.step(
-    "active channel で override が false なら mention 必須になること",
-    () => {
-      assertEquals(
-        shouldRespond(
-          "ch-active-1",
-          activeChannels,
-          false,
-          null,
-          false,
-          false,
-          false,
-        ),
+        null,
         false,
-      );
-    },
-  );
-
-  await t.step(
-    "override が true でも bot mention 無し + 他ユーザーメンションありは無視すること",
-    () => {
-      assertEquals(
-        shouldRespond(
-          "ch-other",
-          activeChannels,
-          false,
-          null,
-          false,
-          true,
-          true,
-        ),
         false,
-      );
-    },
-  );
+        true,
+      ),
+      true,
+    );
+  });
+
+  test("active channel で override が false なら mention 必須になること", () => {
+    assertEquals(
+      shouldRespond(
+        "ch-active-1",
+        activeChannels,
+        false,
+        null,
+        false,
+        false,
+        false,
+      ),
+      false,
+    );
+  });
+
+  test("override が true でも bot mention 無し + 他ユーザーメンションありは無視すること", () => {
+    assertEquals(
+      shouldRespond("ch-other", activeChannels, false, null, false, true, true),
+      false,
+    );
+  });
 });
 
-Deno.test("resolveActive", async (t) => {
-  await t.step(
-    "override が true なら config のリストに無くても true になること",
-    () => {
-      assertEquals(
-        resolveActive("ch-other", activeChannels, false, null, true),
-        true,
-      );
-    },
-  );
+describe("resolveActive", () => {
+  test("override が true なら config のリストに無くても true になること", () => {
+    assertEquals(
+      resolveActive("ch-other", activeChannels, false, null, true),
+      true,
+    );
+  });
 
-  await t.step(
-    "override が false なら config のリストにあっても false になること",
-    () => {
-      assertEquals(
-        resolveActive("ch-active-1", activeChannels, false, null, false),
-        false,
-      );
-    },
-  );
+  test("override が false なら config のリストにあっても false になること", () => {
+    assertEquals(
+      resolveActive("ch-active-1", activeChannels, false, null, false),
+      false,
+    );
+  });
 
-  await t.step(
-    "override が undefined なら config のリスト判定にフォールバックすること",
-    () => {
-      assertEquals(
-        resolveActive("ch-active-1", activeChannels, false, null, undefined),
-        true,
-      );
-      assertEquals(
-        resolveActive("ch-other", activeChannels, false, null, undefined),
-        false,
-      );
-    },
-  );
+  test("override が undefined なら config のリスト判定にフォールバックすること", () => {
+    assertEquals(
+      resolveActive("ch-active-1", activeChannels, false, null, undefined),
+      true,
+    );
+    assertEquals(
+      resolveActive("ch-other", activeChannels, false, null, undefined),
+      false,
+    );
+  });
 
-  await t.step(
-    "override が undefined でスレッドの場合、親チャンネルが active なら true になること",
-    () => {
-      assertEquals(
-        resolveActive(
-          "thread-1",
-          activeChannels,
-          true,
-          "ch-active-1",
-          undefined,
-        ),
-        true,
-      );
-    },
-  );
+  test("override が undefined でスレッドの場合、親チャンネルが active なら true になること", () => {
+    assertEquals(
+      resolveActive("thread-1", activeChannels, true, "ch-active-1", undefined),
+      true,
+    );
+  });
 });
 
-Deno.test("isAuthorizedSelfMessage", async (t) => {
-  await t.step(
-    "自 bot ID + 正しいギルドで許可されること",
-    () => {
-      assertEquals(
-        isAuthorizedSelfMessage("guild-1", "bot-1", "bot-1", baseConfig),
-        true,
-      );
-    },
-  );
+describe("isAuthorizedSelfMessage", () => {
+  test("自 bot ID + 正しいギルドで許可されること", () => {
+    assertEquals(
+      isAuthorizedSelfMessage("guild-1", "bot-1", "bot-1", baseConfig),
+      true,
+    );
+  });
 
-  await t.step("異なるギルドは拒否されること", () => {
+  test("異なるギルドは拒否されること", () => {
     assertEquals(
       isAuthorizedSelfMessage("guild-other", "bot-1", "bot-1", baseConfig),
       false,
     );
   });
 
-  await t.step("guildId が null (DM) の場合は拒否されること", () => {
+  test("guildId が null (DM) の場合は拒否されること", () => {
     assertEquals(
       isAuthorizedSelfMessage(null, "bot-1", "bot-1", baseConfig),
       false,
     );
   });
 
-  await t.step(
-    "authorId が botUserId と異なる (他 bot) 場合は拒否されること",
-    () => {
-      assertEquals(
-        isAuthorizedSelfMessage("guild-1", "other-bot", "bot-1", baseConfig),
-        false,
-      );
-    },
-  );
+  test("authorId が botUserId と異なる (他 bot) 場合は拒否されること", () => {
+    assertEquals(
+      isAuthorizedSelfMessage("guild-1", "other-bot", "bot-1", baseConfig),
+      false,
+    );
+  });
 
-  await t.step("botUserId が null の場合は拒否されること", () => {
+  test("botUserId が null の場合は拒否されること", () => {
     assertEquals(
       isAuthorizedSelfMessage("guild-1", "bot-1", null, baseConfig),
       false,

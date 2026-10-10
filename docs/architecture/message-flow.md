@@ -12,7 +12,7 @@
 sequenceDiagram
     participant D as Discord
     participant B as DiscordBot.onMessage
-    participant S as Store (KV)
+    participant S as Store (SQLite)
     participant Q as ScopeQueue
     participant C as askClaude (Agent SDK)
     participant A as ApprovalManager
@@ -44,7 +44,7 @@ sequenceDiagram
 
 ## `messageCreate` ハンドラ (`DiscordBot.onMessage`)
 
-手順 1〜3 (認可・自己メンション判定 (+ レート枠の事前判定)・スコープ抽出・反応判定) は `resolveIncomingMessage()` (`bot/incoming.ts`) に集約してある。discord.js の `Message`/`Client` には直接触れず、`DiscordBot.onMessage` が取り出した最小の値 (`IncomingMessageInput`) と、KV 読み取り・メンション判定・レート制限といった副作用を持つ処理を関数として注入する (`IncomingMessageDeps`)。内部では既存の `isAuthorized`/`isAuthorizedSelfMessage`/`shouldRespond` (`bot/guard.ts`)/`scopeFromChannel` (`bot/scope.ts`) をそのまま呼ぶ (再実装しない)。戻り値は `{ kind: "ignore"; reason }` (`"unauthorized"`/`"self-not-mentioned"`/`"rate-limited"`/`"not-responding"`) または `{ kind: "handle"; scope; localId; isSelfMessage }` の判別共用体で、`onMessage` はこれを見て早期 return するか後続処理 (ログ出力・キュー投入・Claude 呼び出し) へ進む。
+手順 1〜3 (認可・自己メンション判定 (+ レート枠の事前判定)・スコープ抽出・反応判定) は `resolveIncomingMessage()` (`bot/incoming.ts`) に集約してある。discord.js の `Message`/`Client` には直接触れず、`DiscordBot.onMessage` が取り出した最小の値 (`IncomingMessageInput`) と、ストア読み取り・メンション判定・レート制限といった副作用を持つ処理を関数として注入する (`IncomingMessageDeps`)。内部では既存の `isAuthorized`/`isAuthorizedSelfMessage`/`shouldRespond` (`bot/guard.ts`)/`scopeFromChannel` (`bot/scope.ts`) をそのまま呼ぶ (再実装しない)。戻り値は `{ kind: "ignore"; reason }` (`"unauthorized"`/`"self-not-mentioned"`/`"rate-limited"`/`"not-responding"`) または `{ kind: "handle"; scope; localId; isSelfMessage }` の判別共用体で、`onMessage` はこれを見て早期 return するか後続処理 (ログ出力・キュー投入・Claude 呼び出し) へ進む。
 
 ### 1. 認可
 
@@ -54,7 +54,7 @@ sequenceDiagram
 ### 2. 自己メンション判定 (+ レート枠の事前判定) とスコープ抽出
 
 - `isMentioned = message.mentions.has(client.user, opts)`。自己メッセージのときだけ `opts = { ignoreRepliedUser: true, ignoreEveryone: true, ignoreRoles: true }` を渡し、本文中の明示メンション `<@botId>` のみを数える (bot 投稿への返信ピング・@everyone・role メンションでは true にならない)。人間のメッセージは既定の判定。
-- 自己メッセージでメンションが無ければ `{ kind: "ignore", reason: "self-not-mentioned" }`。bot 自身の全投稿 (応答の分割送信・thinking・進捗・cron 投稿等) がこのハンドラを通るため、KV 読み取りの前に落とす。
+- 自己メッセージでメンションが無ければ `{ kind: "ignore", reason: "self-not-mentioned" }`。bot 自身の全投稿 (応答の分割送信・thinking・進捗・cron 投稿等) がこのハンドラを通るため、ストア読み取りの前に落とす。
 - 自己メッセージでメンションがあれば、`SelfMentionRateLimiter.isExhausted()` (`bot/ratelimit.ts`) を非消費で事前判定する。枠が尽きていれば `{ kind: "ignore", reason: "rate-limited" }` (呼び出し側の `onMessage` が WARN ログを出す)。枠は消費しない (消費は手順 7 の `tryConsume()`)。ここで落とすことで typing・添付ダウンロード等の副作用を起こさない。
 - 自己メッセージがここまで通過すれば (メンションあり・レート枠あり) `scopeFromChannel(message.channel, message.channelId)` (`bot/scope.ts`) で `StoreScope` を組み立て、`{ kind: "handle", scope, localId, isSelfMessage: true }` を返す。`scopeFromChannel` はスレッドなら `{ channelId: parentId ?? message.channelId, threadId: message.channelId }`、それ以外は `{ channelId: message.channelId }` を組み立てる。`bot/commands.ts` の `scopeFromInteraction()` も同じ関数を使う。
 
@@ -94,7 +94,7 @@ bot 側でメッセージをスレッドへ自動分離する機能は実装し�
   - `contentType` が `image/` で始まるものだけ対象。
   - `fetch(att.url, { signal: AbortSignal.timeout(30_000) })` で取得。非 2xx は WARN を出してスキップ。
   - `resizeImageIfNeeded()`: `ffprobe` で幅・高さを取り、長辺が 1568 px を超える場合のみ `ffmpeg` で縮小して JPEG (`-q:v 4`) に再エンコードする。超えなければ元データのまま。
-  - 最初の成功時に `Deno.makeTempDir({ prefix: "loms-claw-img-" })` を作り、`{uuid}{ext}` で保存する (縮小した場合は `.jpg`、それ以外は元の拡張子、無ければ `.bin`)。個別の失敗は WARN を出して次へ進む。
+  - 最初の成功時に `mkdtemp(join(tmpdir(), "loms-claw-img-"))` を作り、`{uuid}{ext}` で保存する (縮小した場合は `.jpg`、それ以外は元の拡張子、無ければ `.bin`)。個別の失敗は WARN を出して次へ進む。
   - `ffmpeg`/`ffprobe` は実行時依存。Dockerfile で `ffmpeg` を apt install している ([deployment](deployment.md))。
 - 1 件以上ダウンロードできたら `appendImageReferences(prompt || "この画像について説明して", images)` で `@/abs/path` を空行を挟んで末尾に付加する。
 - ここでプロンプトが空なら return (finally の後始末は走る)。

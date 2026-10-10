@@ -5,9 +5,13 @@
  * 画像添付ファイルのダウンロードを提供する。
  */
 
-import type { Attachment, GuildTextBasedChannel } from "discord.js";
+import { Temporal } from "@js-temporal/polyfill";
+import { spawn } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname } from "@std/path/dirname";
 import { join } from "@std/path/join";
+import type { Attachment, GuildTextBasedChannel } from "discord.js";
 import { createLogger } from "../logger.ts";
 
 const log = createLogger("message");
@@ -29,13 +33,44 @@ export interface DownloadedImage {
 }
 
 /**
+ * 外部コマンドを起動し、標準入力へ `input` を流して出力を回収する。
+ */
+function runWithStdin(
+  cmd: string,
+  args: string[],
+  input: Uint8Array,
+): Promise<{ code: number; stdout: Buffer; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, { stdio: ["pipe", "pipe", "pipe"] });
+    const stdoutChunks: Buffer[] = [];
+    const stderrChunks: Buffer[] = [];
+    // 出力の読み取りを先に始めてから stdin へ書く (pipe の詰まりによるデッドロック回避)。
+    child.stdout.on("data", (chunk: Buffer) => stdoutChunks.push(chunk));
+    child.stderr.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
+    // ffprobe が入力を読み切る前に終了すると EPIPE になるため無視する。
+    child.stdin.on("error", () => {});
+    child.on("error", reject);
+    child.on("close", (code) => {
+      resolve({
+        // code が null になるのはシグナルで終了したとき。-1 として返す。
+        code: code ?? -1,
+        stdout: Buffer.concat(stdoutChunks),
+        stderr: Buffer.concat(stderrChunks).toString("utf8"),
+      });
+    });
+    child.stdin.end(input);
+  });
+}
+
+/**
  * ffprobe で画像の幅と高さを取得する。
  */
 async function getImageDimensions(
   buffer: Uint8Array,
 ): Promise<{ width: number; height: number }> {
-  const cmd = new Deno.Command("ffprobe", {
-    args: [
+  const { code, stdout, stderr } = await runWithStdin(
+    "ffprobe",
+    [
       "-v",
       "quiet",
       "-print_format",
@@ -45,22 +80,12 @@ async function getImageDimensions(
       "v:0",
       "pipe:0",
     ],
-    stdin: "piped",
-    stdout: "piped",
-    stderr: "piped",
-  });
-
-  const child = cmd.spawn();
-  const writer = child.stdin.getWriter();
-  await writer.write(buffer);
-  await writer.close();
-
-  const output = await child.output();
-  if (!output.success) {
-    const stderr = new TextDecoder().decode(output.stderr);
+    buffer,
+  );
+  if (code !== 0) {
     throw new Error(`ffprobe failed: ${stderr}`);
   }
-  const json = JSON.parse(new TextDecoder().decode(output.stdout));
+  const json = JSON.parse(stdout.toString("utf8"));
   const stream = json.streams?.[0];
 
   return {
@@ -88,8 +113,13 @@ export async function resizeImageIfNeeded(
     return [buffer, ""];
   }
 
-  const cmd = new Deno.Command("ffmpeg", {
-    args: [
+  const {
+    code,
+    stdout: resizedBuffer,
+    stderr,
+  } = await runWithStdin(
+    "ffmpeg",
+    [
       "-i",
       "pipe:0",
       "-vf",
@@ -101,24 +131,13 @@ export async function resizeImageIfNeeded(
       "4",
       "pipe:1",
     ],
-    stdin: "piped",
-    stdout: "piped",
-    stderr: "piped",
-  });
+    buffer,
+  );
 
-  const child = cmd.spawn();
-  const writer = child.stdin.getWriter();
-  await writer.write(buffer);
-  await writer.close();
-
-  const output = await child.output();
-
-  if (!output.success) {
-    const stderr = new TextDecoder().decode(output.stderr);
+  if (code !== 0) {
     throw new Error(`ffmpeg resize failed: ${stderr}`);
   }
-
-  const resized = new Uint8Array(output.stdout);
+  const resized = new Uint8Array(resizedBuffer);
 
   // scale フィルタの force_original_aspect_ratio=decrease と同じ計算
   const scale = Math.min(maxDimension / width, maxDimension / height);
@@ -171,18 +190,19 @@ export async function downloadImageAttachments(
 
       // 最初の成功時にディレクトリを作成。
       if (!dir) {
-        dir = await Deno.makeTempDir({ prefix: "loms-claw-img-" });
+        dir = await mkdtemp(join(tmpdir(), "loms-claw-img-"));
       }
 
       // リサイズされた場合は .jpg、されなかった場合は元の拡張子を維持。
-      const ext = resizedExt ||
+      const ext =
+        resizedExt ||
         (att.name.lastIndexOf(".") !== -1
           ? att.name.substring(att.name.lastIndexOf("."))
           : ".bin");
       const filename = `${crypto.randomUUID()}${ext}`;
       const filepath = join(dir, filename);
 
-      await Deno.writeFile(filepath, data);
+      await writeFile(filepath, data);
       results.push({ path: filepath, originalName: att.name });
       log.debug(`downloaded image: ${att.name} -> ${filepath}`);
     } catch (e) {
@@ -207,7 +227,7 @@ export async function cleanupImageFiles(
     dirs.add(dirname(img.path));
   }
   for (const dir of dirs) {
-    await Deno.remove(dir, { recursive: true }).catch(() => {});
+    await rm(dir, { recursive: true }).catch(() => {});
   }
 }
 

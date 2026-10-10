@@ -1,7 +1,7 @@
 /**
  * チャンネル / スレッド単位の永続化ストア。
  *
- * Deno KV (SQLite backend) に session_id / model / effort / showThinking を保存する。
+ * SQLite (`node:sqlite`) に session_id / model / effort / showThinking を保存する。
  *
  * スコープは {channelId, threadId?} の組で表す。
  *   - threadId 無し: 通常チャンネル (= スレッドではないテキストチャンネル) または
@@ -14,16 +14,20 @@
  * undefined を返し、呼び出し側で config.json の activeChannelIds による判定へ
  * フォールバックする)。
  *
- * KV キー設計:
- *   ["channel", id, "session" | "model" | "effort" | "showThinking" | "active"] -> string
+ * テーブル設計:
+ *   settings(id, field, value) 主キー (id, field)。
+ *   field は "session" | "model" | "effort" | "showThinking" | "active"、
+ *   value は文字列。
  *   id は Discord Snowflake (channel / thread どちらも) または `cron:{name}`。
  *   thread と channel は同一 Snowflake 名前空間で衝突しないため、id をそのまま
- *   キーに使い分ける。
+ *   行の識別に使い分ける。
  *
  * @module
  */
 
-const NS = "channel";
+import { DatabaseSync, type StatementSync } from "node:sqlite";
+import { isRecord } from "../guards.ts";
+
 const SESSION = "session";
 const MODEL = "model";
 const EFFORT = "effort";
@@ -31,11 +35,11 @@ const SHOW_THINKING = "showThinking";
 const ACTIVE = "active";
 
 /**
- * `resolveScoped()` が読み取り対象にできる KV フィールド。
+ * `resolveScoped()` が読み取り対象にできるストアのフィールド。
  * thread → channel → (defaults) の解決チェーンを持つフィールドに限る
  * (`session` はこのチェーンを持たないため含めない)。
  */
-type KvField =
+type StoreField =
   | typeof MODEL
   | typeof EFFORT
   | typeof SHOW_THINKING
@@ -115,26 +119,155 @@ export interface SettingsPatch {
 }
 
 /**
- * Deno KV ベースのスコープ設定ストア。
+ * ストア用の SQLite DB を開く。
+ *
+ * `timeout` は他プロセス (import-kv.ts 等) がロックを持つ間の待ち時間 (ミリ秒)。
+ * 並行アクセスに備えて WAL モードにする。
+ */
+export function openStoreDatabase(path: string): DatabaseSync {
+  const db = new DatabaseSync(path, { timeout: 5000 });
+  db.exec("PRAGMA journal_mode = WAL");
+  return db;
+}
+
+/**
+ * `sqlite_master` の行から name を取り出す。形が合わなければストアの破損として throw する。
+ */
+function toTableName(row: unknown): string {
+  if (!isRecord(row) || typeof row.name !== "string") {
+    throw new Error("store: unexpected row shape for sqlite_master");
+  }
+  return row.name;
+}
+
+/**
+ * `settings` の value 列を取り出す。Store が書く値は常に string なので、
+ * 形が合わなければストアの破損として throw する。
+ */
+function toValue(row: unknown): string {
+  if (!isRecord(row) || typeof row.value !== "string") {
+    throw new Error("store: unexpected row shape for settings.value");
+  }
+  return row.value;
+}
+
+/**
+ * `settings` の (id, field, value) 行を取り出す。
+ */
+function toSettingRow(row: unknown): {
+  id: string;
+  field: string;
+  value: string;
+} {
+  if (
+    !isRecord(row) ||
+    typeof row.id !== "string" ||
+    typeof row.field !== "string" ||
+    typeof row.value !== "string"
+  ) {
+    throw new Error("store: unexpected row shape for settings");
+  }
+  return { id: row.id, field: row.field, value: row.value };
+}
+
+/**
+ * SQLite (`node:sqlite`) ベースのスコープ設定ストア。
  */
 export class Store {
-  constructor(
-    private readonly kv: Deno.Kv,
-    private readonly defaults: StoreDefaults = {},
-  ) {}
+  private readonly db: DatabaseSync;
+  private readonly defaults: StoreDefaults;
+  private readonly selectValue: StatementSync;
+  private readonly upsertValue: StatementSync;
+  private readonly deleteField: StatementSync;
+  private readonly deleteAll: StatementSync;
+  private readonly selectChannel: StatementSync;
+  private readonly selectChannelAndThread: StatementSync;
+  private readonly countRows: StatementSync;
+
+  /**
+   * @throws 既存の DB ファイルにテーブルがあるのに `settings` が無いとき
+   *   (旧 Deno KV ファイルなど、別形式のファイルを黙って開かないため)。
+   */
+  constructor(db: DatabaseSync, defaults: StoreDefaults = {}) {
+    this.db = db;
+    this.defaults = defaults;
+    const tables = this.db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+      .all()
+      .map(toTableName);
+    if (tables.length > 0 && !tables.includes("settings")) {
+      throw new Error(
+        "store file is not a loms-claw database (old Deno KV file?)",
+      );
+    }
+    this.db.exec(
+      `CREATE TABLE IF NOT EXISTS settings (
+        id TEXT NOT NULL,
+        field TEXT NOT NULL,
+        value TEXT NOT NULL,
+        PRIMARY KEY (id, field)
+      )`,
+    );
+    this.selectValue = this.db.prepare(
+      "SELECT value FROM settings WHERE id = $id AND field = $field",
+    );
+    this.upsertValue = this.db.prepare(
+      `INSERT INTO settings (id, field, value) VALUES ($id, $field, $value)
+       ON CONFLICT(id, field) DO UPDATE SET value = excluded.value`,
+    );
+    this.deleteField = this.db.prepare(
+      "DELETE FROM settings WHERE id = $id AND field = $field",
+    );
+    this.deleteAll = this.db.prepare("DELETE FROM settings WHERE id = $id");
+    this.selectChannel = this.db.prepare(
+      "SELECT id, field, value FROM settings WHERE id = $channelId",
+    );
+    this.selectChannelAndThread = this.db.prepare(
+      "SELECT id, field, value FROM settings WHERE id IN ($channelId, $threadId)",
+    );
+    this.countRows = this.db.prepare("SELECT COUNT(*) AS n FROM settings");
+  }
+
+  /**
+   * 設定が 1 件も保存されていないかを返す。起動時に旧 Deno KV ファイルの
+   * 取り込み忘れを検知するために使う。
+   */
+  isEmpty(): boolean {
+    const row = this.countRows.get();
+    if (!isRecord(row) || typeof row.n !== "number") {
+      throw new Error("store: unexpected row shape for settings count");
+    }
+    return row.n === 0;
+  }
+
+  private readValue(id: string, field: string): string | null {
+    const row = this.selectValue.get({ id, field });
+    return row === undefined ? null : toValue(row);
+  }
+
+  private writeValue(id: string, field: string, value: string): void {
+    this.upsertValue.run({ id, field, value });
+  }
+
+  private deleteValue(id: string, field: string): void {
+    this.deleteField.run({ id, field });
+  }
+
+  private deleteScope(id: string): void {
+    this.deleteAll.run({ id });
+  }
 
   // ── session ─────────────────────────────────────────────
   // session は thread と channel で独立。フォールバックしない。
 
   async getSession(scope: StoreScope): Promise<string | undefined> {
     const id = scope.threadId ?? scope.channelId;
-    const entry = await this.kv.get<string>([NS, id, SESSION]);
-    return entry.value ?? undefined;
+    return this.readValue(id, SESSION) ?? undefined;
   }
 
   async setSession(scope: StoreScope, sessionId: string): Promise<void> {
     const id = scope.threadId ?? scope.channelId;
-    await this.kv.set([NS, id, SESSION], sessionId);
+    this.writeValue(id, SESSION, sessionId);
   }
 
   // ── thread → channel → (defaults) の共通解決ヘルパ ─────────
@@ -145,27 +278,19 @@ export class Store {
 
   private async resolveScoped<T>(
     scope: StoreScope,
-    field: KvField,
+    field: StoreField,
     parse: (raw: string) => T,
     fallback: T | undefined,
   ): Promise<T | undefined> {
     if (scope.threadId !== undefined) {
-      const threadEntry = await this.kv.get<string>([
-        NS,
-        scope.threadId,
-        field,
-      ]);
-      if (threadEntry.value !== null) {
-        return parse(threadEntry.value);
+      const threadValue = this.readValue(scope.threadId, field);
+      if (threadValue !== null) {
+        return parse(threadValue);
       }
     }
-    const channelEntry = await this.kv.get<string>([
-      NS,
-      scope.channelId,
-      field,
-    ]);
-    if (channelEntry.value !== null) {
-      return parse(channelEntry.value);
+    const channelValue = this.readValue(scope.channelId, field);
+    if (channelValue !== null) {
+      return parse(channelValue);
     }
     return fallback;
   }
@@ -194,8 +319,8 @@ export class Store {
   }
 
   // ── showThinking ────────────────────────────────────────
-  // thread → channel → defaults の順で解決。boolean は KV に "true" / "false"
-  // の文字列で格納する (KV 値を文字列で統一するため)。未設定なら false。
+  // thread → channel → defaults の順で解決。boolean は ストアに "true" / "false"
+  // の文字列で格納する (値を文字列で統一するため)。未設定なら false。
 
   async getShowThinking(scope: StoreScope): Promise<boolean> {
     const value = await this.resolveScoped(
@@ -229,17 +354,11 @@ export class Store {
    * threadId 指定時は thread の設定のみ消し、親チャンネルの設定は残す。
    * threadId 未指定時はチャンネルの設定のみ消す (配下のスレッド設定は残る)。
    *
-   * delete を atomic で 1 コミットにまとめる。`kv.list` 自体は atomic では
-   * ないが、取得済みキーの削除を 1 トランザクションに集約することで「複数
-   * キーが中途半端に残る」状態を防ぐ。
+   * `DELETE ... WHERE id` 1 文で消すため、複数の行が中途半端に残る状態にならない。
    */
   async clearScope(scope: StoreScope): Promise<void> {
     const id = scope.threadId ?? scope.channelId;
-    const atomic = this.kv.atomic();
-    for await (const entry of this.kv.list({ prefix: [NS, id] })) {
-      atomic.delete(entry.key);
-    }
-    await atomic.commit();
+    this.deleteScope(id);
   }
 
   /**
@@ -247,8 +366,8 @@ export class Store {
    *
    * 書き込み先の id は setSession() と同じく `scope.threadId ?? scope.channelId`。
    * patch のキーのうち値が undefined でないものだけを処理し、null なら削除、
-   * それ以外なら設定する。複数キーの更新は kv.atomic() で 1 コミットにまとめ、
-   * 中途半端に一部だけ適用された状態を防ぐ (clearScope() と同じ方針)。
+   * それ以外なら設定する。複数キーの更新は 1 トランザクションにまとめ、
+   * 中途半端に一部だけ適用された状態を防ぐ。
    *
    * 返す解決結果は渡された scope に基づく。threadId を含まない scope を渡せば
    * thread のフォールバックは効かない (getScopeSettings() と同じ)。
@@ -258,42 +377,41 @@ export class Store {
     patch: SettingsPatch,
   ): Promise<ScopeSettings> {
     const id = scope.threadId ?? scope.channelId;
-    const atomic = this.kv.atomic();
 
-    if (patch.model !== undefined) {
-      if (patch.model === null) {
-        atomic.delete([NS, id, MODEL]);
-      } else {
-        atomic.set([NS, id, MODEL], patch.model);
+    const writes: [string, string | boolean | null | undefined][] = [
+      [MODEL, patch.model],
+      [EFFORT, patch.effort],
+      [SHOW_THINKING, patch.showThinking],
+      [ACTIVE, patch.active],
+    ];
+    // session は null (削除) のみ許可される (SettingsPatch 型で保証)。
+    const deleteSession = patch.session !== undefined;
+
+    if (writes.some(([, value]) => value !== undefined) || deleteSession) {
+      this.db.exec("BEGIN");
+      try {
+        for (const [field, value] of writes) {
+          if (value === undefined) {
+            continue;
+          }
+          if (value === null) {
+            this.deleteValue(id, field);
+          } else {
+            this.writeValue(id, field, String(value));
+          }
+        }
+        if (deleteSession) {
+          this.deleteValue(id, SESSION);
+        }
+        this.db.exec("COMMIT");
+      } catch (e) {
+        if (this.db.isTransaction) {
+          this.db.exec("ROLLBACK");
+        }
+        throw e;
       }
-    }
-    if (patch.effort !== undefined) {
-      if (patch.effort === null) {
-        atomic.delete([NS, id, EFFORT]);
-      } else {
-        atomic.set([NS, id, EFFORT], patch.effort);
-      }
-    }
-    if (patch.showThinking !== undefined) {
-      if (patch.showThinking === null) {
-        atomic.delete([NS, id, SHOW_THINKING]);
-      } else {
-        atomic.set([NS, id, SHOW_THINKING], String(patch.showThinking));
-      }
-    }
-    if (patch.active !== undefined) {
-      if (patch.active === null) {
-        atomic.delete([NS, id, ACTIVE]);
-      } else {
-        atomic.set([NS, id, ACTIVE], String(patch.active));
-      }
-    }
-    if (patch.session !== undefined) {
-      // session は null (削除) のみ許可される (SettingsPatch 型で保証)。
-      atomic.delete([NS, id, SESSION]);
     }
 
-    await atomic.commit();
     return await this.getScopeSettings(scope);
   }
 
@@ -301,8 +419,8 @@ export class Store {
    * 表示用に現在の設定を一括取得する。
    *
    * model / effort の source:
-   *   - thread:  スレッド固有値が KV にある
-   *   - channel: 親チャンネル値が KV にある (thread には無い)
+   *   - thread:  スレッド固有値がストアにある
+   *   - channel: 親チャンネル値がストアにある (thread には無い)
    *   - default: defaults にある (thread / channel どちらも無い)
    *   - undefined: defaults にも無い
    *
@@ -310,98 +428,69 @@ export class Store {
    * 未指定時は channel の値を返す。
    */
   async getScopeSettings(scope: StoreScope): Promise<ScopeSettings> {
-    const channelKeys = [
-      [NS, scope.channelId, SESSION],
-      [NS, scope.channelId, MODEL],
-      [NS, scope.channelId, EFFORT],
-      [NS, scope.channelId, SHOW_THINKING],
-      [NS, scope.channelId, ACTIVE],
-    ] as const;
+    const channelId = scope.channelId;
+    const threadId = scope.threadId;
 
-    if (scope.threadId === undefined) {
-      const [
-        sessionEntry,
-        modelEntry,
-        effortEntry,
-        showThinkingEntry,
-        activeEntry,
-      ] = await this.kv.getMany<
-        [string, string, string, string, string]
-      >([...channelKeys]);
+    // thread / channel の行を 1 回の SELECT でまとめて読む。
+    const rows = new Map<string, Map<string, string>>();
+    const found =
+      threadId === undefined
+        ? this.selectChannel.all({ channelId })
+        : this.selectChannelAndThread.all({ channelId, threadId });
+    for (const raw of found) {
+      const row = toSettingRow(raw);
+      let fields = rows.get(row.id);
+      if (fields === undefined) {
+        fields = new Map();
+        rows.set(row.id, fields);
+      }
+      fields.set(row.field, row.value);
+    }
+    const read = (id: string, field: string): string | null =>
+      rows.get(id)?.get(field) ?? null;
+
+    if (threadId === undefined) {
       return {
-        session: sessionEntry.value ?? undefined,
+        session: read(channelId, SESSION) ?? undefined,
         model: resolveSetting(
           null,
-          modelEntry.value,
+          read(channelId, MODEL),
           this.defaults.model,
         ),
         effort: resolveSetting(
           null,
-          effortEntry.value,
+          read(channelId, EFFORT),
           this.defaults.effort,
         ),
         showThinking: resolveBoolSetting(
           null,
-          showThinkingEntry.value,
+          read(channelId, SHOW_THINKING),
           this.defaults.showThinking,
         ),
-        active: resolveOptionalBoolSetting(null, activeEntry.value),
+        active: resolveOptionalBoolSetting(null, read(channelId, ACTIVE)),
       };
     }
 
-    const threadKeys = [
-      [NS, scope.threadId, SESSION],
-      [NS, scope.threadId, MODEL],
-      [NS, scope.threadId, EFFORT],
-      [NS, scope.threadId, SHOW_THINKING],
-      [NS, scope.threadId, ACTIVE],
-    ] as const;
-    const [
-      threadSession,
-      threadModel,
-      threadEffort,
-      threadShowThinking,
-      threadActive,
-      _channelSession,
-      channelModel,
-      channelEffort,
-      channelShowThinking,
-      channelActive,
-    ] = await this.kv.getMany<
-      [
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-      ]
-    >([...threadKeys, ...channelKeys]);
-
     return {
       // session は thread のみ参照、channel にはフォールバックしない
-      session: threadSession.value ?? undefined,
+      session: read(threadId, SESSION) ?? undefined,
       model: resolveSetting(
-        threadModel.value,
-        channelModel.value,
+        read(threadId, MODEL),
+        read(channelId, MODEL),
         this.defaults.model,
       ),
       effort: resolveSetting(
-        threadEffort.value,
-        channelEffort.value,
+        read(threadId, EFFORT),
+        read(channelId, EFFORT),
         this.defaults.effort,
       ),
       active: resolveOptionalBoolSetting(
-        threadActive.value,
-        channelActive.value,
+        read(threadId, ACTIVE),
+        read(channelId, ACTIVE),
       ),
       showThinking: resolveBoolSetting(
-        threadShowThinking.value,
-        channelShowThinking.value,
+        read(threadId, SHOW_THINKING),
+        read(channelId, SHOW_THINKING),
         this.defaults.showThinking,
       ),
     };
@@ -416,10 +505,10 @@ export class Store {
   }
 
   /**
-   * Deno KV をクローズする。プロセス終了前に呼ぶ。
+   * DB をクローズする。プロセス終了前に呼ぶ。
    */
   close(): void {
-    this.kv.close();
+    this.db.close();
   }
 }
 
@@ -443,7 +532,7 @@ function resolveSetting(
 /**
  * boolean 設定値を thread → channel → default の順で解決する。
  *
- * KV には "true" / "false" の文字列で格納されている。model / effort と違い、
+ * ストアには "true" / "false" の文字列で格納されている。model / effort と違い、
  * boolean は「未設定 = false」という確定した既定値があるため、どこにも値が
  * 無いときも `{ value: false, source: "default" }` を返す (undefined にしない)。
  */

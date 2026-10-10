@@ -1,3 +1,4 @@
+import { describe, test } from "node:test";
 import { assertEquals } from "@std/assert";
 import {
   formatAnswer,
@@ -27,8 +28,8 @@ function validInput(): Record<string, unknown> {
   };
 }
 
-Deno.test("parseQuestions", async (t) => {
-  await t.step("正しい入力から質問一覧を取り出せること", () => {
+describe("parseQuestions", () => {
+  test("正しい入力から質問一覧を取り出せること", () => {
     const questions = parseQuestions(validInput());
 
     assertEquals(questions?.length, 1);
@@ -42,7 +43,7 @@ Deno.test("parseQuestions", async (t) => {
     assertEquals(questions?.[0].multiSelect, false);
   });
 
-  await t.step("multiSelect 欠落は false 扱いになること", () => {
+  test("multiSelect 欠落は false 扱いになること", () => {
     const input = validInput();
     const q = (input.questions as Record<string, unknown>[])[0];
     delete q.multiSelect;
@@ -50,7 +51,7 @@ Deno.test("parseQuestions", async (t) => {
     assertEquals(parseQuestions(input)?.[0].multiSelect, false);
   });
 
-  await t.step("description 欠落は空文字になること", () => {
+  test("description 欠落は空文字になること", () => {
     const input = validInput();
     const q = (input.questions as Record<string, unknown>[])[0];
     q.options = [{ label: "a" }, { label: "b" }];
@@ -58,34 +59,31 @@ Deno.test("parseQuestions", async (t) => {
     assertEquals(parseQuestions(input)?.[0].options[0].description, "");
   });
 
-  await t.step("questions が配列でなければ undefined を返すこと", () => {
+  test("questions が配列でなければ undefined を返すこと", () => {
     assertEquals(parseQuestions({}), undefined);
     assertEquals(parseQuestions({ questions: "invalid" }), undefined);
   });
 
-  await t.step("質問が 0 件なら undefined を返すこと", () => {
+  test("質問が 0 件なら undefined を返すこと", () => {
     assertEquals(parseQuestions({ questions: [] }), undefined);
   });
 
-  await t.step("質問が 5 件以上なら undefined を返すこと", () => {
+  test("質問が 5 件以上なら undefined を返すこと", () => {
     const q = (validInput().questions as unknown[])[0];
     assertEquals(parseQuestions({ questions: [q, q, q, q, q] }), undefined);
   });
 
-  await t.step(
-    "question / header / options 欠落は undefined を返すこと",
-    () => {
-      const base = (validInput().questions as Record<string, unknown>[])[0];
+  test("question / header / options 欠落は undefined を返すこと", () => {
+    const base = (validInput().questions as Record<string, unknown>[])[0];
 
-      for (const key of ["question", "header", "options"]) {
-        const broken = { ...base };
-        delete broken[key];
-        assertEquals(parseQuestions({ questions: [broken] }), undefined);
-      }
-    },
-  );
+    for (const key of ["question", "header", "options"]) {
+      const broken = { ...base };
+      delete broken[key];
+      assertEquals(parseQuestions({ questions: [broken] }), undefined);
+    }
+  });
 
-  await t.step("選択肢が空配列なら undefined を返すこと", () => {
+  test("選択肢が空配列なら undefined を返すこと", () => {
     const base = (validInput().questions as Record<string, unknown>[])[0];
     assertEquals(
       parseQuestions({ questions: [{ ...base, options: [] }] }),
@@ -93,7 +91,7 @@ Deno.test("parseQuestions", async (t) => {
     );
   });
 
-  await t.step("選択肢の label 欠落は undefined を返すこと", () => {
+  test("選択肢の label 欠落は undefined を返すこと", () => {
     const base = (validInput().questions as Record<string, unknown>[])[0];
     assertEquals(
       parseQuestions({
@@ -104,7 +102,7 @@ Deno.test("parseQuestions", async (t) => {
   });
 });
 
-Deno.test("resolveSelectedLabels", async (t) => {
+describe("resolveSelectedLabels", () => {
   const question: Question = {
     question: "q",
     header: "h",
@@ -116,21 +114,21 @@ Deno.test("resolveSelectedLabels", async (t) => {
     multiSelect: true,
   };
 
-  await t.step("value (index 文字列) をラベルに解決すること", () => {
+  test("value (index 文字列) をラベルに解決すること", () => {
     assertEquals(resolveSelectedLabels(question, ["0", "2"]), {
       labels: ["Alpha", "Gamma"],
       hasOther: false,
     });
   });
 
-  await t.step("Other の value を hasOther として検出すること", () => {
+  test("Other の value を hasOther として検出すること", () => {
     assertEquals(resolveSelectedLabels(question, ["1", OTHER_VALUE]), {
       labels: ["Beta"],
       hasOther: true,
     });
   });
 
-  await t.step("不明な value は無視すること", () => {
+  test("不明な value は無視すること", () => {
     assertEquals(resolveSelectedLabels(question, ["99", "abc"]), {
       labels: [],
       hasOther: false,
@@ -138,22 +136,22 @@ Deno.test("resolveSelectedLabels", async (t) => {
   });
 });
 
-Deno.test("formatAnswer", async (t) => {
-  await t.step("単一選択はラベルそのままであること", () => {
+describe("formatAnswer", () => {
+  test("単一選択はラベルそのままであること", () => {
     assertEquals(formatAnswer(["Alpha"]), "Alpha");
   });
 
-  await t.step("複数選択は ', ' 連結であること", () => {
+  test("複数選択は ', ' 連結であること", () => {
     assertEquals(formatAnswer(["Alpha", "Beta"]), "Alpha, Beta");
   });
 });
 
-Deno.test("truncate", async (t) => {
-  await t.step("上限以下はそのまま返すこと", () => {
+describe("truncate", () => {
+  test("上限以下はそのまま返すこと", () => {
     assertEquals(truncate("abc", 3), "abc");
   });
 
-  await t.step("上限超過は省略記号付きで切り詰めること", () => {
+  test("上限超過は省略記号付きで切り詰めること", () => {
     assertEquals(truncate("abcdef", 4), "abc…");
     assertEquals(truncate("abcdef", 4).length, 4);
   });

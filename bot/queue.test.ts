@@ -1,3 +1,4 @@
+import { describe, test } from "node:test";
 import { assertEquals, assertRejects } from "@std/assert";
 import { ScopeQueue } from "./queue.ts";
 
@@ -12,8 +13,8 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
   return { promise, resolve };
 }
 
-Deno.test("ScopeQueue", async (t) => {
-  await t.step("同一 key では投入順に直列実行されること", async () => {
+describe("ScopeQueue", () => {
+  test("同一 key では投入順に直列実行されること", async () => {
     const queue = new ScopeQueue();
     const order: number[] = [];
     const gate1 = deferred();
@@ -38,7 +39,7 @@ Deno.test("ScopeQueue", async (t) => {
     assertEquals(order, [1, 2]);
   });
 
-  await t.step("別 key のタスクは並行に走れること", async () => {
+  test("別 key のタスクは並行に走れること", async () => {
     const queue = new ScopeQueue();
     const gateA = deferred();
     const order: string[] = [];
@@ -63,7 +64,7 @@ Deno.test("ScopeQueue", async (t) => {
     assertEquals(order, ["B", "A"]);
   });
 
-  await t.step("前段がスローしても後続タスクが実行されること", async () => {
+  test("前段がスローしても後続タスクが実行されること", async () => {
     const queue = new ScopeQueue();
     const order: number[] = [];
 
@@ -84,7 +85,7 @@ Deno.test("ScopeQueue", async (t) => {
     assertEquals(order, [1, 2]);
   });
 
-  await t.step("チェーン完了後に key が削除されること", async () => {
+  test("チェーン完了後に key が削除されること", async () => {
     const queue = new ScopeQueue();
 
     const p = queue.enqueue("ch", () => Promise.resolve());
@@ -98,7 +99,7 @@ Deno.test("ScopeQueue", async (t) => {
     assertEquals(queue.isBusy("ch"), false);
   });
 
-  await t.step("未投入の key は busy でないこと", () => {
+  test("未投入の key は busy でないこと", () => {
     const queue = new ScopeQueue();
     assertEquals(queue.isBusy("nope"), false);
   });

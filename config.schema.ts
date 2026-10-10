@@ -12,7 +12,7 @@
  * `additionalProperties: false` で未知キーを拒否する（typo の早期検出）。
  *
  * `claude.cwd` はプロセス由来のため schema には含めず、
- * {@link loadConfig} が検証後に `Deno.cwd()` を注入する。
+ * {@link loadConfig} が検証後に `process.cwd()` を注入する。
  *
  * `config.json` 側で `"$schema": "./config.schema.json"` を書けば
  * IDE が schema に基づいた補完・検証を行う。
@@ -45,7 +45,9 @@ const validator = new Validator(schema as unknown as Schema, "7", false);
 function applyDefaults(node: SchemaNode, value: unknown): void {
   const props = node.properties;
   if (
-    props === undefined || typeof value !== "object" || value === null ||
+    props === undefined ||
+    typeof value !== "object" ||
+    value === null ||
     Array.isArray(value)
   ) {
     return;
@@ -72,9 +74,10 @@ export function applyConfigDefaults(value: unknown): void {
 /**
  * `config.json` 由来の値を schema で構造検証する。
  */
-export function validateConfigFile(
-  value: unknown,
-): { valid: boolean; errors: OutputUnit[] } {
+export function validateConfigFile(value: unknown): {
+  valid: boolean;
+  errors: OutputUnit[];
+} {
   return validator.validate(value);
 }
 
@@ -91,9 +94,10 @@ export function formatConfigErrors(
 
   return errors
     .map((err) => {
-      const path = err.instanceLocation && err.instanceLocation !== "#"
-        ? err.instanceLocation
-        : "(root)";
+      const path =
+        err.instanceLocation && err.instanceLocation !== "#"
+          ? err.instanceLocation
+          : "(root)";
       return `  - ${path}: ${err.error}`;
     })
     .join("\n");

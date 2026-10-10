@@ -13,11 +13,11 @@ Discord + Claude Agent SDK のパーソナル AI エージェント。単一ギ�
 
 ## 技術スタック
 
-- Deno（`unstable: ["temporal", "kv"]`）
+- Node.js 24（TypeScript は型除去で直接実行。`Temporal` は `@js-temporal/polyfill` を各ファイルで import する。Node が組み込みで提供したら外す）
 - discord.js v14
 - Claude Agent SDK (`@anthropic-ai/claude-agent-sdk` の `query()`)
-- Hono（内部 HTTP API）
-- Deno KV（スコープ設定の永続化）
+- Hono + `@hono/node-server`（内部 HTTP API）
+- SQLite（`node:sqlite`。スコープ設定の永続化）
 - `@cfworker/json-schema`（設定・API・cron frontmatter の検証）
 
 ## ドキュメント索引
@@ -28,7 +28,7 @@ Discord + Claude Agent SDK のパーソナル AI エージェント。単一ギ�
 | [docs/architecture/lifecycle.md](docs/architecture/lifecycle.md)                   | 起動 / 終了シーケンス、`config.json` の読み込みと全フィールド、ロガー                            |
 | [docs/architecture/message-flow.md](docs/architecture/message-flow.md)             | Discord メッセージ処理の全ステップ、AI to AI 自己メンション、インタラクションの振り分け          |
 | [docs/architecture/claude-integration.md](docs/architecture/claude-integration.md) | `askClaude()` と `query()` に渡すオプション、システムプロンプトの結合規則、テンプレート変数      |
-| [docs/architecture/store-and-settings.md](docs/architecture/store-and-settings.md) | `Store`（Deno KV）のキー配置とフォールバック、`/claw settings`、`/settings` API                  |
+| [docs/architecture/store-and-settings.md](docs/architecture/store-and-settings.md) | `Store`（SQLite）のテーブル配置とフォールバック、`/claw settings`、`/settings` API               |
 | [docs/architecture/approval.md](docs/architecture/approval.md)                     | ツール承認（`canUseTool`）、`AskUserQuestion`、`permissions.allow`                               |
 | [docs/architecture/cron.md](docs/architecture/cron.md)                             | cron ジョブファイルの形式、ローダ / スケジューラ / 実行器、once、reload                          |
 | [docs/architecture/internal-api.md](docs/architecture/internal-api.md)             | 内部 HTTP API のルート、`docs/api`（OpenAPI）から `api/internal-schemas.ts` への検証パイプライン |
@@ -45,27 +45,27 @@ Discord + Claude Agent SDK のパーソナル AI エージェント。単一ギ�
 | `main.ts`, `config.ts`, `config.schema.*`, `logger.ts`, `errors.ts` | エントリポイント、設定、ロガー、エラー整形                                                       |
 | `bot/`                                                              | Discord 入出力（`DiscordBot`、認可、キュー、レートリミット、メッセージ整形、スラッシュコマンド） |
 | `claude/`                                                           | Agent SDK 連携（`askClaude()`、システムプロンプト、テンプレート変数）                            |
-| `store/`                                                            | Deno KV によるスコープ設定の永続化                                                               |
+| `store/`                                                            | SQLite（`node:sqlite`）によるスコープ設定の永続化                                                |
 | `approval/`                                                         | ツール承認・`AskUserQuestion`・allowlist                                                         |
 | `api/`                                                              | 内部 HTTP API（cron / logs / settings）と生成物 `internal-schemas.ts`                            |
 | `cron/`                                                             | 定期実行（ローダ・スケジューラ・実行器）                                                         |
-| `docs/api/`                                                         | 内部 HTTP API の OpenAPI（独自の `deno.json` を持つ）                                            |
+| `docs/api/`                                                         | 内部 HTTP API の OpenAPI（独自の `deno.json` を持つ Deno プロジェクト）                          |
 | `data/`                                                             | 実行時データ（`config.json` / `home/` / `workspace/`）。追跡対象は一部のみ                       |
 
 ## 開発コマンド
 
 ```bash
-deno task start      # 起動
-deno task dev        # ウォッチモードで起動
-deno task test       # テスト + カバレッジ
-deno task check      # 型チェック
-deno task lint       # lint + format チェック
-deno task fix        # lint 自動修正 + format
-deno task generate   # docs/api の OpenAPI から api/internal-schemas.ts を再生成
+npm run start      # 起動
+npm run dev        # ウォッチモードで起動
+npm test           # テスト + カバレッジ
+npm run check      # 型チェック（tsc --noEmit）
+npm run lint       # lint + format チェック（oxlint + oxfmt --check）
+npm run fix        # lint 自動修正 + format（oxlint --fix + oxfmt）
+npm run generate   # docs/api の OpenAPI から api/internal-schemas.ts を再生成（docs/api は Deno のため Deno が必要）
 ```
 
 - 設定は `data/config.json`（`data/config.json.example` をコピーして必須項目を埋める）。別パスは環境変数 `LOMS_CLAW_CONFIG` で指定する。フィールド一覧は [docs/architecture/lifecycle.md](docs/architecture/lifecycle.md)。
-- `api/internal-schemas.ts` は生成物。内部 API のリクエスト/レスポンス形を変えるときは `docs/api/` の YAML を編集して `deno task generate` で再生成し、生成物もコミットする（[docs/architecture/internal-api.md](docs/architecture/internal-api.md)）。
+- `api/internal-schemas.ts` は生成物。内部 API のリクエスト/レスポンス形を変えるときは `docs/api/` の YAML を編集して `npm run generate` で再生成し、生成物もコミットする（[docs/architecture/internal-api.md](docs/architecture/internal-api.md)）。
 - PR 作成前・push 前の検証チェーンは [.claude/rules/pr.md](.claude/rules/pr.md) に従う。
 
 ## Docker
@@ -80,7 +80,7 @@ docker compose down                  # 本番停止
 docker compose logs -f               # ログ確認
 ```
 
-コンテナ内の `claude` コマンドは Agent SDK が同梱する Claude Code バイナリへの symlink で、Claude Code CLI を別途インストールはしない。開発は `.devcontainer/` で行う（本番と同じ compose プロジェクトを使うため、devcontainer 起動中は本番 bot が置き換わる）。Dockerfile の各段、環境変数（`CLAUDE_CONFIG_DIR`/`LOMS_CLAW_CONFIG`/`TZ`/`DISCORD_BOT_TOKEN`）、`data/` のレイアウトは [docs/architecture/deployment.md](docs/architecture/deployment.md)。
+コンテナ内の `claude` コマンドは Agent SDK が同梱する Claude Code バイナリ（`/app/node_modules/@anthropic-ai/claude-agent-sdk-linux-*/claude`）への symlink で、Claude Code CLI を別途インストールはしない。開発は `.devcontainer/` で行う（本番と同じ compose プロジェクトを使うため、devcontainer 起動中は本番 bot が置き換わる）。Dockerfile の各段、環境変数（`CLAUDE_CONFIG_DIR`/`LOMS_CLAW_CONFIG`/`TZ`/`DISCORD_BOT_TOKEN`）、`data/` のレイアウトは [docs/architecture/deployment.md](docs/architecture/deployment.md)。
 
 ## コミット規約
 
@@ -92,8 +92,10 @@ docker compose logs -f               # ログ確認
 
 - ワークスペースの `.claude/settings.json` の `permissions.allow` に `AskUserQuestion` を入れない。理由: SDK が `canUseTool` を呼ばず素通しし、回答が空のまま解決される（[docs/architecture/approval.md](docs/architecture/approval.md)）。
 - cron 用システムプロンプト（`CRON.md`）ではチャンネル/ユーザー固有のテンプレート変数を使わない。理由: cron ではギルド変数しか渡されず、プレースホルダーのまま残る（[docs/architecture/claude-integration.md](docs/architecture/claude-integration.md)）。
-- 日時は `Date` ではなく Temporal を使う（`cron/match.ts`、`bot/ratelimit.ts`、`logger.ts` と同じ流儀）。
-- テストコード以外で `deno-lint-ignore` や `any` を使わない。型の絞り込みは type guard で行う。
+- 日時は `Date` ではなく Temporal を使う（`cron/match.ts`、`bot/ratelimit.ts`、`logger.ts` と同じ流儀）。Node にはグローバルの `Temporal` が無いため、`import { Temporal } from "@js-temporal/polyfill"` を各ファイルで書く。
+- テストコード以外で `oxlint-disable-next-line` や `any` を使わない。型の絞り込みは type guard で行う。
+- Node の型除去で落ちる構文（parameter property、`enum`、`namespace`、角括弧アサーション `<T>expr`）を使わない。`tsc` の `erasableSyntaxOnly` が検出する。
+- 相対 import には `.ts` 拡張子を付ける（Node は拡張子無しの相対 import を解決しない）。
 - 定期実行は本リポジトリ独自の cron 機能（`cron/`）であり、Claude Code 組み込みの `CronCreate` 等とは無関係。
 
 ## テスト方針
@@ -103,18 +105,21 @@ docker compose logs -f               # ログ確認
 - discord.js 依存コード（`bot/mod.ts`, `approval/manager.ts`）はモック化コストが高いため、ロジックを外部関数に抽出してテストする方針
 - 実際の `query()` 実行（SDK 同梱 CLI の spawn）はインテグレーションテスト領域
 - `bot/message.ts` の `downloadImageAttachments`/`resizeImageIfNeeded`（ffprobe/ffmpeg の spawn を伴う）もインテグレーションテスト領域とし、単体テストの対象外とする
-- テスト実行: `deno task test`（カバレッジレポート付き）
+- テスト実行: `npm test`（カバレッジレポート付き）
 
 ### テスト命名規約
 
 - テスト名は日本語で記述する
-- `Deno.test` の名前はモジュール名/関数名/クラス名（英語のまま）とし、`X - Y` のような接尾辞は付けない。複数の関数・メソッドを 1 つの `Deno.test` にまとめる場合は、step 名に `method: …こと` のプレフィックスを付けて区分する
-- `t.step` の名前は「…こと」「…であること」の形式で記述する
+- `describe` の名前はモジュール名/関数名/クラス名（英語のまま）とし、`X - Y` のような接尾辞は付けない。複数の関数・メソッドを 1 つの `describe` にまとめる場合は、`test` 名に `method: …こと` のプレフィックスを付けて区分する
+- `test` の名前は「…こと」「…であること」の形式で記述する
+- assertion は `@std/assert` を使う（`node:test` の `describe` / `test` と組み合わせる）
 
 ```typescript
-Deno.test("isAuthorized", async (t) => {
-  await t.step("正しいギルド・ユーザーで許可されること", () => { ... });
-  await t.step("bot ユーザーは拒否されること", () => { ... });
+import { describe, test } from "node:test";
+
+describe("isAuthorized", () => {
+  test("正しいギルド・ユーザーで許可されること", () => { ... });
+  test("bot ユーザーは拒否されること", () => { ... });
 });
 ```
 

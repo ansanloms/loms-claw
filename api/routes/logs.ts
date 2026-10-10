@@ -5,6 +5,7 @@
  * Claude (Agent SDK) の Bash ツールから `curl http://127.0.0.1:{port}/logs` で参照可能。
  */
 
+import { Temporal } from "@js-temporal/polyfill";
 import { Hono } from "hono";
 import {
   getLogEntries,
@@ -34,8 +35,7 @@ export function createLogsRoutes() {
       if (!VALID_LEVELS.has(levelParam)) {
         return c.json(
           {
-            error:
-              `invalid level: ${levelParam}. valid: DEBUG, INFO, WARN, ERROR`,
+            error: `invalid level: ${levelParam}. valid: DEBUG, INFO, WARN, ERROR`,
           },
           400,
         );
@@ -62,10 +62,7 @@ export function createLogsRoutes() {
         return c.json({ error: "limit must be a positive integer" }, 400);
       }
       if (n > MAX_LOG_LIMIT) {
-        return c.json(
-          { error: `limit must not exceed ${MAX_LOG_LIMIT}` },
-          400,
-        );
+        return c.json({ error: `limit must not exceed ${MAX_LOG_LIMIT}` }, 400);
       }
       filter.limit = n;
     }

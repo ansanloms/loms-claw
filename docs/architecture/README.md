@@ -15,20 +15,20 @@ Discord の単一ギルド・単一ユーザ専用のパーソナル AI エー�
 
 ## 技術スタック
 
-`deno.json` の `imports` と `unstable` から。
+`package.json` の `dependencies` から。
 
-| 技術                             | 用途                                                                                           |
-| -------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Deno                             | ランタイム。`unstable: ["temporal", "kv"]` を有効化                                            |
-| discord.js v14                   | Discord Gateway への接続、メッセージ受信、ボタン / select menu / Modal、スラッシュコマンド登録 |
-| `@anthropic-ai/claude-agent-sdk` | `query()` による Claude 呼び出し。同梱の Claude Code バイナリを SDK が spawn する              |
-| Hono (`@hono/hono`)              | 内部 HTTP API (`127.0.0.1:{apiPort}`)                                                          |
-| Deno KV                          | スコープ単位の設定・セッション ID の永続化 (`storePath`、SQLite backend)                       |
-| Temporal                         | cron 式のローカルタイム評価 (`cron/match.ts`)、レートリミッタの時刻計算 (`bot/ratelimit.ts`)   |
-| `@cfworker/json-schema`          | `config.json`・内部 API リクエストボディ・cron frontmatter の構造検証                          |
-| `json-schema-to-ts`              | 内部 API の schema から TypeScript 型を導出 (`FromSchema`)                                     |
-| `@std/front-matter`              | cron ジョブファイルの YAML frontmatter 抽出                                                    |
-| `@std/path`, `@std/assert`       | パス操作、テストアサーション                                                                   |
+| 技術                               | 用途                                                                                                                                      |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Node.js 24                         | ランタイム。TypeScript は型除去で直接実行する (`node main.ts`)                                                                            |
+| discord.js v14                     | Discord Gateway への接続、メッセージ受信、ボタン / select menu / Modal、スラッシュコマンド登録                                            |
+| `@anthropic-ai/claude-agent-sdk`   | `query()` による Claude 呼び出し。同梱の Claude Code バイナリを SDK が spawn する                                                         |
+| Hono (`hono`, `@hono/node-server`) | 内部 HTTP API (`127.0.0.1:{apiPort}`)                                                                                                     |
+| SQLite (`node:sqlite`)             | スコープ単位の設定・セッション ID の永続化 (`storePath`、`settings` テーブル)                                                             |
+| `@js-temporal/polyfill`            | `Temporal`。cron 式のローカルタイム評価 (`cron/match.ts`)、レートリミッタの時刻計算 (`bot/ratelimit.ts`)。Node が組み込みで提供したら外す |
+| `@cfworker/json-schema`            | `config.json`・内部 API リクエストボディ・cron frontmatter の構造検証                                                                     |
+| `json-schema-to-ts`                | 内部 API の schema から TypeScript 型を導出 (`FromSchema`)                                                                                |
+| `@std/front-matter`, `@std/yaml`   | cron ジョブファイルの YAML frontmatter 抽出とパース                                                                                       |
+| `@std/path`, `@std/assert`         | パス操作、テストアサーション                                                                                                              |
 
 コンテナイメージ (`Dockerfile`) には `curl`/`jq` (Discord REST を叩く skill 用)、`ffmpeg` (添付画像のリサイズ、`bot/message.ts` の `resizeImageIfNeeded()`)、`git`/`bubblewrap`/`socat` が同梱される。
 
@@ -45,7 +45,7 @@ flowchart LR
     client[discord.js Client<br/>bot/mod.ts]
     cron[CronExecutor / CronScheduler<br/>cron/]
     api[内部 HTTP API<br/>api/server.ts<br/>127.0.0.1:apiPort]
-    kv[(Deno KV<br/>storePath)]
+    kv[(SQLite<br/>storePath)]
     sdk[Agent SDK query]
   end
 
@@ -68,10 +68,10 @@ flowchart LR
 ```
 
 - bot プロセスは discord.js の `Client` で Gateway に接続し、`messageCreate`/`interactionCreate` を受ける (`bot/mod.ts` の `DiscordBot`)。応答・承認ボタン・cron 結果の投稿は同じ Client から送る。
-- Claude 呼び出しは `claude/mod.ts` の `askClaude()` が Agent SDK の `query()` を呼ぶ。`cwd` はプロセス起動時の `Deno.cwd()` (`config.ts` の `loadConfig()` が `claude.cwd` として注入)。本番では `/data/workspace`、devcontainer ではソースリポジトリ自身になる。
+- Claude 呼び出しは `claude/mod.ts` の `askClaude()` が Agent SDK の `query()` を呼ぶ。`cwd` はプロセス起動時の `process.cwd()` (`config.ts` の `loadConfig()` が `claude.cwd` として注入)。本番では `/data/workspace`、devcontainer ではソースリポジトリ自身になる。
 - Claude 側からの Discord 操作は bot プロセスを経由せず、SDK 同梱バイナリが spawn する Bash + curl で Discord REST API を直接叩く。bot トークンは `claude/mod.ts` の `buildQueryOptions()` が `query()` の `env` に `DISCORD_BOT_TOKEN` として注入する。
 - 内部 HTTP API は cron 操作・ログ取得・スコープ設定の操作を `127.0.0.1` に提供し、Claude から curl で呼ばれる。ツール承認は in-process (`canUseTool` コールバック) で、HTTP では扱わない。
-- 永続化は Deno KV 1 ファイル (`config.json` の `storePath`) のみ。`main.ts` が open し、`Store` (`store/mod.ts`) 経由で bot/cron/API が共有する。
+- 永続化は SQLite 1 ファイル (`config.json` の `storePath`) のみ。`main.ts` が open し、`Store` (`store/mod.ts`) 経由で bot/cron/API が共有する。
 
 ## モジュール依存と層構造
 
@@ -181,7 +181,7 @@ graph TD
 
 | 層           | モジュール                                                                      | 役割                                                                                                                               |
 | ------------ | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| エントリ     | `main.ts`                                                                       | 設定読込 → ロガー初期化 → KV open → `DiscordBot` 起動 (リトライ付き)                                                               |
+| エントリ     | `main.ts`                                                                       | 設定読込 → ロガー初期化 → ストア open → `DiscordBot` 起動 (リトライ付き)                                                           |
 | 合成ルート   | `bot/mod.ts`                                                                    | 全サブシステムを生成・接続する唯一の場所                                                                                           |
 | サブシステム | `bot/*` (mod 以外), `claude/*`, `store/mod.ts`, `approval/*`, `api/*`, `cron/*` | 各ディレクトリが 1 つの関心事を担う。ディレクトリをまたぐ参照は次の例外のみ                                                        |
 | 横断基盤     | `config.ts`, `config.schema.ts`, `config.schema.json`, `logger.ts`, `errors.ts` | 設定・ログ・エラー整形。サブシステムに依存しない (内部では `config.ts` → `config.schema.ts` / `errors.ts` / `logger.ts` (型) のみ) |
@@ -201,24 +201,28 @@ graph TD
 
 ### ルート
 
-| パス                  | 役割                                                                                                                                                                                |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `main.ts`             | エントリポイント。`loadConfig()` → `initLogger()` → `Deno.openKv()` → `new DiscordBot().start()`。指数バックオフで最大 5 回リトライ。SIGINT / SIGTERM で `shutdown()`               |
-| `config.ts`           | `config.json` → `Config` 型。`LOMS_CLAW_CONFIG` でパス変更可 (既定 `./data/config.json`)。`claude.cwd` に `Deno.cwd()` を注入                                                       |
-| `config.schema.json`  | 設定の JSON Schema 本体。`config.json` 側で `$schema` として参照すれば IDE 補完が効く                                                                                               |
-| `config.schema.ts`    | `@cfworker/json-schema` の `Validator` で検証。`applyConfigDefaults()` が schema の `default` を補完                                                                                |
-| `logger.ts`           | 名前空間付きロガー。`initLogger()` / `createLogger()` / `getLogEntries()`。リングバッファで直近ログを保持                                                                           |
-| `errors.ts`           | `getErrorMessage()`: unknown なエラー値からメッセージを取り出す                                                                                                                     |
-| `deno.json`           | imports / tasks / fmt / lint 設定。`exclude` に `data/`, `docs/api`, `api/internal-schemas.ts`, `.claude/worktrees/`                                                                |
-| `Dockerfile`          | `denoland/deno` ベース。`CLAUDE_CONFIG_DIR` / `LOMS_CLAW_CONFIG` を `ENV` で宣言。SDK 同梱 Claude Code を `/usr/local/bin/claude` に symlink。`WORKDIR /data/workspace`             |
-| `compose.yaml`        | 本番サービス定義。`./data` を `/data` に bind mount (マウントはこの 1 つ)。`TZ` を `.env` から渡す                                                                                  |
-| `.devcontainer/`      | 開発コンテナ定義。`compose.yaml` にソースの `/app` bind mount を重ねる                                                                                                              |
-| `.github/`            | `dependabot.yml` (deno はルートと `docs/api` の 2 エントリ、加えて docker / github-actions)、`workflows/claude.yml` (issue / PR コメントの `@claude` で起動する Claude Code Action) |
-| `.claude/rules/pr.md` | PR 作成前の検証チェーン (`deno task fix && deno task check && deno task lint && deno task test`)                                                                                    |
-| `.worktreeinclude`    | worktree 作成時にメイン worktree から複製するローカル資産 (`.env`, `data/config.json`, `data/home/`, `data/workspace/`)                                                             |
-| `.env.example`        | docker compose が host 側で読む変数 (`TZ` のみ)                                                                                                                                     |
-| `LICENSE`             | MIT License                                                                                                                                                                         |
-| `CLAUDE.md`           | 開発者・エージェント向けのプロジェクト指示 (不変条件・規約・索引)                                                                                                                   |
+| パス                  | 役割                                                                                                                                                                                                                                                                |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `main.ts`             | エントリポイント。`loadConfig()` → `initLogger()` → `new DatabaseSync()` (`node:sqlite`) → `new DiscordBot().start()`。指数バックオフで最大 5 回リトライ。SIGINT / SIGTERM で `shutdown()`                                                                          |
+| `config.ts`           | `config.json` → `Config` 型。`LOMS_CLAW_CONFIG` でパス変更可 (既定 `./data/config.json`)。`claude.cwd` に `process.cwd()` を注入                                                                                                                                    |
+| `config.schema.json`  | 設定の JSON Schema 本体。`config.json` 側で `$schema` として参照すれば IDE 補完が効く                                                                                                                                                                               |
+| `config.schema.ts`    | `@cfworker/json-schema` の `Validator` で検証。`applyConfigDefaults()` が schema の `default` を補完                                                                                                                                                                |
+| `logger.ts`           | 名前空間付きロガー。`initLogger()` / `createLogger()` / `getLogEntries()`。リングバッファで直近ログを保持                                                                                                                                                           |
+| `errors.ts`           | `getErrorMessage()`: unknown なエラー値からメッセージを取り出す。`isNotFoundError()`: ENOENT 判定                                                                                                                                                                   |
+| `package.json`        | 依存と scripts (`start` / `dev` / `test` / `check` / `lint` / `fix` / `generate`)。`package-lock.json` が lockfile、`.npmrc` が `@std/*` を取る JSR 互換レジストリの設定                                                                                            |
+| `tsconfig.json`       | `tsc --noEmit` の設定 (`check` タスク)。`erasableSyntaxOnly` で Node の型除去が受け付けない構文を検出する。`types` は `node`                                                                                                                                        |
+| `.oxlintrc.json`      | oxlint 設定 (`lint` / `fix` タスク)。`curly` を error にし、`data/`, `docs/api`, `api/internal-schemas.ts`, `.claude/` を除外                                                                                                                                       |
+| `.oxfmtrc.json`       | oxfmt 設定 (`lint` / `fix` タスク)。`data/`, `docs/api`, `api/internal-schemas.ts`, `.claude/`, `.github/workflows/`, YAML 全般を除外                                                                                                                               |
+| `scripts/`            | 旧 Deno KV から SQLite へのデータ移行スクリプト (`dump-kv.ts` は Deno 専用、`import-kv.ts` は Node)。手順は [deployment.md](deployment.md)                                                                                                                          |
+| `Dockerfile`          | `node:24-bookworm-slim` ベースで、`/usr/local/bin/deno` に Deno を同梱。`CLAUDE_CONFIG_DIR` / `LOMS_CLAW_CONFIG` を `ENV` で宣言。SDK 同梱 Claude Code を `/usr/local/bin/claude` に symlink。`WORKDIR /data/workspace`                                             |
+| `compose.yaml`        | 本番サービス定義。`./data` を `/data` に bind mount (マウントはこの 1 つ)。`TZ` を `.env` から渡す                                                                                                                                                                  |
+| `.devcontainer/`      | 開発コンテナ定義。`compose.yaml` にソースの `/app` bind mount を重ねる                                                                                                                                                                                              |
+| `.github/`            | `dependabot.yml` (npm はルート、deno は `docs/api` の 2 エントリ、加えて docker / github-actions)、`workflows/ci.yml` (Node 24 の `root`、Deno の `generated` / `docs-api`)、`workflows/claude.yml` (issue / PR コメントの `@claude` で起動する Claude Code Action) |
+| `.claude/rules/pr.md` | PR 作成前の検証チェーン (`npm run fix && npm run check && npm run lint && npm test`)                                                                                                                                                                                |
+| `.worktreeinclude`    | worktree 作成時にメイン worktree から複製するローカル資産 (`.env`, `data/config.json`, `data/home/`, `data/workspace/`)                                                                                                                                             |
+| `.env.example`        | docker compose が host 側で読む変数 (`TZ` のみ)                                                                                                                                                                                                                     |
+| `LICENSE`             | MIT License                                                                                                                                                                                                                                                         |
+| `CLAUDE.md`           | 開発者・エージェント向けのプロジェクト指示 (不変条件・規約・索引)                                                                                                                                                                                                   |
 
 ### `bot/` — Discord 入出力
 
@@ -244,9 +248,9 @@ graph TD
 
 ### `store/` — 永続化
 
-| パス           | 役割                                                                                                                                         |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `store/mod.ts` | `Store`: Deno KV によるスコープ (`{channelId, threadId?}`) 単位の session / model / effort / showThinking / active の永続化と `applyPatch()` |
+| パス           | 役割                                                                                                                                                        |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `store/mod.ts` | `Store`: SQLite (`node:sqlite`) によるスコープ (`{channelId, threadId?}`) 単位の session / model / effort / showThinking / active の永続化と `applyPatch()` |
 
 ### `approval/` — ツール承認
 
@@ -259,15 +263,15 @@ graph TD
 
 ### `api/` — 内部 HTTP API
 
-| パス                      | 役割                                                                                                                                                                           |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `api/server.ts`           | `createApp()`: Hono アプリ組み立て (cron / health / logs / settings ルートのマウント、共通エラーハンドラ)。`startApiServer()` はそれを `Deno.serve()` に渡すだけの薄いラッパー |
-| `api/routes/cron.ts`      | `GET /cron`, `POST /cron/run`, `POST /cron/reload`。`CronRouteContext` を受け取る                                                                                              |
-| `api/routes/health.ts`    | `GET /health`。`HealthRouteContext { isReady }` を受け取り、healthy なら 200、そうでなければ 503 を返す                                                                        |
-| `api/routes/logs.ts`      | `GET /logs`。`logger.ts` のリングバッファからフィルタ付きで取得                                                                                                                |
-| `api/routes/settings.ts`  | `GET /settings/default`, `GET` / `PATCH` / `DELETE /settings/:id`。`SettingsRouteContext` を受け取る                                                                           |
-| `api/validate.ts`         | `matchesSchema()` / `schemaErrorOf()`: `internal-schemas.ts` を単一ソースに `@cfworker/json-schema` でリクエストボディを検証                                                   |
-| `api/internal-schemas.ts` | `docs/api` の component schema から `deno task generate` で書き出す自動生成物。`deno.json` の `exclude` 対象                                                                   |
+| パス                      | 役割                                                                                                                                                                                             |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `api/server.ts`           | `createApp()`: Hono アプリ組み立て (cron / health / logs / settings ルートのマウント、共通エラーハンドラ)。`startApiServer()` はそれを `@hono/node-server` の `serve()` に渡すだけの薄いラッパー |
+| `api/routes/cron.ts`      | `GET /cron`, `POST /cron/run`, `POST /cron/reload`。`CronRouteContext` を受け取る                                                                                                                |
+| `api/routes/health.ts`    | `GET /health`。`HealthRouteContext { isReady }` を受け取り、healthy なら 200、そうでなければ 503 を返す                                                                                          |
+| `api/routes/logs.ts`      | `GET /logs`。`logger.ts` のリングバッファからフィルタ付きで取得                                                                                                                                  |
+| `api/routes/settings.ts`  | `GET /settings/default`, `GET` / `PATCH` / `DELETE /settings/:id`。`SettingsRouteContext` を受け取る                                                                                             |
+| `api/validate.ts`         | `matchesSchema()` / `schemaErrorOf()`: `internal-schemas.ts` を単一ソースに `@cfworker/json-schema` でリクエストボディを検証                                                                     |
+| `api/internal-schemas.ts` | `docs/api` の component schema から `npm run generate` で書き出す自動生成物。`tsconfig.json` では型検査に含まれるが、`.oxlintrc.json` / `.oxfmtrc.json` の対象外                                 |
 
 ### `cron/` — 定期実行
 
@@ -281,14 +285,14 @@ graph TD
 
 ### `docs/`, `data/`
 
-| パス                       | 役割                                                                                                                                                                                                          |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `docs/architecture/`       | 本ディレクトリ                                                                                                                                                                                                |
-| `docs/terms-of-service.md` | 利用規約上の根拠・引用・経緯                                                                                                                                                                                  |
-| `docs/api/`                | 内部 HTTP API の OpenAPI 定義 (`api.yaml`, `paths/`, `components/schemas/`, `examples/`)。独自の `deno.json` / `deno.lock` を持ち、ルートの `deno task generate` から `bin/emit-server-schemas.ts` が呼ばれる |
-| `data/config.json.example` | アプリ設定の雛形。`data/config.json` にコピーして使う (`data/config.json` は git 管理外)                                                                                                                      |
-| `data/home/`               | Claude の設定・認証情報 (`CLAUDE_CONFIG_DIR`)。`.gitkeep` のみ追跡                                                                                                                                            |
-| `data/workspace/`          | エージェントワークスペース (`query()` の `cwd`)。`CLAUDE.md`, `.claude/` (rules / skills / system-prompt / settings.json), `cron/` のみ追跡し、`memory/` や KV ファイルは管理外                               |
+| パス                       | 役割                                                                                                                                                                                                        |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docs/architecture/`       | 本ディレクトリ                                                                                                                                                                                              |
+| `docs/terms-of-service.md` | 利用規約上の根拠・引用・経緯                                                                                                                                                                                |
+| `docs/api/`                | 内部 HTTP API の OpenAPI 定義 (`api.yaml`, `paths/`, `components/schemas/`, `examples/`)。独自の `deno.json` / `deno.lock` を持ち、ルートの `npm run generate` から `bin/emit-server-schemas.ts` が呼ばれる |
+| `data/config.json.example` | アプリ設定の雛形。`data/config.json` にコピーして使う (`data/config.json` は git 管理外)                                                                                                                    |
+| `data/home/`               | Claude の設定・認証情報 (`CLAUDE_CONFIG_DIR`)。`.gitkeep` のみ追跡                                                                                                                                          |
+| `data/workspace/`          | エージェントワークスペース (`query()` の `cwd`)。`CLAUDE.md`, `.claude/` (rules / skills / system-prompt / settings.json), `cron/` のみ追跡し、`memory/` や SQLite ファイルは管理外                         |
 
 ## 章立て
 

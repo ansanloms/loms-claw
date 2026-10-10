@@ -16,8 +16,8 @@ import {
   type SDKResultMessage,
 } from "@anthropic-ai/claude-agent-sdk";
 import type { ClaudeConfig } from "../config.ts";
-import { createLogger } from "../logger.ts";
 import { getErrorMessage } from "../errors.ts";
+import { createLogger } from "../logger.ts";
 
 const log = createLogger("claude");
 
@@ -26,13 +26,7 @@ const log = createLogger("claude");
  *
  * 値の一覧は {@link EFFORT_LEVELS} を単一ソースとし、型はそこから導出する。
  */
-export const EFFORT_LEVELS = [
-  "low",
-  "medium",
-  "high",
-  "xhigh",
-  "max",
-] as const;
+export const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"] as const;
 
 export type EffortLevel = (typeof EFFORT_LEVELS)[number];
 
@@ -109,9 +103,10 @@ export function extractResultText(event: SDKResultMessage): string {
   if ("result" in event && typeof event.result === "string") {
     return event.result;
   }
-  const detail = "errors" in event
-    ? JSON.stringify(event.errors)
-    : event.subtype ?? "unknown error";
+  const detail =
+    "errors" in event
+      ? JSON.stringify(event.errors)
+      : (event.subtype ?? "unknown error");
   throw new Error(`claude returned error: ${detail}`);
 }
 
@@ -237,6 +232,19 @@ export function extractTopLevelThinkingDelta(
 }
 
 /**
+ * `process.env` から値が `undefined` のキーを落とし、`Record<string, string>` にする。
+ */
+function envSnapshot(): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined) {
+      env[key] = value;
+    }
+  }
+  return env;
+}
+
+/**
  * `ClaudeCallOptions` と `ClaudeConfig` から `query()` の options を構築する。
  *
  * `settingSources: ["user", "project"]` を指定して CLAUDE.md / skills /
@@ -265,7 +273,7 @@ export function buildQueryOptions(
     // discord skill は curl の Authorization ヘッダに ${DISCORD_BOT_TOKEN} を使うため、
     // トークンが渡されていれば query() の env に注入する (skill 外から供給する)。
     env: {
-      ...Deno.env.toObject(),
+      ...envSnapshot(),
       ...(opts.discordToken ? { DISCORD_BOT_TOKEN: opts.discordToken } : {}),
     },
     systemPrompt: {
@@ -307,12 +315,7 @@ export async function* askClaude(
     queryFn?: QueryFn;
   },
 ): AsyncGenerator<SDKMessage> {
-  const {
-    config,
-    signal,
-    queryFn = query,
-    ...callOpts
-  } = options;
+  const { config, signal, queryFn = query, ...callOpts } = options;
 
   // AbortSignal を AbortController に bridge する (SDK は abortController を受け取る)。
   const abortController = new AbortController();
@@ -377,9 +380,7 @@ export async function* askClaude(
       eventTypes.length === 0 &&
       isSessionNotFoundError(reason)
     ) {
-      log.warn(
-        `session ${sessionId} not found, retrying with a new session`,
-      );
+      log.warn(`session ${sessionId} not found, retrying with a new session`);
       sessionId = undefined;
       retriedWithoutSession = true;
       continue;

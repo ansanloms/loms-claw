@@ -84,13 +84,13 @@ export type IncomingIgnoreReason =
 export type IncomingDecision =
   | { kind: "ignore"; reason: IncomingIgnoreReason }
   | {
-    kind: "handle";
-    scope: StoreScope;
-    /** 発話があった場所 (スレッドならスレッド ID、そうでなければチャンネル ID)。 */
-    localId: string;
-    /** AI to AI 自己メンションで起動したターンかどうか。 */
-    isSelfMessage: boolean;
-  };
+      kind: "handle";
+      scope: StoreScope;
+      /** 発話があった場所 (スレッドならスレッド ID、そうでなければチャンネル ID)。 */
+      localId: string;
+      /** AI to AI 自己メンションで起動したターンかどうか。 */
+      isSelfMessage: boolean;
+    };
 
 /**
  * 認可 → 自己メンション判定 (+ レート制限) → スコープ抽出 → active 上書き取得 →
@@ -111,12 +111,7 @@ export async function resolveIncomingMessage(
   );
   if (
     !isSelfMessage &&
-    !isAuthorized(
-      input.guildId,
-      input.authorId,
-      input.authorIsBot,
-      deps.config,
-    )
+    !isAuthorized(input.guildId, input.authorId, input.authorIsBot, deps.config)
   ) {
     return { kind: "ignore", reason: "unauthorized" };
   }

@@ -4,16 +4,17 @@
  * 60 秒間隔のインターバルで全ジョブの cron 式を評価し、
  * マッチするジョブのコールバックを実行する。
  *
- * Deno.cron と異なり、ジョブの追加・削除・スケジュール変更を
- * ホットリロードでサポートする。
+ * ジョブの追加・削除・スケジュール変更をホットリロードでサポートする
+ * (Claude Code 組み込みの CronCreate 等とは無関係)。
  *
  * @module
  */
 
+import { Temporal } from "@js-temporal/polyfill";
+import { getErrorMessage } from "../errors.ts";
+import { createLogger } from "../logger.ts";
 import { matchesCron } from "./match.ts";
 import type { CronJobDef } from "./types.ts";
-import { createLogger } from "../logger.ts";
-import { getErrorMessage } from "../errors.ts";
 
 const log = createLogger("cron-scheduler");
 
@@ -132,10 +133,7 @@ export class CronScheduler {
           this.callback(job);
         }
       } catch (e) {
-        log.error(
-          `cron match error for "${job.name}":`,
-          getErrorMessage(e),
-        );
+        log.error(`cron match error for "${job.name}":`, getErrorMessage(e));
       }
     }
   }

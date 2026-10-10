@@ -27,11 +27,11 @@ import {
   TextInputBuilder,
   TextInputStyle,
 } from "discord.js";
-import { INTERACTION_TIMEOUT_MS } from "./constants.ts";
-import { createLogger } from "../logger.ts";
-import { getErrorMessage } from "../errors.ts";
 import { DISCORD_MESSAGE_LIMIT } from "../bot/message.ts";
+import { getErrorMessage } from "../errors.ts";
 import { isRecord } from "../guards.ts";
+import { createLogger } from "../logger.ts";
+import { INTERACTION_TIMEOUT_MS } from "./constants.ts";
 
 const log = createLogger("question");
 
@@ -179,7 +179,7 @@ export function truncate(text: string, max: number): string {
   if (text.length <= max) {
     return text;
   }
-  return text.slice(0, max - 1) + "…";
+  return `${text.slice(0, max - 1)}…`;
 }
 
 /**
@@ -204,8 +204,11 @@ interface PendingQuestions {
  */
 export class QuestionManager {
   private pending = new Map<string, PendingQuestions>();
+  private client: Client;
 
-  constructor(private client: Client) {}
+  constructor(client: Client) {
+    this.client = client;
+  }
 
   /**
    * 質問を Discord に送信し、全質問への回答が揃うまで待つ。
@@ -222,7 +225,7 @@ export class QuestionManager {
     }
 
     const channel = await this.client.channels.fetch(channelId);
-    if (!channel || !channel.isTextBased()) {
+    if (!channel?.isTextBased()) {
       log.warn("question channel not found:", channelId);
       return { kind: "denied", reason: "Channel not found" };
     }
@@ -250,15 +253,20 @@ export class QuestionManager {
       const timeout = setTimeout(() => {
         this.pending.delete(requestId);
         log.warn("questions timed out:", requestId);
-        message.edit({
-          content: truncate(
-            message.content + "\n**→ Timed out**",
-            DISCORD_MESSAGE_LIMIT,
-          ),
-          components: [],
-        }).catch((error: unknown) => {
-          log.warn("failed to edit timed out message:", getErrorMessage(error));
-        });
+        message
+          .edit({
+            content: truncate(
+              `${message.content}\n**→ Timed out**`,
+              DISCORD_MESSAGE_LIMIT,
+            ),
+            components: [],
+          })
+          .catch((error: unknown) => {
+            log.warn(
+              "failed to edit timed out message:",
+              getErrorMessage(error),
+            );
+          });
         resolve({ kind: "denied", reason: "Timed out" });
       }, INTERACTION_TIMEOUT_MS);
 
@@ -376,7 +384,7 @@ export class QuestionManager {
     pending.resolve({ kind: "denied", reason: "Cancelled by user" });
 
     await interaction.update({
-      content: interaction.message.content + "\n**→ Cancelled**",
+      content: `${interaction.message.content}\n**→ Cancelled**`,
       components: [],
     });
 
@@ -419,7 +427,7 @@ export class QuestionManager {
       .join("\n");
     await interaction.update({
       content: truncate(
-        interaction.message.content + "\n**→ 回答済み**\n" + summary,
+        `${interaction.message.content}\n**→ 回答済み**\n${summary}`,
         DISCORD_MESSAGE_LIMIT,
       ),
       components: [],
@@ -468,18 +476,20 @@ export class QuestionManager {
               description: "選択肢に無い回答をテキストで入力する",
             },
           );
-        return new ActionRowBuilder<StringSelectMenuBuilder | ButtonBuilder>()
-          .addComponents(select);
+        return new ActionRowBuilder<
+          StringSelectMenuBuilder | ButtonBuilder
+        >().addComponents(select);
       });
 
     rows.push(
-      new ActionRowBuilder<StringSelectMenuBuilder | ButtonBuilder>()
-        .addComponents(
-          new ButtonBuilder()
-            .setCustomId(`question-cancel:${requestId}`)
-            .setLabel("Cancel")
-            .setStyle(ButtonStyle.Danger),
-        ),
+      new ActionRowBuilder<
+        StringSelectMenuBuilder | ButtonBuilder
+      >().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`question-cancel:${requestId}`)
+          .setLabel("Cancel")
+          .setStyle(ButtonStyle.Danger),
+      ),
     );
 
     return rows;

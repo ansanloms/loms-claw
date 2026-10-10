@@ -13,10 +13,10 @@
 
 import { Hono } from "hono";
 import type { FromSchema } from "json-schema-to-ts";
-import type { Store, StoreScope } from "../../store/mod.ts";
-import { internalSchemas } from "../internal-schemas.ts";
-import { matchesSchema, schemaErrorOf } from "../validate.ts";
 import { createLogger } from "../../logger.ts";
+import type { Store, StoreScope } from "../../store/mod.ts";
+import type { internalSchemas } from "../internal-schemas.ts";
+import { matchesSchema, schemaErrorOf } from "../validate.ts";
 
 const log = createLogger("api-settings");
 
@@ -36,7 +36,7 @@ export interface SettingsRouteContext {
 /** request body が RequestPatchSettings スキーマに適合するかの型ガード。 */
 function isPatchSettingsBody(
   value: unknown,
-): value is FromSchema<typeof internalSchemas["RequestPatchSettings"]> {
+): value is FromSchema<(typeof internalSchemas)["RequestPatchSettings"]> {
   return matchesSchema("RequestPatchSettings", value);
 }
 
@@ -57,9 +57,11 @@ async function resolveScope(
   }
   try {
     const parentId = await ctx.resolveParentId(id);
-    return parentId ? { channelId: parentId, threadId: id } : {
-      channelId: id,
-    };
+    return parentId
+      ? { channelId: parentId, threadId: id }
+      : {
+          channelId: id,
+        };
   } catch (e) {
     // cron:{name} は cron ジョブの擬似 ID で、resolveParentId (discord.js のチャンネル
     // 解決) は設計上必ず失敗するため、想定内の失敗として debug に留める。それ以外の ID
