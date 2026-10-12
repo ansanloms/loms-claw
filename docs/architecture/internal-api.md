@@ -118,7 +118,7 @@ flowchart LR
 - テンプレート [ansanloms/openapi-template](https://github.com/ansanloms/openapi-template) 由来の OpenAPI プロジェクト。独自の `package.json`/`package-lock.json` (Node 24、`.node-version`) を持ち、ルートの `.oxlintrc.json`/`.oxfmtrc.json`/`tsconfig.json` の対象外で、ルートの lint/check/test には含まれない。`.github/dependabot.yml` に `/docs/api` を directory とする別エントリがあり、ルートとは独立に依存更新が追従される (理由はそのファイルのコメントに書かれている)。git 依存の自前 3 パッケージ (`@ansanloms/*`) は dependabot の更新 PR が来なければ手動で上げる。
 - docs/api はルートとは独立した npm パッケージで、TypeScript のバージョンや oxlint/oxfmt の設定は openapi-template に合わせて持つ (ルートの設定には寄せない。次回のテンプレート追従を楽にするため)。`docs/api/.oxlintrc.json` の `correctness: error` だけはテンプレートからの意図的な差分。
 - `api.yaml` の `info.description` は `$ref: ./README.md` で、接続条件 (127.0.0.1 固定・`claude.apiPort`・認証なし) とエラー応答の形は [docs/api/README.md](../api/README.md) が正。`servers` の URL は既定ポート 3000 を使った例。
-- `redocly.yaml` は `recommended-strict` を継承し、`info-license`/`operation-2xx-response`/`operation-4xx-response`/`no-invalid-media-type-examples`/`security-defined` を off にしている (`security-defined` は loopback 専用で認証を持たないため)。`redocly/plugins/index.js` は inline-examples plugin のローカルラッパーで、redocly の plugins ローダがローカルファイルパスしか解決できないため、`package.json` の git 依存 (`@ansanloms/redocly-plugin-inline-examples`) を re-export する。
+- `redocly.yaml` は `recommended-strict` を継承し、`info-license`/`operation-2xx-response`/`operation-4xx-response`/`no-invalid-media-type-examples`/`security-defined` を off にしている (`security-defined` は loopback 専用で認証を持たないため)。`plugins:` は `package.json` の git 依存 `@ansanloms/redocly-plugin-inline-examples` をパッケージ名で直接参照する。
 - `bin/` のスクリプト:
 
   | スクリプト               | 役割                                                                                                                                  |
