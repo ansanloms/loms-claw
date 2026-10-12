@@ -13,7 +13,7 @@ description: >-
 
 ## scripts ディレクトリの絶対パスを確定する
 
-この skill の主軸 4 コマンド (`find-mountain` ・ `fetch-index` ・ `find-area` ・ `fetch-openmeteo`、いずれも後述) は `mountain-weather/scripts` を `--cwd` に指定して実行する。パスは変数に代入せず、最初に 1 度だけ次のコマンドで絶対パスを確定し、以降の各コマンド例ではその結果をそのままリテラルで書き下す。理由: エージェントのシェルはコール間で cwd ・変数を失う (詳細は「2. 気象庁の麓の天気」の DANGER 参照)。
+この skill の主軸 4 コマンド (`find-mountain` ・ `fetch-index` ・ `find-area` ・ `fetch-openmeteo`、いずれも後述) は `mountain-weather/scripts` の package.json の `bin` として、`npx --no --prefix "<scripts の絶対パス>" -- <name> <args>` の形で実行する。パスは変数に代入せず、最初に 1 度だけ次のコマンドで絶対パスを確定し、以降の各コマンド例ではその結果をそのままリテラルで書き下す。理由: エージェントのシェルはコール間で cwd ・変数を失う (詳細は「2. 気象庁の麓の天気」の DANGER 参照)。
 
 ```sh
 for d in "$PWD/.claude/skills/mountain-weather" "$HOME/.claude/skills/mountain-weather" "$PWD/mountain-weather"; do
@@ -27,7 +27,14 @@ done
 - この skill のリポジトリ本体 (`ansanloms/skills`) 内で作業している場合は `$PWD/mountain-weather/scripts` がヒットする。
 - 複数ヒットしたら先に見つかったものを使う。0 件のときは、実際のインストール先を確認してから進める (推測でパスを組み立てない)。理由: 想定した配置になっていない。
 - 以降のコマンド例中の `<scripts の絶対パス>` は、ここで確定した絶対パスに読み替える。呼び出すたびにこのパスをリテラルで書き下し、変数には入れない。
-- `scripts/README.md` (内部動作の参照先として各節から案内する) のコマンド例はすべて `--cwd` 無しで、cwd が `scripts` ディレクトリ自身である前提で書かれている。この SKILL.md と併読するときも、実行時は必ずここで確定した絶対パスを `--cwd` に付ける (`scripts/README.md` の例をそのままコピーしない)。
+- 最初のコマンドを実行する前に、`<scripts の絶対パス>/node_modules` が無いとき、または skill を更新 (`apm update` 等) した直後であれば、下の「実行環境」の `npm ci --omit=dev --prefix` を実行する。
+- `scripts/README.md` (内部動作の参照先として各節から案内する) のコマンド例はすべて相対形式 (`npx --no -- <name> <args>`) で、cwd が `scripts` ディレクトリ自身である前提で書かれている。この SKILL.md と併読するときも、実行時は必ずここで確定した絶対パスを `--prefix` に指定する (`scripts/README.md` の例をそのままコピーしない)。
+
+## 実行環境
+
+Node.js 24 以上が必要。`<scripts の絶対パス>/node_modules` が無いとき、または skill を更新 (`apm update` 等) した直後は、`npm ci --omit=dev --prefix "<scripts の絶対パス>"` で依存 (gunshi) を入れる。実行に要るのは gunshi だけなので、devDependencies (typescript・oxlint・oxfmt) は入れない。依存が無いまま実行すると 4 コマンドすべてが `gunshi` の解決エラーで失敗する。
+
+`--prefix` は bin の解決先を指定するだけで、CLI の cwd は呼び出し元のまま変わらない。`--file` 等でファイルパスを渡すときは絶対パスで渡す (相対パスは呼び出し元基準で解決される)。
 
 ## 前提: 何が取れて何が取れないか
 
@@ -100,6 +107,7 @@ curl -s "https://www.jma.go.jp/bosai/amedas/data/point/50066/20260810_12.json"
   ```
 
   本文は JSON ではなく `<title>404｜気象庁</title>` を含む HTML ページ。ステータス行と `content-type: text/html` だけで判定でき、本文をパースする必要はない。
+
 - 使いどころは 2 つ。過去・現在の実況として山頂気温を答えること、および予報の当たり外れを事後に確認すること。
 - MUST: 風は観測していない。レコードに `wind` キー自体が存在しない (`null` が入るのではない。`null` を期待した参照はエラーになる)。
   - 風は他の山と同じくてんくらの気圧面風を主に扱う。理由: 富士山でも山頂の風の実測は取れない。
@@ -169,9 +177,27 @@ curl -s "https://www.jma.go.jp/bosai/amedas/data/point/50066/20260810_12.json"
 対象の山の名前から、てんくらの山コード (`kad.html?code=` の数値) を `find-mountain` で引く。skill 内のキャッシュ (`assets/tenkura-mountains.json`。全 9 地域の山リスト `kasel.html` から生成済み) を検索するのでネットワーク不要。
 
 ```sh
-# -q はタスクランナーのバナー抑止 (出力を jq 等で機械処理するため。全 scripts 共通)
-deno task -q --cwd "<scripts の絶対パス>" find-mountain --name=旭岳
-# => {"matches": [{"code": "01150010", "name": "大雪山・旭岳", "ba": "hk", "pref": "北海道"}, ...]}
+npx --no --prefix "<scripts の絶対パス>" -- find-mountain --name=旭岳
+```
+
+出力例 (取得日 2026-10-12 (JST)。上のコマンドを実際に実行して得た実物。`fetchedAt` はキャッシュ生成時刻で、実行日ではない)。
+
+```json
+{
+  "query": "旭岳",
+  "fetchedAt": "2026-07-05T18:09:19.716Z",
+  "matches": [
+    { "code": "01150322", "name": "旭岳石室", "ba": "hk", "pref": "北海道" },
+    { "code": "01150010", "name": "大雪山・旭岳", "ba": "hk", "pref": "北海道" },
+    { "code": "07150027", "name": "旭岳", "ba": "th", "pref": "福島県" }
+  ]
+}
+```
+
+0 件のとき (取得日 2026-10-12 (JST)。`npx --no --prefix "<scripts の絶対パス>" -- find-mountain --name=存在しない山XYZ` を実際に実行して得た実物)。stdout は空で、stderr に次のメッセージが出て exit 1 で終わる。
+
+```text
+「存在しない山XYZ」が 0 件。キャッシュ (2026-07-05T18:09:19.716Z 取得) が古い可能性がある。--update を付けて取り直してから再判断する。
 ```
 
 - 検索は部分一致。0 件のときは `--update` でキャッシュを取り直してから再判断する (山リストの更新頻度は低いが、新規追加・改名はありうる)。理由: exit 1 で止まる。
@@ -202,7 +228,13 @@ deno task -q --cwd "<scripts の絶対パス>" find-mountain --name=旭岳
 
 ```sh
 # --code は前節 find-mountain で引いた対象の山のコード (下の 01150271 は別の山 = 青山の例。必ず引き直す)
-deno task -q --cwd "<scripts の絶対パス>" fetch-index --code=01150271
+npx --no --prefix "<scripts の絶対パス>" -- fetch-index --code=01150271
+```
+
+停止する場合の実物 (取得日 2026-10-12 (JST)。`npx --no --prefix "<scripts の絶対パス>" -- fetch-index --code=99999999` を実際に実行した。存在しないコードの例)。stdout は空で、stderr に次のメッセージが出て exit 1 で終わる。
+
+```text
+登山指数が見つからない。type=15 の付け忘れ、または HTML 構造の変化の可能性。値を捏造せず停止する。
 ```
 
 スクリプトは取得・Shift_JIS デコード・キャッシュ照合・検証・抽出を一括で行い、今日・明日 (時間帯別) と週間の登山指数・気温・風を JSON で出力する。内部動作 (デコード・キャッシュ回避の突き合わせ・検証) は scripts/README.md。
@@ -317,8 +349,29 @@ DANGER (実行): `forecast` の取得から照合・値の抽出までを 1 つ�
 
 ```sh
 # 登山口の市町村・地区名 (例: 富士宮市、松本市乗鞍上高地) から細分区と気象台を引く
-deno task -q --cwd "<scripts の絶対パス>" find-area --municipality=富士宮市
-# => {"matches": [{"class20": {"name": "富士宮市", ...}, "class10": {"code": "220030", "name": "東部"}, "office": {"code": "220000", "name": "静岡県"}}]}
+npx --no --prefix "<scripts の絶対パス>" -- find-area --municipality=富士宮市
+```
+
+出力例 (取得日 2026-10-12 (JST)。上のコマンドを実際に実行して得た実物。`fetchedAt` はキャッシュ生成時刻で、実行日ではない)。
+
+```json
+{
+  "query": "富士宮市",
+  "fetchedAt": "2026-07-05T18:09:19.988Z",
+  "matches": [
+    {
+      "class20": { "code": "2220700", "name": "富士宮市" },
+      "class10": { "code": "220030", "name": "東部" },
+      "office": { "code": "220000", "name": "静岡県" }
+    }
+  ]
+}
+```
+
+0 件のとき (取得日 2026-10-12 (JST)。`npx --no --prefix "<scripts の絶対パス>" -- find-area --municipality=存在しない市XYZ` を実際に実行して得た実物)。stdout は空で、stderr に次のメッセージが出て exit 1 で終わる。
+
+```text
+「存在しない市XYZ」が 0 件。より広い市名・近隣地名で引き直すか、キャッシュ (2026-07-05T18:09:19.988Z 取得) が古い可能性があれば --update を付けて取り直す。
 ```
 
 - 0 件のときは exit 1 で止まる。より広い市名・近隣地名で引き直し、市町村合併等でキャッシュが古い可能性があれば `--update` で取り直す。
@@ -413,7 +466,7 @@ jq '.[0].timeSeries[2].areas[] | {name: .area.name, temps}' "$tmpdir/forecast.js
 
 ```sh
 # 例は富士山頂 (3776m。剣ヶ峰の公称標高。アメダス富士山地点の3775mとは別。「前提」の例外節参照)
-deno task -q --cwd "<scripts の絶対パス>" fetch-openmeteo --lat=35.3606 --lon=138.7274 --elevation=3776
+npx --no --prefix "<scripts の絶対パス>" -- fetch-openmeteo --lat=35.3606 --lon=138.7274 --elevation=3776
 ```
 
 出力例 (取得日 2026-08-10 (JST)。上のコマンドを実際に実行して得た実物。`hourly[]` は `--days` × 24 レコード続くが、構造が読み取れる先頭 1 レコード分に絞った)。
@@ -451,6 +504,12 @@ deno task -q --cwd "<scripts の絶対パス>" fetch-openmeteo --lat=35.3606 --l
     // 以降 1 時間ごと × --days 日分 ...
   ]
 }
+```
+
+引数が不正なときの実物 (取得日 2026-10-12 (JST)。`npx --no --prefix "<scripts の絶対パス>" -- fetch-openmeteo --lat=35.3606 --lon=138.7274 --elevation=abc` を実際に実行した)。stdout は空で、stderr に次の usage が出て exit 1 で終わる。標高の不一致・HTTP エラー・`error: true` で停止したときのメッセージは、再現できなかったため実測サンプルが無い。
+
+```text
+usage: fetch-openmeteo --lat=<緯度> --lon=<経度> --elevation=<山頂標高 m> [--days=<1..7>]
 ```
 
 - 引数は `--lat` ・ `--lon` ・ `--elevation` (いずれも必須で、標高は山頂の m)。
@@ -559,7 +618,7 @@ Open-Meteo が取得できない場合 (API 停止・ネットワーク断・`fe
 - この skill が扱うのは天気の判断のみ。開山期・登山道の開通/通行止め・入山規制・登山届などは天気とは別事項で、skill 側で開通可否を断定しない。該当しそうな場面 (例: 富士山の週末が開山前) では「天気とは別に開通状況を必ず確認する」と一言添えるに留める。
 - 登山指数は同社の独自指標、山頂気温・体感温度は推定であり、いずれも山頂の実況を保証しない。断定せず、安全側に倒して伝える。
 - てんくら・気象庁のデータは明示的なオープンデータライセンスが確認できていない。取得した生データの無断の二次配布・公開はしない。Open-Meteo のデータは CC BY 4.0 で、ユーザへの提示時に出典 (Open-Meteo) を添える。
-- scripts の実行は必ず `deno task -q` で行う。`-q` が無いとタスクランナーのバナー行が stdout に混ざり、`jq` 等での機械処理が壊れる。
+- scripts の実行は `npx --no --prefix "<scripts の絶対パス>" -- <name> <args>` で行う。`npx` はこの package の `bin` を解決し、stdout には CLI の出力だけが出る。 `--no` は未インストールのパッケージを registry から取りに行かないための指定で、bin 名が registry の同名パッケージと衝突しても誤って実行しない。`--` は必須。無いと npm 11 が `--config` 等のフラグを自分の設定として取り込む。
 - 気象庁側で使う一時ファイル (`forecast.json`) は `mktemp -d` で実行ごとに一意なディレクトリを作りその中へ置く。理由: 固定パスは並行タスクに上書きされ、別対象のデータを掴む事故が起きる。
   - 後続の `jq` も同じ絶対パスを参照し、照合と値の抽出は同一コマンド内で行う。
   - 山コード検索 `find-mountain`・区域解決 `find-area`・てんくら取得 `fetch-index`・Open-Meteo 取得 `fetch-openmeteo` は一時ファイルを手で持たない。理由: script が一括で行う。

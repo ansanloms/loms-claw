@@ -5,8 +5,8 @@
  */
 
 /** `dataPoints:batchDelete` の body (`{"names": [...]}`) を組み立てる。 */
-export function buildBatchDeleteBody(
-  names: readonly string[],
-): { names: readonly string[] } {
+export function buildBatchDeleteBody(names: readonly string[]): {
+  names: readonly string[];
+} {
   return { names };
 }

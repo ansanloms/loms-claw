@@ -34,7 +34,8 @@ function pick(
     const name = (node as { name?: unknown }).name;
     const parent = (node as { parent?: unknown }).parent;
     if (
-      typeof name !== "string" || (withParent && typeof parent !== "string")
+      typeof name !== "string" ||
+      (withParent && typeof parent !== "string")
     ) {
       throw new Error(
         `area.json の ${label}.${code} に name/parent が無い (構造変化の可能性)。値を捏造せず停止する。`,

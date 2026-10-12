@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+import { readFile } from "node:fs/promises";
 import { cli, define } from "gunshi";
 import {
   type DayTable,
@@ -121,7 +123,7 @@ const command = define({
 
     if (file !== undefined) {
       // オフライン: iconv で UTF-8 化済みのローカル HTML を解析する (fingerprint 比較・検証用)。
-      html = await Deno.readTextFile(file);
+      html = await readFile(file, "utf-8");
       note = "ローカルファイル";
       if (code === "") {
         code = html.match(/code=(\d+)/)?.[1] ?? "";
@@ -133,13 +135,13 @@ const command = define({
         note = r.note;
       } catch (e) {
         console.error(e instanceof Error ? e.message : String(e));
-        Deno.exit(1);
+        process.exit(1);
       }
     } else {
       console.error(
         "usage: fetch-index --code=<山のコード> | --file=<UTF-8 HTML>",
       );
-      Deno.exit(1);
+      process.exit(1);
     }
 
     const tables = parseDayTables(html);
@@ -147,7 +149,7 @@ const command = define({
       console.error(
         "登山指数テーブルを抽出できなかった (HTML 構造変化の可能性)。値を捏造せず停止する。",
       );
-      Deno.exit(1);
+      process.exit(1);
     }
 
     const result: Result = {
@@ -161,6 +163,4 @@ const command = define({
   },
 });
 
-if (import.meta.main) {
-  await cli(Deno.args, command);
-}
+await cli(process.argv.slice(2), command);

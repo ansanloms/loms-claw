@@ -1,4 +1,5 @@
-import { assertEquals, assertRejects } from "@std/assert";
+import { test } from "node:test";
+import assert from "node:assert/strict";
 import {
   buildAuthUrl,
   DEFAULT_SCOPES,
@@ -7,7 +8,7 @@ import {
   refreshToken,
 } from "./oauth.ts";
 
-Deno.test("buildAuthUrl: client_id・redirect_uri・response_type・access_type・prompt・scope・state を含む", () => {
+test("buildAuthUrl: client_id・redirect_uri・response_type・access_type・prompt・scope・state を含む", () => {
   const url = new URL(
     buildAuthUrl({
       clientId: "cid",
@@ -16,43 +17,46 @@ Deno.test("buildAuthUrl: client_id・redirect_uri・response_type・access_type�
       state: "state-value",
     }),
   );
-  assertEquals(
+  assert.deepEqual(
     url.origin + url.pathname,
     "https://accounts.google.com/o/oauth2/v2/auth",
   );
-  assertEquals(url.searchParams.get("client_id"), "cid");
-  assertEquals(url.searchParams.get("redirect_uri"), "https://www.google.com");
-  assertEquals(url.searchParams.get("response_type"), "code");
-  assertEquals(url.searchParams.get("access_type"), "offline");
-  assertEquals(url.searchParams.get("prompt"), "consent");
-  assertEquals(url.searchParams.get("scope"), DEFAULT_SCOPES.join(" "));
-  assertEquals(url.searchParams.get("state"), "state-value");
+  assert.deepEqual(url.searchParams.get("client_id"), "cid");
+  assert.deepEqual(
+    url.searchParams.get("redirect_uri"),
+    "https://www.google.com",
+  );
+  assert.deepEqual(url.searchParams.get("response_type"), "code");
+  assert.deepEqual(url.searchParams.get("access_type"), "offline");
+  assert.deepEqual(url.searchParams.get("prompt"), "consent");
+  assert.deepEqual(url.searchParams.get("scope"), DEFAULT_SCOPES.join(" "));
+  assert.deepEqual(url.searchParams.get("state"), "state-value");
 });
 
-Deno.test("DEFAULT_SCOPES: 既定スコープは 4 系統 × readonly/writeonly の 8 つ", () => {
-  assertEquals(DEFAULT_SCOPES.length, 8);
+test("DEFAULT_SCOPES: 既定スコープは 4 系統 × readonly/writeonly の 8 つ", () => {
+  assert.deepEqual(DEFAULT_SCOPES.length, 8);
 });
 
-Deno.test("generateState: 64 文字の hex 文字列で、呼ぶたびに異なる値になる", () => {
+test("generateState: 64 文字の hex 文字列で、呼ぶたびに異なる値になる", () => {
   const a = generateState();
   const b = generateState();
-  assertEquals(/^[0-9a-f]{64}$/.test(a), true);
-  assertEquals(/^[0-9a-f]{64}$/.test(b), true);
-  assertEquals(a === b, false);
+  assert.deepEqual(/^[0-9a-f]{64}$/.test(a), true);
+  assert.deepEqual(/^[0-9a-f]{64}$/.test(b), true);
+  assert.deepEqual(a === b, false);
 });
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status });
 }
 
-Deno.test("exchangeCode: 正常系は access_token 等の全フィールドを返す", async () => {
+test("exchangeCode: 正常系は access_token 等の全フィールドを返す", async () => {
   const fetchFn = (_url: string | URL | Request, init?: RequestInit) => {
     const body = new URLSearchParams(init?.body as string);
-    assertEquals(body.get("grant_type"), "authorization_code");
-    assertEquals(body.get("client_id"), "cid");
-    assertEquals(body.get("client_secret"), "secret");
-    assertEquals(body.get("redirect_uri"), "https://www.google.com");
-    assertEquals(body.get("code"), "auth-code");
+    assert.deepEqual(body.get("grant_type"), "authorization_code");
+    assert.deepEqual(body.get("client_id"), "cid");
+    assert.deepEqual(body.get("client_secret"), "secret");
+    assert.deepEqual(body.get("redirect_uri"), "https://www.google.com");
+    assert.deepEqual(body.get("code"), "auth-code");
     return Promise.resolve(
       jsonResponse({
         access_token: "at",
@@ -73,7 +77,7 @@ Deno.test("exchangeCode: 正常系は access_token 等の全フィールドを�
     },
     fetchFn as typeof fetch,
   );
-  assertEquals(token, {
+  assert.deepEqual(token, {
     access_token: "at",
     expires_in: 3600,
     refresh_token: "rt",
@@ -83,10 +87,10 @@ Deno.test("exchangeCode: 正常系は access_token 等の全フィールドを�
   });
 });
 
-Deno.test("exchangeCode: 非 2xx は HTTP ステータスとボディを含む例外", async () => {
+test("exchangeCode: 非 2xx は HTTP ステータスとボディを含む例外", async () => {
   const fetchFn = () =>
     Promise.resolve(new Response("bad request body", { status: 400 }));
-  await assertRejects(
+  await assert.rejects(
     () =>
       exchangeCode(
         {
@@ -97,14 +101,13 @@ Deno.test("exchangeCode: 非 2xx は HTTP ステータスとボディを含む�
         },
         fetchFn as typeof fetch,
       ),
-    Error,
-    "HTTP 400",
+    /HTTP 400/,
   );
 });
 
-Deno.test("exchangeCode: フィールド欠落は例外", async () => {
+test("exchangeCode: フィールド欠落は例外", async () => {
   const fetchFn = () => Promise.resolve(jsonResponse({ access_token: "at" }));
-  await assertRejects(
+  await assert.rejects(
     () =>
       exchangeCode(
         {
@@ -115,19 +118,18 @@ Deno.test("exchangeCode: フィールド欠落は例外", async () => {
         },
         fetchFn as typeof fetch,
       ),
-    Error,
-    "揃っていない",
+    /揃っていない/,
   );
 });
 
-Deno.test("refreshToken: 正常系は grant_type=refresh_token で交換する (redirect_uri は送らない)", async () => {
+test("refreshToken: 正常系は grant_type=refresh_token で交換する (redirect_uri は送らない)", async () => {
   const fetchFn = (_url: string | URL | Request, init?: RequestInit) => {
     const body = new URLSearchParams(init?.body as string);
-    assertEquals(body.get("grant_type"), "refresh_token");
-    assertEquals(body.get("client_id"), "cid");
-    assertEquals(body.get("client_secret"), "secret");
-    assertEquals(body.get("refresh_token"), "rt-old");
-    assertEquals(body.get("redirect_uri"), null);
+    assert.deepEqual(body.get("grant_type"), "refresh_token");
+    assert.deepEqual(body.get("client_id"), "cid");
+    assert.deepEqual(body.get("client_secret"), "secret");
+    assert.deepEqual(body.get("refresh_token"), "rt-old");
+    assert.deepEqual(body.get("redirect_uri"), null);
     return Promise.resolve(
       jsonResponse({
         access_token: "at2",
@@ -145,10 +147,10 @@ Deno.test("refreshToken: 正常系は grant_type=refresh_token で交換する (
     },
     fetchFn as typeof fetch,
   );
-  assertEquals(token.access_token, "at2");
+  assert.deepEqual(token.access_token, "at2");
 });
 
-Deno.test("refreshToken: レスポンスに refresh_token・refresh_token_expires_in が無ければ省略される", async () => {
+test("refreshToken: レスポンスに refresh_token・refresh_token_expires_in が無ければ省略される", async () => {
   const fetchFn = () =>
     Promise.resolve(
       jsonResponse({
@@ -165,7 +167,7 @@ Deno.test("refreshToken: レスポンスに refresh_token・refresh_token_expire
     },
     fetchFn as typeof fetch,
   );
-  assertEquals(token, {
+  assert.deepEqual(token, {
     access_token: "at2",
     expires_in: 3600,
     refresh_token: undefined,
@@ -173,9 +175,9 @@ Deno.test("refreshToken: レスポンスに refresh_token・refresh_token_expire
   });
 });
 
-Deno.test("refreshToken: access_token・expires_in が欠けていれば例外", async () => {
+test("refreshToken: access_token・expires_in が欠けていれば例外", async () => {
   const fetchFn = () => Promise.resolve(jsonResponse({ expires_in: 100 }));
-  await assertRejects(
+  await assert.rejects(
     () =>
       refreshToken(
         {
@@ -185,15 +187,14 @@ Deno.test("refreshToken: access_token・expires_in が欠けていれば例外",
         },
         fetchFn as typeof fetch,
       ),
-    Error,
-    "揃っていない",
+    /揃っていない/,
   );
 });
 
-Deno.test("refreshToken: 非 2xx は HTTP ステータスとボディを含む例外", async () => {
+test("refreshToken: 非 2xx は HTTP ステータスとボディを含む例外", async () => {
   const fetchFn = () =>
     Promise.resolve(new Response("unauthorized", { status: 401 }));
-  await assertRejects(
+  await assert.rejects(
     () =>
       refreshToken(
         {
@@ -203,7 +204,6 @@ Deno.test("refreshToken: 非 2xx は HTTP ステータスとボディを含む�
         },
         fetchFn as typeof fetch,
       ),
-    Error,
-    "HTTP 401",
+    /HTTP 401/,
   );
 });

@@ -1,6 +1,10 @@
+#!/usr/bin/env node
+import { resolve } from "node:path";
 import { cli, define } from "gunshi";
 import { loadTokenPathConfig } from "../lib/config.ts";
 import { computeTokenStatus, readTokenFile } from "../lib/token-file.ts";
+
+const SCRIPTS_DIR = resolve(import.meta.dirname, "..");
 
 const command = define({
   name: "token-status",
@@ -15,19 +19,17 @@ const command = define({
 
       if (status.refresh_token_expired) {
         console.error(
-          "refresh_token が失効している。deno task auth で再認可すること (localhost に届かない端末では auth-url と token <code> の組み合わせ)。",
+          `refresh_token が失効している。\`npx --no --prefix "${SCRIPTS_DIR}" -- auth\` で再認可すること (localhost に届かない端末では auth-url と token <code> の組み合わせ)。`,
         );
-        Deno.exit(1);
+        process.exit(1);
       }
 
       console.log(JSON.stringify(status));
     } catch (e) {
       console.error(e instanceof Error ? e.message : String(e));
-      Deno.exit(1);
+      process.exit(1);
     }
   },
 });
 
-if (import.meta.main) {
-  await cli(Deno.args, command);
-}
+await cli(process.argv.slice(2), command);

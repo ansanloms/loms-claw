@@ -1,4 +1,5 @@
-import { assertEquals, assertThrows } from "@std/assert";
+import { test } from "node:test";
+import assert from "node:assert/strict";
 import { resolveMunicipality, stripAreaJson } from "./area.ts";
 
 const RAW = {
@@ -11,19 +12,19 @@ const RAW = {
   },
 };
 
-Deno.test("stripAreaJson: 必要フィールドのみ残し余分を落とす", () => {
+test("stripAreaJson: 必要フィールドのみ残し余分を落とす", () => {
   const data = stripAreaJson(RAW);
-  assertEquals(data.offices["220000"], { name: "静岡県", parent: "" });
-  assertEquals(data.class10s["220030"], { name: "東部", parent: "220000" });
+  assert.deepEqual(data.offices["220000"], { name: "静岡県", parent: "" });
+  assert.deepEqual(data.class10s["220030"], { name: "東部", parent: "220000" });
 });
 
-Deno.test("stripAreaJson: セクション欠落は例外 (構造変化)", () => {
-  assertThrows(() => stripAreaJson({ offices: {} }), Error, "class10s");
+test("stripAreaJson: セクション欠落は例外 (構造変化)", () => {
+  assert.throws(() => stripAreaJson({ offices: {} }), /class10s/);
 });
 
-Deno.test("resolveMunicipality: class20 → class15 → class10 → office を辿る", () => {
+test("resolveMunicipality: class20 → class15 → class10 → office を辿る", () => {
   const matches = resolveMunicipality(stripAreaJson(RAW), "富士宮");
-  assertEquals(matches, [
+  assert.deepEqual(matches, [
     {
       class20: { code: "2220700", name: "富士宮市" },
       class10: { code: "220030", name: "東部" },
@@ -32,10 +33,10 @@ Deno.test("resolveMunicipality: class20 → class15 → class10 → office を�
   ]);
 });
 
-Deno.test("resolveMunicipality: 親の欠けたエントリは候補から除く", () => {
-  assertEquals(resolveMunicipality(stripAreaJson(RAW), "親の欠けた"), []);
+test("resolveMunicipality: 親の欠けたエントリは候補から除く", () => {
+  assert.deepEqual(resolveMunicipality(stripAreaJson(RAW), "親の欠けた"), []);
 });
 
-Deno.test("resolveMunicipality: 不一致は空配列", () => {
-  assertEquals(resolveMunicipality(stripAreaJson(RAW), "存在しない市"), []);
+test("resolveMunicipality: 不一致は空配列", () => {
+  assert.deepEqual(resolveMunicipality(stripAreaJson(RAW), "存在しない市"), []);
 });

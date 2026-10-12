@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { cli, define } from "gunshi";
 import { loadTokenConfig } from "../lib/config.ts";
 import { getValidToken } from "../lib/token-file.ts";
@@ -14,7 +15,7 @@ const command = define({
       console.error(
         "usage: get <dataPoint name> (例: users/me/dataTypes/steps/dataPoints/<id>)",
       );
-      Deno.exit(1);
+      process.exit(1);
     }
 
     try {
@@ -25,11 +26,9 @@ const command = define({
       console.log(text);
     } catch (e) {
       console.error(e instanceof Error ? e.message : String(e));
-      Deno.exit(1);
+      process.exit(1);
     }
   },
 });
 
-if (import.meta.main) {
-  await cli(Deno.args, command);
-}
+await cli(process.argv.slice(2), command);

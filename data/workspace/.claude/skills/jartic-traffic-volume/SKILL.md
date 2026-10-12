@@ -270,6 +270,70 @@ curl -sS -G 'https://api.jartic-open-traffic.org/geoserver' \
 - HTTP 400 で `{"message": ...}`: 必須パラメータ (`typeNames` など) の欠落。
 - HTTP 200 で `{"version": ..., "exceptions": [...]}`: `typeNames` などの値が不正 (`exceptions=application/json` 指定時)。
 - `{"errorMessage": ..., "errorType": ...}`: ペイロードサイズ超過。BBOX か期間を狭める。
+- HTTP 200 で `{"message": "Internal server error"}`: 時間コードを省き、道路種別のみで全国を照会したときに観測した (原因は未確認)。時間コードや BBOX を加えて絞り込み、再試行する。
+
+以下は実測したレスポンスである (取得日 2026-10-12)。`totalFeatures` などのキーは実レスポンスのままで、`timeStamp` は取得時刻 (UTC)。
+
+0 件 (高速自動車国道、狭い BBOX、時間コード 202610120000)。HTTP 200 で `features` が空配列、`crs` が `null`。
+
+```sh
+curl -sS -G 'https://api.jartic-open-traffic.org/geoserver' \
+  --data-urlencode 'service=WFS' \
+  --data-urlencode 'version=2.0.0' \
+  --data-urlencode 'request=GetFeature' \
+  --data-urlencode 'typeNames=t_travospublic_measure_5m' \
+  --data-urlencode 'srsName=EPSG:4326' \
+  --data-urlencode 'outputFormat=application/json' \
+  --data-urlencode 'exceptions=application/json' \
+  --data-urlencode "cql_filter=道路種別=1 AND 時間コード=202610120000 AND BBOX(ジオメトリ,139.5,35.5,139.6,35.6,'EPSG:4326')"
+```
+
+```json
+{"type": "FeatureCollection", "features": [], "totalFeatures": 0, "numberMatched": 0, "numberReturned": 0, "timeStamp": "2026-10-12T14:23:50.153Z", "crs": null}
+```
+
+`typeNames` の欠落 (HTTP 400)。上記のリクエストから `typeNames` の行と `BBOX` を除き、`cql_filter=道路種別=3` のみにした。
+
+```sh
+curl -sS -w '\nHTTP %{http_code}\n' -G 'https://api.jartic-open-traffic.org/geoserver' \
+  --data-urlencode 'service=WFS' \
+  --data-urlencode 'version=2.0.0' \
+  --data-urlencode 'request=GetFeature' \
+  --data-urlencode 'srsName=EPSG:4326' \
+  --data-urlencode 'outputFormat=application/json' \
+  --data-urlencode 'exceptions=application/json' \
+  --data-urlencode 'cql_filter=道路種別=3'
+```
+
+```json
+{"message": "Missing required request parameters: [typeNames]"}
+HTTP 400
+```
+
+`typeNames` の値が不正 (HTTP 200)。上記から `typeNames=t_nonexistent` を加えただけの違い。
+
+```json
+{"version": "2.0.0", "exceptions": [{"code": "InvalidParameterValue", "locator": "typeName", "text": "Feature type :t_nonexistent unknown"}]}
+```
+
+時間コードの省略 (HTTP 200)。`cql_filter` を `道路種別=3` のみにした全国照会で、`message` が `Internal server error` になった。`-w` の出力を末尾に付けている。
+
+```sh
+curl -sS --max-time 60 -w '\n%{http_code}\n' -G 'https://api.jartic-open-traffic.org/geoserver' \
+  --data-urlencode 'service=WFS' \
+  --data-urlencode 'version=2.0.0' \
+  --data-urlencode 'request=GetFeature' \
+  --data-urlencode 'typeNames=t_travospublic_measure_5m' \
+  --data-urlencode 'srsName=EPSG:4326' \
+  --data-urlencode 'outputFormat=application/json' \
+  --data-urlencode 'exceptions=application/json' \
+  --data-urlencode 'cql_filter=道路種別=3'
+```
+
+```json
+{"message": "Internal server error"}
+200
+```
 
 ## 注意
 

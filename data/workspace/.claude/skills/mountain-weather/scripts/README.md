@@ -2,7 +2,9 @@
 
 てんくらの登山指数 HTML と Open-Meteo の山頂数値予報を取得・解析し、山コード・気象庁区域コードを検索する CLI ツール。
 
-出力を `jq` 等で機械処理するときは `deno task -q <task>` で実行する。`-q` が無いとタスクランナーのバナー行が stdout に混ざる。
+`node_modules` が無いとき、または skill を更新 (`apm update` 等) した直後は、`npm ci --omit=dev --prefix "<scripts の絶対パス>"` で依存を入れる (Node.js 24 以上)。実行に要るのは gunshi だけなので devDependencies は入れない。
+
+CLI は package.json の `bin` として公開しており `npx --no -- <name> <args>` で実行する (cwd が `scripts` ディレクトリの場合。別の cwd からは `npx --no --prefix "<scripts の絶対パス>" -- <name> <args>`)。別の cwd から `--prefix` で実行する場合、`--file` 等のパスは絶対パスで渡す (`--prefix` は bin の解決先を変えるだけで、相対パスは呼び出し元の cwd 基準で解決される)。`--` は必須。無いと npm 11 が `--config` 等のフラグを自分の設定として取り込む。
 
 `find-mountain`・`find-area` は `../assets/` のキャッシュ (コミット済み) を検索する。キャッシュは各コマンドの `--update` で再生成する。
 
@@ -18,9 +20,9 @@
 引数解析は [gunshi](https://gunshi.dev/) を使う。`--help` で使い方、各オプションに短縮形がある。
 
 ```sh
-deno task fetch-index --code=<山のコード> [--type=15]   # -c / -t
-deno task fetch-index --file=<iconv 済み UTF-8 HTML>    # -f。オフライン (取得済み HTML を解析)
-deno task fetch-index --help                            # 使い方
+npx --no -- fetch-index --code=<山のコード> [--type=15]   # -c / -t
+npx --no -- fetch-index --file=<iconv 済み UTF-8 HTML>    # -f。オフライン (取得済み HTML を解析)
+npx --no -- fetch-index --help                            # 使い方
 ```
 
 `--code` は地域リスト `kasel.html` から引く (SKILL.md 参照)。`--type` は既定 15 (登山)。`--code` と `--file` のどちらも無ければ usage を出して exit 1。
@@ -72,8 +74,8 @@ deno task fetch-index --help                            # 使い方
 - 出力の `pref` はコード先頭 2 桁から引いた都道府県名。同名の山の識別に使う。
 
 ```sh
-deno task -q find-mountain --name=<山名>   # -n。キャッシュを検索
-deno task -q find-mountain --update        # -u。キャッシュを再生成
+npx --no -- find-mountain --name=<山名>   # -n。キャッシュを検索
+npx --no -- find-mountain --update        # -u。キャッシュを再生成
 ```
 
 `--update` なしで 0 件のときは「キャッシュが古い可能性」を stderr に出して exit 1 で止まる (呼び出し側に `--update` での取り直しを促す)。`--update` 付きで 0 件なら確定的な空結果として exit 0 で空の `matches` を返す。
@@ -87,8 +89,8 @@ deno task -q find-mountain --update        # -u。キャッシュを再生成
 - 複数ヒットは全件返す。どれを使うかは呼び出し側の判断 (SKILL.md 参照)。
 
 ```sh
-deno task -q find-area --municipality=<市町村・地区名>   # -m。キャッシュを検索
-deno task -q find-area --update                          # -u。キャッシュを再生成
+npx --no -- find-area --municipality=<市町村・地区名>   # -m。キャッシュを検索
+npx --no -- find-area --update                          # -u。キャッシュを再生成
 ```
 
 0 件時の挙動は find-mountain と同じ (`--update` なしは exit 1、あわせて広い地名での引き直しを促す)。
@@ -107,7 +109,7 @@ deno task -q find-area --update                          # -u。キャッシュ�
 引数解析は fetch-index と同じく [gunshi](https://gunshi.dev/) を使う。`--help` で使い方、各オプションに短縮形がある。
 
 ```sh
-deno task fetch-openmeteo --lat=<緯度> --lon=<経度> --elevation=<山頂標高 m> [--days=<1..7>]
+npx --no -- fetch-openmeteo --lat=<緯度> --lon=<経度> --elevation=<山頂標高 m> [--days=<1..7>]
 # 短縮形: -a / -o / -e / -d。--days の既定は 3、最大 7
 ```
 

@@ -1,11 +1,11 @@
 lockfile_version: '1'
-generated_at: '2026-09-08T13:35:56.318728+00:00'
-apm_version: 0.30.0
+generated_at: '2026-10-12T15:27:32.929192+00:00'
+apm_version: 0.33.0
 dependencies:
 - repo_url: ansanloms/skills
   name: bluesky
   host: github.com
-  resolved_commit: 601d80d1bc6dda7c322201bc956b0287886760aa
+  resolved_commit: a72decb6feef860ff1d3df2b80f6d1aa511a64a5
   version: unknown
   virtual_path: bluesky
   is_virtual: true
@@ -15,13 +15,13 @@ dependencies:
   - .claude/skills/bluesky/README.md
   - .claude/skills/bluesky/SKILL.md
   deployed_file_hashes:
-    .claude/skills/bluesky/README.md: sha256:032c3eee122f105ad1a0696b5f083fb1f3c0771400342659a102b8c1f0fcb7ab
-    .claude/skills/bluesky/SKILL.md: sha256:52ae0bfe3d963203d05a248ce55c5dfce9317a3963f001dd84fb10e8897e633e
-  content_hash: sha256:a5b9f97313f2df8b2e6d8a8bb255aeeeb684a1d828cb1072b3419d5a5672c180
+    .claude/skills/bluesky/README.md: sha256:83cfd3ba2c1f52428ba6889033c73961a6a21e6c39313d4ddc978b8cf535f839
+    .claude/skills/bluesky/SKILL.md: sha256:fbc8bd10c5f38c812da816b3577bb921b2b56a186d37112e7fbc7744e6e96c3a
+  content_hash: sha256:8176f65ca960961a45f7631db435e777fed5959f6bcbe26c1a1e25e3bbf2d1e7
 - repo_url: ansanloms/skills
   name: discord
   host: github.com
-  resolved_commit: 601d80d1bc6dda7c322201bc956b0287886760aa
+  resolved_commit: a72decb6feef860ff1d3df2b80f6d1aa511a64a5
   version: unknown
   virtual_path: discord
   is_virtual: true
@@ -31,13 +31,13 @@ dependencies:
   - .claude/skills/discord/README.md
   - .claude/skills/discord/SKILL.md
   deployed_file_hashes:
-    .claude/skills/discord/README.md: sha256:482419b1acca20dc508cfeb7823cf0dd15678ab99c41eb788cafbb4480064ca3
-    .claude/skills/discord/SKILL.md: sha256:0c1e43fb5f9f78308692e8c6c5c295c875c25f68647c93cdf3d7c372f77f3979
-  content_hash: sha256:d470db3ac2408ef4693038f4634ed9241339a662ef7fddda0b298b8688ac04f7
+    .claude/skills/discord/README.md: sha256:7a0939faedcc0e73e7c87eecb42c3960239661559eea72482da34208875b662e
+    .claude/skills/discord/SKILL.md: sha256:300876a469fa70341e0164e88be185acf96eeadb5bed7039d5edda5f122a4414
+  content_hash: sha256:ca185753bd71932e9d3670a1a9b0640aa3a98a45d00419788f7c280a435e2dab
 - repo_url: ansanloms/skills
   name: find-docs
   host: github.com
-  resolved_commit: 601d80d1bc6dda7c322201bc956b0287886760aa
+  resolved_commit: a72decb6feef860ff1d3df2b80f6d1aa511a64a5
   version: unknown
   virtual_path: find-docs
   is_virtual: true
@@ -47,131 +47,13 @@ dependencies:
   - .claude/skills/find-docs/README.md
   - .claude/skills/find-docs/SKILL.md
   deployed_file_hashes:
-    .claude/skills/find-docs/README.md: sha256:8a23a92a7d585461c013bfa8e54b300351a03e2f3d5bff6d1e0d4c05047cb1a6
-    .claude/skills/find-docs/SKILL.md: sha256:e8d51772cf602e46e9ae1d1d3cef2a212af5a4282b195ca4307df80e3997f07e
-  content_hash: sha256:52312f50958cb07456d7ac79ed1ba111f8bc5a806fbff2c063b524bebad0ccba
-- repo_url: ansanloms/skills
-  name: jartic-traffic-jam-forecast
-  host: github.com
-  resolved_commit: 601d80d1bc6dda7c322201bc956b0287886760aa
-  version: unknown
-  virtual_path: jartic-traffic-jam-forecast
-  is_virtual: true
-  package_type: claude_skill
-  deployed_files:
-  - .claude/skills/jartic-traffic-jam-forecast
-  - .claude/skills/jartic-traffic-jam-forecast/README.md
-  - .claude/skills/jartic-traffic-jam-forecast/SKILL.md
-  deployed_file_hashes:
-    .claude/skills/jartic-traffic-jam-forecast/README.md: sha256:b60df73b21d465ba494c4880b0cee5ca2f655241ddad3bf8b0dc54852c2b49a8
-    .claude/skills/jartic-traffic-jam-forecast/SKILL.md: sha256:c4759f5ecc20bbf6ebbf489d2760fa89ea4f3382c641a8538bab3831b6aa6dbc
-  content_hash: sha256:8a55e837e8f6b043a5d1d7179278bdad971c52d9374cab1a9506417a62eb73dc
-- repo_url: ansanloms/skills
-  name: jartic-traffic-volume
-  host: github.com
-  resolved_commit: 601d80d1bc6dda7c322201bc956b0287886760aa
-  version: unknown
-  virtual_path: jartic-traffic-volume
-  is_virtual: true
-  package_type: claude_skill
-  deployed_files:
-  - .claude/skills/jartic-traffic-volume
-  - .claude/skills/jartic-traffic-volume/README.md
-  - .claude/skills/jartic-traffic-volume/SKILL.md
-  deployed_file_hashes:
-    .claude/skills/jartic-traffic-volume/README.md: sha256:df1d500eb4fdb45e69895e17ccdb35cffca6ecd41a867d85b0db742ec6aaa356
-    .claude/skills/jartic-traffic-volume/SKILL.md: sha256:19a8c80b0000eb3e9bf39d8dc901e6738ecefa92036bb3697feddfc0d2ecc86f
-  content_hash: sha256:3ee284c36b4ba2318e3370a18a3ae0951a43b5059ec2dd5ac4a3cec8993d2852
-- repo_url: ansanloms/skills
-  name: mountain-weather
-  host: github.com
-  resolved_commit: 601d80d1bc6dda7c322201bc956b0287886760aa
-  version: unknown
-  virtual_path: mountain-weather
-  is_virtual: true
-  package_type: claude_skill
-  deployed_files:
-  - .claude/skills/mountain-weather
-  - .claude/skills/mountain-weather/README.md
-  - .claude/skills/mountain-weather/SKILL.md
-  - .claude/skills/mountain-weather/assets/jma-area.json
-  - .claude/skills/mountain-weather/assets/tenkura-mountains.json
-  - .claude/skills/mountain-weather/scripts/.gitignore
-  - .claude/skills/mountain-weather/scripts/README.md
-  - .claude/skills/mountain-weather/scripts/cli/area.test.ts
-  - .claude/skills/mountain-weather/scripts/cli/area.ts
-  - .claude/skills/mountain-weather/scripts/cli/fetch-index.ts
-  - .claude/skills/mountain-weather/scripts/cli/fetch-openmeteo.ts
-  - .claude/skills/mountain-weather/scripts/cli/find-area.ts
-  - .claude/skills/mountain-weather/scripts/cli/find-mountain.ts
-  - .claude/skills/mountain-weather/scripts/cli/kasel.test.ts
-  - .claude/skills/mountain-weather/scripts/cli/kasel.ts
-  - .claude/skills/mountain-weather/scripts/cli/openmeteo.test.ts
-  - .claude/skills/mountain-weather/scripts/cli/openmeteo.ts
-  - .claude/skills/mountain-weather/scripts/cli/parse.test.ts
-  - .claude/skills/mountain-weather/scripts/cli/parse.ts
-  - .claude/skills/mountain-weather/scripts/deno.json
-  - .claude/skills/mountain-weather/scripts/deno.lock
-  - .claude/skills/mountain-weather/scripts/testdata/aoyama-kad.utf8.html
-  deployed_file_hashes:
-    .claude/skills/mountain-weather/README.md: sha256:4704a4c450372b260af29698d44c4b9869c629aab0c66d02614c2445089b8526
-    .claude/skills/mountain-weather/SKILL.md: sha256:7ca30b7f98f455f1266423119c30cef42972f90161888c699d6ecb9c8e043c31
-    .claude/skills/mountain-weather/assets/jma-area.json: sha256:398f89c043eed0ab252d4cbb94c7d463db278b9b37616519becdb83326d23424
-    .claude/skills/mountain-weather/assets/tenkura-mountains.json: sha256:c429f8fca4de1d760722af9b47df3bb2b3a99cc42cc5c573afe417073518deff
-    .claude/skills/mountain-weather/scripts/.gitignore: sha256:5c5daf48fdf4db42e16c29b5b3de54984bafe0c2ff367a186ca97f1d4ed48290
-    .claude/skills/mountain-weather/scripts/README.md: sha256:e96b9fa3b04bff99479ce4353d6b6413df194b4c01beb5147d9bd342280c4ede
-    .claude/skills/mountain-weather/scripts/cli/area.test.ts: sha256:e0dc067a271339cdc4fb2894a558c8dbbe82f18766ac02ce9340722c526ad78f
-    .claude/skills/mountain-weather/scripts/cli/area.ts: sha256:5f1076dff96f50ac5af34194fa0a6eebb2d11708027abec401487c28cc0ef811
-    .claude/skills/mountain-weather/scripts/cli/fetch-index.ts: sha256:5625aab60bc37d86a707f4734d8d66bd5bc181e75b3e242a7c34bcf88bc3bdb8
-    .claude/skills/mountain-weather/scripts/cli/fetch-openmeteo.ts: sha256:b4ae1d335e978c35de76926c482d4763d2218468e0ceeac73ed0b91162546773
-    .claude/skills/mountain-weather/scripts/cli/find-area.ts: sha256:fddae973b2ace9e89cf1ddad7370d5cc2d40fa283eb48b66de5819804df49c23
-    .claude/skills/mountain-weather/scripts/cli/find-mountain.ts: sha256:346a637ba1860ae94f7c68042df4e3a462039226ed71f37700c527b2dbd2f660
-    .claude/skills/mountain-weather/scripts/cli/kasel.test.ts: sha256:77183c6ef55f50153a09550e931cdbdf700884c1c74156e716196d84232b6f8f
-    .claude/skills/mountain-weather/scripts/cli/kasel.ts: sha256:0235938738889f94ee7849081b9ad47ccc8e1c108c1e0cbc1b8f1f82a14c2e7b
-    .claude/skills/mountain-weather/scripts/cli/openmeteo.test.ts: sha256:2157800aeab383e9a2e5a38590e1e20a0aba0a02c043f8d71110f3e8ba3d4e83
-    .claude/skills/mountain-weather/scripts/cli/openmeteo.ts: sha256:e62d25932a233ff27ec4985e1c4c517678389014f8c58d775083a86f91a8f84a
-    .claude/skills/mountain-weather/scripts/cli/parse.test.ts: sha256:b70e26211007d13bb29914d0b4656b64f7a8bbb9bc2ccfdea969556d8ee59c5d
-    .claude/skills/mountain-weather/scripts/cli/parse.ts: sha256:714c5b3cdeef5e9cf3bf98c609bbdee750388dbdff3a066429fba2a61084eb83
-    .claude/skills/mountain-weather/scripts/deno.json: sha256:4c0834e6c745974aa9beb740668ae73f81792835f656cc8a17bd1ffff3ba9954
-    .claude/skills/mountain-weather/scripts/deno.lock: sha256:71f2a76b839e3343bb4c04c99950be97112f9b9f4587c6bb411fcd94f1d03560
-    .claude/skills/mountain-weather/scripts/testdata/aoyama-kad.utf8.html: sha256:4307c936a30115aae1fe9727fa026e91ac0de6d625c16345d33508e5720c0d3f
-  content_hash: sha256:a47c1a9e09704d7dd3bd37b13b1e68c2bf4c3fedc9b8ca6f4a7293274629e790
-- repo_url: ansanloms/skills
-  name: news-digest
-  host: github.com
-  resolved_commit: 601d80d1bc6dda7c322201bc956b0287886760aa
-  version: unknown
-  virtual_path: news-digest
-  is_virtual: true
-  package_type: claude_skill
-  deployed_files:
-  - .claude/skills/news-digest
-  - .claude/skills/news-digest/README.md
-  - .claude/skills/news-digest/SKILL.md
-  deployed_file_hashes:
-    .claude/skills/news-digest/README.md: sha256:dfc2a6c5a83d4adac9202a504d9d296e9440bd2f2ddb10393eca25056792c7d3
-    .claude/skills/news-digest/SKILL.md: sha256:02c8e459c239b3c9d6e2a653211d38ac86726541131da3665c89d61ae1c475ad
-  content_hash: sha256:8785f871919412fd8716041ab67c35c52bb4d162d53e61a8b3c307a8d58b71ae
-- repo_url: ansanloms/skills
-  name: yamareco
-  host: github.com
-  resolved_commit: 601d80d1bc6dda7c322201bc956b0287886760aa
-  version: unknown
-  virtual_path: yamareco
-  is_virtual: true
-  package_type: claude_skill
-  deployed_files:
-  - .claude/skills/yamareco
-  - .claude/skills/yamareco/README.md
-  - .claude/skills/yamareco/SKILL.md
-  deployed_file_hashes:
-    .claude/skills/yamareco/README.md: sha256:937764aaeb1614b7a2720c55e74ff6cc34bbede20402cbe2979ebe8782ee116f
-    .claude/skills/yamareco/SKILL.md: sha256:bcd5879ba2363e3671d30a3868b37e1aa89d5d08c6cc44c1f7e82a631fc52ddf
-  content_hash: sha256:1b9f761b61418a405bfc8f8359b0bb57019bfccb3b3b83faeda8300f18876d16
+    .claude/skills/find-docs/README.md: sha256:42bbbb98294980dd4988ebb3f63e05901ed2cbeea779e9d64bef022d59d61a51
+    .claude/skills/find-docs/SKILL.md: sha256:f4379d8f0fb9a5efdf195f6cf73f5ed0ee9473c330a2eb02c1006295feaab597
+  content_hash: sha256:fd781fb8ed612afb07d0fcac6bcfae9583982064c361dcce75ac9c089cc87008
 - repo_url: ansanloms/skills
   name: google-health
   host: github.com
-  resolved_commit: a51964c098c31528f8634c157dc957e7a450fd74
+  resolved_commit: a72decb6feef860ff1d3df2b80f6d1aa511a64a5
   version: unknown
   virtual_path: google-health
   is_virtual: true
@@ -181,6 +63,9 @@ dependencies:
   - .claude/skills/google-health/README.md
   - .claude/skills/google-health/SKILL.md
   - .claude/skills/google-health/scripts/.gitignore
+  - .claude/skills/google-health/scripts/.npmrc
+  - .claude/skills/google-health/scripts/.oxfmtrc.json
+  - .claude/skills/google-health/scripts/.oxlintrc.json
   - .claude/skills/google-health/scripts/cli/auth-url.ts
   - .claude/skills/google-health/scripts/cli/auth.ts
   - .claude/skills/google-health/scripts/cli/batch-delete.ts
@@ -192,8 +77,6 @@ dependencies:
   - .claude/skills/google-health/scripts/cli/token-status.ts
   - .claude/skills/google-health/scripts/cli/token.ts
   - .claude/skills/google-health/scripts/cli/update.ts
-  - .claude/skills/google-health/scripts/deno.json
-  - .claude/skills/google-health/scripts/deno.lock
   - .claude/skills/google-health/scripts/lib/api.test.ts
   - .claude/skills/google-health/scripts/lib/api.ts
   - .claude/skills/google-health/scripts/lib/auth-server.test.ts
@@ -214,44 +97,177 @@ dependencies:
   - .claude/skills/google-health/scripts/lib/oauth.ts
   - .claude/skills/google-health/scripts/lib/token-file.test.ts
   - .claude/skills/google-health/scripts/lib/token-file.ts
+  - .claude/skills/google-health/scripts/package-lock.json
+  - .claude/skills/google-health/scripts/package.json
+  - .claude/skills/google-health/scripts/tsconfig.json
   deployed_file_hashes:
-    .claude/skills/google-health/README.md: sha256:cbd5292805dbf51f0cd992d0216608c06beead4fa4b7b7e41b243677eba281e2
-    .claude/skills/google-health/SKILL.md: sha256:49549c7c8aaffaa3a470fb00bd044516ce8a937a3887cd60b4cbba2efe390c1f
-    .claude/skills/google-health/scripts/.gitignore: sha256:5c5daf48fdf4db42e16c29b5b3de54984bafe0c2ff367a186ca97f1d4ed48290
-    .claude/skills/google-health/scripts/cli/auth-url.ts: sha256:a727a2b81c5eb5156620a0aed8079722279929e1393126561e437866dc2f8334
-    .claude/skills/google-health/scripts/cli/auth.ts: sha256:8b24825227032f2ef3df2a0cad9ab30cfde9991ec1b9c397d175e9359b1279d4
-    .claude/skills/google-health/scripts/cli/batch-delete.ts: sha256:a46833fdd1a1dbae5fc43019bc9a2780ddc5f07c01f0350577d613ba037d06dd
-    .claude/skills/google-health/scripts/cli/create.ts: sha256:1f35659365d5ff8ffe6d2585cf28879a689e3a279aae0085060be6aa860b2ff7
-    .claude/skills/google-health/scripts/cli/daily-rollup.ts: sha256:1eb7fbfcc4f893f0da52b9bc44393fe50be174e3c4d86f03eab94b0c54e48538
-    .claude/skills/google-health/scripts/cli/datapoints.ts: sha256:9512d569aca9465195264e71ff707547a6d1bd9fe6e0dc54ed1655415f02c236
-    .claude/skills/google-health/scripts/cli/get.ts: sha256:8570e508df2628065aa984736ef7b321799a95c17fb4777a3cf1bbdc4c41f044
-    .claude/skills/google-health/scripts/cli/rollup.ts: sha256:99297d65a94d46f78cf9d579f9354cc8931ad6cce9818731ff470f28d68e55d4
-    .claude/skills/google-health/scripts/cli/token-status.ts: sha256:e5bd5b1e692fa0684c0aaecfc4db3cda12e121f522ee15a602966f146962b34e
-    .claude/skills/google-health/scripts/cli/token.ts: sha256:acdb88eea0e89cafe5555a0a5d61d61205c689504b0665b50c443a886d8c7b0f
-    .claude/skills/google-health/scripts/cli/update.ts: sha256:8d0c27eb49f02748f5cdc38d7ed50e5132b8857bc539255c4b6098b3ab15b61d
-    .claude/skills/google-health/scripts/deno.json: sha256:7862467067f665552c20da84670a9da4e16ab73b39737ce876228f1f45789dfd
-    .claude/skills/google-health/scripts/deno.lock: sha256:c2af56eb4afb25cb10c361f1df7062d801af25e3faf6a5c79cadd5cd1c0bfa30
-    .claude/skills/google-health/scripts/lib/api.test.ts: sha256:d15feea0a19a42546c70a1eb5471a59d28bfc97ec1509159846a471aa2a3159e
-    .claude/skills/google-health/scripts/lib/api.ts: sha256:0a4a0ccdf4eece3576b5a7ad974414658aa164d2a84dcadf351b15cb9cd023b0
-    .claude/skills/google-health/scripts/lib/auth-server.test.ts: sha256:57ad429c5f21378e90a2510ab5d14432d501be9504faeae1f8babcbbc5b8338c
-    .claude/skills/google-health/scripts/lib/auth-server.ts: sha256:432e4d01eb9301602ca587bb3102ab3611899cd1d787ab077ca0dc52f6d44cfe
-    .claude/skills/google-health/scripts/lib/batch-delete.test.ts: sha256:1c82418ff0a7a5e43bd2205e0ed6033e589fb979729845f44ae35d4eee802a0b
-    .claude/skills/google-health/scripts/lib/batch-delete.ts: sha256:05d541dd4704de028c7b6fa9ca900b7164dd9f912f0b90f812662630aec457fa
-    .claude/skills/google-health/scripts/lib/body.test.ts: sha256:1278642abde411456b804689a804f7e73ad99e7dce702fd5137a6c3d6a5e98f9
-    .claude/skills/google-health/scripts/lib/body.ts: sha256:d5333fdc757cd3efea9ceb68a205c8aa7d15f882a47802cd73821442b6c1044a
-    .claude/skills/google-health/scripts/lib/civil.test.ts: sha256:aad16781b61ac93a4a8ca666c77ad0febf25f95cf98499f29d2e7f056813504e
+    .claude/skills/google-health/README.md: sha256:1be1231b31583319aac7cddf34d1a1f089b39c0edd4eec5653f9e2cb46860260
+    .claude/skills/google-health/SKILL.md: sha256:7215c7be52e977e46cdd392a0aca78127aaf0761a2551c49e540376082a6acaa
+    .claude/skills/google-health/scripts/.gitignore: sha256:4d56952b0fb13bf8f9b6c13a6d4c34a075bac3af447636a1df4335d7576e2f97
+    .claude/skills/google-health/scripts/.npmrc: sha256:de8a5e7c930cbe6df5590b3e05fc178a5155ac18c2e4554c788b53e95b6979af
+    .claude/skills/google-health/scripts/.oxfmtrc.json: sha256:522125f869e4d28e388c7ced11ebc9d9ddf93b0dcedee7e454644c35f8325e5a
+    .claude/skills/google-health/scripts/.oxlintrc.json: sha256:f43663a9e5bd2608cf24c234bd290f80b3237ae83535cd04992890be285cf980
+    .claude/skills/google-health/scripts/cli/auth-url.ts: sha256:c1523a9c88f8699e0e745d7e6256f17666ff3d261a9501c0902a00373795ee40
+    .claude/skills/google-health/scripts/cli/auth.ts: sha256:5dcfda76c5988b45e92be7def3ca38a6949be928e35e929a3bdceca4ef83b92d
+    .claude/skills/google-health/scripts/cli/batch-delete.ts: sha256:73d0f267fa6631bd415661cac6c4e471a70411f100f96d654a15c2be72c820d3
+    .claude/skills/google-health/scripts/cli/create.ts: sha256:9f25ad63f01cd15311d780068faeef36e89d7b5732e23833ea8e35d7f21638c1
+    .claude/skills/google-health/scripts/cli/daily-rollup.ts: sha256:16fabfad0e899732dc2b4765771cbce6bd0ac85ebd0c2a7a089fe77d17ebd457
+    .claude/skills/google-health/scripts/cli/datapoints.ts: sha256:262916ac6a56a548c80aa818a4e4090558e1195bc0641459c32354f6b3726854
+    .claude/skills/google-health/scripts/cli/get.ts: sha256:76b0b42dda55781f521e0e8127ea27d2864fb7e6ed56800aaa1be83fb285c01d
+    .claude/skills/google-health/scripts/cli/rollup.ts: sha256:9f3069222bca6e5e44d1fda1dd9579328ebf7683ca8820607dc9881881dc897b
+    .claude/skills/google-health/scripts/cli/token-status.ts: sha256:b999e75ddc59b0eb852cbc2c7b88284b776b531b0a149446a04c7cccc4acccb4
+    .claude/skills/google-health/scripts/cli/token.ts: sha256:4d18dc788475b82e2ed00cf93d6852bdd7f02982097773b3bc3c1b1ac62fff25
+    .claude/skills/google-health/scripts/cli/update.ts: sha256:69fdc41c46f3417443eeaeadb8718651698106a5f0ea4c5010fe2774ed8e71b4
+    .claude/skills/google-health/scripts/lib/api.test.ts: sha256:f9d5caaad86122d3026cdd75cd08747b095768a49f66bcb3b9352c45693b7957
+    .claude/skills/google-health/scripts/lib/api.ts: sha256:6e06ad4c7eb6d718564e441b210b215b8ff40f64c76ba637fce3e57b3671bed7
+    .claude/skills/google-health/scripts/lib/auth-server.test.ts: sha256:627d8c438e07a7ff96ac4226b5cc0f2290be4b6b90812f43d3b6710aa7c66ee5
+    .claude/skills/google-health/scripts/lib/auth-server.ts: sha256:d36201266ab30f90896354b782e84a6a44475f3a3b81ac391c17b8c72827df19
+    .claude/skills/google-health/scripts/lib/batch-delete.test.ts: sha256:89fadfa76adf66d45e601a98e3302b4b8c00613119fd8ae5907f69123a25c7a4
+    .claude/skills/google-health/scripts/lib/batch-delete.ts: sha256:8b25daad3aa3716156060a7498b092771a02d0e1b01c1088ecd4806ad19723cf
+    .claude/skills/google-health/scripts/lib/body.test.ts: sha256:d15a1e94b3f01289975cce39399aa75e050bc53f4636250297209877cc524a5a
+    .claude/skills/google-health/scripts/lib/body.ts: sha256:fdc245dfddef18a81857fe8dc51c66aa46fa91116e36a308bbd8d96ea75263c6
+    .claude/skills/google-health/scripts/lib/civil.test.ts: sha256:f864161afa6240903141487512ca8d375677fb92d9b827c1d7c502e101d05a66
     .claude/skills/google-health/scripts/lib/civil.ts: sha256:20a0defc847202442ac5726d7c1214b2be9118bad6a94a740b31664bdea0c9db
-    .claude/skills/google-health/scripts/lib/config.test.ts: sha256:7e5130a22ebee209ad8d974759d5bcd4bfc19922fd903e7d64654bbaf4ba989c
-    .claude/skills/google-health/scripts/lib/config.ts: sha256:7733fb8071a80d426034358966ece9b8c034267c803eeb419b790eef896a5b7a
-    .claude/skills/google-health/scripts/lib/duration.test.ts: sha256:154dfa1f0ffe22d36ab8fb0416b8bd3891c2eaac9959d825f41ecd0eafa133f9
+    .claude/skills/google-health/scripts/lib/config.test.ts: sha256:53a182b857c09d56a5b68348cb45ff481485f06107f82472e5e041430da9db74
+    .claude/skills/google-health/scripts/lib/config.ts: sha256:23bd4f83fa2749b00a1fa3b7c2e7837c71da15d6ba278d2faee2117ccf945c8b
+    .claude/skills/google-health/scripts/lib/duration.test.ts: sha256:f4542e1322e82503198663380f99d0f765ff544630986128e62f11138893687e
     .claude/skills/google-health/scripts/lib/duration.ts: sha256:be71665882597809ee042b7d2edd212f525ecaf976895d05d357a1b4c23f4b74
-    .claude/skills/google-health/scripts/lib/filter.test.ts: sha256:79ac519eb1c8fab0dff1146aaac669e07644d1786103eb640d5be77410a409d9
-    .claude/skills/google-health/scripts/lib/filter.ts: sha256:4a46b9e8721fd33dcffa09f21d9b3ba48eb789bdef7cf2b845196012bc7da695
-    .claude/skills/google-health/scripts/lib/oauth.test.ts: sha256:383e0fa3a766e63358dd7e4e2c88e4068ef171694dd73597d093da89f9397b4f
-    .claude/skills/google-health/scripts/lib/oauth.ts: sha256:dc7fdd3ae0218ab3b09b389980f8a5f117e45276cb4f7c86816a947b2f039cac
-    .claude/skills/google-health/scripts/lib/token-file.test.ts: sha256:4abd38a346618a278103ee29d9fdbb15f4a827d1242748a6ffbbc9b637701039
-    .claude/skills/google-health/scripts/lib/token-file.ts: sha256:3ce4191ac47868b4f5187fbdb8ee5c4e5b33891491aa03e55dd96760a9b7b07d
-  content_hash: sha256:bbba9f0def564909203954fead412a48865b12559af55a275b273e9f4b7047dc
+    .claude/skills/google-health/scripts/lib/filter.test.ts: sha256:1f7ed666394c7fa39710c74470687c3f7f2d77305e1e3d799ddc4d93a769b93c
+    .claude/skills/google-health/scripts/lib/filter.ts: sha256:f630e46c2ff42392fbc9d11d310c8fcbb45a07a5cb15e50ddafa5eb677e549f7
+    .claude/skills/google-health/scripts/lib/oauth.test.ts: sha256:b1634ff4cd5c44660f62a08b9baec449a713cf051595882e9845bcc32cba9c51
+    .claude/skills/google-health/scripts/lib/oauth.ts: sha256:7d12b784596e233858e9b13db9e602aab503a2fad247ee896ff52397ec8141da
+    .claude/skills/google-health/scripts/lib/token-file.test.ts: sha256:8ae417eec1b54ea07d940e0bbc94de9d0b1f67a481bf5d4c6bf8ebd14ffb36f5
+    .claude/skills/google-health/scripts/lib/token-file.ts: sha256:e1dc715f175689386105ab542fbeef30ac0dcc25ce66d126007abb79ec9438a5
+    .claude/skills/google-health/scripts/package-lock.json: sha256:1b4022ef441f8168f2430832084e51911070a0f4e3544868ff54a16e1b932b47
+    .claude/skills/google-health/scripts/package.json: sha256:4122486d85db5da2216768d5e64286a3e239aa6fa0a6fc7ffaea459d98afd55b
+    .claude/skills/google-health/scripts/tsconfig.json: sha256:411621ee3819f89f3d68e7745a47b69f087103950ebee7686a967fa31141f06a
+  content_hash: sha256:69cb286036d129c5c78b895d68ff1cbd64a9e4979cdc5e0466ac3bbfbf0732f4
+- repo_url: ansanloms/skills
+  name: jartic-traffic-jam-forecast
+  host: github.com
+  resolved_commit: a72decb6feef860ff1d3df2b80f6d1aa511a64a5
+  version: unknown
+  virtual_path: jartic-traffic-jam-forecast
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .claude/skills/jartic-traffic-jam-forecast
+  - .claude/skills/jartic-traffic-jam-forecast/README.md
+  - .claude/skills/jartic-traffic-jam-forecast/SKILL.md
+  deployed_file_hashes:
+    .claude/skills/jartic-traffic-jam-forecast/README.md: sha256:0a9ffbf0bc867add38252c3bd8005baa36e34c0e82a1536d88b53690baee6751
+    .claude/skills/jartic-traffic-jam-forecast/SKILL.md: sha256:5c1ab2a807371a56f6b1d758661dbe38f72744a9351ebd7d4509dab362e40594
+  content_hash: sha256:edcf879c1e2f081bc95b415a3e7d984558c578fe057fbd5ddffa2fced5ed3ec7
+- repo_url: ansanloms/skills
+  name: jartic-traffic-volume
+  host: github.com
+  resolved_commit: a72decb6feef860ff1d3df2b80f6d1aa511a64a5
+  version: unknown
+  virtual_path: jartic-traffic-volume
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .claude/skills/jartic-traffic-volume
+  - .claude/skills/jartic-traffic-volume/README.md
+  - .claude/skills/jartic-traffic-volume/SKILL.md
+  deployed_file_hashes:
+    .claude/skills/jartic-traffic-volume/README.md: sha256:d36ae1880ebac89cce3dfa6a5850ac2bb0c7c09cf5f5dea94741e5fa837fcdfd
+    .claude/skills/jartic-traffic-volume/SKILL.md: sha256:741df15fc055a6aaaaa8099db51b4ef301098efbacfe87ddc5fa17dd97c8e39c
+  content_hash: sha256:ac679cd71d2ab34e699168b565c56bcb3f652bd5f96e1d553bacea0d43c146d0
+- repo_url: ansanloms/skills
+  name: mountain-weather
+  host: github.com
+  resolved_commit: a72decb6feef860ff1d3df2b80f6d1aa511a64a5
+  version: unknown
+  virtual_path: mountain-weather
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .claude/skills/mountain-weather
+  - .claude/skills/mountain-weather/README.md
+  - .claude/skills/mountain-weather/SKILL.md
+  - .claude/skills/mountain-weather/assets/jma-area.json
+  - .claude/skills/mountain-weather/assets/tenkura-mountains.json
+  - .claude/skills/mountain-weather/scripts/.gitignore
+  - .claude/skills/mountain-weather/scripts/.npmrc
+  - .claude/skills/mountain-weather/scripts/.oxfmtrc.json
+  - .claude/skills/mountain-weather/scripts/.oxlintrc.json
+  - .claude/skills/mountain-weather/scripts/README.md
+  - .claude/skills/mountain-weather/scripts/cli/area.test.ts
+  - .claude/skills/mountain-weather/scripts/cli/area.ts
+  - .claude/skills/mountain-weather/scripts/cli/fetch-index.ts
+  - .claude/skills/mountain-weather/scripts/cli/fetch-openmeteo.ts
+  - .claude/skills/mountain-weather/scripts/cli/find-area.ts
+  - .claude/skills/mountain-weather/scripts/cli/find-mountain.ts
+  - .claude/skills/mountain-weather/scripts/cli/kasel.test.ts
+  - .claude/skills/mountain-weather/scripts/cli/kasel.ts
+  - .claude/skills/mountain-weather/scripts/cli/openmeteo.test.ts
+  - .claude/skills/mountain-weather/scripts/cli/openmeteo.ts
+  - .claude/skills/mountain-weather/scripts/cli/parse.test.ts
+  - .claude/skills/mountain-weather/scripts/cli/parse.ts
+  - .claude/skills/mountain-weather/scripts/package-lock.json
+  - .claude/skills/mountain-weather/scripts/package.json
+  - .claude/skills/mountain-weather/scripts/testdata/aoyama-kad.utf8.html
+  - .claude/skills/mountain-weather/scripts/tsconfig.json
+  deployed_file_hashes:
+    .claude/skills/mountain-weather/README.md: sha256:e934feb6307e7dbb765c69472a655ce0911d0fd71e201fc0b228914b775de3a7
+    .claude/skills/mountain-weather/SKILL.md: sha256:c5c0a96edec0655310d23037e808c543def57b6027594489cb831249393c5aa8
+    .claude/skills/mountain-weather/assets/jma-area.json: sha256:398f89c043eed0ab252d4cbb94c7d463db278b9b37616519becdb83326d23424
+    .claude/skills/mountain-weather/assets/tenkura-mountains.json: sha256:c429f8fca4de1d760722af9b47df3bb2b3a99cc42cc5c573afe417073518deff
+    .claude/skills/mountain-weather/scripts/.gitignore: sha256:4d56952b0fb13bf8f9b6c13a6d4c34a075bac3af447636a1df4335d7576e2f97
+    .claude/skills/mountain-weather/scripts/.npmrc: sha256:de8a5e7c930cbe6df5590b3e05fc178a5155ac18c2e4554c788b53e95b6979af
+    .claude/skills/mountain-weather/scripts/.oxfmtrc.json: sha256:929e7ff6e701dfb69913600cc763b3969b7e7b24b9f167429ee042c89e9d0994
+    .claude/skills/mountain-weather/scripts/.oxlintrc.json: sha256:f43663a9e5bd2608cf24c234bd290f80b3237ae83535cd04992890be285cf980
+    .claude/skills/mountain-weather/scripts/README.md: sha256:a7c4553ba6f6f81bffa385c642046032856d4bebef085cfe56f4731c872fec33
+    .claude/skills/mountain-weather/scripts/cli/area.test.ts: sha256:266497817b3630fcaf3bbde27cc7d49d55ccdb76b74353d700f693be3e0912dd
+    .claude/skills/mountain-weather/scripts/cli/area.ts: sha256:47452378482d14d4def5b55eb659d55efa431c6015c0b637e42bdfa63c4c5a76
+    .claude/skills/mountain-weather/scripts/cli/fetch-index.ts: sha256:b513214631734935c14a554dc93aba1b17d602becae0c69ac3f61898d71242d1
+    .claude/skills/mountain-weather/scripts/cli/fetch-openmeteo.ts: sha256:47281d4a41d27decd15f8348ddb1dcbff8ae0dbe95d062c0360915182420d689
+    .claude/skills/mountain-weather/scripts/cli/find-area.ts: sha256:ddbd6ee62f82a872cc79d1296ee5ead7676020ec669cbd9290ef7e02ffa4a63f
+    .claude/skills/mountain-weather/scripts/cli/find-mountain.ts: sha256:81f8f5a475c400edb34862c5ca30100ee9be65f27113fe3ee2973fdcf6b3cc69
+    .claude/skills/mountain-weather/scripts/cli/kasel.test.ts: sha256:30b4a05afb85167a424a4df39d146e13d34a6c59a307ecda680711145737f101
+    .claude/skills/mountain-weather/scripts/cli/kasel.ts: sha256:0235938738889f94ee7849081b9ad47ccc8e1c108c1e0cbc1b8f1f82a14c2e7b
+    .claude/skills/mountain-weather/scripts/cli/openmeteo.test.ts: sha256:47dbac33b124dd24f8b7ebff9cce2b4d704fa9a72f50f506af3ba3f06808559b
+    .claude/skills/mountain-weather/scripts/cli/openmeteo.ts: sha256:be321c0ac464f517fd8f6ddeef629966aa22b9fce14466585eb50c5730f36858
+    .claude/skills/mountain-weather/scripts/cli/parse.test.ts: sha256:17591d366f5f6f3c9f0898a37c7fc25eea71182d6d3f995524c18411312e32e5
+    .claude/skills/mountain-weather/scripts/cli/parse.ts: sha256:f1b4e114bd713300947a064acff1e86b42afb40796a76bbf1f2c8c67ebe34fc0
+    .claude/skills/mountain-weather/scripts/package-lock.json: sha256:56a26ce8052a3a125469042e423ce7fa4ab5318dbdca8b0485c009bbfdd595b0
+    .claude/skills/mountain-weather/scripts/package.json: sha256:ce35eb960139074c5e8e35e1eff6d5bbf7b7c8990c2b75ce099d286159c2e368
+    .claude/skills/mountain-weather/scripts/testdata/aoyama-kad.utf8.html: sha256:4307c936a30115aae1fe9727fa026e91ac0de6d625c16345d33508e5720c0d3f
+    .claude/skills/mountain-weather/scripts/tsconfig.json: sha256:468e3050bef780b74c9a62cf4bc9f8d25abbd1fd4e86b1938f5f6c0f05409bb3
+  content_hash: sha256:9d007b79ddca6cc81512bd0fb47c2f604db92ed04f4e703a2de0dc5bea83a3b0
+- repo_url: ansanloms/skills
+  name: news-digest
+  host: github.com
+  resolved_commit: a72decb6feef860ff1d3df2b80f6d1aa511a64a5
+  version: unknown
+  virtual_path: news-digest
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .claude/skills/news-digest
+  - .claude/skills/news-digest/README.md
+  - .claude/skills/news-digest/SKILL.md
+  deployed_file_hashes:
+    .claude/skills/news-digest/README.md: sha256:9009302e3c5782d0de36c65cd023878f8363d52dc622ce88ca37ceaff372b889
+    .claude/skills/news-digest/SKILL.md: sha256:f7a805bf912f28c2643a2c7fd6fd917a223154c93d356ef458f18f867baa0246
+  content_hash: sha256:a79da737a965baf85d5a4adebd0fb1a7289c01cc6e3d60a2aa7607438623f024
+- repo_url: ansanloms/skills
+  name: yamareco
+  host: github.com
+  resolved_commit: a72decb6feef860ff1d3df2b80f6d1aa511a64a5
+  version: unknown
+  virtual_path: yamareco
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .claude/skills/yamareco
+  - .claude/skills/yamareco/README.md
+  - .claude/skills/yamareco/SKILL.md
+  deployed_file_hashes:
+    .claude/skills/yamareco/README.md: sha256:b502a3135446885b57df1fbfceb459bf8413e8387f56031eea93d72d6eb7dbb8
+    .claude/skills/yamareco/SKILL.md: sha256:2023e4fcfae4f8d2bd2791e4e064d5276371c6050ff5ac6d8d8c82c2600333ac
+  content_hash: sha256:0c7a0e5b8c0b78951f18cb8c32dbb09da3a3dacb0a838f671c71317b9c6f6bda
 deployments:
 - kind: project-relative
   target: claude
@@ -270,7 +286,7 @@ deployments:
   owners:
   - ansanloms/skills/bluesky
   active_owner: ansanloms/skills/bluesky
-  content_hash: sha256:032c3eee122f105ad1a0696b5f083fb1f3c0771400342659a102b8c1f0fcb7ab
+  content_hash: sha256:83cfd3ba2c1f52428ba6889033c73961a6a21e6c39313d4ddc978b8cf535f839
 - kind: project-relative
   target: claude
   value: .claude/skills/bluesky/SKILL.md
@@ -279,7 +295,7 @@ deployments:
   owners:
   - ansanloms/skills/bluesky
   active_owner: ansanloms/skills/bluesky
-  content_hash: sha256:52ae0bfe3d963203d05a248ce55c5dfce9317a3963f001dd84fb10e8897e633e
+  content_hash: sha256:fbc8bd10c5f38c812da816b3577bb921b2b56a186d37112e7fbc7744e6e96c3a
 - kind: project-relative
   target: claude
   value: .claude/skills/discord
@@ -297,7 +313,7 @@ deployments:
   owners:
   - ansanloms/skills/discord
   active_owner: ansanloms/skills/discord
-  content_hash: sha256:482419b1acca20dc508cfeb7823cf0dd15678ab99c41eb788cafbb4480064ca3
+  content_hash: sha256:7a0939faedcc0e73e7c87eecb42c3960239661559eea72482da34208875b662e
 - kind: project-relative
   target: claude
   value: .claude/skills/discord/SKILL.md
@@ -306,7 +322,7 @@ deployments:
   owners:
   - ansanloms/skills/discord
   active_owner: ansanloms/skills/discord
-  content_hash: sha256:0c1e43fb5f9f78308692e8c6c5c295c875c25f68647c93cdf3d7c372f77f3979
+  content_hash: sha256:300876a469fa70341e0164e88be185acf96eeadb5bed7039d5edda5f122a4414
 - kind: project-relative
   target: claude
   value: .claude/skills/find-docs
@@ -324,7 +340,7 @@ deployments:
   owners:
   - ansanloms/skills/find-docs
   active_owner: ansanloms/skills/find-docs
-  content_hash: sha256:8a23a92a7d585461c013bfa8e54b300351a03e2f3d5bff6d1e0d4c05047cb1a6
+  content_hash: sha256:42bbbb98294980dd4988ebb3f63e05901ed2cbeea779e9d64bef022d59d61a51
 - kind: project-relative
   target: claude
   value: .claude/skills/find-docs/SKILL.md
@@ -333,7 +349,7 @@ deployments:
   owners:
   - ansanloms/skills/find-docs
   active_owner: ansanloms/skills/find-docs
-  content_hash: sha256:e8d51772cf602e46e9ae1d1d3cef2a212af5a4282b195ca4307df80e3997f07e
+  content_hash: sha256:f4379d8f0fb9a5efdf195f6cf73f5ed0ee9473c330a2eb02c1006295feaab597
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health
@@ -351,7 +367,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:cbd5292805dbf51f0cd992d0216608c06beead4fa4b7b7e41b243677eba281e2
+  content_hash: sha256:1be1231b31583319aac7cddf34d1a1f089b39c0edd4eec5653f9e2cb46860260
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/SKILL.md
@@ -360,7 +376,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:49549c7c8aaffaa3a470fb00bd044516ce8a937a3887cd60b4cbba2efe390c1f
+  content_hash: sha256:7215c7be52e977e46cdd392a0aca78127aaf0761a2551c49e540376082a6acaa
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/.gitignore
@@ -369,7 +385,34 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:5c5daf48fdf4db42e16c29b5b3de54984bafe0c2ff367a186ca97f1d4ed48290
+  content_hash: sha256:4d56952b0fb13bf8f9b6c13a6d4c34a075bac3af447636a1df4335d7576e2f97
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/scripts/.npmrc
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:de8a5e7c930cbe6df5590b3e05fc178a5155ac18c2e4554c788b53e95b6979af
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/scripts/.oxfmtrc.json
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:522125f869e4d28e388c7ced11ebc9d9ddf93b0dcedee7e454644c35f8325e5a
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/scripts/.oxlintrc.json
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:f43663a9e5bd2608cf24c234bd290f80b3237ae83535cd04992890be285cf980
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/cli/auth-url.ts
@@ -378,7 +421,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:a727a2b81c5eb5156620a0aed8079722279929e1393126561e437866dc2f8334
+  content_hash: sha256:c1523a9c88f8699e0e745d7e6256f17666ff3d261a9501c0902a00373795ee40
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/cli/auth.ts
@@ -387,7 +430,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:8b24825227032f2ef3df2a0cad9ab30cfde9991ec1b9c397d175e9359b1279d4
+  content_hash: sha256:5dcfda76c5988b45e92be7def3ca38a6949be928e35e929a3bdceca4ef83b92d
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/cli/batch-delete.ts
@@ -396,7 +439,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:a46833fdd1a1dbae5fc43019bc9a2780ddc5f07c01f0350577d613ba037d06dd
+  content_hash: sha256:73d0f267fa6631bd415661cac6c4e471a70411f100f96d654a15c2be72c820d3
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/cli/create.ts
@@ -405,7 +448,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:1f35659365d5ff8ffe6d2585cf28879a689e3a279aae0085060be6aa860b2ff7
+  content_hash: sha256:9f25ad63f01cd15311d780068faeef36e89d7b5732e23833ea8e35d7f21638c1
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/cli/daily-rollup.ts
@@ -414,7 +457,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:1eb7fbfcc4f893f0da52b9bc44393fe50be174e3c4d86f03eab94b0c54e48538
+  content_hash: sha256:16fabfad0e899732dc2b4765771cbce6bd0ac85ebd0c2a7a089fe77d17ebd457
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/cli/datapoints.ts
@@ -423,7 +466,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:9512d569aca9465195264e71ff707547a6d1bd9fe6e0dc54ed1655415f02c236
+  content_hash: sha256:262916ac6a56a548c80aa818a4e4090558e1195bc0641459c32354f6b3726854
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/cli/get.ts
@@ -432,7 +475,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:8570e508df2628065aa984736ef7b321799a95c17fb4777a3cf1bbdc4c41f044
+  content_hash: sha256:76b0b42dda55781f521e0e8127ea27d2864fb7e6ed56800aaa1be83fb285c01d
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/cli/rollup.ts
@@ -441,7 +484,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:99297d65a94d46f78cf9d579f9354cc8931ad6cce9818731ff470f28d68e55d4
+  content_hash: sha256:9f3069222bca6e5e44d1fda1dd9579328ebf7683ca8820607dc9881881dc897b
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/cli/token-status.ts
@@ -450,7 +493,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:e5bd5b1e692fa0684c0aaecfc4db3cda12e121f522ee15a602966f146962b34e
+  content_hash: sha256:b999e75ddc59b0eb852cbc2c7b88284b776b531b0a149446a04c7cccc4acccb4
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/cli/token.ts
@@ -459,7 +502,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:acdb88eea0e89cafe5555a0a5d61d61205c689504b0665b50c443a886d8c7b0f
+  content_hash: sha256:4d18dc788475b82e2ed00cf93d6852bdd7f02982097773b3bc3c1b1ac62fff25
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/cli/update.ts
@@ -468,25 +511,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:8d0c27eb49f02748f5cdc38d7ed50e5132b8857bc539255c4b6098b3ab15b61d
-- kind: project-relative
-  target: claude
-  value: .claude/skills/google-health/scripts/deno.json
-  runtime: null
-  scope: project
-  owners:
-  - ansanloms/skills/google-health
-  active_owner: ansanloms/skills/google-health
-  content_hash: sha256:7862467067f665552c20da84670a9da4e16ab73b39737ce876228f1f45789dfd
-- kind: project-relative
-  target: claude
-  value: .claude/skills/google-health/scripts/deno.lock
-  runtime: null
-  scope: project
-  owners:
-  - ansanloms/skills/google-health
-  active_owner: ansanloms/skills/google-health
-  content_hash: sha256:c2af56eb4afb25cb10c361f1df7062d801af25e3faf6a5c79cadd5cd1c0bfa30
+  content_hash: sha256:69fdc41c46f3417443eeaeadb8718651698106a5f0ea4c5010fe2774ed8e71b4
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/lib/api.test.ts
@@ -495,7 +520,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:d15feea0a19a42546c70a1eb5471a59d28bfc97ec1509159846a471aa2a3159e
+  content_hash: sha256:f9d5caaad86122d3026cdd75cd08747b095768a49f66bcb3b9352c45693b7957
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/lib/api.ts
@@ -504,7 +529,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:0a4a0ccdf4eece3576b5a7ad974414658aa164d2a84dcadf351b15cb9cd023b0
+  content_hash: sha256:6e06ad4c7eb6d718564e441b210b215b8ff40f64c76ba637fce3e57b3671bed7
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/lib/auth-server.test.ts
@@ -513,7 +538,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:57ad429c5f21378e90a2510ab5d14432d501be9504faeae1f8babcbbc5b8338c
+  content_hash: sha256:627d8c438e07a7ff96ac4226b5cc0f2290be4b6b90812f43d3b6710aa7c66ee5
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/lib/auth-server.ts
@@ -522,7 +547,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:432e4d01eb9301602ca587bb3102ab3611899cd1d787ab077ca0dc52f6d44cfe
+  content_hash: sha256:d36201266ab30f90896354b782e84a6a44475f3a3b81ac391c17b8c72827df19
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/lib/batch-delete.test.ts
@@ -531,7 +556,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:1c82418ff0a7a5e43bd2205e0ed6033e589fb979729845f44ae35d4eee802a0b
+  content_hash: sha256:89fadfa76adf66d45e601a98e3302b4b8c00613119fd8ae5907f69123a25c7a4
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/lib/batch-delete.ts
@@ -540,7 +565,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:05d541dd4704de028c7b6fa9ca900b7164dd9f912f0b90f812662630aec457fa
+  content_hash: sha256:8b25daad3aa3716156060a7498b092771a02d0e1b01c1088ecd4806ad19723cf
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/lib/body.test.ts
@@ -549,7 +574,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:1278642abde411456b804689a804f7e73ad99e7dce702fd5137a6c3d6a5e98f9
+  content_hash: sha256:d15a1e94b3f01289975cce39399aa75e050bc53f4636250297209877cc524a5a
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/lib/body.ts
@@ -558,7 +583,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:d5333fdc757cd3efea9ceb68a205c8aa7d15f882a47802cd73821442b6c1044a
+  content_hash: sha256:fdc245dfddef18a81857fe8dc51c66aa46fa91116e36a308bbd8d96ea75263c6
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/lib/civil.test.ts
@@ -567,7 +592,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:aad16781b61ac93a4a8ca666c77ad0febf25f95cf98499f29d2e7f056813504e
+  content_hash: sha256:f864161afa6240903141487512ca8d375677fb92d9b827c1d7c502e101d05a66
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/lib/civil.ts
@@ -585,7 +610,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:7e5130a22ebee209ad8d974759d5bcd4bfc19922fd903e7d64654bbaf4ba989c
+  content_hash: sha256:53a182b857c09d56a5b68348cb45ff481485f06107f82472e5e041430da9db74
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/lib/config.ts
@@ -594,7 +619,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:7733fb8071a80d426034358966ece9b8c034267c803eeb419b790eef896a5b7a
+  content_hash: sha256:23bd4f83fa2749b00a1fa3b7c2e7837c71da15d6ba278d2faee2117ccf945c8b
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/lib/duration.test.ts
@@ -603,7 +628,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:154dfa1f0ffe22d36ab8fb0416b8bd3891c2eaac9959d825f41ecd0eafa133f9
+  content_hash: sha256:f4542e1322e82503198663380f99d0f765ff544630986128e62f11138893687e
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/lib/duration.ts
@@ -621,7 +646,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:79ac519eb1c8fab0dff1146aaac669e07644d1786103eb640d5be77410a409d9
+  content_hash: sha256:1f7ed666394c7fa39710c74470687c3f7f2d77305e1e3d799ddc4d93a769b93c
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/lib/filter.ts
@@ -630,7 +655,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:4a46b9e8721fd33dcffa09f21d9b3ba48eb789bdef7cf2b845196012bc7da695
+  content_hash: sha256:f630e46c2ff42392fbc9d11d310c8fcbb45a07a5cb15e50ddafa5eb677e549f7
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/lib/oauth.test.ts
@@ -639,7 +664,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:383e0fa3a766e63358dd7e4e2c88e4068ef171694dd73597d093da89f9397b4f
+  content_hash: sha256:b1634ff4cd5c44660f62a08b9baec449a713cf051595882e9845bcc32cba9c51
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/lib/oauth.ts
@@ -648,7 +673,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:dc7fdd3ae0218ab3b09b389980f8a5f117e45276cb4f7c86816a947b2f039cac
+  content_hash: sha256:7d12b784596e233858e9b13db9e602aab503a2fad247ee896ff52397ec8141da
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/lib/token-file.test.ts
@@ -657,7 +682,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:4abd38a346618a278103ee29d9fdbb15f4a827d1242748a6ffbbc9b637701039
+  content_hash: sha256:8ae417eec1b54ea07d940e0bbc94de9d0b1f67a481bf5d4c6bf8ebd14ffb36f5
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/lib/token-file.ts
@@ -666,7 +691,34 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:3ce4191ac47868b4f5187fbdb8ee5c4e5b33891491aa03e55dd96760a9b7b07d
+  content_hash: sha256:e1dc715f175689386105ab542fbeef30ac0dcc25ce66d126007abb79ec9438a5
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/scripts/package-lock.json
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:1b4022ef441f8168f2430832084e51911070a0f4e3544868ff54a16e1b932b47
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/scripts/package.json
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:4122486d85db5da2216768d5e64286a3e239aa6fa0a6fc7ffaea459d98afd55b
+- kind: project-relative
+  target: claude
+  value: .claude/skills/google-health/scripts/tsconfig.json
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:411621ee3819f89f3d68e7745a47b69f087103950ebee7686a967fa31141f06a
 - kind: project-relative
   target: claude
   value: .claude/skills/jartic-traffic-jam-forecast
@@ -684,7 +736,7 @@ deployments:
   owners:
   - ansanloms/skills/jartic-traffic-jam-forecast
   active_owner: ansanloms/skills/jartic-traffic-jam-forecast
-  content_hash: sha256:b60df73b21d465ba494c4880b0cee5ca2f655241ddad3bf8b0dc54852c2b49a8
+  content_hash: sha256:0a9ffbf0bc867add38252c3bd8005baa36e34c0e82a1536d88b53690baee6751
 - kind: project-relative
   target: claude
   value: .claude/skills/jartic-traffic-jam-forecast/SKILL.md
@@ -693,7 +745,7 @@ deployments:
   owners:
   - ansanloms/skills/jartic-traffic-jam-forecast
   active_owner: ansanloms/skills/jartic-traffic-jam-forecast
-  content_hash: sha256:c4759f5ecc20bbf6ebbf489d2760fa89ea4f3382c641a8538bab3831b6aa6dbc
+  content_hash: sha256:5c1ab2a807371a56f6b1d758661dbe38f72744a9351ebd7d4509dab362e40594
 - kind: project-relative
   target: claude
   value: .claude/skills/jartic-traffic-volume
@@ -711,7 +763,7 @@ deployments:
   owners:
   - ansanloms/skills/jartic-traffic-volume
   active_owner: ansanloms/skills/jartic-traffic-volume
-  content_hash: sha256:df1d500eb4fdb45e69895e17ccdb35cffca6ecd41a867d85b0db742ec6aaa356
+  content_hash: sha256:d36ae1880ebac89cce3dfa6a5850ac2bb0c7c09cf5f5dea94741e5fa837fcdfd
 - kind: project-relative
   target: claude
   value: .claude/skills/jartic-traffic-volume/SKILL.md
@@ -720,7 +772,7 @@ deployments:
   owners:
   - ansanloms/skills/jartic-traffic-volume
   active_owner: ansanloms/skills/jartic-traffic-volume
-  content_hash: sha256:19a8c80b0000eb3e9bf39d8dc901e6738ecefa92036bb3697feddfc0d2ecc86f
+  content_hash: sha256:741df15fc055a6aaaaa8099db51b4ef301098efbacfe87ddc5fa17dd97c8e39c
 - kind: project-relative
   target: claude
   value: .claude/skills/mountain-weather
@@ -738,7 +790,7 @@ deployments:
   owners:
   - ansanloms/skills/mountain-weather
   active_owner: ansanloms/skills/mountain-weather
-  content_hash: sha256:4704a4c450372b260af29698d44c4b9869c629aab0c66d02614c2445089b8526
+  content_hash: sha256:e934feb6307e7dbb765c69472a655ce0911d0fd71e201fc0b228914b775de3a7
 - kind: project-relative
   target: claude
   value: .claude/skills/mountain-weather/SKILL.md
@@ -747,7 +799,7 @@ deployments:
   owners:
   - ansanloms/skills/mountain-weather
   active_owner: ansanloms/skills/mountain-weather
-  content_hash: sha256:7ca30b7f98f455f1266423119c30cef42972f90161888c699d6ecb9c8e043c31
+  content_hash: sha256:c5c0a96edec0655310d23037e808c543def57b6027594489cb831249393c5aa8
 - kind: project-relative
   target: claude
   value: .claude/skills/mountain-weather/assets/jma-area.json
@@ -774,7 +826,34 @@ deployments:
   owners:
   - ansanloms/skills/mountain-weather
   active_owner: ansanloms/skills/mountain-weather
-  content_hash: sha256:5c5daf48fdf4db42e16c29b5b3de54984bafe0c2ff367a186ca97f1d4ed48290
+  content_hash: sha256:4d56952b0fb13bf8f9b6c13a6d4c34a075bac3af447636a1df4335d7576e2f97
+- kind: project-relative
+  target: claude
+  value: .claude/skills/mountain-weather/scripts/.npmrc
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/mountain-weather
+  active_owner: ansanloms/skills/mountain-weather
+  content_hash: sha256:de8a5e7c930cbe6df5590b3e05fc178a5155ac18c2e4554c788b53e95b6979af
+- kind: project-relative
+  target: claude
+  value: .claude/skills/mountain-weather/scripts/.oxfmtrc.json
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/mountain-weather
+  active_owner: ansanloms/skills/mountain-weather
+  content_hash: sha256:929e7ff6e701dfb69913600cc763b3969b7e7b24b9f167429ee042c89e9d0994
+- kind: project-relative
+  target: claude
+  value: .claude/skills/mountain-weather/scripts/.oxlintrc.json
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/mountain-weather
+  active_owner: ansanloms/skills/mountain-weather
+  content_hash: sha256:f43663a9e5bd2608cf24c234bd290f80b3237ae83535cd04992890be285cf980
 - kind: project-relative
   target: claude
   value: .claude/skills/mountain-weather/scripts/README.md
@@ -783,7 +862,7 @@ deployments:
   owners:
   - ansanloms/skills/mountain-weather
   active_owner: ansanloms/skills/mountain-weather
-  content_hash: sha256:e96b9fa3b04bff99479ce4353d6b6413df194b4c01beb5147d9bd342280c4ede
+  content_hash: sha256:a7c4553ba6f6f81bffa385c642046032856d4bebef085cfe56f4731c872fec33
 - kind: project-relative
   target: claude
   value: .claude/skills/mountain-weather/scripts/cli/area.test.ts
@@ -792,7 +871,7 @@ deployments:
   owners:
   - ansanloms/skills/mountain-weather
   active_owner: ansanloms/skills/mountain-weather
-  content_hash: sha256:e0dc067a271339cdc4fb2894a558c8dbbe82f18766ac02ce9340722c526ad78f
+  content_hash: sha256:266497817b3630fcaf3bbde27cc7d49d55ccdb76b74353d700f693be3e0912dd
 - kind: project-relative
   target: claude
   value: .claude/skills/mountain-weather/scripts/cli/area.ts
@@ -801,7 +880,7 @@ deployments:
   owners:
   - ansanloms/skills/mountain-weather
   active_owner: ansanloms/skills/mountain-weather
-  content_hash: sha256:5f1076dff96f50ac5af34194fa0a6eebb2d11708027abec401487c28cc0ef811
+  content_hash: sha256:47452378482d14d4def5b55eb659d55efa431c6015c0b637e42bdfa63c4c5a76
 - kind: project-relative
   target: claude
   value: .claude/skills/mountain-weather/scripts/cli/fetch-index.ts
@@ -810,7 +889,7 @@ deployments:
   owners:
   - ansanloms/skills/mountain-weather
   active_owner: ansanloms/skills/mountain-weather
-  content_hash: sha256:5625aab60bc37d86a707f4734d8d66bd5bc181e75b3e242a7c34bcf88bc3bdb8
+  content_hash: sha256:b513214631734935c14a554dc93aba1b17d602becae0c69ac3f61898d71242d1
 - kind: project-relative
   target: claude
   value: .claude/skills/mountain-weather/scripts/cli/fetch-openmeteo.ts
@@ -819,7 +898,7 @@ deployments:
   owners:
   - ansanloms/skills/mountain-weather
   active_owner: ansanloms/skills/mountain-weather
-  content_hash: sha256:b4ae1d335e978c35de76926c482d4763d2218468e0ceeac73ed0b91162546773
+  content_hash: sha256:47281d4a41d27decd15f8348ddb1dcbff8ae0dbe95d062c0360915182420d689
 - kind: project-relative
   target: claude
   value: .claude/skills/mountain-weather/scripts/cli/find-area.ts
@@ -828,7 +907,7 @@ deployments:
   owners:
   - ansanloms/skills/mountain-weather
   active_owner: ansanloms/skills/mountain-weather
-  content_hash: sha256:fddae973b2ace9e89cf1ddad7370d5cc2d40fa283eb48b66de5819804df49c23
+  content_hash: sha256:ddbd6ee62f82a872cc79d1296ee5ead7676020ec669cbd9290ef7e02ffa4a63f
 - kind: project-relative
   target: claude
   value: .claude/skills/mountain-weather/scripts/cli/find-mountain.ts
@@ -837,7 +916,7 @@ deployments:
   owners:
   - ansanloms/skills/mountain-weather
   active_owner: ansanloms/skills/mountain-weather
-  content_hash: sha256:346a637ba1860ae94f7c68042df4e3a462039226ed71f37700c527b2dbd2f660
+  content_hash: sha256:81f8f5a475c400edb34862c5ca30100ee9be65f27113fe3ee2973fdcf6b3cc69
 - kind: project-relative
   target: claude
   value: .claude/skills/mountain-weather/scripts/cli/kasel.test.ts
@@ -846,7 +925,7 @@ deployments:
   owners:
   - ansanloms/skills/mountain-weather
   active_owner: ansanloms/skills/mountain-weather
-  content_hash: sha256:77183c6ef55f50153a09550e931cdbdf700884c1c74156e716196d84232b6f8f
+  content_hash: sha256:30b4a05afb85167a424a4df39d146e13d34a6c59a307ecda680711145737f101
 - kind: project-relative
   target: claude
   value: .claude/skills/mountain-weather/scripts/cli/kasel.ts
@@ -864,7 +943,7 @@ deployments:
   owners:
   - ansanloms/skills/mountain-weather
   active_owner: ansanloms/skills/mountain-weather
-  content_hash: sha256:2157800aeab383e9a2e5a38590e1e20a0aba0a02c043f8d71110f3e8ba3d4e83
+  content_hash: sha256:47dbac33b124dd24f8b7ebff9cce2b4d704fa9a72f50f506af3ba3f06808559b
 - kind: project-relative
   target: claude
   value: .claude/skills/mountain-weather/scripts/cli/openmeteo.ts
@@ -873,7 +952,7 @@ deployments:
   owners:
   - ansanloms/skills/mountain-weather
   active_owner: ansanloms/skills/mountain-weather
-  content_hash: sha256:e62d25932a233ff27ec4985e1c4c517678389014f8c58d775083a86f91a8f84a
+  content_hash: sha256:be321c0ac464f517fd8f6ddeef629966aa22b9fce14466585eb50c5730f36858
 - kind: project-relative
   target: claude
   value: .claude/skills/mountain-weather/scripts/cli/parse.test.ts
@@ -882,7 +961,7 @@ deployments:
   owners:
   - ansanloms/skills/mountain-weather
   active_owner: ansanloms/skills/mountain-weather
-  content_hash: sha256:b70e26211007d13bb29914d0b4656b64f7a8bbb9bc2ccfdea969556d8ee59c5d
+  content_hash: sha256:17591d366f5f6f3c9f0898a37c7fc25eea71182d6d3f995524c18411312e32e5
 - kind: project-relative
   target: claude
   value: .claude/skills/mountain-weather/scripts/cli/parse.ts
@@ -891,25 +970,25 @@ deployments:
   owners:
   - ansanloms/skills/mountain-weather
   active_owner: ansanloms/skills/mountain-weather
-  content_hash: sha256:714c5b3cdeef5e9cf3bf98c609bbdee750388dbdff3a066429fba2a61084eb83
+  content_hash: sha256:f1b4e114bd713300947a064acff1e86b42afb40796a76bbf1f2c8c67ebe34fc0
 - kind: project-relative
   target: claude
-  value: .claude/skills/mountain-weather/scripts/deno.json
+  value: .claude/skills/mountain-weather/scripts/package-lock.json
   runtime: null
   scope: project
   owners:
   - ansanloms/skills/mountain-weather
   active_owner: ansanloms/skills/mountain-weather
-  content_hash: sha256:4c0834e6c745974aa9beb740668ae73f81792835f656cc8a17bd1ffff3ba9954
+  content_hash: sha256:56a26ce8052a3a125469042e423ce7fa4ab5318dbdca8b0485c009bbfdd595b0
 - kind: project-relative
   target: claude
-  value: .claude/skills/mountain-weather/scripts/deno.lock
+  value: .claude/skills/mountain-weather/scripts/package.json
   runtime: null
   scope: project
   owners:
   - ansanloms/skills/mountain-weather
   active_owner: ansanloms/skills/mountain-weather
-  content_hash: sha256:71f2a76b839e3343bb4c04c99950be97112f9b9f4587c6bb411fcd94f1d03560
+  content_hash: sha256:ce35eb960139074c5e8e35e1eff6d5bbf7b7c8990c2b75ce099d286159c2e368
 - kind: project-relative
   target: claude
   value: .claude/skills/mountain-weather/scripts/testdata/aoyama-kad.utf8.html
@@ -919,6 +998,15 @@ deployments:
   - ansanloms/skills/mountain-weather
   active_owner: ansanloms/skills/mountain-weather
   content_hash: sha256:4307c936a30115aae1fe9727fa026e91ac0de6d625c16345d33508e5720c0d3f
+- kind: project-relative
+  target: claude
+  value: .claude/skills/mountain-weather/scripts/tsconfig.json
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/mountain-weather
+  active_owner: ansanloms/skills/mountain-weather
+  content_hash: sha256:468e3050bef780b74c9a62cf4bc9f8d25abbd1fd4e86b1938f5f6c0f05409bb3
 - kind: project-relative
   target: claude
   value: .claude/skills/news-digest
@@ -936,7 +1024,7 @@ deployments:
   owners:
   - ansanloms/skills/news-digest
   active_owner: ansanloms/skills/news-digest
-  content_hash: sha256:dfc2a6c5a83d4adac9202a504d9d296e9440bd2f2ddb10393eca25056792c7d3
+  content_hash: sha256:9009302e3c5782d0de36c65cd023878f8363d52dc622ce88ca37ceaff372b889
 - kind: project-relative
   target: claude
   value: .claude/skills/news-digest/SKILL.md
@@ -945,7 +1033,7 @@ deployments:
   owners:
   - ansanloms/skills/news-digest
   active_owner: ansanloms/skills/news-digest
-  content_hash: sha256:02c8e459c239b3c9d6e2a653211d38ac86726541131da3665c89d61ae1c475ad
+  content_hash: sha256:f7a805bf912f28c2643a2c7fd6fd917a223154c93d356ef458f18f867baa0246
 - kind: project-relative
   target: claude
   value: .claude/skills/yamareco
@@ -963,7 +1051,7 @@ deployments:
   owners:
   - ansanloms/skills/yamareco
   active_owner: ansanloms/skills/yamareco
-  content_hash: sha256:937764aaeb1614b7a2720c55e74ff6cc34bbede20402cbe2979ebe8782ee116f
+  content_hash: sha256:b502a3135446885b57df1fbfceb459bf8413e8387f56031eea93d72d6eb7dbb8
 - kind: project-relative
   target: claude
   value: .claude/skills/yamareco/SKILL.md
@@ -972,4 +1060,4 @@ deployments:
   owners:
   - ansanloms/skills/yamareco
   active_owner: ansanloms/skills/yamareco
-  content_hash: sha256:bcd5879ba2363e3671d30a3868b37e1aa89d5d08c6cc44c1f7e82a631fc52ddf
+  content_hash: sha256:2023e4fcfae4f8d2bd2791e4e064d5276371c6050ff5ac6d8d8c82c2600333ac

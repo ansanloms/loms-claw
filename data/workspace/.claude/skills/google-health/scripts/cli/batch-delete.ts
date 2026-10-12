@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { cli, define } from "gunshi";
 import { loadTokenConfig } from "../lib/config.ts";
 import { getValidToken } from "../lib/token-file.ts";
@@ -15,14 +16,13 @@ const command = define({
     const names = ctx.positionals.slice(1);
     if (dataType === undefined || names.length === 0) {
       console.error("usage: batch-delete <dataType> <dataPoint name...>");
-      Deno.exit(1);
+      process.exit(1);
     }
 
     try {
       const config = loadTokenConfig();
       const token = await getValidToken(config);
-      const url =
-        `${API_BASE}/users/me/dataTypes/${dataType}/dataPoints:batchDelete`;
+      const url = `${API_BASE}/users/me/dataTypes/${dataType}/dataPoints:batchDelete`;
       const text = await request(
         url,
         token.access_token,
@@ -37,11 +37,9 @@ const command = define({
       }
     } catch (e) {
       console.error(e instanceof Error ? e.message : String(e));
-      Deno.exit(1);
+      process.exit(1);
     }
   },
 });
 
-if (import.meta.main) {
-  await cli(Deno.args, command);
-}
+await cli(process.argv.slice(2), command);

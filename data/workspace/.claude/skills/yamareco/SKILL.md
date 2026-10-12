@@ -53,11 +53,32 @@ curl -s 'https://api.yamareco.com/api/v1/getReclist/user/1005182/1' --header 'Ac
 
 上記は一部フィールドを抜粋したもので、実レスポンスにはこのほか `uname`/`nickname`/`avatar`/`area_id`/`genre_id`/`group_id`/`other_members`/`is_track`/`draft`/`cheer`/`comment`/`rank`/`members`/`thumb_url`/`notes`/`photos` 等のキーもある。`start`/`end` は `YYYY-MM-DD` の文字列、`days` は数値文字列、`permission.guest`/`permission.user` 等は `"1"`/`"0"` の文字列。
 
+終端を過ぎたときのエラー応答 (取得日: 2026-10-12、HTTP 200、`application/json`)。`reclist` キーが無い。
+
+```bash
+curl -s 'https://api.yamareco.com/api/v1/getReclist/user/1005182/9999' --header 'Accept: application/json'
+```
+
+```json
+{ "err": 1, "errcode": "NODATA", "message": "" }
+```
+
 `page_url` はこの skill では使わない (詳細 URL は下記「HTML から抽出する手順」で `rec_id` から直接組み立てる。理由: `page_url` はスキームが `http` で不整合)。
 
 ## 個別山行の詳細取得
 
-`GET /api/v1/getRec/{rec_id}` は OAuth 認証が必要で、未認証だと `{"err":1,"message":"App does not have a valid scope."}` が返る。
+`GET /api/v1/getRec/{rec_id}` は OAuth 認証が必要で、未認証だと HTTP 403 が返り、本文は JSON ではなくプレーンテキストの `App does not have a valid scope.` になる。
+
+未認証時の実応答 (取得日: 2026-10-12、HTTP 403、`Content-Type` は `application/json` だが本文はプレーンテキスト)。
+
+```bash
+curl -sS -w '\nHTTP %{http_code} %{content_type}\n' 'https://api.yamareco.com/api/v1/getRec/10012224' --header 'Accept: application/json'
+```
+
+```text
+App does not have a valid scope.
+HTTP 403 application/json; charset=utf-8
+```
 
 現状は API では詳細取れない。HTML から抽出する。
 
@@ -115,6 +136,35 @@ grep -oE 'font-weight:bold;font-size:18px;">[0-9.,]+</span>(km|m)' "/tmp/yamarec
 ```bash
 grep -oE 'pace[1-4]">[^<]+' "/tmp/yamareco-{rec_id}-utf8.html"
 grep -oE 'pace-num.{1,150}' "/tmp/yamareco-{rec_id}-utf8.html" | grep -oE 'font-en">[0-9.]+'
+```
+
+次は実際に抽出した出力 (取得日: 2026-10-12、rec_id `10012224`、`head -3` で先頭 3 件までに絞っており、以降は省略。`time1` は複数マッチし、先頭 1 件が山行時間、2 件目以降は別文脈の値)。
+
+```bash
+curl -s -A "Mozilla/5.0" "https://www.yamareco.com/modules/yamareco/detail-10012224.html" -o "/tmp/yamareco-10012224.html"
+iconv -f EUC-JP -t UTF-8//IGNORE "/tmp/yamareco-10012224.html" > "/tmp/yamareco-10012224-utf8.html"
+grep -oE 'class="time1">[0-9:]+' "/tmp/yamareco-10012224-utf8.html" | head -3
+grep -oE 'class="time2">[0-9:]+' "/tmp/yamareco-10012224-utf8.html" | head -3
+grep -oE 'class="time3">[0-9:]+' "/tmp/yamareco-10012224-utf8.html" | head -3
+grep -oE 'font-weight:bold;font-size:18px;">[0-9.,]+</span>(km|m)' "/tmp/yamareco-10012224-utf8.html" | head -3
+grep -oE 'pace[1-4]">[^<]+' "/tmp/yamareco-10012224-utf8.html"
+grep -oE 'pace-num.{1,150}' "/tmp/yamareco-10012224-utf8.html" | grep -oE 'font-en">[0-9.]+'
+```
+
+```text
+class="time1">6:29
+class="time1">10:42
+class="time1">10:55
+class="time2">1:17
+class="time2">10:43
+class="time2">11:10
+class="time3">7:46
+font-weight:bold;font-size:18px;">15.8</span>km
+font-weight:bold;font-size:18px;">1,511</span>m
+font-weight:bold;font-size:18px;">1,511</span>m
+pace3">速い
+font-en">0.7
+font-en">0.8
 ```
 
 ### 抽出結果の検証
@@ -248,6 +298,7 @@ iconv -f EUC-JP -t UTF-8//IGNORE "/tmp/yamareco-plan-{plan_id}.html" > "/tmp/yam
   ```
 
   実 HTML では `time2`/`time3` は `class="time2">`/`class="time3">` に直接続く箇所が totaltime 内の 1 件しか無く (距離・登り・下りの `dd class="time2" style="...">` は `class="time2"` の直後が `style=` でありこのパターンには一致しない)、`head -1` を付けなくても実害は無いが、`time1` は必ず `head -1` で絞る。
+
 - 旧レイアウト: `totaltime` の合計が無い。後述の行動予定の通過時刻列から、最初の時刻 (出発) と最後の時刻 (下山) を求める。両者の差で行程の幅を出す。この端点差は休憩を含む合計に相当し、`time1` (行動時間のみ) とは意味が違う。旧レイアウトしか無く端点差しか取れない場合は、これを計画タイムとして使ったうえで、後述の補正手順にある休憩 1〜1.5 時間の追加上乗せは行わない (二重計上防止)。
 
 行動予定 (通過予定時刻列) は次のように取得する。
@@ -304,6 +355,20 @@ iconv -f EUC-JP -t UTF-8//IGNORE "/tmp/yamareco-plan-{plan_id}.html" > "/tmp/yam
 
 一方、必須パラメータの欠落は `errcode: "FORMAT"` で返る (実測: `area_id`/`genre_id`/`is_track`/`ptid` を省略すると `{"err":1,"errcode":"FORMAT","message":"<p>The area_id field is required.</p>…"}`)。こちらはリクエストの組み立てが誤っているサインで、`NODATA` (=正常な 0 件/終端) とは区別して修正する。
 
+必須パラメータ欠落時の実応答 (取得日: 2026-10-12、HTTP 200。`area_id`/`genre_id`/`is_track`/`ptid` を省略)。
+
+```bash
+curl -sS -X POST 'https://api.yamareco.com/api/v1/searchPlan' -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'page=1' --data-urlencode 'place=塔ノ岳'
+```
+
+```json
+{
+  "err": 1,
+  "errcode": "FORMAT",
+  "message": "<p>The area_id field is required.</p>\n<p>The genre_id field is required.</p>\n<p>The is_track field is required.</p>\n<p>The ptid field is required.</p>\n"
+}
+```
+
 レスポンスには `track_time`/`track_dist` を含まない。
 
 POST だが検索のみで副作用は無いので実行してよい。詳細 HTML の取得を含め、リクエストは 1 件ずつ順に行い、並列多重リクエストや短時間の連打はしない。
@@ -358,6 +423,7 @@ curl -sS -X POST 'https://api.yamareco.com/api/v1/searchPlan' \
    3. 上記で順位が付かない場合はレスポンスの返り順をそのまま使う (実測では `start` 降順に見えたが、これは実装依存の挙動であり根拠のある優先順位ではない)。
 
    詳細 HTML を開く件数の上限は、実測に基づく値ではなくリクエスト数を抑えるための運用上の目安として既定 10 件とする (この数値自体に統計的な裏付けは無い)。上限に達しても一致が確認できない場合、`page` を増やして候補を広げるかはユーザに確認する (無制限に辿らない)。
+
 3. 見つかった計画の詳細 HTML から `time1` (山行 = 行動時間) と `pace-num` (予定倍率) を抽出する。
    - `time1` は複数マッチのうち最初の 1 件を採用する (詳細は「個別計画の詳細取得」参照)。
    - 候補スクリーニング中に距離・登り・下りが (行またぎで拾っても) 0 件の候補に当たった場合、既存の「抽出結果の検証」にある構造変化の停止規則はここでは適用せず、その候補をスキップして次の候補に進む。理由: 他ユーザの任意の計画にはルート未設定等の想定外のものが含まれうるため。

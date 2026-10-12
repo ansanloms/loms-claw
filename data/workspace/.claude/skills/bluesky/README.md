@@ -4,17 +4,11 @@
 
 ## できること
 
-- 直近の投稿内容・関心トピックの把握 (`app.bsky.feed.getAuthorFeed`)
-- プロフィールと各種件数の取得 (`app.bsky.actor.getProfile`)
-- フォロー/フォロワーの一覧と、傾向からの関心分野の推測 (`app.bsky.graph.getFollows`/`getFollowers`)
-- 画像はダウンロード後に ffmpeg でリサイズして表示
+直近の投稿内容と関心トピックは `app.bsky.feed.getAuthorFeed` で、プロフィールと各種件数は `app.bsky.actor.getProfile` で取得する。フォロー/フォロワーの一覧は `app.bsky.graph.getFollows`/`getFollowers` で取得し、その傾向から関心分野を推測する。画像はダウンロード後に ffmpeg でリサイズして表示する。
 
 ## 対象外
 
-- いいね一覧など認証必須のデータの取得
-- 投稿・フォローの作成/削除
-
-対象は公開情報のみ。
+いいね一覧など認証必須のデータの取得と、投稿・フォローの作成/削除はできない。対象は公開情報のみ。
 
 ## 発動する場面
 

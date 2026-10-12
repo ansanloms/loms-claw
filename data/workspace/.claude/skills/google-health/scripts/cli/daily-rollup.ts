@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { cli, define } from "gunshi";
 import { loadTokenConfig } from "../lib/config.ts";
 import { getValidToken } from "../lib/token-file.ts";
@@ -28,11 +29,11 @@ const command = define({
       console.error(
         "usage: daily-rollup <dataType> --from=<YYYY-MM-DD> --to=<YYYY-MM-DD>",
       );
-      Deno.exit(1);
+      process.exit(1);
     }
     if (from === undefined || to === undefined) {
       console.error("usage: --from と --to は必須");
-      Deno.exit(1);
+      process.exit(1);
     }
 
     try {
@@ -42,8 +43,7 @@ const command = define({
       const config = loadTokenConfig();
       const token = await getValidToken(config);
 
-      const url =
-        `${API_BASE}/users/me/dataTypes/${dataType}/dataPoints:dailyRollUp`;
+      const url = `${API_BASE}/users/me/dataTypes/${dataType}/dataPoints:dailyRollUp`;
       const rollupDataPoints = await postPaginated(
         url,
         token.access_token,
@@ -53,11 +53,9 @@ const command = define({
       console.log(JSON.stringify({ rollupDataPoints }));
     } catch (e) {
       console.error(e instanceof Error ? e.message : String(e));
-      Deno.exit(1);
+      process.exit(1);
     }
   },
 });
 
-if (import.meta.main) {
-  await cli(Deno.args, command);
-}
+await cli(process.argv.slice(2), command);

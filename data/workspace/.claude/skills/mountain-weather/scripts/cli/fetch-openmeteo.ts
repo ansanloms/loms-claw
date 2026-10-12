@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { cli, define } from "gunshi";
 import {
   buildForecastUrl,
@@ -86,7 +87,7 @@ const command = define({
       console.error(
         "usage: fetch-openmeteo --lat=<緯度> --lon=<経度> --elevation=<山頂標高 m> [--days=<1..7>]",
       );
-      Deno.exit(1);
+      process.exit(1);
     }
 
     try {
@@ -101,11 +102,9 @@ const command = define({
       console.log(JSON.stringify(result, null, 2));
     } catch (e) {
       console.error(e instanceof Error ? e.message : String(e));
-      Deno.exit(1);
+      process.exit(1);
     }
   },
 });
 
-if (import.meta.main) {
-  await cli(Deno.args, command);
-}
+await cli(process.argv.slice(2), command);

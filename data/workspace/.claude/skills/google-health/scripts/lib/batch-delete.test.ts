@@ -1,10 +1,11 @@
-import { assertEquals } from "@std/assert";
+import { test } from "node:test";
+import assert from "node:assert/strict";
 import { buildBatchDeleteBody } from "./batch-delete.ts";
 
-Deno.test("buildBatchDeleteBody: names 配列をそのまま { names } に包む", () => {
-  assertEquals(buildBatchDeleteBody(["a", "b"]), { names: ["a", "b"] });
+test("buildBatchDeleteBody: names 配列をそのまま { names } に包む", () => {
+  assert.deepEqual(buildBatchDeleteBody(["a", "b"]), { names: ["a", "b"] });
 });
 
-Deno.test("buildBatchDeleteBody: 空配列も許容する", () => {
-  assertEquals(buildBatchDeleteBody([]), { names: [] });
+test("buildBatchDeleteBody: 空配列も許容する", () => {
+  assert.deepEqual(buildBatchDeleteBody([]), { names: [] });
 });

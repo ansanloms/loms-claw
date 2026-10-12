@@ -15,7 +15,7 @@ export function redirectUriForPort(port: number): string {
 
 /** 必須環境変数を読む。無ければ変数名を含むエラーを投げる。 */
 function requireEnv(name: string): string {
-  const value = Deno.env.get(name);
+  const value = process.env[name];
   if (value === undefined || value === "") {
     throw new Error(`環境変数 ${name} が未設定`);
   }

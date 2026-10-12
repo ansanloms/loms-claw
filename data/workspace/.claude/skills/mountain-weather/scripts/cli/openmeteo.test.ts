@@ -1,4 +1,5 @@
-import { assertEquals, assertThrows } from "@std/assert";
+import { test } from "node:test";
+import assert from "node:assert/strict";
 import {
   buildForecastUrl,
   HOURLY_VARS,
@@ -31,49 +32,49 @@ function validBody(): OpenMeteoResponse {
   };
 }
 
-Deno.test("buildForecastUrl: 固定パラメータと指定値が全て入る", () => {
+test("buildForecastUrl: 固定パラメータと指定値が全て入る", () => {
   const url = new URL(buildForecastUrl(PARAMS));
   const q = url.searchParams;
-  assertEquals(q.get("latitude"), "35.3606");
-  assertEquals(q.get("longitude"), "138.7274");
-  assertEquals(q.get("elevation"), "3776");
-  assertEquals(q.get("hourly"), HOURLY_VARS.join(","));
-  assertEquals(q.get("timezone"), "Asia/Tokyo");
-  assertEquals(q.get("wind_speed_unit"), "ms");
-  assertEquals(q.get("forecast_days"), "3");
+  assert.deepEqual(q.get("latitude"), "35.3606");
+  assert.deepEqual(q.get("longitude"), "138.7274");
+  assert.deepEqual(q.get("elevation"), "3776");
+  assert.deepEqual(q.get("hourly"), HOURLY_VARS.join(","));
+  assert.deepEqual(q.get("timezone"), "Asia/Tokyo");
+  assert.deepEqual(q.get("wind_speed_unit"), "ms");
+  assert.deepEqual(q.get("forecast_days"), "3");
 });
 
-Deno.test("toResult: 時刻ごとのレコードに整形し、単位と null を保持する", () => {
+test("toResult: 時刻ごとのレコードに整形し、単位と null を保持する", () => {
   const r = toResult(validBody(), PARAMS);
-  assertEquals(r.elevation, 3776);
-  assertEquals(r.hourly.length, 2);
-  assertEquals(r.hourly[0].time, "2026-07-06T00:00");
-  assertEquals(r.hourly[0].temperature_2m, 1);
-  assertEquals(r.hourly[0].precipitation_probability, null);
-  assertEquals(r.hourly[1].precipitation_probability, 40);
-  assertEquals(r.units.temperature_2m, "unit");
-  assertEquals(r.license, "CC BY 4.0");
+  assert.deepEqual(r.elevation, 3776);
+  assert.deepEqual(r.hourly.length, 2);
+  assert.deepEqual(r.hourly[0].time, "2026-07-06T00:00");
+  assert.deepEqual(r.hourly[0].temperature_2m, 1);
+  assert.deepEqual(r.hourly[0].precipitation_probability, null);
+  assert.deepEqual(r.hourly[1].precipitation_probability, 40);
+  assert.deepEqual(r.units.temperature_2m, "unit");
+  assert.deepEqual(r.license, "CC BY 4.0");
 });
 
-Deno.test("toResult: elevation 不一致は例外 (標高補正の検証)", () => {
+test("toResult: elevation 不一致は例外 (標高補正の検証)", () => {
   const body = validBody();
   body.elevation = 3720; // API が DEM 標高等に置き換えた想定
-  assertThrows(() => toResult(body, PARAMS), Error, "elevation");
+  assert.throws(() => toResult(body, PARAMS), /elevation/);
 });
 
-Deno.test("toResult: error レスポンスは reason 付きで例外", () => {
+test("toResult: error レスポンスは reason 付きで例外", () => {
   const body: OpenMeteoResponse = { error: true, reason: "Invalid latitude" };
-  assertThrows(() => toResult(body, PARAMS), Error, "Invalid latitude");
+  assert.throws(() => toResult(body, PARAMS), /Invalid latitude/);
 });
 
-Deno.test("toResult: 変数の欠落は例外 (API 構造変化)", () => {
+test("toResult: 変数の欠落は例外 (API 構造変化)", () => {
   const body = validBody();
   delete (body.hourly as Record<string, unknown>).freezing_level_height;
-  assertThrows(() => toResult(body, PARAMS), Error, "freezing_level_height");
+  assert.throws(() => toResult(body, PARAMS), /freezing_level_height/);
 });
 
-Deno.test("toResult: 時刻列と長さ不一致は例外", () => {
+test("toResult: 時刻列と長さ不一致は例外", () => {
   const body = validBody();
   (body.hourly as Record<string, unknown>).temperature_2m = [1];
-  assertThrows(() => toResult(body, PARAMS), Error, "temperature_2m");
+  assert.throws(() => toResult(body, PARAMS), /temperature_2m/);
 });

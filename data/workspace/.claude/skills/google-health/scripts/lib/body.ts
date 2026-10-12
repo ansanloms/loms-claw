@@ -1,12 +1,14 @@
+import { text as readStreamText } from "node:stream/consumers";
+
 /**
  * create/update サブコマンドの `--body` (JSON 文字列) の検証と、create の応答 (Operation) の `done` 検査。
  * ネットワークに出る前に JSON として不正な入力を弾くために分離してある。
  */
 
-/** `--body` の値を読む。`-` のときは標準入力を全部読む (ネットワーク非依存だが Deno.stdin に依存するためテスト対象外)。 */
+/** `--body` の値を読む。`-` のときは標準入力を全部読む (ネットワーク非依存だが process.stdin に依存するためテスト対象外)。 */
 export async function readBodyArg(value: string): Promise<string> {
   if (value === "-") {
-    return await new Response(Deno.stdin.readable).text();
+    return await readStreamText(process.stdin);
   }
   return value;
 }
@@ -19,9 +21,7 @@ export function parseBodyArg(text: string): Record<string, unknown> {
   } catch {
     throw new Error("--body が JSON として解釈できない");
   }
-  if (
-    typeof parsed !== "object" || parsed === null || Array.isArray(parsed)
-  ) {
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     throw new Error("--body は JSON オブジェクトで指定する");
   }
   return parsed as Record<string, unknown>;
@@ -42,9 +42,10 @@ export function checkOperationDone(text: string): string | undefined {
   } catch {
     return undefined;
   }
-  const rec = typeof parsed === "object" && parsed !== null
-    ? (parsed as Record<string, unknown>)
-    : undefined;
+  const rec =
+    typeof parsed === "object" && parsed !== null
+      ? (parsed as Record<string, unknown>)
+      : undefined;
   if (rec === undefined) {
     return undefined;
   }

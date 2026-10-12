@@ -43,9 +43,9 @@ export function buildAuthUrl(params: AuthUrlParams): string {
 /** CSRF 対策の state をランダムに生成する (32 バイトの hex 文字列)。 */
 export function generateState(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
-  return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join(
-    "",
-  );
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 /** authorization_code 交換のレスポンス。 */
@@ -112,16 +112,20 @@ export async function exchangeCode(
   params: ExchangeCodeParams,
   fetchFn: typeof fetch = fetch,
 ): Promise<ExchangeCodeResponse> {
-  const body = await postToken({
-    client_id: params.clientId,
-    client_secret: params.clientSecret,
-    redirect_uri: params.redirectUri,
-    grant_type: "authorization_code",
-    code: params.code,
-  }, fetchFn);
-  const rec = typeof body === "object" && body !== null
-    ? (body as Record<string, unknown>)
-    : undefined;
+  const body = await postToken(
+    {
+      client_id: params.clientId,
+      client_secret: params.clientSecret,
+      redirect_uri: params.redirectUri,
+      grant_type: "authorization_code",
+      code: params.code,
+    },
+    fetchFn,
+  );
+  const rec =
+    typeof body === "object" && body !== null
+      ? (body as Record<string, unknown>)
+      : undefined;
   if (
     rec === undefined ||
     typeof rec.access_token !== "string" ||
@@ -152,15 +156,19 @@ export async function refreshToken(
   params: RefreshTokenParams,
   fetchFn: typeof fetch = fetch,
 ): Promise<RefreshResponse> {
-  const body = await postToken({
-    client_id: params.clientId,
-    client_secret: params.clientSecret,
-    grant_type: "refresh_token",
-    refresh_token: params.refreshToken,
-  }, fetchFn);
-  const rec = typeof body === "object" && body !== null
-    ? (body as Record<string, unknown>)
-    : undefined;
+  const body = await postToken(
+    {
+      client_id: params.clientId,
+      client_secret: params.clientSecret,
+      grant_type: "refresh_token",
+      refresh_token: params.refreshToken,
+    },
+    fetchFn,
+  );
+  const rec =
+    typeof body === "object" && body !== null
+      ? (body as Record<string, unknown>)
+      : undefined;
   if (
     rec === undefined ||
     typeof rec.access_token !== "string" ||

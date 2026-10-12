@@ -54,6 +54,7 @@ description: >-
   ```
 
   取得した XML は専用パーサを介さず、テキストとしてそのまま読んで項目を拾う。RSS 2.0 は `<item>` ごとの `<title>`・`<link>`・`<pubDate>`・`<description>`、Atom は `<entry>` ごとの `<title>`・`<link href="...">`・`<updated>` または `<published>`・`<summary>` を見る。
+
 - 個別記事ページ (公開日確認・要約根拠の取得): `curl -sL -A "<UA>" "<記事 URL>"` で HTML を直接取得し、返ってきたテキストをそのまま読んで本文・日付を確認する。
   - UA: RSS/Atom と同じ UA を使い、WebFetch は使わない。
   - 理由は RSS/Atom で curl を選んだ理由と同じで、AI による要約変換を介さず取得内容をそのまま扱うことで、数値 (CVSS・計測値等) の変換過程での誤りを避けるためである。詳細は「ルール/注意」の数値の扱いを参照。
@@ -63,6 +64,48 @@ description: >-
   - 優先ソースはあるが RSS/Atom の URL が無い、または不明である。
   - RSS/Atom の取得を試みたが、HTTP エラーやタイムアウトで失敗した。
   - RSS/Atom は取得できたが、テーマに合致する記事が無かった。
+
+### 取得結果の実サンプル
+
+読む対象の実物を示す。いずれも実際に取得した結果で、長いため途中を省略している。
+
+RSS 2.0 フィード (取得日: 2026-10-12、先頭 1 項目のみ。`<channel>` 内の後続の `<item>` は省略)。コマンドは次のとおり。
+
+```sh
+curl -sL -A "Mozilla/5.0 (compatible; news-digest-skill/1.0; +https://github.com/ansanloms/skills)" "https://gigazine.net/news/rss_2.0/"
+```
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" ...>
+    <channel>
+    <title>GIGAZINE</title>
+    <link>https://gigazine.net/</link>
+    ...
+    <item>
+      <title>7年前に発売されたNVIDIA製品がAIブームで1.5倍に値上がり</title>
+      <link>https://gigazine.net/news/20261012&#45;nvidia&#45;shield&#45;tv&#45;price&#45;hike/</link>
+      <guid isPermaLink="true">https://gigazine.net/news/20261012-nvidia-shield-tv-price-hike/</guid>
+      <description><![CDATA[NVIDIAが7年前に発売した、...値上げされました。<p><b><a href="...">続きを読む...</a></b></p>]]></description>
+      <pubDate>Mon, 12 Oct 2026 23:15:00 +0900</pubDate>
+      <dc:subject>AI, ハードウェア,</dc:subject>
+      <dc:date>2026-10-12T23:15:00+09:00</dc:date>
+    </item>
+    ...
+```
+
+`<link>` の URL には `&#45;` (ハイフンの文字参照) が含まれる。個別 URL として使うときは `-` に戻す (`<guid>` は `-` のまま入っている)。`<description>` は冒頭の概要のみで、要約の根拠にはならない。
+
+取得失敗の例 (取得日: 2026-10-12)。同じ URL を短時間に繰り返し取得すると、フィードの代わりに Cloudflare のボット判定ページが HTTP 429 で返った。XML ではなく HTML が返るため、`<item>` が無いことで取得失敗と判断する (本文は先頭のみ、以降は省略)。コマンドと本文の先頭は次のとおり。
+
+```sh
+curl -sL -A "Mozilla/5.0 (compatible; news-digest-skill/1.0; +https://github.com/ansanloms/skills)" -o /dev/null -w '%{http_code} %{content_type}\n' "https://gigazine.net/news/rss_2.0/"
+# 429 text/html; charset=UTF-8
+```
+
+```html
+<!DOCTYPE html><html lang="en-US"><head><title>Just a moment...</title><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">...
+```
 
 ## 出力
 

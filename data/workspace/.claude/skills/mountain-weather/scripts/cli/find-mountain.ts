@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+import { readFile, writeFile } from "node:fs/promises";
 import { cli, define } from "gunshi";
 import {
   BA_LIST,
@@ -48,13 +50,13 @@ async function updateAsset(): Promise<Asset> {
     source: `${BASE}?ba=<ba>&type=${TYPE}`,
     entries,
   };
-  await Deno.writeTextFile(ASSET_URL, JSON.stringify(asset, null, 2) + "\n");
+  await writeFile(ASSET_URL, JSON.stringify(asset, null, 2) + "\n");
   return asset;
 }
 
 async function readAsset(): Promise<Asset> {
   try {
-    return JSON.parse(await Deno.readTextFile(ASSET_URL)) as Asset;
+    return JSON.parse(await readFile(ASSET_URL, "utf-8")) as Asset;
   } catch {
     throw new Error(
       "キャッシュ (assets/tenkura-mountains.json) が読めない。--update で生成する。",
@@ -86,7 +88,7 @@ const command = define({
       console.error(
         "usage: find-mountain --name=<山名> [--update] | find-mountain --update",
       );
-      Deno.exit(1);
+      process.exit(1);
     }
 
     try {
@@ -116,7 +118,7 @@ const command = define({
         console.error(
           `「${name}」が 0 件。キャッシュ (${asset.fetchedAt} 取得) が古い可能性がある。--update を付けて取り直してから再判断する。`,
         );
-        Deno.exit(1);
+        process.exit(1);
       }
 
       console.log(
@@ -128,11 +130,9 @@ const command = define({
       );
     } catch (e) {
       console.error(e instanceof Error ? e.message : String(e));
-      Deno.exit(1);
+      process.exit(1);
     }
   },
 });
 
-if (import.meta.main) {
-  await cli(Deno.args, command);
-}
+await cli(process.argv.slice(2), command);

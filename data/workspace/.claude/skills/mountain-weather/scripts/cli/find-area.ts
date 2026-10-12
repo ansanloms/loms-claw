@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+import { readFile, writeFile } from "node:fs/promises";
 import { cli, define } from "gunshi";
 import { type AreaData, resolveMunicipality, stripAreaJson } from "./area.ts";
 
@@ -23,13 +25,13 @@ async function updateAsset(): Promise<Asset> {
     source: SOURCE,
     ...data,
   };
-  await Deno.writeTextFile(ASSET_URL, JSON.stringify(asset, null, 2) + "\n");
+  await writeFile(ASSET_URL, JSON.stringify(asset, null, 2) + "\n");
   return asset;
 }
 
 async function readAsset(): Promise<Asset> {
   try {
-    return JSON.parse(await Deno.readTextFile(ASSET_URL)) as Asset;
+    return JSON.parse(await readFile(ASSET_URL, "utf-8")) as Asset;
   } catch {
     throw new Error(
       "キャッシュ (assets/jma-area.json) が読めない。--update で生成する。",
@@ -62,7 +64,7 @@ const command = define({
       console.error(
         "usage: find-area --municipality=<市町村・地区名> [--update] | find-area --update",
       );
-      Deno.exit(1);
+      process.exit(1);
     }
 
     try {
@@ -89,7 +91,7 @@ const command = define({
         console.error(
           `「${municipality}」が 0 件。より広い市名・近隣地名で引き直すか、キャッシュ (${asset.fetchedAt} 取得) が古い可能性があれば --update を付けて取り直す。`,
         );
-        Deno.exit(1);
+        process.exit(1);
       }
 
       console.log(
@@ -101,11 +103,9 @@ const command = define({
       );
     } catch (e) {
       console.error(e instanceof Error ? e.message : String(e));
-      Deno.exit(1);
+      process.exit(1);
     }
   },
 });
 
-if (import.meta.main) {
-  await cli(Deno.args, command);
-}
+await cli(process.argv.slice(2), command);

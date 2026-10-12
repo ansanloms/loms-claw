@@ -1,64 +1,59 @@
-import { assertEquals, assertThrows } from "@std/assert";
+import { test } from "node:test";
+import assert from "node:assert/strict";
 import { checkOperationDone, parseBodyArg } from "./body.ts";
 
-Deno.test("parseBodyArg: JSON オブジェクトの文字列をパースする", () => {
-  assertEquals(parseBodyArg('{"foo":"bar"}'), { foo: "bar" });
+test("parseBodyArg: JSON オブジェクトの文字列をパースする", () => {
+  assert.deepEqual(parseBodyArg('{"foo":"bar"}'), { foo: "bar" });
 });
 
-Deno.test("parseBodyArg: JSON として解釈できない文字列はエラー", () => {
-  assertThrows(
-    () => parseBodyArg("not json"),
-    Error,
-    "JSON として解釈できない",
-  );
+test("parseBodyArg: JSON として解釈できない文字列はエラー", () => {
+  assert.throws(() => parseBodyArg("not json"), /JSON として解釈できない/);
 });
 
-Deno.test("parseBodyArg: オブジェクトでない JSON (配列・文字列・数値・null) はエラー", () => {
-  assertThrows(() => parseBodyArg("[1,2,3]"), Error, "JSON オブジェクト");
-  assertThrows(() => parseBodyArg('"str"'), Error, "JSON オブジェクト");
-  assertThrows(() => parseBodyArg("123"), Error, "JSON オブジェクト");
-  assertThrows(() => parseBodyArg("null"), Error, "JSON オブジェクト");
+test("parseBodyArg: オブジェクトでない JSON (配列・文字列・数値・null) はエラー", () => {
+  assert.throws(() => parseBodyArg("[1,2,3]"), /JSON オブジェクト/);
+  assert.throws(() => parseBodyArg('"str"'), /JSON オブジェクト/);
+  assert.throws(() => parseBodyArg("123"), /JSON オブジェクト/);
+  assert.throws(() => parseBodyArg("null"), /JSON オブジェクト/);
 });
 
-Deno.test("checkOperationDone: done が false なら警告メッセージを返す", () => {
+test("checkOperationDone: done が false なら警告メッセージを返す", () => {
   const msg = checkOperationDone('{"done":false}');
-  assertEquals(typeof msg, "string");
+  assert.deepEqual(typeof msg, "string");
 });
 
-Deno.test("checkOperationDone: done が true なら undefined", () => {
-  assertEquals(checkOperationDone('{"done":true}'), undefined);
+test("checkOperationDone: done が true なら undefined", () => {
+  assert.deepEqual(checkOperationDone('{"done":true}'), undefined);
 });
 
-Deno.test("checkOperationDone: done が true で response があっても undefined (成功)", () => {
-  assertEquals(
+test("checkOperationDone: done が true で response があっても undefined (成功)", () => {
+  assert.deepEqual(
     checkOperationDone('{"done":true,"response":{"name":"x"}}'),
     undefined,
   );
 });
 
-Deno.test("checkOperationDone: error があれば code と message を含む例外 (done の値に関わらず)", () => {
-  assertThrows(
+test("checkOperationDone: error があれば code と message を含む例外 (done の値に関わらず)", () => {
+  assert.throws(
     () =>
       checkOperationDone(
         '{"error":{"code":500,"message":"Internal error encountered.","status":"INTERNAL"}}',
       ),
-    Error,
-    "code=500",
+    /code=500/,
   );
-  assertThrows(
+  assert.throws(
     () =>
       checkOperationDone(
         '{"error":{"code":500,"message":"Internal error encountered.","status":"INTERNAL"}}',
       ),
-    Error,
-    "Internal error encountered.",
+    /Internal error encountered\./,
   );
 });
 
-Deno.test("checkOperationDone: done フィールドが無ければ undefined", () => {
-  assertEquals(checkOperationDone('{"name":"x"}'), undefined);
+test("checkOperationDone: done フィールドが無ければ undefined", () => {
+  assert.deepEqual(checkOperationDone('{"name":"x"}'), undefined);
 });
 
-Deno.test("checkOperationDone: JSON として解釈できない応答は undefined (検査を諦める)", () => {
-  assertEquals(checkOperationDone("not json"), undefined);
+test("checkOperationDone: JSON として解釈できない応答は undefined (検査を諦める)", () => {
+  assert.deepEqual(checkOperationDone("not json"), undefined);
 });

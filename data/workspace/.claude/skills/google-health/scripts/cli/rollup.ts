@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { cli, define } from "gunshi";
 import { loadTokenConfig } from "../lib/config.ts";
 import { getValidToken } from "../lib/token-file.ts";
@@ -31,11 +32,11 @@ const command = define({
       console.error(
         "usage: rollup <dataType> --from=<RFC3339> --to=<RFC3339> --window=<30s|5m|1h>",
       );
-      Deno.exit(1);
+      process.exit(1);
     }
     if (from === undefined || to === undefined || window === undefined) {
       console.error("usage: --from・--to・--window は必須");
-      Deno.exit(1);
+      process.exit(1);
     }
 
     try {
@@ -44,8 +45,7 @@ const command = define({
       const config = loadTokenConfig();
       const token = await getValidToken(config);
 
-      const url =
-        `${API_BASE}/users/me/dataTypes/${dataType}/dataPoints:rollUp`;
+      const url = `${API_BASE}/users/me/dataTypes/${dataType}/dataPoints:rollUp`;
       const rollupDataPoints = await postPaginated(
         url,
         token.access_token,
@@ -55,11 +55,9 @@ const command = define({
       console.log(JSON.stringify({ rollupDataPoints }));
     } catch (e) {
       console.error(e instanceof Error ? e.message : String(e));
-      Deno.exit(1);
+      process.exit(1);
     }
   },
 });
 
-if (import.meta.main) {
-  await cli(Deno.args, command);
-}
+await cli(process.argv.slice(2), command);
