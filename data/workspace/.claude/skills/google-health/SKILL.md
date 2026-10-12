@@ -149,7 +149,27 @@ GOOGLE_HEALTH_TOKEN_PATH=<トークンファイルの絶対パス> \
 }
 ```
 
-`refresh_token_expired` が `true` のとき (残り日数が 0 以下) は、標準エラーに再認可が必要な旨を出して exit code 1 で終了する。このとき JSON は出力しない。
+`refresh_token_expired` が `true` のとき (残り日数が 0 以下) は、標準エラーに再認可が必要な旨を出して exit code 2 で終了する。このとき JSON は出力しない。exit code の全体は次のとおり。
+
+| exit code | 意味                                                                                                           |
+| --------- | -------------------------------------------------------------------------------------------------------------- |
+| 0         | 有効。標準出力に上の JSON を出す                                                                               |
+| 2         | リフレッシュトークンが失効している (再認可が必要)                                                              |
+| 1         | 判定できなかった。依存 (gunshi) 未インストール・環境変数の欠落・トークンファイルが読めない・フィールド欠落など |
+
+### skill の外から非対話で呼ぶ
+
+cron・監視スクリプトなど skill の外から `token-status` を呼ぶ場合の入口は次のコマンドで固定する。
+
+```sh
+npx --no --prefix "<scripts の絶対パス>" -- token-status
+```
+
+- 標準出力の JSON の形は上の実測サンプルのとおり。
+- 呼び出し側は exit code 2 を「再認可が必要」と扱う。1 は「判定できなかった」であり、失効とは限らない。理由: 依存未インストールでも Node が exit code 1 で落ちるため、1 を失効とみなすと誤検知する。
+- `token-status` はサーバへ問い合わせず、トークンファイルに記録されたリフレッシュトークンの取得時刻 (`refresh_token_obtained_at`、無ければ `obtained_at`) と `refresh_token_expires_in` から期限を計算する。公称の期限より前にサーバ側で失効したリフレッシュトークンは検出できず、exit code 0 になる。その場合は他のコマンドが refresh で exit code 1 になる。
+- exit code 1 を無視しない。セットアップや設定の不備で判定できなかった状態 (`apm update` 後の `npm ci` 忘れ・未認可でトークンファイルが無い・環境変数の欠落等) なので、exit code 2 とは別に通知する。原因は stderr で見分ける。
+- `apm update` で skill の実体が置き換わると `node_modules` も消える。更新のたびに `npm ci --omit=dev --prefix "<scripts の絶対パス>"` を再実行する。
 
 ## サブコマンド
 
@@ -340,7 +360,7 @@ GOOGLE_HEALTH_CLIENT_ID=<client_id> \
 
 公開リポジトリのため、サンプル中の測定値・ID・日時はダミー値に置き換えている。構造と型は実測のまま。
 
-次のうち、読み取り系の `datapoints` ・ `daily-rollup` の各サンプル (sleep・steps・active-minutes・distance・exercise・heart-rate・weight・body-fat・total-calories・daily-rollup steps) は 2026-10-12 に現行のコマンド `npx --no --prefix "<scripts の絶対パス>" -- <サブコマンド>` で再測定したもの。`token-status` の出力例 (「再認可」節) も同日の再測定。以降の `create nutrition-log` ・ `get` ・ `update` ・ `datapoints nutrition-log` ・ `batch-delete` のサンプルは Deno 実行時 (2026-09-27) のもので、取得コマンドの `deno task -q <サブコマンド>` は Deno 実行時の形。現在は `npx --no --prefix "<scripts の絶対パス>" -- <サブコマンド>` に相当する。これらは書き込みや、その削除済みの記録を対象とするため再測定していない。応答は API 由来で実行方式に依存しない。
+次のサンプルは、いずれも現行のコマンド `npx --no --prefix "<scripts の絶対パス>" -- <サブコマンド>` で実測したもの。`datapoints` ・ `daily-rollup` の各サンプル (sleep・steps・active-minutes・distance・exercise・heart-rate・weight・body-fat・total-calories・daily-rollup steps) は 2026-10-12 に取得した。`token-status` の出力例は「再認可」節にあり、同日に取得した。書き込み系の `create nutrition-log` ・ `get` ・ `update` ・ `datapoints nutrition-log` ・ `batch-delete` のサンプルは 2026-10-13 に取得した。書き込み系ではテスト用の記録を作成し、検証後に `batch-delete` で削除した。削除後の `datapoints nutrition-log` で残存なしを確認済み。
 
 ### datapoints sleep --reconcile (公式ドキュメント掲載の例)
 
@@ -1048,7 +1068,7 @@ GOOGLE_HEALTH_CLIENT_ID=<client_id> \
 
 ### create nutrition-log (実測)
 
-取得コマンド (2026-09-27 JST 取得): `deno task -q create nutrition-log --body '<下記のリクエスト body>'`。テスト用の記録で、確認後に `batch-delete` で削除済み。
+取得コマンド (2026-10-13 JST 取得): `npx --no --prefix "<scripts の絶対パス>" -- create nutrition-log --body '<下記のリクエスト body>'`。テスト用の記録で、確認後に `batch-delete` で削除済み。
 
 リクエスト body は次のとおり。`energy` ・ `totalCarbohydrate` ・ `totalFat` は公式例と同じ形で、`nutrients[]` の量は `quantity.grams` で通ることを実測で確認した。`interval` には `startUtcOffset`/`endUtcOffset` を付けて JST を明示した。
 
@@ -1116,7 +1136,7 @@ GOOGLE_HEALTH_CLIENT_ID=<client_id> \
 
 ### get (実測)
 
-取得コマンド (2026-09-27 JST 取得): `deno task -q get users/<USER_ID>/dataTypes/nutrition-log/dataPoints/<DATA_POINT_ID>` (上記 create で登録した記録)。応答は `Operation` で包まれず、`DataPoint` がそのまま返る (`name` ・ `dataSource` ・ `nutritionLog` のみで `create` の `response` と同じ形)。
+取得コマンド (2026-10-13 JST 取得): `npx --no --prefix "<scripts の絶対パス>" -- get users/<USER_ID>/dataTypes/nutrition-log/dataPoints/<DATA_POINT_ID>` (上記 create で登録した記録)。応答は `Operation` で包まれず、`DataPoint` がそのまま返る (`name` ・ `dataSource` ・ `nutritionLog` のみで `create` の `response` と同じ形)。
 
 ```json
 {
@@ -1157,7 +1177,7 @@ GOOGLE_HEALTH_CLIENT_ID=<client_id> \
 
 ### update (実測、失敗)
 
-取得コマンド (2026-09-27 JST 取得): `deno task -q create nutrition-log --body '{"nutritionLog": {"interval": {"startTime": "2026-09-27T03:00:00+09:00", "endTime": "2026-09-27T03:20:00+09:00"}, "mealType": "SNACK", "foodDisplayName": "テスト記録 (update 検証、削除予定)", "energy": {"kcal": 100}}}'` で `users/<USER_ID>/dataTypes/nutrition-log/dataPoints/<DATA_POINT_ID>` を作成し、`deno task -q update users/<USER_ID>/dataTypes/nutrition-log/dataPoints/<DATA_POINT_ID> --body '{"nutritionLog": {"energy": {"kcal": 120}}}'` を実行した。今回も成功する形を確認できなかった。詳細と試した形は「サブコマンド」節の `update` の説明を参照。応答 (500) は次のとおり。
+取得コマンド (2026-10-13 JST 取得): `npx --no --prefix "<scripts の絶対パス>" -- create nutrition-log --body '{"nutritionLog": {"interval": {"startTime": "2026-10-13T03:00:00+09:00", "endTime": "2026-10-13T03:20:00+09:00"}, "mealType": "SNACK", "foodDisplayName": "テスト記録 (update 検証、削除予定)", "energy": {"kcal": 100}}}'` で `users/<USER_ID>/dataTypes/nutrition-log/dataPoints/<DATA_POINT_ID>` を作成し、`npx --no --prefix "<scripts の絶対パス>" -- update users/<USER_ID>/dataTypes/nutrition-log/dataPoints/<DATA_POINT_ID> --body '{"nutritionLog": {"energy": {"kcal": 120}}}'` を実行した。今回も成功する形を確認できなかった。詳細と試した形は「サブコマンド」節の `update` の説明を参照。標準エラーに `PATCH <URL> 失敗 (HTTP 500): ` に続けて応答ボディが出力され、exit code 1 で終了する。応答ボディ (500) は次のとおり。
 
 ```json
 {
@@ -1169,11 +1189,11 @@ GOOGLE_HEALTH_CLIENT_ID=<client_id> \
 }
 ```
 
-検証後、`deno task -q batch-delete nutrition-log users/<USER_ID>/dataTypes/nutrition-log/dataPoints/<DATA_POINT_ID>` で作成した記録を削除し、`deno task -q datapoints nutrition-log --from 2026-09-27 --to 2026-09-28` で残存なし (`{"dataPoints":[]}`) を確認した。
+検証後、`npx --no --prefix "<scripts の絶対パス>" -- batch-delete nutrition-log users/<USER_ID>/dataTypes/nutrition-log/dataPoints/<DATA_POINT_ID>` で作成した記録を削除し、`npx --no --prefix "<scripts の絶対パス>" -- datapoints nutrition-log --from 2026-10-13 --to 2026-10-14` で残存なし (`{"dataPoints":[]}`) を確認した。
 
 ### datapoints nutrition-log (実測)
 
-取得コマンド (2026-09-27 JST 取得): `deno task -q datapoints nutrition-log --from 2026-09-27 --to 2026-09-28` (上記 create で登録した記録のみが該当期間に存在した状態)。`{"dataPoints": [...]}` の形で、要素は `get` と同じ `DataPoint`。
+取得コマンド (2026-10-13 JST 取得): `npx --no --prefix "<scripts の絶対パス>" -- datapoints nutrition-log --from 2026-10-13 --to 2026-10-14` (上記 create で登録した記録のみが該当期間に存在した状態)。`{"dataPoints": [...]}` の形で、要素は `get` と同じ `DataPoint`。
 
 ```json
 {
@@ -1218,7 +1238,7 @@ filter は `nutrition_log.interval.civil_start_time` (日付) のみ通る。`st
 
 ### batch-delete (実測)
 
-取得コマンド (2026-09-27 JST 取得): `deno task -q batch-delete nutrition-log users/<USER_ID>/dataTypes/nutrition-log/dataPoints/<DATA_POINT_ID>` (上記の記録を削除)。応答は `Operation` で、`response` に `BatchDeleteDataPointsResponse` (削除した `DataPoint` の配列。要素の形は `get` と同じ) が入る。
+取得コマンド (2026-10-13 JST 取得): `npx --no --prefix "<scripts の絶対パス>" -- batch-delete nutrition-log users/<USER_ID>/dataTypes/nutrition-log/dataPoints/<DATA_POINT_ID>` (上記の記録を削除)。応答は `Operation` で、`response` に `BatchDeleteDataPointsResponse` (削除した `DataPoint` の配列。要素の形は `get` と同じ) が入る。
 
 ```json
 {
@@ -1263,7 +1283,7 @@ filter は `nutrition_log.interval.civil_start_time` (日付) のみ通る。`st
 }
 ```
 
-削除後の `get` (2026-09-27 JST 取得): 404。
+削除後の `get` (2026-10-13 JST 取得): `npx --no --prefix "<scripts の絶対パス>" -- get users/<USER_ID>/dataTypes/nutrition-log/dataPoints/<DATA_POINT_ID>`。標準エラーに `<URL> 取得失敗 (HTTP 404): ` に続けて応答ボディが出力され、exit code 1 で終了する。応答ボディ (404) は次のとおり。
 
 ```json
 {
@@ -1345,9 +1365,12 @@ invalid_grant (実測、2026-09-26 JST 取得): OAuth token endpoint (`https://o
 ## エラー時の挙動
 
 - `datapoints` ・ `daily-rollup` ・ `get` ・ `rollup` ・ `create` ・ `update` ・ `batch-delete` ・ `/token` のいずれも、非 2xx レスポンス (429 を含む) は HTTP ステータスと生のレスポンスボディを stderr に出力し、exit code 1 で終了する。リトライしない。値を捏造しない。
-- アクセストークンの更新 (refresh) に失敗した場合は、リフレッシュトークンが失効している可能性がある旨と `npx --no --prefix "<scripts の絶対パス>" -- auth` での再認可が必要な旨 (localhost に届かない端末では `auth-url` と `token <code>`) を stderr に出力し、exit code 1 で終了する。
-- `token-status` はリフレッシュトークンが失効済み (残り日数 0 以下) なら再認可が必要な旨を stderr に出力し、exit code 1 で終了する。このとき JSON は出力しない。
-- トークンファイルが読めない・必要なフィールドが揃っていない場合も、理由を添えて stderr に出力し exit code 1 で終了する。
+- アクセストークンの更新 (refresh) に失敗した場合は、リフレッシュトークンが失効している可能性がある旨と `npx --no --prefix "<scripts の絶対パス>" -- auth` での再認可が必要な旨 (localhost に届かない端末では `auth-url` と `token <code>`) を stderr に出力し、exit code 1 で終了する。失効しているかどうかは区別せず、失効していても exit code 1 になる。再認可の要否は `token-status` の exit code 2 を基準に判断する。ただし `token-status` はサーバへ問い合わせず、トークンファイルに記録されたリフレッシュトークンの取得時刻 (`refresh_token_obtained_at`、無ければ `obtained_at`) と `refresh_token_expires_in` から期限を計算するだけである。公称の期限より前にサーバ側で失効したリフレッシュトークンは検出できず、`token-status` は exit code 0 を返す。その場合は他のコマンドが refresh で exit code 1 になる。
+- `token-status` はリフレッシュトークンが失効済み (残り日数 0 以下) なら再認可が必要な旨を stderr に出力し、exit code 2 で終了する。このとき JSON は出力しない。
+- `token-status` でトークンファイルが読めない・必要なフィールドが揃っていない・環境変数が欠落している・依存が未インストールの場合は、失効とは区別して exit code 1 で終了する。stderr に出るものは原因ごとに異なる。
+  - 環境変数の欠落・トークンファイルが読めない・フィールドの欠落: この skill が理由を日本語で出力する。
+  - 依存の未インストール: Node の `ERR_MODULE_NOT_FOUND` のスタックが出る。skill 側は理由を出力できない。
+- 呼び出し側は exit code 2 を「再認可が必要」と扱う。サーバ側で先に失効した場合は exit code 0 のままなので、他のコマンドの refresh 失敗 (exit code 1) も再認可の要否の判断材料にする。
 
 ## 対象外
 

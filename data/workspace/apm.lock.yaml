@@ -1,11 +1,11 @@
 lockfile_version: '1'
-generated_at: '2026-10-12T15:27:32.929192+00:00'
+generated_at: '2026-10-12T23:54:36.924045+00:00'
 apm_version: 0.33.0
 dependencies:
 - repo_url: ansanloms/skills
   name: bluesky
   host: github.com
-  resolved_commit: a72decb6feef860ff1d3df2b80f6d1aa511a64a5
+  resolved_commit: 206e0f5488608ed8a81b73ceb37e501b433d740f
   version: unknown
   virtual_path: bluesky
   is_virtual: true
@@ -21,7 +21,7 @@ dependencies:
 - repo_url: ansanloms/skills
   name: discord
   host: github.com
-  resolved_commit: a72decb6feef860ff1d3df2b80f6d1aa511a64a5
+  resolved_commit: 206e0f5488608ed8a81b73ceb37e501b433d740f
   version: unknown
   virtual_path: discord
   is_virtual: true
@@ -37,7 +37,7 @@ dependencies:
 - repo_url: ansanloms/skills
   name: find-docs
   host: github.com
-  resolved_commit: a72decb6feef860ff1d3df2b80f6d1aa511a64a5
+  resolved_commit: 206e0f5488608ed8a81b73ceb37e501b433d740f
   version: unknown
   virtual_path: find-docs
   is_virtual: true
@@ -53,7 +53,7 @@ dependencies:
 - repo_url: ansanloms/skills
   name: google-health
   host: github.com
-  resolved_commit: a72decb6feef860ff1d3df2b80f6d1aa511a64a5
+  resolved_commit: 206e0f5488608ed8a81b73ceb37e501b433d740f
   version: unknown
   virtual_path: google-health
   is_virtual: true
@@ -74,6 +74,7 @@ dependencies:
   - .claude/skills/google-health/scripts/cli/datapoints.ts
   - .claude/skills/google-health/scripts/cli/get.ts
   - .claude/skills/google-health/scripts/cli/rollup.ts
+  - .claude/skills/google-health/scripts/cli/token-status.test.ts
   - .claude/skills/google-health/scripts/cli/token-status.ts
   - .claude/skills/google-health/scripts/cli/token.ts
   - .claude/skills/google-health/scripts/cli/update.ts
@@ -101,8 +102,8 @@ dependencies:
   - .claude/skills/google-health/scripts/package.json
   - .claude/skills/google-health/scripts/tsconfig.json
   deployed_file_hashes:
-    .claude/skills/google-health/README.md: sha256:1be1231b31583319aac7cddf34d1a1f089b39c0edd4eec5653f9e2cb46860260
-    .claude/skills/google-health/SKILL.md: sha256:7215c7be52e977e46cdd392a0aca78127aaf0761a2551c49e540376082a6acaa
+    .claude/skills/google-health/README.md: sha256:d7eca9a747a8e572843a1a812e15c8176da9e7bbb6b58c6538a3263fc65a0607
+    .claude/skills/google-health/SKILL.md: sha256:e4ac56a173f4fea24f73f36ff154616662c884785b8904d68c23790ac84a4c1a
     .claude/skills/google-health/scripts/.gitignore: sha256:4d56952b0fb13bf8f9b6c13a6d4c34a075bac3af447636a1df4335d7576e2f97
     .claude/skills/google-health/scripts/.npmrc: sha256:de8a5e7c930cbe6df5590b3e05fc178a5155ac18c2e4554c788b53e95b6979af
     .claude/skills/google-health/scripts/.oxfmtrc.json: sha256:522125f869e4d28e388c7ced11ebc9d9ddf93b0dcedee7e454644c35f8325e5a
@@ -115,7 +116,8 @@ dependencies:
     .claude/skills/google-health/scripts/cli/datapoints.ts: sha256:262916ac6a56a548c80aa818a4e4090558e1195bc0641459c32354f6b3726854
     .claude/skills/google-health/scripts/cli/get.ts: sha256:76b0b42dda55781f521e0e8127ea27d2864fb7e6ed56800aaa1be83fb285c01d
     .claude/skills/google-health/scripts/cli/rollup.ts: sha256:9f3069222bca6e5e44d1fda1dd9579328ebf7683ca8820607dc9881881dc897b
-    .claude/skills/google-health/scripts/cli/token-status.ts: sha256:b999e75ddc59b0eb852cbc2c7b88284b776b531b0a149446a04c7cccc4acccb4
+    .claude/skills/google-health/scripts/cli/token-status.test.ts: sha256:0c061f9a727e09216460e4bb5a8eac341d2369f01ac06b0c23119c89146adcfb
+    .claude/skills/google-health/scripts/cli/token-status.ts: sha256:05f2bac3545b73cf48a230cb0b72a1b76c561d3579f17eecb3882222d1d826d5
     .claude/skills/google-health/scripts/cli/token.ts: sha256:4d18dc788475b82e2ed00cf93d6852bdd7f02982097773b3bc3c1b1ac62fff25
     .claude/skills/google-health/scripts/cli/update.ts: sha256:69fdc41c46f3417443eeaeadb8718651698106a5f0ea4c5010fe2774ed8e71b4
     .claude/skills/google-health/scripts/lib/api.test.ts: sha256:f9d5caaad86122d3026cdd75cd08747b095768a49f66bcb3b9352c45693b7957
@@ -141,11 +143,11 @@ dependencies:
     .claude/skills/google-health/scripts/package-lock.json: sha256:1b4022ef441f8168f2430832084e51911070a0f4e3544868ff54a16e1b932b47
     .claude/skills/google-health/scripts/package.json: sha256:4122486d85db5da2216768d5e64286a3e239aa6fa0a6fc7ffaea459d98afd55b
     .claude/skills/google-health/scripts/tsconfig.json: sha256:411621ee3819f89f3d68e7745a47b69f087103950ebee7686a967fa31141f06a
-  content_hash: sha256:69cb286036d129c5c78b895d68ff1cbd64a9e4979cdc5e0466ac3bbfbf0732f4
+  content_hash: sha256:8ad10d22eb3ac40c3e4d75b4b59a7fcfb20d4b4e61141243d89c980b8ff2b20e
 - repo_url: ansanloms/skills
   name: jartic-traffic-jam-forecast
   host: github.com
-  resolved_commit: a72decb6feef860ff1d3df2b80f6d1aa511a64a5
+  resolved_commit: 206e0f5488608ed8a81b73ceb37e501b433d740f
   version: unknown
   virtual_path: jartic-traffic-jam-forecast
   is_virtual: true
@@ -161,7 +163,7 @@ dependencies:
 - repo_url: ansanloms/skills
   name: jartic-traffic-volume
   host: github.com
-  resolved_commit: a72decb6feef860ff1d3df2b80f6d1aa511a64a5
+  resolved_commit: 206e0f5488608ed8a81b73ceb37e501b433d740f
   version: unknown
   virtual_path: jartic-traffic-volume
   is_virtual: true
@@ -177,7 +179,7 @@ dependencies:
 - repo_url: ansanloms/skills
   name: mountain-weather
   host: github.com
-  resolved_commit: a72decb6feef860ff1d3df2b80f6d1aa511a64a5
+  resolved_commit: 206e0f5488608ed8a81b73ceb37e501b433d740f
   version: unknown
   virtual_path: mountain-weather
   is_virtual: true
@@ -239,7 +241,7 @@ dependencies:
 - repo_url: ansanloms/skills
   name: news-digest
   host: github.com
-  resolved_commit: a72decb6feef860ff1d3df2b80f6d1aa511a64a5
+  resolved_commit: 206e0f5488608ed8a81b73ceb37e501b433d740f
   version: unknown
   virtual_path: news-digest
   is_virtual: true
@@ -255,7 +257,7 @@ dependencies:
 - repo_url: ansanloms/skills
   name: yamareco
   host: github.com
-  resolved_commit: a72decb6feef860ff1d3df2b80f6d1aa511a64a5
+  resolved_commit: 206e0f5488608ed8a81b73ceb37e501b433d740f
   version: unknown
   virtual_path: yamareco
   is_virtual: true
@@ -367,7 +369,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:1be1231b31583319aac7cddf34d1a1f089b39c0edd4eec5653f9e2cb46860260
+  content_hash: sha256:d7eca9a747a8e572843a1a812e15c8176da9e7bbb6b58c6538a3263fc65a0607
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/SKILL.md
@@ -376,7 +378,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:7215c7be52e977e46cdd392a0aca78127aaf0761a2551c49e540376082a6acaa
+  content_hash: sha256:e4ac56a173f4fea24f73f36ff154616662c884785b8904d68c23790ac84a4c1a
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/.gitignore
@@ -487,13 +489,22 @@ deployments:
   content_hash: sha256:9f3069222bca6e5e44d1fda1dd9579328ebf7683ca8820607dc9881881dc897b
 - kind: project-relative
   target: claude
+  value: .claude/skills/google-health/scripts/cli/token-status.test.ts
+  runtime: null
+  scope: project
+  owners:
+  - ansanloms/skills/google-health
+  active_owner: ansanloms/skills/google-health
+  content_hash: sha256:0c061f9a727e09216460e4bb5a8eac341d2369f01ac06b0c23119c89146adcfb
+- kind: project-relative
+  target: claude
   value: .claude/skills/google-health/scripts/cli/token-status.ts
   runtime: null
   scope: project
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:b999e75ddc59b0eb852cbc2c7b88284b776b531b0a149446a04c7cccc4acccb4
+  content_hash: sha256:05f2bac3545b73cf48a230cb0b72a1b76c561d3579f17eecb3882222d1d826d5
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/cli/token.ts
