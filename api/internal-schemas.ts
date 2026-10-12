@@ -1,5 +1,5 @@
 // This file was auto-generated from the OpenAPI definition in docs/api.
-// Do not make direct changes to the file. Run `deno task generate:internal`.
+// Do not make direct changes to the file. Run `npm run generate`.
 //
 // docs/api の component schema (= JSON Schema)。サーバはこれ 1 枚から
 // 型 (json-schema-to-ts の FromSchema) と検証 (@cfworker/json-schema) を得る。

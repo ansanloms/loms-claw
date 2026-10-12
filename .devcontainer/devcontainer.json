@@ -4,7 +4,7 @@
   "service": "bot",
   "workspaceFolder": "/app",
   "overrideCommand": true,
-  "postCreateCommand": "npm ci",
+  "postCreateCommand": "npm ci && npm --prefix docs/api ci",
   "customizations": {
     "vscode": {
       "extensions": ["oxc.oxc-vscode"],

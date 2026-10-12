@@ -49,7 +49,7 @@ Discord + Claude Agent SDK のパーソナル AI エージェント。単一ギ�
 | `approval/`                                                         | ツール承認・`AskUserQuestion`・allowlist                                                         |
 | `api/`                                                              | 内部 HTTP API（cron / logs / settings）と生成物 `internal-schemas.ts`                            |
 | `cron/`                                                             | 定期実行（ローダ・スケジューラ・実行器）                                                         |
-| `docs/api/`                                                         | 内部 HTTP API の OpenAPI（独自の `deno.json` を持つ Deno プロジェクト）                          |
+| `docs/api/`                                                         | 内部 HTTP API の OpenAPI（独自の `package.json` を持つ Node プロジェクト）                       |
 | `data/`                                                             | 実行時データ（`config.json` / `home/` / `workspace/`）。追跡対象は一部のみ                       |
 
 ## 開発コマンド
@@ -61,11 +61,11 @@ npm test           # テスト + カバレッジ
 npm run check      # 型チェック（tsc --noEmit）
 npm run lint       # lint + format チェック（oxlint + oxfmt --check）
 npm run fix        # lint 自動修正 + format（oxlint --fix + oxfmt）
-npm run generate   # docs/api の OpenAPI から api/internal-schemas.ts を再生成（docs/api は Deno のため Deno が必要）
+npm run generate   # docs/api の OpenAPI から api/internal-schemas.ts を再生成（事前に `npm --prefix docs/api ci` が必要）
 ```
 
 - 設定は `data/config.json`（`data/config.json.example` をコピーして必須項目を埋める）。別パスは環境変数 `LOMS_CLAW_CONFIG` で指定する。フィールド一覧は [docs/architecture/lifecycle.md](docs/architecture/lifecycle.md)。
-- `api/internal-schemas.ts` は生成物。内部 API のリクエスト/レスポンス形を変えるときは `docs/api/` の YAML を編集して `npm run generate` で再生成し、生成物もコミットする（[docs/architecture/internal-api.md](docs/architecture/internal-api.md)）。
+- `api/internal-schemas.ts` は生成物。内部 API のリクエスト/レスポンス形を変えるときは `docs/api/` の YAML を編集して `npm run generate` で再生成し（docs/api は独立した npm パッケージなので、初回と依存更新後は `npm --prefix docs/api ci` が先に要る）、生成物もコミットする（[docs/architecture/internal-api.md](docs/architecture/internal-api.md)）。
 - PR 作成前・push 前の検証チェーンは [.claude/rules/pr.md](.claude/rules/pr.md) に従う。
 
 ## Docker

@@ -1,10 +1,11 @@
-import { cli, define } from "@gunshi/gunshi";
+import { cli, define } from "gunshi";
 import Table from "cli-table3";
-import * as fs from "@std/fs";
-import * as path from "@std/path";
+import { readFile } from "node:fs/promises";
+import * as path from "node:path";
 import * as yaml from "yaml";
+import { listYamlFiles } from "./lib/files.ts";
 
-const __dirname = path.dirname(path.fromFileUrl(import.meta.url));
+const __dirname = import.meta.dirname;
 
 const methodOrder = [
   "GET",
@@ -18,7 +19,7 @@ const methodOrder = [
   "CONNECT",
 ] as const;
 
-type Method = typeof methodOrder[number];
+type Method = (typeof methodOrder)[number];
 
 const getEndpointPath = (filePath: string) => {
   return (
@@ -47,41 +48,35 @@ const command = define({
       throw new Error(`unknown format: ${format}`);
     }
 
-    const pathFiles: string[] = [];
-    for await (
-      const entry of fs.walk(path.resolve(path.join(__dirname, "../paths")), {
-        includeFiles: true,
-        includeDirs: false,
-        followSymlinks: false,
-        exts: ["yaml"],
-      })
-    ) {
-      pathFiles.push(entry.path);
-    }
+    const pathFiles = await listYamlFiles(path.resolve(path.join(__dirname, "../paths")));
 
-    const endpoints = (await Promise.all(pathFiles.map(async (filePath) => {
-      const endpoint = getEndpointPath(filePath);
-      const parsed = yaml.parse(
-        await Deno.readTextFile(filePath),
-      ) as Record<string, { summary?: unknown }>;
+    const endpoints = (
+      await Promise.all(
+        pathFiles.map(async (filePath) => {
+          const endpoint = getEndpointPath(filePath);
+          const parsed = yaml.parse(await readFile(filePath, "utf8")) as Record<
+            string,
+            { summary?: unknown }
+          >;
 
-      return Object.entries(parsed).map(([method, body]) => ({
-        method: method.toUpperCase(),
-        endpoint,
-        summary: String(body?.summary ?? ""),
-      }));
-    }))).flat().toSorted((a, b) => {
-      if (a.endpoint !== b.endpoint) {
-        return a.endpoint.localeCompare(b.endpoint);
-      }
-      if (a.method !== b.method) {
-        return (
-          methodOrder.indexOf(a.method as Method) -
-          methodOrder.indexOf(b.method as Method)
-        );
-      }
-      return 0;
-    });
+          return Object.entries(parsed).map(([method, body]) => ({
+            method: method.toUpperCase(),
+            endpoint,
+            summary: String(body?.summary ?? ""),
+          }));
+        }),
+      )
+    )
+      .flat()
+      .toSorted((a, b) => {
+        if (a.endpoint !== b.endpoint) {
+          return a.endpoint.localeCompare(b.endpoint);
+        }
+        if (a.method !== b.method) {
+          return methodOrder.indexOf(a.method as Method) - methodOrder.indexOf(b.method as Method);
+        }
+        return 0;
+      });
 
     if (format === "table") {
       const table = new Table();
@@ -95,4 +90,4 @@ const command = define({
   },
 });
 
-await cli(Deno.args, command);
+await cli(process.argv.slice(2), command);

@@ -34,7 +34,7 @@ flowchart LR
 `Dockerfile` はリポジトリルートに置く。
 
 - ベースイメージは `docker.io/node:24-bookworm-slim` (Debian ベースの glibc イメージ。既定ユーザは root)。
-- `COPY --from=docker.io/denoland/deno:bin-2.9.7 /deno /usr/local/bin/deno` で Deno バイナリを同梱する。理由: workspace の skill / cron (`google-health`, `mountain-weather`, `find-docs`) と `docs/api` の `generate` が Deno を使う。skill が Deno を離れたら外す ([#190](https://github.com/ansanloms/loms-claw/issues/190))。
+- `COPY --from=docker.io/denoland/deno:bin-2.9.7 /deno /usr/local/bin/deno` で Deno バイナリを同梱する。理由: workspace の skill / cron (`google-health`, `mountain-weather`, `find-docs`) が Deno を使う。`docs/api` は `.dockerignore` でイメージに入らず、同梱の理由ではない。skill が Deno を離れたら外す ([#190](https://github.com/ansanloms/loms-claw/issues/190))。
 - `ENV CLAUDE_CONFIG_DIR=/data/home`: Claude Code の設定・認証情報の置き場所を既定の `~/.claude` から bind mount 先へ置き換える。
 - `ENV LOMS_CLAW_CONFIG=/data/config.json`: `config.ts` の `loadConfig()` が読む設定ファイルのパス。未設定時の既定は `./data/config.json`。
 - apt で `ca-certificates curl git jq bubblewrap socat ffmpeg tzdata` を入れる。Dockerfile のコメントに用途を 1 行ずつ記載している。
@@ -112,7 +112,7 @@ docker compose logs -f               # ログ確認
 
 `.devcontainer/` は本番と同じイメージ・compose 定義に、ソースツリーの bind mount を重ねただけの構成。
 
-- `.devcontainer/devcontainer.json`: `dockerComposeFile` に `../compose.yaml` と `./compose.yaml` の 2 つを順に指定し、`service` は `bot`、`workspaceFolder` は `/app`、`overrideCommand: true`。`postCreateCommand` で `npm ci` を実行する (ソースツリーの bind mount がイメージ内の `/app/node_modules` を隠すため、コンテナ作成後に入れ直す)。VS Code 向けに `oxc.oxc-vscode` 拡張を入れ、`editor.defaultFormatter` を `oxc.oxc-vscode` にする。
+- `.devcontainer/devcontainer.json`: `dockerComposeFile` に `../compose.yaml` と `./compose.yaml` の 2 つを順に指定し、`service` は `bot`、`workspaceFolder` は `/app`、`overrideCommand: true`。`postCreateCommand` で `npm ci && npm --prefix docs/api ci` を実行する (ルートと `docs/api` の両方) (ソースツリーの bind mount がイメージ内の `/app/node_modules` を隠すため、コンテナ作成後に入れ直す)。VS Code 向けに `oxc.oxc-vscode` 拡張を入れ、`editor.defaultFormatter` を `oxc.oxc-vscode` にする。
 - `.devcontainer/compose.yaml`: サービス `bot` に、リポジトリルート (`.`、相対パスは最初に指定した compose ファイルの場所基準) を `/app` へ重ねる bind mount を追加し、`restart: "no"` にする。
   - コメントによれば、編集が即コンテナに反映されて `npm run dev` の `--watch` が拾い、起動・停止は devcontainer が管理する。
   - `healthcheck: { disable: true }` で `compose.yaml` の healthcheck を無効化する。
@@ -242,16 +242,16 @@ KV ファイルのパスは `data/config.json` の `storePath` の値を使う (
 
 ## dependabot と GitHub Actions
 
-- `.github/dependabot.yml` は次の 4 エントリを持つ。いずれも週次 (月曜 07:00 Asia/Tokyo)。npm と deno の 2 エントリは minor/patch を `minor-and-patch` グループにまとめ、コミットメッセージの prefix は npm/deno/docker が `build`、github-actions が `ci`。
+- `.github/dependabot.yml` は次の 4 エントリを持つ。いずれも週次 (月曜 07:00 Asia/Tokyo)。npm の 2 エントリは minor/patch を `minor-and-patch` グループにまとめ、コミットメッセージの prefix は npm/docker が `build`、github-actions が `ci`。
   - `npm` (`/`。`package.json`/`package-lock.json`)
-  - `deno` (`/docs/api`。独自の `deno.json`/`deno.lock` を持ちルートから参照されないため分けている。docs/api は Deno のまま)
+  - `npm` (`/docs/api`。独自の `package.json`/`package-lock.json` を持ちルートから参照されないため分けている。git 依存の自前 3 パッケージ `@ansanloms/*` は dependabot の更新 PR が来なければ手動で上げる)
   - `docker` (`/`)
   - `github-actions` (`/`)
 
 ### CI
 
-`.github/workflows/ci.yml` が `push` (main)/`pull_request` で走る CI。冒頭コメントのとおり、`DENO_VERSION` は Dockerfile の `denoland/deno:bin-*` タグと揃える。`env` は `DENO_VERSION: "2.9.7"`、`NODE_VERSION: "24"`。次の 3 job を並列で実行する。
+`.github/workflows/ci.yml` が `push` (main)/`pull_request` で走る CI。`env` は `NODE_VERSION: "24"`。次の 3 job を並列で実行する。
 
 - `root`: Node 24 (`actions/setup-node`、`cache: npm`) で `npm ci` → `npm run check` → `npm run lint` → `npm test`。
-- `generated`: Node 24 と Deno 2.9.7 (`denoland/setup-deno`) で `npm run generate` を実行し、`api/internal-schemas.ts` の差分を `git diff --exit-code` で検査する。`generate` は docs/api の Deno タスクを呼ぶだけなので `npm ci` は不要。
-- `docs-api`: Deno 2.9.7 で `docs/api` の `lint`/`check` を `deno task --cwd ./docs/api` で実行する (Deno のまま)。
+- `generated`: Node 24 (`cache: npm`、`cache-dependency-path: docs/api/package-lock.json`) で `docs/api` の `npm ci` → ルートの `npm run generate` を実行し、`api/internal-schemas.ts` の差分を `git diff --exit-code` で検査する。`generate` はルートの依存を使わず docs/api の依存だけを使うので、ルートの `npm ci` は不要。
+- `docs-api`: Node 24 (`cache` は docs/api の lock) で `docs/api` の `npm ci` → `npm run lint` (check / oxc / textlint / redocly を一括) を実行する。

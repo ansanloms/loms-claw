@@ -15,10 +15,12 @@ updates:
           - "minor"
           - "patch"
 
-  # docs/api は独自の deno.json / deno.lock を持ち、ルートの package.json からは
-  # 参照されない。エントリを分けないと追従されず、テンプレート
+  # docs/api は独自の package.json / package-lock.json を持ち、ルートの
+  # package.json からは参照されない。エントリを分けないと追従されず、テンプレート
   # (ansanloms/openapi-template) との差が開き続ける。
-  - package-ecosystem: "deno"
+  # git 依存の自前 3 パッケージ (@ansanloms/*) は、dependabot の更新 PR が来な
+  # ければ手動で上げる。
+  - package-ecosystem: "npm"
     directory: "/docs/api"
     schedule:
       interval: "weekly"
