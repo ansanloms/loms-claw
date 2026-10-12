@@ -1,4 +1,4 @@
-FROM docker.io/node:24-bookworm-slim
+FROM docker.io/node:26-bookworm-slim
 
 # workspace の skill / cron (google-health, mountain-weather, find-docs) が
 # Deno を使うため、Deno バイナリを同梱する。docs/api は .dockerignore で
