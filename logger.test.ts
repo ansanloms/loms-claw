@@ -1,65 +1,67 @@
-import { assertEquals, assertThrows } from "@std/assert";
+import { Temporal } from "@js-temporal/polyfill";
+import { after, before, describe, test } from "node:test";
+import assert from "node:assert/strict";
 import { createLogger, getLogEntries, initLogger } from "./logger.ts";
 
-Deno.test("createLogger", async (t) => {
-  await t.step("全メソッドが定義されていること", () => {
+describe("createLogger", () => {
+  test("全メソッドが定義されていること", () => {
     const log = createLogger("test");
-    assertEquals(typeof log.debug, "function");
-    assertEquals(typeof log.info, "function");
-    assertEquals(typeof log.warn, "function");
-    assertEquals(typeof log.error, "function");
+    assert.deepStrictEqual(typeof log.debug, "function");
+    assert.deepStrictEqual(typeof log.info, "function");
+    assert.deepStrictEqual(typeof log.warn, "function");
+    assert.deepStrictEqual(typeof log.error, "function");
   });
 
-  await t.step("info が console.log に出力すること", () => {
+  test("info が console.log に出力すること", () => {
     const calls: unknown[][] = [];
     const originalLog = console.log;
     console.log = (...args: unknown[]) => calls.push(args);
     try {
       const log = createLogger("ns");
       log.info("hello", "world");
-      assertEquals(calls.length, 1);
+      assert.deepStrictEqual(calls.length, 1);
       const output = calls[0].join(" ");
-      assertEquals(output.includes("[INFO ]"), true);
-      assertEquals(output.includes("[ns]"), true);
-      assertEquals(output.includes("hello"), true);
-      assertEquals(output.includes("world"), true);
+      assert.deepStrictEqual(output.includes("[INFO ]"), true);
+      assert.deepStrictEqual(output.includes("[ns]"), true);
+      assert.deepStrictEqual(output.includes("hello"), true);
+      assert.deepStrictEqual(output.includes("world"), true);
     } finally {
       console.log = originalLog;
     }
   });
 
-  await t.step("error が console.error に出力すること", () => {
+  test("error が console.error に出力すること", () => {
     const calls: unknown[][] = [];
     const originalError = console.error;
     console.error = (...args: unknown[]) => calls.push(args);
     try {
       const log = createLogger("ns");
       log.error("fail");
-      assertEquals(calls.length, 1);
+      assert.deepStrictEqual(calls.length, 1);
       const output = calls[0].join(" ");
-      assertEquals(output.includes("[ERROR]"), true);
+      assert.deepStrictEqual(output.includes("[ERROR]"), true);
     } finally {
       console.error = originalError;
     }
   });
 
-  await t.step("warn が console.warn に出力すること", () => {
+  test("warn が console.warn に出力すること", () => {
     const calls: unknown[][] = [];
     const originalWarn = console.warn;
     console.warn = (...args: unknown[]) => calls.push(args);
     try {
       const log = createLogger("ns");
       log.warn("caution");
-      assertEquals(calls.length, 1);
+      assert.deepStrictEqual(calls.length, 1);
       const output = calls[0].join(" ");
-      assertEquals(output.includes("[WARN ]"), true);
+      assert.deepStrictEqual(output.includes("[WARN ]"), true);
     } finally {
       console.warn = originalWarn;
     }
   });
 });
 
-Deno.test("initLogger", async (t) => {
+describe("initLogger", () => {
   // コンソール出力を抑制しつつ呼び出しを記録するヘルパー
   function silencedCounting(fn: () => void): {
     logCount: number;
@@ -84,75 +86,69 @@ Deno.test("initLogger", async (t) => {
     return { logCount, warnCount };
   }
 
-  try {
-    await t.step(
-      "level が反映され下位レベルは標準出力に出ないが、リングバッファには全レベル残ること",
-      () => {
-        initLogger({ level: "WARN", bufferSize: 1000 });
-        const NS = `test-initLogger-level-${crypto.randomUUID().slice(0, 8)}`;
-
-        const { logCount, warnCount } = silencedCounting(() => {
-          const log = createLogger(NS);
-          log.debug("d1");
-          log.info("i1");
-          log.warn("w1");
-        });
-
-        // debug/info は WARN 未満なので console.log には出力されない
-        assertEquals(logCount, 0);
-        // warn は WARN 以上なので console.warn に出力される
-        assertEquals(warnCount, 1);
-
-        // リングバッファには level に関わらず全件残る
-        const entries = getLogEntries({ namespace: NS, limit: 1000 });
-        assertEquals(entries.length, 3);
-      },
-    );
-
-    await t.step("bufferSize が 1 未満に切り詰められること", () => {
-      initLogger({ level: "INFO", bufferSize: 0 });
-      const NS = `test-initLogger-min-${crypto.randomUUID().slice(0, 8)}`;
-
-      silencedCounting(() => {
-        const log = createLogger(NS);
-        log.info("first");
-        log.info("second");
-      });
-
-      // 容量 1 に clamp されるため、最後の 1 件しか残らない
-      const entries = getLogEntries({ namespace: NS, limit: 1000 });
-      assertEquals(entries.length, 1);
-      assertEquals(entries[0].message, "second");
-    });
-
-    await t.step(
-      "10000 を超える bufferSize でもエラーにならず、大きな容量として反映されること",
-      () => {
-        initLogger({ level: "INFO", bufferSize: 20000 });
-        const NS = `test-initLogger-max-${crypto.randomUUID().slice(0, 8)}`;
-
-        silencedCounting(() => {
-          const log = createLogger(NS);
-          for (let i = 0; i < 1500; i++) {
-            log.info(`entry-${i}`);
-          }
-        });
-
-        // getLogEntries() 自体が MAX_LOG_LIMIT (1000) で返却件数を頭打ちにする
-        // ため、「10000 に clamp され 20000 にはならない」ことまでは公開 API
-        // 越しに観測できない (1000 件以上保持できていれば容量が既定の 1 件
-        // (前ステップ) から更新されたことは確認できる)。
-        const entries = getLogEntries({ namespace: NS, limit: 1000 });
-        assertEquals(entries.length, 1000);
-      },
-    );
-  } finally {
+  after(() => {
     // 他のテストへ影響しないよう、デフォルト設定に戻す
     initLogger({ level: "INFO", bufferSize: 1000 });
-  }
+  });
+
+  test("level が反映され下位レベルは標準出力に出ないが、リングバッファには全レベル残ること", () => {
+    initLogger({ level: "WARN", bufferSize: 1000 });
+    const NS = `test-initLogger-level-${crypto.randomUUID().slice(0, 8)}`;
+
+    const { logCount, warnCount } = silencedCounting(() => {
+      const log = createLogger(NS);
+      log.debug("d1");
+      log.info("i1");
+      log.warn("w1");
+    });
+
+    // debug/info は WARN 未満なので console.log には出力されない
+    assert.deepStrictEqual(logCount, 0);
+    // warn は WARN 以上なので console.warn に出力される
+    assert.deepStrictEqual(warnCount, 1);
+
+    // リングバッファには level に関わらず全件残る
+    const entries = getLogEntries({ namespace: NS, limit: 1000 });
+    assert.deepStrictEqual(entries.length, 3);
+  });
+
+  test("bufferSize が 1 未満に切り詰められること", () => {
+    initLogger({ level: "INFO", bufferSize: 0 });
+    const NS = `test-initLogger-min-${crypto.randomUUID().slice(0, 8)}`;
+
+    silencedCounting(() => {
+      const log = createLogger(NS);
+      log.info("first");
+      log.info("second");
+    });
+
+    // 容量 1 に clamp されるため、最後の 1 件しか残らない
+    const entries = getLogEntries({ namespace: NS, limit: 1000 });
+    assert.deepStrictEqual(entries.length, 1);
+    assert.deepStrictEqual(entries[0].message, "second");
+  });
+
+  test("10000 を超える bufferSize でもエラーにならず、大きな容量として反映されること", () => {
+    initLogger({ level: "INFO", bufferSize: 20000 });
+    const NS = `test-initLogger-max-${crypto.randomUUID().slice(0, 8)}`;
+
+    silencedCounting(() => {
+      const log = createLogger(NS);
+      for (let i = 0; i < 1500; i++) {
+        log.info(`entry-${i}`);
+      }
+    });
+
+    // getLogEntries() 自体が MAX_LOG_LIMIT (1000) で返却件数を頭打ちにする
+    // ため、「10000 に clamp され 20000 にはならない」ことまでは公開 API
+    // 越しに観測できない (1000 件以上保持できていれば容量が既定の 1 件
+    // (前ステップ) から更新されたことは確認できる)。
+    const entries = getLogEntries({ namespace: NS, limit: 1000 });
+    assert.deepStrictEqual(entries.length, 1000);
+  });
 });
 
-Deno.test("getLogEntries", async (t) => {
+describe("getLogEntries", () => {
   // テスト用のユニークな namespace でバッファの他エントリと隔離する
   const NS = `test-getLogEntries-${crypto.randomUUID().slice(0, 8)}`;
 
@@ -174,131 +170,140 @@ Deno.test("getLogEntries", async (t) => {
   }
 
   // テスト用エントリを投入
-  silenced(() => {
-    const log = createLogger(NS);
-    log.debug("d1");
-    log.info("i1");
-    log.warn("w1");
-    log.error("e1");
-    log.info("i2");
+  before(() => {
+    silenced(() => {
+      const log = createLogger(NS);
+      log.debug("d1");
+      log.info("i1");
+      log.warn("w1");
+      log.error("e1");
+      log.info("i2");
+    });
   });
 
-  await t.step("namespace フィルタで対象エントリのみ返すこと", () => {
+  test("namespace フィルタで対象エントリのみ返すこと", () => {
     const entries = getLogEntries({ namespace: NS, limit: 1000 });
-    assertEquals(entries.length, 5);
+    assert.deepStrictEqual(entries.length, 5);
   });
 
-  await t.step("level フィルタで指定レベル以上のみ返すこと", () => {
+  test("level フィルタで指定レベル以上のみ返すこと", () => {
     const entries = getLogEntries({
       namespace: NS,
       level: "WARN",
       limit: 1000,
     });
-    assertEquals(entries.length, 2);
-    assertEquals(
+    assert.deepStrictEqual(entries.length, 2);
+    assert.deepStrictEqual(
       entries.every((e) => e.level === "WARN" || e.level === "ERROR"),
       true,
     );
   });
 
-  await t.step("limit で件数を制限できること", () => {
+  test("limit で件数を制限できること", () => {
     const entries = getLogEntries({ namespace: NS, limit: 2 });
-    assertEquals(entries.length, 2);
+    assert.deepStrictEqual(entries.length, 2);
     // 最新の2件が返る
-    assertEquals(entries[1].message, "i2");
+    assert.deepStrictEqual(entries[1].message, "i2");
   });
 
-  await t.step("since で時刻以降のみ返すこと", () => {
+  test("since で時刻以降のみ返すこと", () => {
     const all = getLogEntries({ namespace: NS, limit: 1000 });
     // 2番目のエントリのタイムスタンプを since に指定
     const since = all[1].timestamp;
     const filtered = getLogEntries({ namespace: NS, since, limit: 1000 });
-    assertEquals(filtered.every((e) => e.timestamp >= since), true);
+    assert.deepStrictEqual(
+      filtered.every(
+        (e) =>
+          Temporal.Instant.compare(
+            Temporal.Instant.from(e.timestamp),
+            Temporal.Instant.from(since),
+          ) >= 0,
+      ),
+      true,
+    );
   });
 
-  await t.step(
-    "since がオフセット付き (+09:00) でも Temporal.Instant として正しく比較されること",
-    () => {
-      const NS4 = `test-since-offset-${crypto.randomUUID().slice(0, 8)}`;
-      silenced(() => {
-        const log = createLogger(NS4);
-        log.info("offset-test");
-      });
-      const entries = getLogEntries({ namespace: NS4, limit: 1 });
-      const entryInstant = Temporal.Instant.from(entries[0].timestamp);
+  test("since がオフセット付き (+09:00) でも Temporal.Instant として正しく比較されること", () => {
+    const NS4 = `test-since-offset-${crypto.randomUUID().slice(0, 8)}`;
+    silenced(() => {
+      const log = createLogger(NS4);
+      log.info("offset-test");
+    });
+    const entries = getLogEntries({ namespace: NS4, limit: 1 });
+    const entryInstant = Temporal.Instant.from(entries[0].timestamp);
 
-      // エントリの 1 秒前を +09:00 オフセット付きの文字列で表す。
-      // 文字列の辞書順比較では "+09:00" 表記の時刻は数字が大きく見えるため、
-      // 旧実装だとこのエントリは since より古いと誤判定され除外されていた。
-      const since = entryInstant.subtract({ seconds: 1 })
-        .toZonedDateTimeISO("+09:00")
-        .toString({ timeZoneName: "never" });
+    // エントリの 1 秒前を +09:00 オフセット付きの文字列で表す。
+    // 文字列の辞書順比較では "+09:00" 表記の時刻は数字が大きく見えるため、
+    // 旧実装だとこのエントリは since より古いと誤判定され除外されていた。
+    const since = entryInstant
+      .subtract({ seconds: 1 })
+      .toZonedDateTimeISO("+09:00")
+      .toString({ timeZoneName: "never" });
 
-      const filtered = getLogEntries({ namespace: NS4, since, limit: 1000 });
-      assertEquals(filtered.length, 1);
-    },
-  );
+    const filtered = getLogEntries({ namespace: NS4, since, limit: 1000 });
+    assert.deepStrictEqual(filtered.length, 1);
+  });
 
-  await t.step(
-    "since に小数秒が無くても、小数秒付きのより新しいエントリが返ること",
-    () => {
-      const NS5 = `test-since-fraction-${crypto.randomUUID().slice(0, 8)}`;
-      silenced(() => {
-        const log = createLogger(NS5);
-        log.info("fraction-test");
-      });
-      const entries = getLogEntries({ namespace: NS5, limit: 1 });
-      const entryInstant = Temporal.Instant.from(entries[0].timestamp);
+  test("since に小数秒が無くても、小数秒付きのより新しいエントリが返ること", () => {
+    const NS5 = `test-since-fraction-${crypto.randomUUID().slice(0, 8)}`;
+    silenced(() => {
+      const log = createLogger(NS5);
+      log.info("fraction-test");
+    });
+    const entries = getLogEntries({ namespace: NS5, limit: 1 });
+    const entryInstant = Temporal.Instant.from(entries[0].timestamp);
 
-      // エントリの秒未満を切り捨てた (小数秒無しの) since を指定する。
-      // 文字列の辞書順比較では "." (0x2E) が "Z" (0x5A) より小さいため、
-      // 旧実装だと小数秒付きのエントリが since より古いと誤判定され除外されていた。
-      const since = entryInstant
-        .round({ smallestUnit: "second", roundingMode: "floor" })
-        .toString();
+    // エントリの秒未満を切り捨てた (小数秒無しの) since を指定する。
+    // 文字列の辞書順比較では "." (0x2E) が "Z" (0x5A) より小さいため、
+    // 旧実装だと小数秒付きのエントリが since より古いと誤判定され除外されていた。
+    const since = entryInstant
+      .round({ smallestUnit: "second", roundingMode: "floor" })
+      .toString();
 
-      const filtered = getLogEntries({ namespace: NS5, since, limit: 1000 });
-      assertEquals(filtered.length, 1);
-    },
-  );
+    const filtered = getLogEntries({ namespace: NS5, since, limit: 1000 });
+    assert.deepStrictEqual(filtered.length, 1);
+  });
 
-  await t.step("since が不正な値の場合に例外を投げること", () => {
-    assertThrows(
+  test("since が不正な値の場合に例外を投げること", () => {
+    assert.throws(
       () => getLogEntries({ namespace: NS, since: "not-a-date", limit: 1 }),
       RangeError,
     );
   });
 
-  await t.step("エントリの構造が正しいこと", () => {
+  test("エントリの構造が正しいこと", () => {
     const entries = getLogEntries({ namespace: NS, limit: 1 });
     const entry = entries[0];
-    assertEquals(typeof entry.timestamp, "string");
-    assertEquals(typeof entry.level, "string");
-    assertEquals(entry.namespace, NS);
-    assertEquals(typeof entry.message, "string");
+    assert.deepStrictEqual(typeof entry.timestamp, "string");
+    assert.deepStrictEqual(typeof entry.level, "string");
+    assert.deepStrictEqual(entry.namespace, NS);
+    assert.deepStrictEqual(typeof entry.message, "string");
   });
 
-  await t.step("引数を含むメッセージが文字列化されること", () => {
+  test("引数を含むメッセージが文字列化されること", () => {
     const NS2 = `test-args-${crypto.randomUUID().slice(0, 8)}`;
     silenced(() => {
       const log = createLogger(NS2);
       log.info("msg", { key: "val" });
     });
     const entries = getLogEntries({ namespace: NS2, limit: 1 });
-    assertEquals(entries[0].message.includes("msg"), true);
-    assertEquals(entries[0].message.includes('"key"'), true);
+    assert.deepStrictEqual(entries[0].message.includes("msg"), true);
+    assert.deepStrictEqual(entries[0].message.includes('"key"'), true);
   });
 
-  await t.step("Error の stack が展開されること", () => {
+  test("Error の stack が展開されること", () => {
     const NS3 = `test-error-${crypto.randomUUID().slice(0, 8)}`;
     silenced(() => {
       const log = createLogger(NS3);
       log.error("boom:", new Error("explicit failure"));
     });
     const entries = getLogEntries({ namespace: NS3, limit: 1 });
-    assertEquals(entries[0].message.includes("boom:"), true);
-    assertEquals(entries[0].message.includes("explicit failure"), true);
+    assert.deepStrictEqual(entries[0].message.includes("boom:"), true);
+    assert.deepStrictEqual(
+      entries[0].message.includes("explicit failure"),
+      true,
+    );
     // stack に最低限ファイル名が含まれること
-    assertEquals(entries[0].message.includes("logger.test.ts"), true);
+    assert.deepStrictEqual(entries[0].message.includes("logger.test.ts"), true);
   });
 });

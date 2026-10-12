@@ -6,8 +6,9 @@ data
 .git
 .claude
 coverage
+node_modules
 
-# 実行時に不要 (deno task generate 等の開発時のみ使う)
+# 実行時に不要 (npm run generate 等の開発時のみ使う)
 docs/
 README.md
 LICENSE

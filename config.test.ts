@@ -1,7 +1,17 @@
-import { assertEquals, assertStringIncludes, assertThrows } from "@std/assert";
+import { describe, test } from "node:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import assert from "node:assert/strict";
+import { errorWith } from "./test-helpers.ts";
 import { loadConfig } from "./config.ts";
 
 const ENV_KEY = "LOMS_CLAW_CONFIG";
+
+/** 一時ディレクトリ配下の config ファイルパスを返す (ファイル自体は作らない)。 */
+function makeTempConfigPath(): string {
+  return join(mkdtempSync(join(tmpdir(), "loms-claw-test-")), "config.json");
+}
 
 const requiredFields = {
   discord: {
@@ -19,139 +29,134 @@ function withTempConfig(
   contents: Record<string, unknown>,
   fn: () => void,
 ): void {
-  const original = Deno.env.get(ENV_KEY);
-  const path = Deno.makeTempFileSync({ suffix: ".json" });
+  const original = process.env[ENV_KEY];
+  const path = makeTempConfigPath();
   try {
-    Deno.writeTextFileSync(path, JSON.stringify(contents));
-    Deno.env.set(ENV_KEY, path);
+    writeFileSync(path, JSON.stringify(contents));
+    process.env[ENV_KEY] = path;
     fn();
   } finally {
     if (original === undefined) {
-      Deno.env.delete(ENV_KEY);
+      delete process.env[ENV_KEY];
     } else {
-      Deno.env.set(ENV_KEY, original);
+      process.env[ENV_KEY] = original;
     }
     try {
-      Deno.removeSync(path);
-    } catch { /* ignore */ }
+      rmSync(dirname(path), { recursive: true });
+    } catch {
+      /* ignore */
+    }
   }
 }
 
-Deno.test("loadConfig", async (t) => {
-  await t.step("必須フィールドのみでデフォルト値が補完されること", () => {
+describe("loadConfig", () => {
+  test("必須フィールドのみでデフォルト値が補完されること", () => {
     withTempConfig(requiredFields, () => {
       const config = loadConfig();
-      assertEquals(config.discord.token, "test-token");
-      assertEquals(config.discord.guildId, "test-guild");
-      assertEquals(config.discord.userId, "test-user");
-      assertEquals(config.discord.activeChannelIds, []);
-      assertEquals(config.storePath, ".claude/loms-claw.kv");
-      assertEquals(config.claude.defaults.model, undefined);
-      assertEquals(config.claude.defaults.effort, undefined);
-      assertEquals(config.claude.maxTurns, 10);
-      assertEquals(config.claude.timeout, 300000);
-      assertEquals(config.claude.apiPort, 3000);
-      assertEquals(config.claude.defaults.showThinking, false);
-      assertEquals(config.log.level, "INFO");
-      assertEquals(config.log.bufferSize, 1000);
+      assert.deepStrictEqual(config.discord.token, "test-token");
+      assert.deepStrictEqual(config.discord.guildId, "test-guild");
+      assert.deepStrictEqual(config.discord.userId, "test-user");
+      assert.deepStrictEqual(config.discord.activeChannelIds, []);
+      assert.deepStrictEqual(config.storePath, ".claude/loms-claw.sqlite");
+      assert.deepStrictEqual(config.claude.defaults.model, undefined);
+      assert.deepStrictEqual(config.claude.defaults.effort, undefined);
+      assert.deepStrictEqual(config.claude.maxTurns, 10);
+      assert.deepStrictEqual(config.claude.timeout, 300000);
+      assert.deepStrictEqual(config.claude.apiPort, 3000);
+      assert.deepStrictEqual(config.claude.defaults.showThinking, false);
+      assert.deepStrictEqual(config.log.level, "INFO");
+      assert.deepStrictEqual(config.log.bufferSize, 1000);
     });
   });
 
-  await t.step("claude.cwd が Deno.cwd() で実行時注入されること", () => {
+  test("claude.cwd が process.cwd() で実行時注入されること", () => {
     withTempConfig(requiredFields, () => {
       const config = loadConfig();
-      assertEquals(config.claude.cwd, Deno.cwd());
+      assert.deepStrictEqual(config.claude.cwd, process.cwd());
     });
   });
 
-  await t.step("discord.token 未設定でエラーになること", () => {
+  test("discord.token 未設定でエラーになること", () => {
     const { token: _omit, ...restDiscord } = requiredFields.discord;
     withTempConfig({ discord: restDiscord }, () => {
-      assertThrows(() => loadConfig(), Error, "token");
+      assert.throws(() => loadConfig(), errorWith(Error, "token"));
     });
   });
 
-  await t.step("discord.guildId が空文字列でエラーになること", () => {
+  test("discord.guildId が空文字列でエラーになること", () => {
     withTempConfig(
       { discord: { ...requiredFields.discord, guildId: "" } },
       () => {
-        assertThrows(() => loadConfig(), Error, "guildId");
+        assert.throws(() => loadConfig(), errorWith(Error, "guildId"));
       },
     );
   });
 
-  await t.step("discord.token が空文字列でエラーになること", () => {
+  test("discord.token が空文字列でエラーになること", () => {
     withTempConfig(
       { discord: { ...requiredFields.discord, token: "" } },
       () => {
-        assertThrows(() => loadConfig(), Error, "token");
+        assert.throws(() => loadConfig(), errorWith(Error, "token"));
       },
     );
   });
 
-  await t.step("discord.userId 未設定でエラーになること", () => {
+  test("discord.userId 未設定でエラーになること", () => {
     const { userId: _omit, ...rest } = requiredFields.discord;
     withTempConfig({ discord: rest }, () => {
-      assertThrows(() => loadConfig(), Error, "userId");
+      assert.throws(() => loadConfig(), errorWith(Error, "userId"));
     });
   });
 
-  await t.step("log.bufferSize が minimum 未満でエラーになること", () => {
+  test("log.bufferSize が minimum 未満でエラーになること", () => {
     withTempConfig(
       { ...requiredFields, log: { level: "INFO", bufferSize: 0 } },
       () => {
-        assertThrows(() => loadConfig(), Error, "bufferSize");
+        assert.throws(() => loadConfig(), errorWith(Error, "bufferSize"));
       },
     );
   });
 
-  await t.step("log.bufferSize が maximum 超過でエラーになること", () => {
+  test("log.bufferSize が maximum 超過でエラーになること", () => {
     withTempConfig(
       { ...requiredFields, log: { level: "INFO", bufferSize: 10001 } },
       () => {
-        assertThrows(() => loadConfig(), Error, "bufferSize");
+        assert.throws(() => loadConfig(), errorWith(Error, "bufferSize"));
       },
     );
   });
 
-  await t.step("claude.defaults.effort の enum 違反でエラーになること", () => {
+  test("claude.defaults.effort の enum 違反でエラーになること", () => {
     withTempConfig(
       { ...requiredFields, claude: { defaults: { effort: "invalid" } } },
       () => {
-        assertThrows(() => loadConfig(), Error, "effort");
+        assert.throws(() => loadConfig(), errorWith(Error, "effort"));
       },
     );
   });
 
-  await t.step("maxTurns が string のとき型不一致でエラーになること", () => {
-    withTempConfig(
-      { ...requiredFields, claude: { maxTurns: "ten" } },
-      () => {
-        assertThrows(() => loadConfig(), Error, "maxTurns");
-      },
-    );
+  test("maxTurns が string のとき型不一致でエラーになること", () => {
+    withTempConfig({ ...requiredFields, claude: { maxTurns: "ten" } }, () => {
+      assert.throws(() => loadConfig(), errorWith(Error, "maxTurns"));
+    });
   });
 
-  await t.step("未知プロパティ (additionalProperties) を拒否すること", () => {
-    withTempConfig(
-      { ...requiredFields, UNKNOWN_KEY: "nope" },
-      () => {
-        const err = assertThrows(() => loadConfig(), Error);
-        assertStringIncludes(err.message, "UNKNOWN_KEY");
-      },
-    );
+  test("未知プロパティ (additionalProperties) を拒否すること", () => {
+    withTempConfig({ ...requiredFields, UNKNOWN_KEY: "nope" }, () => {
+      assert.throws(() => loadConfig(), errorWith(Error, "UNKNOWN_KEY"));
+    });
   });
 
-  await t.step("log.level の enum 違反でエラーになること", () => {
+  test("log.level の enum 違反でエラーになること", () => {
     withTempConfig(
       { ...requiredFields, log: { level: "VERBOSE", bufferSize: 1000 } },
       () => {
-        assertThrows(() => loadConfig(), Error, "level");
+        assert.throws(() => loadConfig(), errorWith(Error, "level"));
       },
     );
   });
 
-  await t.step("discord.activeChannelIds を配列として受け取れること", () => {
+  test("discord.activeChannelIds を配列として受け取れること", () => {
     withTempConfig(
       {
         discord: {
@@ -161,12 +166,15 @@ Deno.test("loadConfig", async (t) => {
       },
       () => {
         const config = loadConfig();
-        assertEquals(config.discord.activeChannelIds, ["ch-1", "ch-2"]);
+        assert.deepStrictEqual(config.discord.activeChannelIds, [
+          "ch-1",
+          "ch-2",
+        ]);
       },
     );
   });
 
-  await t.step("claude.defaults.model / effort を指定できること", () => {
+  test("claude.defaults.model / effort を指定できること", () => {
     withTempConfig(
       {
         ...requiredFields,
@@ -174,13 +182,13 @@ Deno.test("loadConfig", async (t) => {
       },
       () => {
         const config = loadConfig();
-        assertEquals(config.claude.defaults.model, "opus");
-        assertEquals(config.claude.defaults.effort, "high");
+        assert.deepStrictEqual(config.claude.defaults.model, "opus");
+        assert.deepStrictEqual(config.claude.defaults.effort, "high");
       },
     );
   });
 
-  await t.step("claude 設定を上書きできること", () => {
+  test("claude 設定を上書きできること", () => {
     withTempConfig(
       {
         ...requiredFields,
@@ -192,88 +200,94 @@ Deno.test("loadConfig", async (t) => {
       },
       () => {
         const config = loadConfig();
-        assertEquals(config.claude.maxTurns, 5);
-        assertEquals(config.claude.timeout, 60000);
-        assertEquals(config.claude.apiPort, 4000);
+        assert.deepStrictEqual(config.claude.maxTurns, 5);
+        assert.deepStrictEqual(config.claude.timeout, 60000);
+        assert.deepStrictEqual(config.claude.apiPort, 4000);
       },
     );
   });
 
-  await t.step(
-    "claude.verbose を含む config は additionalProperties: false で検証エラーになること",
-    () => {
-      withTempConfig(
-        {
-          ...requiredFields,
-          claude: {
-            maxTurns: 10,
-            timeout: 300000,
-            apiPort: 3000,
-            defaults: {},
-            verbose: true,
-          },
+  test("claude.verbose を含む config は additionalProperties: false で検証エラーになること", () => {
+    withTempConfig(
+      {
+        ...requiredFields,
+        claude: {
+          maxTurns: 10,
+          timeout: 300000,
+          apiPort: 3000,
+          defaults: {},
+          verbose: true,
         },
-        () => {
-          const err = assertThrows(() => loadConfig(), Error);
-          assertStringIncludes(err.message, "verbose");
-        },
-      );
-    },
-  );
+      },
+      () => {
+        assert.throws(() => loadConfig(), errorWith(Error, "verbose"));
+      },
+    );
+  });
 
-  await t.step("LOMS_CLAW_CONFIG で指定したパスが読まれること", () => {
-    const path = Deno.makeTempFileSync({ suffix: ".json" });
-    const original = Deno.env.get(ENV_KEY);
+  test("LOMS_CLAW_CONFIG で指定したパスが読まれること", () => {
+    const path = makeTempConfigPath();
+    const original = process.env[ENV_KEY];
     try {
-      Deno.writeTextFileSync(
+      writeFileSync(
         path,
         JSON.stringify({ ...requiredFields, storePath: "/tmp/custom.kv" }),
       );
-      Deno.env.set(ENV_KEY, path);
+      process.env[ENV_KEY] = path;
       const config = loadConfig();
-      assertEquals(config.storePath, "/tmp/custom.kv");
+      assert.deepStrictEqual(config.storePath, "/tmp/custom.kv");
     } finally {
       if (original === undefined) {
-        Deno.env.delete(ENV_KEY);
+        delete process.env[ENV_KEY];
       } else {
-        Deno.env.set(ENV_KEY, original);
+        process.env[ENV_KEY] = original;
       }
       try {
-        Deno.removeSync(path);
-      } catch { /* ignore */ }
-    }
-  });
-
-  await t.step("ファイルが存在しない場合にエラーになること", () => {
-    const original = Deno.env.get(ENV_KEY);
-    Deno.env.set(ENV_KEY, "/tmp/__does-not-exist__.json");
-    try {
-      assertThrows(() => loadConfig(), Error, "failed to read config file");
-    } finally {
-      if (original === undefined) {
-        Deno.env.delete(ENV_KEY);
-      } else {
-        Deno.env.set(ENV_KEY, original);
+        rmSync(dirname(path), { recursive: true });
+      } catch {
+        /* ignore */
       }
     }
   });
 
-  await t.step("不正な JSON でパースエラーになること", () => {
-    const path = Deno.makeTempFileSync({ suffix: ".json" });
-    const original = Deno.env.get(ENV_KEY);
+  test("ファイルが存在しない場合にエラーになること", () => {
+    const original = process.env[ENV_KEY];
+    process.env[ENV_KEY] = "/tmp/__does-not-exist__.json";
     try {
-      Deno.writeTextFileSync(path, "{ not valid json");
-      Deno.env.set(ENV_KEY, path);
-      assertThrows(() => loadConfig(), Error, "failed to parse config file");
+      assert.throws(
+        () => loadConfig(),
+        errorWith(Error, "failed to read config file"),
+      );
     } finally {
       if (original === undefined) {
-        Deno.env.delete(ENV_KEY);
+        delete process.env[ENV_KEY];
       } else {
-        Deno.env.set(ENV_KEY, original);
+        process.env[ENV_KEY] = original;
+      }
+    }
+  });
+
+  test("不正な JSON でパースエラーになること", () => {
+    const path = makeTempConfigPath();
+    const original = process.env[ENV_KEY];
+    try {
+      writeFileSync(path, "{ not valid json");
+      process.env[ENV_KEY] = path;
+      assert.throws(
+        () => loadConfig(),
+        errorWith(Error, "failed to parse config file"),
+      );
+    } finally {
+      if (original === undefined) {
+        delete process.env[ENV_KEY];
+      } else {
+        process.env[ENV_KEY] = original;
       }
       try {
-        Deno.removeSync(path);
-      } catch { /* ignore */ }
+        rmSync(dirname(path), { recursive: true });
+      } catch {
+        /* ignore */
+      }
     }
   });
 });

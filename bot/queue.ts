@@ -37,7 +37,10 @@ export class ScopeQueue {
 
     // チェーン末尾は reject を握り潰した版を保持する。これにより次に enqueue
     // されたタスクが「前段の失敗」で巻き込まれて未実行になるのを防ぐ。
-    const guarded = run.then(() => {}, () => {});
+    const guarded = run.then(
+      () => {},
+      () => {},
+    );
     this.tails.set(key, guarded);
 
     // チェーン末尾が settle した時点で、まだ自分が末尾なら Map から消す。

@@ -1,4 +1,8 @@
-import { assertEquals } from "@std/assert";
+import { describe, test } from "node:test";
+import { mkdtemp, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import assert from "node:assert/strict";
 import type { GuildTextBasedChannel } from "discord.js";
 import {
   appendImageReferences,
@@ -10,90 +14,87 @@ import {
   stripBotMentions,
 } from "./message.ts";
 
-Deno.test("splitMessage", async (t) => {
-  await t.step("短いテキストは 1 チャンクで返すこと", () => {
-    assertEquals(splitMessage("hello"), ["hello"]);
+describe("splitMessage", () => {
+  test("短いテキストは 1 チャンクで返すこと", () => {
+    assert.deepStrictEqual(splitMessage("hello"), ["hello"]);
   });
 
-  await t.step("制限値ちょうどのテキストは 1 チャンクで返すこと", () => {
+  test("制限値ちょうどのテキストは 1 チャンクで返すこと", () => {
     const text = "a".repeat(2000);
-    assertEquals(splitMessage(text), [text]);
+    assert.deepStrictEqual(splitMessage(text), [text]);
   });
 
-  await t.step("改行位置で分割すること", () => {
+  test("改行位置で分割すること", () => {
     const line1 = "a".repeat(1500);
     const line2 = "b".repeat(600);
     const text = `${line1}\n${line2}`;
     const chunks = splitMessage(text);
-    assertEquals(chunks.length, 2);
-    assertEquals(chunks[0], line1);
-    assertEquals(chunks[1], line2);
+    assert.deepStrictEqual(chunks.length, 2);
+    assert.deepStrictEqual(chunks[0], line1);
+    assert.deepStrictEqual(chunks[1], line2);
   });
 
-  await t.step("後半に改行がない場合は強制分割すること", () => {
+  test("後半に改行がない場合は強制分割すること", () => {
     const text = "a".repeat(3000);
     const chunks = splitMessage(text);
-    assertEquals(chunks.length, 2);
-    assertEquals(chunks[0].length, 2000);
-    assertEquals(chunks[1].length, 1000);
+    assert.deepStrictEqual(chunks.length, 2);
+    assert.deepStrictEqual(chunks[0].length, 2000);
+    assert.deepStrictEqual(chunks[1].length, 1000);
   });
 
-  await t.step("カスタム制限値で分割できること", () => {
+  test("カスタム制限値で分割できること", () => {
     const chunks = splitMessage("abcdef", 3);
-    assertEquals(chunks, ["abc", "def"]);
+    assert.deepStrictEqual(chunks, ["abc", "def"]);
   });
 
-  await t.step("空文字列は空配列を返すこと", () => {
-    assertEquals(splitMessage(""), []);
+  test("空文字列は空配列を返すこと", () => {
+    assert.deepStrictEqual(splitMessage(""), []);
   });
 
-  await t.step("非常に長いテキストは複数チャンクに分割すること", () => {
+  test("非常に長いテキストは複数チャンクに分割すること", () => {
     const text = "a".repeat(5000);
     const chunks = splitMessage(text);
-    assertEquals(chunks.length, 3);
-    assertEquals(chunks[0].length, 2000);
-    assertEquals(chunks[1].length, 2000);
-    assertEquals(chunks[2].length, 1000);
+    assert.deepStrictEqual(chunks.length, 3);
+    assert.deepStrictEqual(chunks[0].length, 2000);
+    assert.deepStrictEqual(chunks[1].length, 2000);
+    assert.deepStrictEqual(chunks[2].length, 1000);
   });
 
-  await t.step("後半の改行位置で分割すること", () => {
+  test("後半の改行位置で分割すること", () => {
     const text = "a".repeat(1200) + "\n" + "b".repeat(900);
     const chunks = splitMessage(text);
-    assertEquals(chunks.length, 2);
-    assertEquals(chunks[0], "a".repeat(1200));
-    assertEquals(chunks[1], "b".repeat(900));
+    assert.deepStrictEqual(chunks.length, 2);
+    assert.deepStrictEqual(chunks[0], "a".repeat(1200));
+    assert.deepStrictEqual(chunks[1], "b".repeat(900));
   });
 
-  await t.step("前半の改行は無視して強制分割すること", () => {
+  test("前半の改行は無視して強制分割すること", () => {
     const text = "a".repeat(100) + "\n" + "b".repeat(2500);
     const chunks = splitMessage(text);
-    assertEquals(chunks[0].length, 2000);
+    assert.deepStrictEqual(chunks[0].length, 2000);
   });
 
-  await t.step("制限値 +1 文字のテキストは 2 チャンクに分割すること", () => {
+  test("制限値 +1 文字のテキストは 2 チャンクに分割すること", () => {
     const text = "a".repeat(2001);
     const chunks = splitMessage(text);
-    assertEquals(chunks.length, 2);
-    assertEquals(chunks[0].length, 2000);
-    assertEquals(chunks[1].length, 1);
+    assert.deepStrictEqual(chunks.length, 2);
+    assert.deepStrictEqual(chunks[0].length, 2000);
+    assert.deepStrictEqual(chunks[1].length, 1);
   });
 
-  await t.step(
-    "コードフェンスをまたぐ場合は境界を考慮せず改行位置で分割すること（既存仕様）",
-    () => {
-      const before = "a".repeat(1990);
-      const text = `${before}\n\`\`\`\n${"b".repeat(500)}\n\`\`\``;
-      const chunks = splitMessage(text);
-      assertEquals(chunks.length, 2);
-      // 改行位置優先のため、コードフェンスの開始行の直後で分割される
-      assertEquals(chunks[0], `${before}\n\`\`\``);
-      assertEquals(chunks[1], `${"b".repeat(500)}\n\`\`\``);
-    },
-  );
+  test("コードフェンスをまたぐ場合は境界を考慮せず改行位置で分割すること（既存仕様）", () => {
+    const before = "a".repeat(1990);
+    const text = `${before}\n\`\`\`\n${"b".repeat(500)}\n\`\`\``;
+    const chunks = splitMessage(text);
+    assert.deepStrictEqual(chunks.length, 2);
+    // 改行位置優先のため、コードフェンスの開始行の直後で分割される
+    assert.deepStrictEqual(chunks[0], `${before}\n\`\`\``);
+    assert.deepStrictEqual(chunks[1], `${"b".repeat(500)}\n\`\`\``);
+  });
 });
 
-Deno.test("keepTyping", async (t) => {
-  await t.step("初回の sendTyping が即座に呼ばれること", () => {
+describe("keepTyping", () => {
+  test("初回の sendTyping が即座に呼ばれること", () => {
     let typingCount = 0;
     const fakeChannel = {
       sendTyping: () => {
@@ -108,11 +109,11 @@ Deno.test("keepTyping", async (t) => {
       controller.signal,
     );
 
-    assertEquals(typingCount, 1);
+    assert.deepStrictEqual(typingCount, 1);
     controller.abort();
   });
 
-  await t.step("既に abort 済みの場合は何もしないこと", () => {
+  test("既に abort 済みの場合は何もしないこと", () => {
     let typingCount = 0;
     const fakeChannel = {
       sendTyping: () => {
@@ -128,7 +129,7 @@ Deno.test("keepTyping", async (t) => {
       controller.signal,
     );
 
-    assertEquals(typingCount, 0);
+    assert.deepStrictEqual(typingCount, 0);
   });
 });
 
@@ -155,42 +156,39 @@ function fakeProgressChannel() {
   return { channel, calls };
 }
 
-Deno.test("createProgressReporter", async (t) => {
-  await t.step("初回の report で send が呼ばれること", async () => {
+describe("createProgressReporter", () => {
+  test("初回の report で send が呼ばれること", async () => {
     const { channel, calls } = fakeProgressChannel();
     const { report, cleanup } = createProgressReporter(channel);
 
     await report("Bash", 5);
 
-    assertEquals(calls.length, 1);
-    assertEquals(calls[0].method, "send");
-    assertEquals(calls[0].text, "`Bash` 実行中... (5s)");
+    assert.deepStrictEqual(calls.length, 1);
+    assert.deepStrictEqual(calls[0].method, "send");
+    assert.deepStrictEqual(calls[0].text, "`Bash` 実行中... (5s)");
 
     await cleanup();
   });
 
-  await t.step("2回目の report で edit が呼ばれること", async () => {
+  test("2回目の report で edit が呼ばれること", async () => {
     const { channel, calls } = fakeProgressChannel();
     let fakeNow = 10000;
-    const { report, cleanup } = createProgressReporter(
-      channel,
-      () => fakeNow,
-    );
+    const { report, cleanup } = createProgressReporter(channel, () => fakeNow);
 
     await report("Bash", 1);
     // スロットルを回避するために時間を進める（PROGRESS_THROTTLE_MS = 3000ms）
     fakeNow += 4000;
     await report("Bash", 5);
 
-    assertEquals(calls.length, 2);
-    assertEquals(calls[0].method, "send");
-    assertEquals(calls[1].method, "edit");
-    assertEquals(calls[1].text, "`Bash` 実行中... (5s)");
+    assert.deepStrictEqual(calls.length, 2);
+    assert.deepStrictEqual(calls[0].method, "send");
+    assert.deepStrictEqual(calls[1].method, "edit");
+    assert.deepStrictEqual(calls[1].text, "`Bash` 実行中... (5s)");
 
     await cleanup();
   });
 
-  await t.step("スロットル間隔内の report は無視されること", async () => {
+  test("スロットル間隔内の report は無視されること", async () => {
     const { channel, calls } = fakeProgressChannel();
     const { report, cleanup } = createProgressReporter(channel);
 
@@ -198,81 +196,72 @@ Deno.test("createProgressReporter", async (t) => {
     await report("Bash", 2);
     await report("Bash", 3);
 
-    assertEquals(calls.length, 1);
+    assert.deepStrictEqual(calls.length, 1);
 
     await cleanup();
   });
 
-  await t.step("cleanup で delete が呼ばれること", async () => {
+  test("cleanup で delete が呼ばれること", async () => {
     const { channel, calls } = fakeProgressChannel();
     const { report, cleanup } = createProgressReporter(channel);
 
     await report("Read", 3);
     await cleanup();
 
-    assertEquals(calls[calls.length - 1].method, "delete");
+    assert.deepStrictEqual(calls[calls.length - 1].method, "delete");
   });
 
-  await t.step(
-    "report 未呼び出しで cleanup しても delete されないこと",
-    async () => {
-      const { channel, calls } = fakeProgressChannel();
-      const { cleanup } = createProgressReporter(channel);
+  test("report 未呼び出しで cleanup しても delete されないこと", async () => {
+    const { channel, calls } = fakeProgressChannel();
+    const { cleanup } = createProgressReporter(channel);
 
-      await cleanup();
+    await cleanup();
 
-      assertEquals(calls.length, 0);
-    },
-  );
+    assert.deepStrictEqual(calls.length, 0);
+  });
 });
 
-Deno.test("appendImageReferences", async (t) => {
-  await t.step("画像がない場合はプロンプトがそのまま返ること", () => {
-    assertEquals(appendImageReferences("hello", []), "hello");
+describe("appendImageReferences", () => {
+  test("画像がない場合はプロンプトがそのまま返ること", () => {
+    assert.deepStrictEqual(appendImageReferences("hello", []), "hello");
   });
 
-  await t.step("単一画像の参照が付加されること", () => {
+  test("単一画像の参照が付加されること", () => {
     const images: DownloadedImage[] = [
       { path: "/tmp/test/a.jpg", originalName: "photo.jpg" },
     ];
     const result = appendImageReferences("describe this", images);
-    assertEquals(result, "describe this\n\n@/tmp/test/a.jpg");
+    assert.deepStrictEqual(result, "describe this\n\n@/tmp/test/a.jpg");
   });
 
-  await t.step("複数画像の参照がスペース区切りで付加されること", () => {
+  test("複数画像の参照がスペース区切りで付加されること", () => {
     const images: DownloadedImage[] = [
       { path: "/tmp/test/a.jpg", originalName: "a.jpg" },
       { path: "/tmp/test/b.png", originalName: "b.png" },
     ];
     const result = appendImageReferences("what are these", images);
-    assertEquals(
+    assert.deepStrictEqual(
       result,
       "what are these\n\n@/tmp/test/a.jpg @/tmp/test/b.png",
     );
   });
 });
 
-Deno.test("cleanupImageFiles", async (t) => {
-  await t.step("一時ディレクトリが削除されること", async () => {
-    const dir = await Deno.makeTempDir({ prefix: "loms-claw-test-" });
+describe("cleanupImageFiles", () => {
+  test("一時ディレクトリが削除されること", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "loms-claw-test-"));
     const filepath = `${dir}/test.jpg`;
-    await Deno.writeTextFile(filepath, "dummy");
+    await writeFile(filepath, "dummy");
 
     const images: DownloadedImage[] = [
       { path: filepath, originalName: "test.jpg" },
     ];
     await cleanupImageFiles(images);
 
-    let exists = true;
-    try {
-      await Deno.stat(dir);
-    } catch {
-      exists = false;
-    }
-    assertEquals(exists, false);
+    await assert.rejects(stat(dir), { code: "ENOENT" });
   });
 
-  await t.step("既に削除済みでもエラーにならないこと", async () => {
+  test("既に削除済みでもエラーにならないこと", async () => {
     const images: DownloadedImage[] = [
       { path: "/tmp/nonexistent-dir-12345/test.jpg", originalName: "test.jpg" },
     ];
@@ -280,34 +269,34 @@ Deno.test("cleanupImageFiles", async (t) => {
   });
 });
 
-Deno.test("stripBotMentions", async (t) => {
-  await t.step("表示名のメンションが除去されること", () => {
-    assertEquals(
+describe("stripBotMentions", () => {
+  test("表示名のメンションが除去されること", () => {
+    assert.deepStrictEqual(
       stripBotMentions("@loms-claw 天気教えて", ["loms-claw"]),
       "天気教えて",
     );
   });
 
-  await t.step("接頭辞関係にある名前でも残骸が残らないこと", () => {
-    assertEquals(
+  test("接頭辞関係にある名前でも残骸が残らないこと", () => {
+    assert.deepStrictEqual(
       stripBotMentions("@loms-claw 天気教えて", ["loms", "loms-claw"]),
       "天気教えて",
     );
-    assertEquals(
+    assert.deepStrictEqual(
       stripBotMentions("@loms-claw 天気教えて", ["loms-claw", "loms"]),
       "天気教えて",
     );
   });
 
-  await t.step("複数箇所のメンションがすべて除去されること", () => {
-    assertEquals(
+  test("複数箇所のメンションがすべて除去されること", () => {
+    assert.deepStrictEqual(
       stripBotMentions("@loms 天気 @loms 教えて", ["loms"]),
       "天気  教えて",
     );
   });
 
-  await t.step("名前が無い・空文字の場合は trim のみ行われること", () => {
-    assertEquals(stripBotMentions("  本文  ", []), "本文");
-    assertEquals(stripBotMentions("  本文  ", [""]), "本文");
+  test("名前が無い・空文字の場合は trim のみ行われること", () => {
+    assert.deepStrictEqual(stripBotMentions("  本文  ", []), "本文");
+    assert.deepStrictEqual(stripBotMentions("  本文  ", [""]), "本文");
   });
 });

@@ -1,31 +1,26 @@
-import { assertEquals } from "@std/assert";
-import { createHealthRoutes } from "./health.ts";
+import { describe, test } from "node:test";
+import assert from "node:assert/strict";
 import { Hono } from "hono";
+import { createHealthRoutes } from "./health.ts";
 
-Deno.test("health routes", async (t) => {
-  await t.step(
-    "GET /: isReady が true の場合に 200 で status: ok を返すこと",
-    async () => {
-      const app = new Hono();
-      app.route("/health", createHealthRoutes({ isReady: () => true }));
+describe("health routes", () => {
+  test("GET /: isReady が true の場合に 200 で status: ok を返すこと", async () => {
+    const app = new Hono();
+    app.route("/health", createHealthRoutes({ isReady: () => true }));
 
-      const res = await app.request("/health");
+    const res = await app.request("/health");
 
-      assertEquals(res.status, 200);
-      assertEquals(await res.json(), { status: "ok" });
-    },
-  );
+    assert.deepStrictEqual(res.status, 200);
+    assert.deepStrictEqual(await res.json(), { status: "ok" });
+  });
 
-  await t.step(
-    "GET /: isReady が false の場合に 503 で status: unavailable を返すこと",
-    async () => {
-      const app = new Hono();
-      app.route("/health", createHealthRoutes({ isReady: () => false }));
+  test("GET /: isReady が false の場合に 503 で status: unavailable を返すこと", async () => {
+    const app = new Hono();
+    app.route("/health", createHealthRoutes({ isReady: () => false }));
 
-      const res = await app.request("/health");
+    const res = await app.request("/health");
 
-      assertEquals(res.status, 503);
-      assertEquals(await res.json(), { status: "unavailable" });
-    },
-  );
+    assert.deepStrictEqual(res.status, 503);
+    assert.deepStrictEqual(await res.json(), { status: "unavailable" });
+  });
 });

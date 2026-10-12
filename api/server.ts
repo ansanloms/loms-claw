@@ -2,14 +2,17 @@
  * 統合 HTTP サーバー。
  *
  * cron ジョブの一覧取得・手動実行・再読み込み、ログ取得、スコープ設定の
- * 取得・部分更新・削除を Hono アプリケーションとして単一の Deno.serve() で提供する。
+ * 取得・部分更新・削除を Hono アプリケーションとして単一の HTTP サーバーとして提供する。
  *
  * ツール承認は SDK の `canUseTool` コールバックで in-process に処理するため、
  * HTTP エンドポイントは持たない。
  */
 
+import { serve, type ServerType } from "@hono/node-server";
 import { Hono } from "hono";
-import { createCronRoutes, type CronRouteContext } from "./routes/cron.ts";
+import { getErrorMessage } from "../errors.ts";
+import { createLogger } from "../logger.ts";
+import { type CronRouteContext, createCronRoutes } from "./routes/cron.ts";
 import {
   createHealthRoutes,
   type HealthRouteContext,
@@ -19,8 +22,6 @@ import {
   createSettingsRoutes,
   type SettingsRouteContext,
 } from "./routes/settings.ts";
-import { createLogger } from "../logger.ts";
-import { getErrorMessage } from "../errors.ts";
 
 const log = createLogger("api-server");
 
@@ -28,7 +29,7 @@ const log = createLogger("api-server");
  * 統合 HTTP サーバーの Hono アプリケーションを組み立てる。
  *
  * `startApiServer()` から Hono アプリの組み立てだけを切り出したもの。
- * `Deno.serve()` を経由せずに `app.request()` で直接叩けるため、
+ * HTTP サーバーを経由せずに `app.request()` で直接叩けるため、
  * ルーティング (404 / 500 / マウント) を単体テストできる。
  *
  * @param settingsCtx - settings ルートの依存関係コンテキスト。
@@ -80,21 +81,28 @@ export function createApp(
  * @param settingsCtx - settings ルートの依存関係コンテキスト。
  * @param healthCtx - health ルートの依存関係コンテキスト。
  * @param cronCtx - cron ルートの依存関係コンテキスト。
- * @returns Deno.HttpServer インスタンス（shutdown() で停止可能）。
+ * @returns listening になった時点で resolve する Node の HTTP サーバー（close() で停止可能）。
+ *   ポート使用中などで listen に失敗した場合は reject する。
  */
 export function startApiServer(
   port: number,
   settingsCtx: SettingsRouteContext,
   healthCtx: HealthRouteContext,
   cronCtx?: CronRouteContext,
-): Deno.HttpServer {
+): Promise<ServerType> {
   const app = createApp(settingsCtx, healthCtx, cronCtx);
 
-  const server = Deno.serve(
-    { port, hostname: "127.0.0.1" },
-    app.fetch,
-  );
-
-  log.info("API server started on port", port);
-  return server;
+  return new Promise<ServerType>((resolve, reject) => {
+    const server = serve({
+      fetch: app.fetch,
+      port,
+      hostname: "127.0.0.1",
+    });
+    server.once("error", reject);
+    server.once("listening", () => {
+      server.off("error", reject);
+      log.info("API server started on port", port);
+      resolve(server);
+    });
+  });
 }

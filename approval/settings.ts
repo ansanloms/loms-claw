@@ -5,7 +5,9 @@
  * 次回の query() から SDK 側で事前許可させる（canUseTool の確認をスキップ）。
  */
 
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "@std/path/dirname";
+import { isNotFoundError } from "../errors.ts";
 import { createLogger } from "../logger.ts";
 
 const log = createLogger("approval-settings");
@@ -23,7 +25,7 @@ export async function isInAllowList(
   toolName: string,
 ): Promise<boolean> {
   try {
-    const raw = await Deno.readTextFile(settingsPath);
+    const raw = await readFile(settingsPath, "utf8");
     const settings = JSON.parse(raw);
     const allow = settings?.permissions?.allow;
     return Array.isArray(allow) && allow.includes(toolName);
@@ -48,14 +50,14 @@ export async function addToSettingsAllowList(
 ): Promise<void> {
   let settings: Record<string, unknown> = {};
   try {
-    const raw = await Deno.readTextFile(settingsPath);
+    const raw = await readFile(settingsPath, "utf8");
     try {
       settings = JSON.parse(raw);
     } catch {
       log.warn("settings.json is invalid JSON, overwriting:", settingsPath);
     }
   } catch (error: unknown) {
-    if (!(error instanceof Deno.errors.NotFound)) {
+    if (!isNotFoundError(error)) {
       throw error;
     }
   }
@@ -77,11 +79,8 @@ export async function addToSettingsAllowList(
 
   allowList.push(toolName);
 
-  await Deno.mkdir(dirname(settingsPath), { recursive: true });
-  await Deno.writeTextFile(
-    settingsPath,
-    JSON.stringify(settings, null, 2) + "\n",
-  );
+  await mkdir(dirname(settingsPath), { recursive: true });
+  await writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
 
   log.info("persisted to settings.json allow list:", toolName);
 }

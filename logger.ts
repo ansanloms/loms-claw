@@ -18,6 +18,8 @@
  * ```
  */
 
+import { Temporal } from "@js-temporal/polyfill";
+
 /**
  * サポートするログレベル（重要度の昇順）。
  */
@@ -91,7 +93,7 @@ let minLevel: LogLevel = "INFO";
 /** リングバッファ容量。{@link initLogger} で上書き可能。 */
 let bufferCapacity = 1000;
 /** リングバッファ本体。 */
-let buffer: (LogEntry | undefined)[] = new Array(bufferCapacity);
+let buffer: (LogEntry | undefined)[] = Array.from({ length: bufferCapacity });
 /** 次に書き込む位置。 */
 let writePos = 0;
 /** バッファに書き込まれた総数（容量を超えても加算し続ける）。 */
@@ -108,7 +110,7 @@ export function initLogger(options: LoggerInitOptions): void {
   const nextCapacity = Math.max(1, Math.min(options.bufferSize, 10000));
   if (nextCapacity !== bufferCapacity) {
     bufferCapacity = nextCapacity;
-    buffer = new Array(bufferCapacity);
+    buffer = Array.from({ length: bufferCapacity });
     writePos = 0;
     totalWritten = 0;
   }
@@ -159,9 +161,9 @@ export function getLogEntries(filter?: LogFilter): LogEntry[] {
     if (
       sinceInstant &&
       Temporal.Instant.compare(
-          Temporal.Instant.from(entry.timestamp),
-          sinceInstant,
-        ) < 0
+        Temporal.Instant.from(entry.timestamp),
+        sinceInstant,
+      ) < 0
     ) {
       continue;
     }
@@ -195,9 +197,8 @@ export function createLogger(namespace: string): Logger {
     const ts = Temporal.Now.instant().toString();
 
     // リングバッファには minLevel に関係なく全レベルを記録する
-    const fullMessage = args.length > 0
-      ? `${msg} ${args.map(stringifyArg).join(" ")}`
-      : msg;
+    const fullMessage =
+      args.length > 0 ? `${msg} ${args.map(stringifyArg).join(" ")}` : msg;
     pushEntry({ timestamp: ts, level, namespace, message: fullMessage });
 
     if (LEVEL_ORDER[level] < LEVEL_ORDER[minLevel]) {

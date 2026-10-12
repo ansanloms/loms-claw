@@ -1,68 +1,60 @@
-import { assertEquals } from "@std/assert";
-import { createCronRoutes } from "./cron.ts";
+import { describe, test } from "node:test";
+import assert from "node:assert/strict";
 import { Hono } from "hono";
+import { createCronRoutes } from "./cron.ts";
 
-Deno.test("createCronRoutes", async (t) => {
-  await t.step(
-    "POST /reload: reloadCronJobs が成功した場合に ok: true を返すこと",
-    async () => {
-      let called = false;
-      const app = new Hono();
-      app.route(
-        "/cron",
-        createCronRoutes({
-          reloadCronJobs: () => {
-            called = true;
-            return Promise.resolve();
-          },
-        }),
-      );
+describe("createCronRoutes", () => {
+  test("POST /reload: reloadCronJobs が成功した場合に ok: true を返すこと", async () => {
+    let called = false;
+    const app = new Hono();
+    app.route(
+      "/cron",
+      createCronRoutes({
+        reloadCronJobs: () => {
+          called = true;
+          return Promise.resolve();
+        },
+      }),
+    );
 
-      const res = await app.request("/cron/reload", { method: "POST" });
+    const res = await app.request("/cron/reload", { method: "POST" });
 
-      assertEquals(res.status, 200);
-      assertEquals(await res.json(), { ok: true });
-      assertEquals(called, true);
-    },
-  );
+    assert.deepStrictEqual(res.status, 200);
+    assert.deepStrictEqual(await res.json(), { ok: true });
+    assert.deepStrictEqual(called, true);
+  });
 
-  await t.step(
-    "POST /reload: reloadCronJobs が未指定の場合に 503 を返すこと",
-    async () => {
-      const app = new Hono();
-      app.route("/cron", createCronRoutes());
+  test("POST /reload: reloadCronJobs が未指定の場合に 503 を返すこと", async () => {
+    const app = new Hono();
+    app.route("/cron", createCronRoutes());
 
-      const res = await app.request("/cron/reload", { method: "POST" });
+    const res = await app.request("/cron/reload", { method: "POST" });
 
-      assertEquals(res.status, 503);
-      const json = await res.json();
-      assertEquals(json.error, "cron reload not available");
-    },
-  );
+    assert.deepStrictEqual(res.status, 503);
+    const json = (await res.json()) as Record<string, unknown>;
+    assert.deepStrictEqual(json.error, "cron reload not available");
+  });
 
-  await t.step(
-    "POST /reload: reloadCronJobs が例外を投げた場合に 500 を返すこと",
-    async () => {
-      const app = new Hono();
-      app.route(
-        "/cron",
-        createCronRoutes({
-          reloadCronJobs: () => Promise.reject(new Error("load failed")),
-        }),
-      );
-      app.onError((err, c) => {
-        return c.json({ error: err.message }, 500);
-      });
+  test("POST /reload: reloadCronJobs が例外を投げた場合に 500 を返すこと", async () => {
+    const app = new Hono();
+    app.route(
+      "/cron",
+      createCronRoutes({
+        reloadCronJobs: () => Promise.reject(new Error("load failed")),
+      }),
+    );
+    app.onError((err, c) => {
+      return c.json({ error: err.message }, 500);
+    });
 
-      const res = await app.request("/cron/reload", { method: "POST" });
+    const res = await app.request("/cron/reload", { method: "POST" });
 
-      assertEquals(res.status, 500);
-      const json = await res.json();
-      assertEquals(json.error, "load failed");
-    },
-  );
+    assert.deepStrictEqual(res.status, 500);
+    const json = (await res.json()) as Record<string, unknown>;
+    assert.deepStrictEqual(json.error, "load failed");
+  });
 
-  await t.step("GET /: ジョブ一覧が返ること", async () => {
+  test("GET /: ジョブ一覧が返ること", async () => {
     const app = new Hono();
     app.route(
       "/cron",
@@ -88,28 +80,35 @@ Deno.test("createCronRoutes", async (t) => {
     );
 
     const res = await app.request("/cron");
-    assertEquals(res.status, 200);
-    const json = await res.json();
-    assertEquals(json.jobs.length, 2);
-    assertEquals(json.jobs[0].name, "job1");
-    assertEquals(json.jobs[0].kind, "prompt");
-    assertEquals(json.jobs[0].channelId, "123");
-    assertEquals(json.jobs[0].once, false);
-    assertEquals(json.jobs[1].name, "job2");
-    assertEquals(json.jobs[1].kind, "command");
-    assertEquals(json.jobs[1].channelId, undefined);
-    assertEquals(json.jobs[1].once, true);
+    assert.deepStrictEqual(res.status, 200);
+    const json = (await res.json()) as {
+      jobs: Array<{
+        name: string;
+        kind: string;
+        channelId?: string;
+        once: boolean;
+      }>;
+    };
+    assert.deepStrictEqual(json.jobs.length, 2);
+    assert.deepStrictEqual(json.jobs[0].name, "job1");
+    assert.deepStrictEqual(json.jobs[0].kind, "prompt");
+    assert.deepStrictEqual(json.jobs[0].channelId, "123");
+    assert.deepStrictEqual(json.jobs[0].once, false);
+    assert.deepStrictEqual(json.jobs[1].name, "job2");
+    assert.deepStrictEqual(json.jobs[1].kind, "command");
+    assert.deepStrictEqual(json.jobs[1].channelId, undefined);
+    assert.deepStrictEqual(json.jobs[1].once, true);
   });
 
-  await t.step("GET /: listJobs 未指定で 503 を返すこと", async () => {
+  test("GET /: listJobs 未指定で 503 を返すこと", async () => {
     const app = new Hono();
     app.route("/cron", createCronRoutes());
 
     const res = await app.request("/cron");
-    assertEquals(res.status, 503);
+    assert.deepStrictEqual(res.status, 503);
   });
 
-  await t.step("POST /run: 正常にジョブが実行されること", async () => {
+  test("POST /run: 正常にジョブが実行されること", async () => {
     const executed: string[] = [];
     const app = new Hono();
     app.route(
@@ -128,12 +127,12 @@ Deno.test("createCronRoutes", async (t) => {
       body: JSON.stringify({ name: "my-job" }),
     });
 
-    assertEquals(res.status, 200);
-    assertEquals(await res.json(), { ok: true, name: "my-job" });
-    assertEquals(executed, ["my-job"]);
+    assert.deepStrictEqual(res.status, 200);
+    assert.deepStrictEqual(await res.json(), { ok: true, name: "my-job" });
+    assert.deepStrictEqual(executed, ["my-job"]);
   });
 
-  await t.step("POST /run: name 未指定で 400 を返すこと", async () => {
+  test("POST /run: name 未指定で 400 を返すこと", async () => {
     const app = new Hono();
     app.route(
       "/cron",
@@ -148,40 +147,37 @@ Deno.test("createCronRoutes", async (t) => {
       body: JSON.stringify({}),
     });
 
-    assertEquals(res.status, 400);
-    const json = await res.json();
-    assertEquals(
+    assert.deepStrictEqual(res.status, 400);
+    const json = (await res.json()) as Record<string, unknown>;
+    assert.deepStrictEqual(
       json.error,
       'Instance does not have required property "name".',
     );
   });
 
-  await t.step(
-    "POST /run: 存在しないジョブで 404 を返すこと",
-    async () => {
-      const app = new Hono();
-      app.route(
-        "/cron",
-        createCronRoutes({
-          runJob: () => {
-            return Promise.reject(new Error("job not found: nonexistent"));
-          },
-        }),
-      );
+  test("POST /run: 存在しないジョブで 404 を返すこと", async () => {
+    const app = new Hono();
+    app.route(
+      "/cron",
+      createCronRoutes({
+        runJob: () => {
+          return Promise.reject(new Error("job not found: nonexistent"));
+        },
+      }),
+    );
 
-      const res = await app.request("/cron/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "nonexistent" }),
-      });
+    const res = await app.request("/cron/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "nonexistent" }),
+    });
 
-      assertEquals(res.status, 404);
-      const json = await res.json();
-      assertEquals(json.error, "job not found: nonexistent");
-    },
-  );
+    assert.deepStrictEqual(res.status, 404);
+    const json = (await res.json()) as Record<string, unknown>;
+    assert.deepStrictEqual(json.error, "job not found: nonexistent");
+  });
 
-  await t.step("POST /run: runJob 未指定で 503 を返すこと", async () => {
+  test("POST /run: runJob 未指定で 503 を返すこと", async () => {
     const app = new Hono();
     app.route("/cron", createCronRoutes());
 
@@ -191,29 +187,26 @@ Deno.test("createCronRoutes", async (t) => {
       body: JSON.stringify({ name: "test" }),
     });
 
-    assertEquals(res.status, 503);
+    assert.deepStrictEqual(res.status, 503);
   });
 
-  await t.step(
-    "POST /run: 不正な JSON ボディで 400 を返すこと",
-    async () => {
-      const app = new Hono();
-      app.route(
-        "/cron",
-        createCronRoutes({
-          runJob: () => Promise.resolve(),
-        }),
-      );
+  test("POST /run: 不正な JSON ボディで 400 を返すこと", async () => {
+    const app = new Hono();
+    app.route(
+      "/cron",
+      createCronRoutes({
+        runJob: () => Promise.resolve(),
+      }),
+    );
 
-      const res = await app.request("/cron/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: "not-json",
-      });
+    const res = await app.request("/cron/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "not-json",
+    });
 
-      assertEquals(res.status, 400);
-      const json = await res.json();
-      assertEquals(json.error, "invalid JSON body");
-    },
-  );
+    assert.deepStrictEqual(res.status, 400);
+    const json = (await res.json()) as Record<string, unknown>;
+    assert.deepStrictEqual(json.error, "invalid JSON body");
+  });
 });

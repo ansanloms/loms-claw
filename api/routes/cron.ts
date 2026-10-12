@@ -7,9 +7,9 @@
 import { Hono } from "hono";
 import type { FromSchema } from "json-schema-to-ts";
 import type { CronJobDef } from "../../cron/types.ts";
-import { internalSchemas } from "../internal-schemas.ts";
-import { matchesSchema, schemaErrorOf } from "../validate.ts";
 import { createLogger } from "../../logger.ts";
+import type { internalSchemas } from "../internal-schemas.ts";
+import { matchesSchema, schemaErrorOf } from "../validate.ts";
 
 const log = createLogger("api-cron");
 
@@ -28,7 +28,7 @@ export interface CronRouteContext {
 /** request body が RequestPostCronRun スキーマに適合するかの型ガード。 */
 function isCronRunBody(
   value: unknown,
-): value is FromSchema<typeof internalSchemas["RequestPostCronRun"]> {
+): value is FromSchema<(typeof internalSchemas)["RequestPostCronRun"]> {
   return matchesSchema("RequestPostCronRun", value);
 }
 

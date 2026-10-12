@@ -1,6 +1,8 @@
-import { assertEquals } from "@std/assert";
-import { createApp } from "./server.ts";
+import { DatabaseSync } from "node:sqlite";
+import { describe, test } from "node:test";
+import assert from "node:assert/strict";
 import { Store, type StoreDefaults } from "../store/mod.ts";
+import { createApp } from "./server.ts";
 
 const defaults: StoreDefaults = {};
 
@@ -9,81 +11,68 @@ async function withApp(
   fn: (app: ReturnType<typeof createApp>) => Promise<void>,
   cronCtx?: Parameters<typeof createApp>[2],
 ): Promise<void> {
-  const kv = await Deno.openKv(":memory:");
+  const db = new DatabaseSync(":memory:");
   try {
-    const store = new Store(kv, defaults);
-    const app = createApp(
-      { store },
-      { isReady: () => true },
-      cronCtx,
-    );
+    const store = new Store(db, defaults);
+    const app = createApp({ store }, { isReady: () => true }, cronCtx);
     await fn(app);
   } finally {
-    kv.close();
+    db.close();
   }
 }
 
-Deno.test("createApp", async (t) => {
-  await t.step(
-    '未定義パスへのアクセスは 404 で { error: "Not Found" } を返すこと',
-    async () => {
-      await withApp(async (app) => {
-        const res = await app.request("/no-such-route");
-        assertEquals(res.status, 404);
-        assertEquals(await res.json(), { error: "Not Found" });
-      });
-    },
-  );
+describe("createApp", () => {
+  test('未定義パスへのアクセスは 404 で { error: "Not Found" } を返すこと', async () => {
+    await withApp(async (app) => {
+      const res = await app.request("/no-such-route");
+      assert.deepStrictEqual(res.status, 404);
+      assert.deepStrictEqual(await res.json(), { error: "Not Found" });
+    });
+  });
 
-  await t.step(
-    "マウント済みルートで例外が投げられた場合に 500 で { error: message } を返すこと",
-    async () => {
-      await withApp(
-        async (app) => {
-          const res = await app.request("/cron/run", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: "job-1" }),
-          });
-          assertEquals(res.status, 500);
-          assertEquals(await res.json(), { error: "boom" });
-        },
-        {
-          runJob: () => Promise.reject(new Error("boom")),
-        },
-      );
-    },
-  );
+  test("マウント済みルートで例外が投げられた場合に 500 で { error: message } を返すこと", async () => {
+    await withApp(
+      async (app) => {
+        const res = await app.request("/cron/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: "job-1" }),
+        });
+        assert.deepStrictEqual(res.status, 500);
+        assert.deepStrictEqual(await res.json(), { error: "boom" });
+      },
+      {
+        runJob: () => Promise.reject(new Error("boom")),
+      },
+    );
+  });
 
-  await t.step("/health がマウントされていること", async () => {
+  test("/health がマウントされていること", async () => {
     await withApp(async (app) => {
       const res = await app.request("/health");
-      assertEquals(res.status, 200);
-      assertEquals(await res.json(), { status: "ok" });
+      assert.deepStrictEqual(res.status, 200);
+      assert.deepStrictEqual(await res.json(), { status: "ok" });
     });
   });
 
-  await t.step("/logs がマウントされていること", async () => {
+  test("/logs がマウントされていること", async () => {
     await withApp(async (app) => {
       const res = await app.request("/logs");
-      assertEquals(res.status, 200);
+      assert.deepStrictEqual(res.status, 200);
     });
   });
 
-  await t.step("/settings がマウントされていること", async () => {
+  test("/settings がマウントされていること", async () => {
     await withApp(async (app) => {
       const res = await app.request("/settings/default");
-      assertEquals(res.status, 200);
+      assert.deepStrictEqual(res.status, 200);
     });
   });
 
-  await t.step(
-    "/cron は cronCtx 未指定でも 503 を返しマウント自体はされていること",
-    async () => {
-      await withApp(async (app) => {
-        const res = await app.request("/cron");
-        assertEquals(res.status, 503);
-      });
-    },
-  );
+  test("/cron は cronCtx 未指定でも 503 を返しマウント自体はされていること", async () => {
+    await withApp(async (app) => {
+      const res = await app.request("/cron");
+      assert.deepStrictEqual(res.status, 503);
+    });
+  });
 });

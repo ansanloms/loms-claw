@@ -6,7 +6,7 @@
     "userId": "",
     "activeChannelIds": []
   },
-  "storePath": ".claude/loms-claw.kv",
+  "storePath": ".claude/loms-claw.sqlite",
   "claude": {
     "maxTurns": 10,
     "timeout": 300000,

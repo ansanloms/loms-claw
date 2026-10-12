@@ -1,5 +1,6 @@
 .env
 coverage/
+node_modules/
 **/.claude/settings.local.json
 
 # 実行時データ (data/ 配下)。ワークスペースの共有資産のみ追跡する
@@ -19,10 +20,13 @@ data/workspace/.claude/plans/
 data/workspace/cron/*.once.md
 data/workspace/cron/*.once.yaml
 
-# Deno KV。ローカル実行ではリポジトリ直下の .claude/ にも作られる (storePath 既定値が cwd 基準のため)
+# 永続化ストア (SQLite)。旧 Deno KV のファイルも残りうる。ローカル実行ではリポジトリ直下の .claude/ にも作られる (storePath 既定値が cwd 基準のため)
 **/*.kv
 **/*.kv-shm
 **/*.kv-wal
+**/*.sqlite
+**/*.sqlite-shm
+**/*.sqlite-wal
 
 # apm
 **/apm_modules/

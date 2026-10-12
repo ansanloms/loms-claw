@@ -8,6 +8,8 @@
  * @module
  */
 
+import { Temporal } from "@js-temporal/polyfill";
+
 /**
  * パース済み cron フィールド。各要素はそのフィールドでマッチする値の Set。
  */

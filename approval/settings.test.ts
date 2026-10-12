@@ -1,10 +1,13 @@
-import { assertEquals } from "@std/assert";
+import { describe, test } from "node:test";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import assert from "node:assert/strict";
 import { join } from "@std/path/join";
 import { addToSettingsAllowList, isInAllowList } from "./settings.ts";
 
-Deno.test("addToSettingsAllowList", async (t) => {
-  await t.step("ファイルが存在しない場合は新規作成すること", async () => {
-    const dir = await Deno.makeTempDir();
+describe("addToSettingsAllowList", () => {
+  test("ファイルが存在しない場合は新規作成すること", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "loms-claw-test-"));
     const settingsPath = join(dir, ".claude", "settings.json");
 
     await addToSettingsAllowList(
@@ -12,26 +15,26 @@ Deno.test("addToSettingsAllowList", async (t) => {
       "mcp__claude_ai_Gmail__search_threads",
     );
 
-    const result = JSON.parse(await Deno.readTextFile(settingsPath));
-    assertEquals(result, {
+    const result = JSON.parse(await readFile(settingsPath, "utf8"));
+    assert.deepStrictEqual(result, {
       permissions: {
         allow: ["mcp__claude_ai_Gmail__search_threads"],
       },
     });
   });
 
-  await t.step("既存フィールドを保持してマージすること", async () => {
-    const dir = await Deno.makeTempDir();
+  test("既存フィールドを保持してマージすること", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "loms-claw-test-"));
     const settingsPath = join(dir, "settings.json");
-    await Deno.writeTextFile(
+    await writeFile(
       settingsPath,
       JSON.stringify({ env: { LOG_LEVEL: "debug" } }, null, 2) + "\n",
     );
 
     await addToSettingsAllowList(settingsPath, "Bash(git status)");
 
-    const result = JSON.parse(await Deno.readTextFile(settingsPath));
-    assertEquals(result, {
+    const result = JSON.parse(await readFile(settingsPath, "utf8"));
+    assert.deepStrictEqual(result, {
       env: { LOG_LEVEL: "debug" },
       permissions: {
         allow: ["Bash(git status)"],
@@ -39,93 +42,84 @@ Deno.test("addToSettingsAllowList", async (t) => {
     });
   });
 
-  await t.step(
-    "既存の permissions.allow に追記すること",
-    async () => {
-      const dir = await Deno.makeTempDir();
-      const settingsPath = join(dir, "settings.json");
-      await Deno.writeTextFile(
-        settingsPath,
-        JSON.stringify(
-          { permissions: { allow: ["Read"], deny: ["Bash(rm *)"] } },
-          null,
-          2,
-        ) + "\n",
-      );
+  test("既存の permissions.allow に追記すること", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "loms-claw-test-"));
+    const settingsPath = join(dir, "settings.json");
+    await writeFile(
+      settingsPath,
+      JSON.stringify(
+        { permissions: { allow: ["Read"], deny: ["Bash(rm *)"] } },
+        null,
+        2,
+      ) + "\n",
+    );
 
-      await addToSettingsAllowList(settingsPath, "Edit");
+    await addToSettingsAllowList(settingsPath, "Edit");
 
-      const result = JSON.parse(await Deno.readTextFile(settingsPath));
-      assertEquals(result, {
-        permissions: {
-          allow: ["Read", "Edit"],
-          deny: ["Bash(rm *)"],
-        },
-      });
-    },
-  );
+    const result = JSON.parse(await readFile(settingsPath, "utf8"));
+    assert.deepStrictEqual(result, {
+      permissions: {
+        allow: ["Read", "Edit"],
+        deny: ["Bash(rm *)"],
+      },
+    });
+  });
 
-  await t.step("重複するツール名は追加しないこと", async () => {
-    const dir = await Deno.makeTempDir();
+  test("重複するツール名は追加しないこと", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "loms-claw-test-"));
     const settingsPath = join(dir, "settings.json");
 
     await addToSettingsAllowList(settingsPath, "Read");
     await addToSettingsAllowList(settingsPath, "Read");
 
-    const result = JSON.parse(await Deno.readTextFile(settingsPath));
-    assertEquals(result.permissions.allow, ["Read"]);
+    const result = JSON.parse(await readFile(settingsPath, "utf8"));
+    assert.deepStrictEqual(result.permissions.allow, ["Read"]);
   });
 });
 
-Deno.test("isInAllowList", async (t) => {
-  await t.step("allow list に含まれるツールで true を返すこと", async () => {
-    const dir = await Deno.makeTempDir();
+describe("isInAllowList", () => {
+  test("allow list に含まれるツールで true を返すこと", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "loms-claw-test-"));
     const settingsPath = join(dir, "settings.json");
-    await Deno.writeTextFile(
+    await writeFile(
       settingsPath,
       JSON.stringify({ permissions: { allow: ["Read", "Bash"] } }),
     );
 
-    assertEquals(await isInAllowList(settingsPath, "Bash"), true);
+    assert.deepStrictEqual(await isInAllowList(settingsPath, "Bash"), true);
   });
 
-  await t.step(
-    "allow list に含まれないツールで false を返すこと",
-    async () => {
-      const dir = await Deno.makeTempDir();
-      const settingsPath = join(dir, "settings.json");
-      await Deno.writeTextFile(
-        settingsPath,
-        JSON.stringify({ permissions: { allow: ["Read"] } }),
-      );
+  test("allow list に含まれないツールで false を返すこと", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "loms-claw-test-"));
+    const settingsPath = join(dir, "settings.json");
+    await writeFile(
+      settingsPath,
+      JSON.stringify({ permissions: { allow: ["Read"] } }),
+    );
 
-      assertEquals(await isInAllowList(settingsPath, "Bash"), false);
-    },
-  );
+    assert.deepStrictEqual(await isInAllowList(settingsPath, "Bash"), false);
+  });
 
-  await t.step("ファイルが存在しない場合に false を返すこと", async () => {
-    const dir = await Deno.makeTempDir();
+  test("ファイルが存在しない場合に false を返すこと", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "loms-claw-test-"));
     const settingsPath = join(dir, "nonexistent.json");
 
-    assertEquals(await isInAllowList(settingsPath, "Read"), false);
+    assert.deepStrictEqual(await isInAllowList(settingsPath, "Read"), false);
   });
 
-  await t.step("JSON が不正な場合に false を返すこと", async () => {
-    const dir = await Deno.makeTempDir();
+  test("JSON が不正な場合に false を返すこと", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "loms-claw-test-"));
     const settingsPath = join(dir, "settings.json");
-    await Deno.writeTextFile(settingsPath, "not json");
+    await writeFile(settingsPath, "not json");
 
-    assertEquals(await isInAllowList(settingsPath, "Read"), false);
+    assert.deepStrictEqual(await isInAllowList(settingsPath, "Read"), false);
   });
 
-  await t.step(
-    "permissions.allow が存在しない場合に false を返すこと",
-    async () => {
-      const dir = await Deno.makeTempDir();
-      const settingsPath = join(dir, "settings.json");
-      await Deno.writeTextFile(settingsPath, JSON.stringify({ env: {} }));
+  test("permissions.allow が存在しない場合に false を返すこと", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "loms-claw-test-"));
+    const settingsPath = join(dir, "settings.json");
+    await writeFile(settingsPath, JSON.stringify({ env: {} }));
 
-      assertEquals(await isInAllowList(settingsPath, "Read"), false);
-    },
-  );
+    assert.deepStrictEqual(await isInAllowList(settingsPath, "Read"), false);
+  });
 });

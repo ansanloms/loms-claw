@@ -1,4 +1,5 @@
-import { assertEquals, assertExists } from "@std/assert";
+import { describe, test } from "node:test";
+import assert from "node:assert/strict";
 import type {
   ActionRowBuilder,
   ButtonBuilder,
@@ -60,123 +61,114 @@ const toolOptions = {
   requestId: "req-1",
 };
 
-Deno.test("createCanUseTool", async (t) => {
-  await t.step(
-    "allow を behavior:allow に変換し入力を echo back すること",
-    async () => {
-      const canUseTool = createCanUseTool(
-        mockManager({ decision: "allow", reason: "ok" }),
-        "ch-1",
-      );
-      const input = { command: "ls" };
-      const result = await canUseTool("Bash", input, toolOptions);
+describe("createCanUseTool", () => {
+  test("allow を behavior:allow に変換し入力を echo back すること", async () => {
+    const canUseTool = createCanUseTool(
+      mockManager({ decision: "allow", reason: "ok" }),
+      "ch-1",
+    );
+    const input = { command: "ls" };
+    const result = await canUseTool("Bash", input, toolOptions);
 
-      assertExists(result);
-      assertEquals(result.behavior, "allow");
-      if (result.behavior === "allow") {
-        assertEquals(result.updatedInput, input);
-      }
-    },
-  );
+    assert.ok(result, "allow の変換結果が返ること");
+    assert.deepStrictEqual(result.behavior, "allow");
+    if (result.behavior === "allow") {
+      assert.deepStrictEqual(result.updatedInput, input);
+    }
+  });
 
-  await t.step(
-    "deny を behavior:deny に変換し理由を message に載せること",
-    async () => {
-      const canUseTool = createCanUseTool(
-        mockManager({ decision: "deny", reason: "Denied by user" }),
-        "ch-1",
-      );
-      const result = await canUseTool("Bash", { command: "rm" }, toolOptions);
+  test("deny を behavior:deny に変換し理由を message に載せること", async () => {
+    const canUseTool = createCanUseTool(
+      mockManager({ decision: "deny", reason: "Denied by user" }),
+      "ch-1",
+    );
+    const result = await canUseTool("Bash", { command: "rm" }, toolOptions);
 
-      assertExists(result);
-      assertEquals(result.behavior, "deny");
-      if (result.behavior === "deny") {
-        assertEquals(result.message, "Denied by user");
-      }
-    },
-  );
+    assert.ok(result, "deny の変換結果が返ること");
+    assert.deepStrictEqual(result.behavior, "deny");
+    if (result.behavior === "deny") {
+      assert.deepStrictEqual(result.message, "Denied by user");
+    }
+  });
 
-  await t.step(
-    "reason 無しの deny は message が 'Denied' になること",
-    async () => {
-      const canUseTool = createCanUseTool(
-        mockManager({ decision: "deny" }),
-        "ch-1",
-      );
-      const result = await canUseTool("Bash", {}, toolOptions);
+  test("reason 無しの deny は message が 'Denied' になること", async () => {
+    const canUseTool = createCanUseTool(
+      mockManager({ decision: "deny" }),
+      "ch-1",
+    );
+    const result = await canUseTool("Bash", {}, toolOptions);
 
-      assertExists(result);
-      assertEquals(result.behavior, "deny");
-      if (result.behavior === "deny") {
-        assertEquals(result.message, "Denied");
-      }
-    },
-  );
+    assert.ok(result, "reason 無し deny の変換結果が返ること");
+    assert.deepStrictEqual(result.behavior, "deny");
+    if (result.behavior === "deny") {
+      assert.deepStrictEqual(result.message, "Denied");
+    }
+  });
 
-  await t.step(
-    "AskUserQuestion の回答を updatedInput.answers に載せて allow すること",
-    async () => {
-      const canUseTool = createCanUseTool(
-        mockManager({ decision: "deny" }, {
+  test("AskUserQuestion の回答を updatedInput.answers に載せて allow すること", async () => {
+    const canUseTool = createCanUseTool(
+      mockManager(
+        { decision: "deny" },
+        {
           kind: "answered",
           answers: { "Which one?": "A" },
-        }),
-        "ch-1",
-      );
-      const input = askUserQuestionInput();
-      const result = await canUseTool("AskUserQuestion", input, toolOptions);
+        },
+      ),
+      "ch-1",
+    );
+    const input = askUserQuestionInput();
+    const result = await canUseTool("AskUserQuestion", input, toolOptions);
 
-      assertExists(result);
-      assertEquals(result.behavior, "allow");
-      if (result.behavior === "allow") {
-        assertEquals(result.updatedInput, {
-          ...input,
-          answers: { "Which one?": "A" },
-        });
-      }
-    },
-  );
+    assert.ok(result, "AskUserQuestion の回答の変換結果が返ること");
+    assert.deepStrictEqual(result.behavior, "allow");
+    if (result.behavior === "allow") {
+      assert.deepStrictEqual(result.updatedInput, {
+        ...input,
+        answers: { "Which one?": "A" },
+      });
+    }
+  });
 
-  await t.step(
-    "AskUserQuestion のキャンセル・タイムアウトは deny に変換すること",
-    async () => {
-      const canUseTool = createCanUseTool(
-        mockManager({ decision: "allow" }, {
+  test("AskUserQuestion のキャンセル・タイムアウトは deny に変換すること", async () => {
+    const canUseTool = createCanUseTool(
+      mockManager(
+        { decision: "allow" },
+        {
           kind: "denied",
           reason: "Timed out",
-        }),
-        "ch-1",
-      );
-      const result = await canUseTool(
-        "AskUserQuestion",
-        askUserQuestionInput(),
-        toolOptions,
-      );
+        },
+      ),
+      "ch-1",
+    );
+    const result = await canUseTool(
+      "AskUserQuestion",
+      askUserQuestionInput(),
+      toolOptions,
+    );
 
-      assertExists(result);
-      assertEquals(result.behavior, "deny");
-      if (result.behavior === "deny") {
-        assertEquals(result.message, "The user did not answer (Timed out)");
-      }
-    },
-  );
-
-  await t.step(
-    "AskUserQuestion の不正な入力は承認フローに回さず deny すること",
-    async () => {
-      const canUseTool = createCanUseTool(
-        mockManager({ decision: "allow" }),
-        "ch-1",
+    assert.ok(result, "キャンセル・タイムアウトの変換結果が返ること");
+    assert.deepStrictEqual(result.behavior, "deny");
+    if (result.behavior === "deny") {
+      assert.deepStrictEqual(
+        result.message,
+        "The user did not answer (Timed out)",
       );
-      const result = await canUseTool("AskUserQuestion", {}, toolOptions);
+    }
+  });
 
-      assertExists(result);
-      assertEquals(result.behavior, "deny");
-      if (result.behavior === "deny") {
-        assertEquals(result.message, "Malformed AskUserQuestion input");
-      }
-    },
-  );
+  test("AskUserQuestion の不正な入力は承認フローに回さず deny すること", async () => {
+    const canUseTool = createCanUseTool(
+      mockManager({ decision: "allow" }),
+      "ch-1",
+    );
+    const result = await canUseTool("AskUserQuestion", {}, toolOptions);
+
+    assert.ok(result, "不正な入力の deny 結果が返ること");
+    assert.deepStrictEqual(result.behavior, "deny");
+    if (result.behavior === "deny") {
+      assert.deepStrictEqual(result.message, "Malformed AskUserQuestion input");
+    }
+  });
 });
 
 /**
@@ -197,9 +189,10 @@ interface SentApprovalPayload {
 }
 
 /** requestApproval() が送信した payload を記録する fake チャンネル解決。 */
-function fakeChannelResolver(
-  sendableChannelIds: Set<string>,
-): { resolver: ApprovalChannelResolver; sent: SentApprovalPayload[] } {
+function fakeChannelResolver(sendableChannelIds: Set<string>): {
+  resolver: ApprovalChannelResolver;
+  sent: SentApprovalPayload[];
+} {
   const sent: SentApprovalPayload[] = [];
   const resolver: ApprovalChannelResolver = {
     fetchSendable: (channelId) => {
@@ -222,7 +215,7 @@ function buttonCustomIds(
   components: ActionRowBuilder<ButtonBuilder>[],
 ): string[] {
   return components[0].components.map((b) =>
-    "custom_id" in b.data ? b.data.custom_id ?? "" : ""
+    "custom_id" in b.data ? (b.data.custom_id ?? "") : "",
   );
 }
 
@@ -262,7 +255,10 @@ function fakeButtonInteraction(customId: string): {
 /** 条件が成立するまでポーリングして待つ。上限到達で例外を投げる。 */
 async function waitFor(
   cond: () => boolean,
-  { attempts = 100, intervalMs = 10 }: {
+  {
+    attempts = 100,
+    intervalMs = 10,
+  }: {
     attempts?: number;
     intervalMs?: number;
   } = {},
@@ -283,109 +279,89 @@ async function waitFor(
   );
 }
 
-Deno.test("ApprovalManager", async (t) => {
-  await t.step(
-    "requestApproval → handleButton (approve) で allow に解決すること",
-    async () => {
-      const { resolver, sent } = fakeChannelResolver(new Set(["ch-1"]));
-      const manager = new ApprovalManagerClass(
-        fakeClient(),
-        "/tmp/loms-claw-test-nonexistent/settings.json",
-        { channelResolver: resolver },
-      );
+describe("ApprovalManager", () => {
+  test("requestApproval → handleButton (approve) で allow に解決すること", async () => {
+    const { resolver, sent } = fakeChannelResolver(new Set(["ch-1"]));
+    const manager = new ApprovalManagerClass(
+      fakeClient(),
+      "/tmp/loms-claw-test-nonexistent/settings.json",
+      { channelResolver: resolver },
+    );
 
-      const pending = manager.requestApproval(
-        "Bash",
-        { command: "ls" },
-        "ch-1",
-      );
+    const pending = manager.requestApproval("Bash", { command: "ls" }, "ch-1");
 
-      // send() は allowlist 読み込み等の複数の await を経て呼ばれるため、送信されるまで待つ
-      await waitFor(() => sent.length === 1);
-      assertEquals(sent.length, 1);
-      const [approveId] = buttonCustomIds(sent[0].components);
-      const requestId = approveId.split(":")[1];
+    // send() は allowlist 読み込み等の複数の await を経て呼ばれるため、送信されるまで待つ
+    await waitFor(() => sent.length === 1);
+    assert.deepStrictEqual(sent.length, 1);
+    const [approveId] = buttonCustomIds(sent[0].components);
+    const requestId = approveId.split(":")[1];
 
-      const { interaction } = fakeButtonInteraction(`approve:${requestId}`);
-      const handled = await manager.handleButton(interaction);
-      assertEquals(handled, true);
+    const { interaction } = fakeButtonInteraction(`approve:${requestId}`);
+    const handled = await manager.handleButton(interaction);
+    assert.deepStrictEqual(handled, true);
 
-      const result = await pending;
-      assertEquals(result.decision, "allow");
-      assertEquals(result.reason, "Allowed");
-    },
-  );
+    const result = await pending;
+    assert.deepStrictEqual(result.decision, "allow");
+    assert.deepStrictEqual(result.reason, "Allowed");
+  });
 
-  await t.step(
-    "requestApproval → handleButton (deny) で deny に解決すること",
-    async () => {
-      const { resolver, sent } = fakeChannelResolver(new Set(["ch-1"]));
-      const manager = new ApprovalManagerClass(
-        fakeClient(),
-        "/tmp/loms-claw-test-nonexistent/settings.json",
-        { channelResolver: resolver },
-      );
+  test("requestApproval → handleButton (deny) で deny に解決すること", async () => {
+    const { resolver, sent } = fakeChannelResolver(new Set(["ch-1"]));
+    const manager = new ApprovalManagerClass(
+      fakeClient(),
+      "/tmp/loms-claw-test-nonexistent/settings.json",
+      { channelResolver: resolver },
+    );
 
-      const pending = manager.requestApproval(
-        "Bash",
-        { command: "rm" },
-        "ch-1",
-      );
+    const pending = manager.requestApproval("Bash", { command: "rm" }, "ch-1");
 
-      await waitFor(() => sent.length === 1);
-      assertEquals(sent.length, 1);
-      const [, , denyId] = buttonCustomIds(sent[0].components);
-      const requestId = denyId.split(":")[1];
+    await waitFor(() => sent.length === 1);
+    assert.deepStrictEqual(sent.length, 1);
+    const [, , denyId] = buttonCustomIds(sent[0].components);
+    const requestId = denyId.split(":")[1];
 
-      const { interaction } = fakeButtonInteraction(`deny:${requestId}`);
-      const handled = await manager.handleButton(interaction);
-      assertEquals(handled, true);
+    const { interaction } = fakeButtonInteraction(`deny:${requestId}`);
+    const handled = await manager.handleButton(interaction);
+    assert.deepStrictEqual(handled, true);
 
-      const result = await pending;
-      assertEquals(result.decision, "deny");
-      assertEquals(result.reason, "Denied");
-    },
-  );
+    const result = await pending;
+    assert.deepStrictEqual(result.decision, "deny");
+    assert.deepStrictEqual(result.reason, "Denied");
+  });
 
-  await t.step(
-    "承認待ちがタイムアウトすると deny (Timed out) に解決すること",
-    async () => {
-      const { resolver } = fakeChannelResolver(new Set(["ch-1"]));
-      const manager = new ApprovalManagerClass(
-        fakeClient(),
-        "/tmp/loms-claw-test-nonexistent/settings.json",
-        { channelResolver: resolver, timeoutMs: 10 },
-      );
+  test("承認待ちがタイムアウトすると deny (Timed out) に解決すること", async () => {
+    const { resolver } = fakeChannelResolver(new Set(["ch-1"]));
+    const manager = new ApprovalManagerClass(
+      fakeClient(),
+      "/tmp/loms-claw-test-nonexistent/settings.json",
+      { channelResolver: resolver, timeoutMs: 10 },
+    );
 
-      const result = await manager.requestApproval(
-        "Bash",
-        { command: "ls" },
-        "ch-1",
-      );
+    const result = await manager.requestApproval(
+      "Bash",
+      { command: "ls" },
+      "ch-1",
+    );
 
-      assertEquals(result.decision, "deny");
-      assertEquals(result.reason, "Timed out");
-    },
-  );
+    assert.deepStrictEqual(result.decision, "deny");
+    assert.deepStrictEqual(result.reason, "Timed out");
+  });
 
-  await t.step(
-    "channelId が undefined の場合は即座に deny すること",
-    async () => {
-      const { resolver } = fakeChannelResolver(new Set(["ch-1"]));
-      const manager = new ApprovalManagerClass(
-        fakeClient(),
-        "/tmp/loms-claw-test-nonexistent/settings.json",
-        { channelResolver: resolver },
-      );
+  test("channelId が undefined の場合は即座に deny すること", async () => {
+    const { resolver } = fakeChannelResolver(new Set(["ch-1"]));
+    const manager = new ApprovalManagerClass(
+      fakeClient(),
+      "/tmp/loms-claw-test-nonexistent/settings.json",
+      { channelResolver: resolver },
+    );
 
-      const result = await manager.requestApproval(
-        "Bash",
-        { command: "ls" },
-        undefined,
-      );
+    const result = await manager.requestApproval(
+      "Bash",
+      { command: "ls" },
+      undefined,
+    );
 
-      assertEquals(result.decision, "deny");
-      assertEquals(result.reason, "No approval channel");
-    },
-  );
+    assert.deepStrictEqual(result.decision, "deny");
+    assert.deepStrictEqual(result.reason, "No approval channel");
+  });
 });

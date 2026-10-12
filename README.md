@@ -1,6 +1,6 @@
 # loms-claw
 
-Discord + Claude Agent SDK のパーソナル AI エージェント。単一ギルド・単一ユーザ専用の bot として Discord のメッセージや定期実行 (cron) を受け、Claude Agent SDK の `query()` で SDK 同梱の Claude Code バイナリをエージェントワークスペース上で動かし、結果を Discord に返す。ランタイムは Deno、Discord 接続は discord.js v14。
+Discord + Claude Agent SDK のパーソナル AI エージェント。単一ギルド・単一ユーザ専用の bot として Discord のメッセージや定期実行 (cron) を受け、Claude Agent SDK の `query()` で SDK 同梱の Claude Code バイナリをエージェントワークスペース上で動かし、結果を Discord に返す。ランタイムは Node.js 24、Discord 接続は discord.js v14。
 
 ## 必要なもの
 
@@ -29,16 +29,16 @@ docker compose up -d
 ## 開発コマンド
 
 ```bash
-deno task start      # 起動
-deno task dev        # ウォッチモードで起動
-deno task test       # テスト + カバレッジ
-deno task check      # 型チェック
-deno task lint       # lint + format チェック
-deno task fix        # lint 自動修正 + format
-deno task generate   # docs/api の OpenAPI から api/internal-schemas.ts を再生成
+npm run start      # 起動
+npm run dev        # ウォッチモードで起動
+npm test           # テスト + カバレッジ
+npm run check      # 型チェック
+npm run lint       # lint + format チェック
+npm run fix        # lint 自動修正 + format
+npm run generate   # docs/api の OpenAPI から api/internal-schemas.ts を再生成 (Deno が必要)
 ```
 
-PR 作成前は `deno task fix && deno task check && deno task lint && deno task test` を通す ([.claude/rules/pr.md](.claude/rules/pr.md))。
+PR 作成前は `npm run fix && npm run check && npm run lint && npm test` を通す ([.claude/rules/pr.md](.claude/rules/pr.md))。
 
 ## ドキュメント
 

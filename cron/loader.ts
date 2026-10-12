@@ -8,16 +8,17 @@
  * @module
  */
 
-import { join } from "@std/path/join";
-import { extract } from "@std/front-matter/yaml";
-import { parse as parseYaml } from "@std/yaml";
+import { readdir, readFile } from "node:fs/promises";
 import { type OutputUnit, type Schema, Validator } from "@cfworker/json-schema";
+import { extract } from "@std/front-matter/yaml";
+import { join } from "@std/path/join";
+import { parse as parseYaml } from "@std/yaml";
+import { EFFORT_LEVELS, type EffortLevel } from "../claude/mod.ts";
+import { getErrorMessage, isNotFoundError } from "../errors.ts";
+import { isRecord } from "../guards.ts";
 import { createLogger } from "../logger.ts";
 import { parseCronExpression } from "./match.ts";
 import type { CronCommandJob, CronJobDef, CronPromptJob } from "./types.ts";
-import { EFFORT_LEVELS, type EffortLevel } from "../claude/mod.ts";
-import { getErrorMessage } from "../errors.ts";
-import { isRecord } from "../guards.ts";
 
 const log = createLogger("cron-loader");
 
@@ -141,8 +142,8 @@ function formatSchemaErrors(
     const field = err.instanceLocation.replace(/^#\/?/, "");
 
     if (err.keyword === "required") {
-      const prop = /required property "([^"]+)"/.exec(err.error)?.[1] ??
-        "schedule";
+      const prop =
+        /required property "([^"]+)"/.exec(err.error)?.[1] ?? "schedule";
       messages.push(`"${prop}" is required and must be a non-empty string`);
     } else if (err.keyword === "minLength") {
       messages.push(`"${field}" is required and must be a non-empty string`);
@@ -160,9 +161,8 @@ function formatSchemaErrors(
     } else if (err.keyword === "enum") {
       messages.push(`"${field}" must be one of the allowed values`);
     } else if (err.keyword === "additionalProperties") {
-      // "false" keyword エラー (instanceLocation がキー名を指す) が同じキーについて
-      // 別途出るため、こちらは重複を避けてスキップする。
-      continue;
+      // この分岐では何もしない。同じキーに対して `false` キーワードの
+      // エラーが別途報告されるので、二重報告を避ける。
     } else if (err.keyword === "false") {
       // @cfworker は properties に宣言済みのフィールドがその subschema に失敗した
       // 場合にも additionalProperties + false のエラーを instanceLocation "#/<field>"
@@ -333,8 +333,8 @@ export async function loadCronJobsFromDir(
   const jobs: CronJobDef[] = [];
 
   try {
-    for await (const entry of Deno.readDir(cronDir)) {
-      if (!entry.isFile) {
+    for (const entry of await readdir(cronDir, { withFileTypes: true })) {
+      if (!entry.isFile()) {
         continue;
       }
 
@@ -342,24 +342,21 @@ export async function loadCronJobsFromDir(
 
       try {
         if (entry.name.endsWith(".md")) {
-          const raw = await Deno.readTextFile(filePath);
+          const raw = await readFile(filePath, "utf8");
           const { attrs, body } = extract<Record<string, unknown>>(raw);
           jobs.push(validateCronJob(attrs, body.trim(), entry.name));
         } else if (entry.name.endsWith(".yaml")) {
-          const raw = await Deno.readTextFile(filePath);
+          const raw = await readFile(filePath, "utf8");
           const parsed = parseYaml(raw);
           jobs.push(validateCommandJob(parsed, entry.name));
         }
         // .md / .yaml 以外は無視する
       } catch (e) {
-        log.error(
-          `failed to load cron job ${entry.name}:`,
-          getErrorMessage(e),
-        );
+        log.error(`failed to load cron job ${entry.name}:`, getErrorMessage(e));
       }
     }
   } catch (e) {
-    if (e instanceof Deno.errors.NotFound) {
+    if (isNotFoundError(e)) {
       log.info("cron directory not found, skipping");
       return [];
     }

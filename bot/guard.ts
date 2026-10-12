@@ -57,9 +57,10 @@ export function resolveActive(
   parentId: string | null,
   override: boolean | undefined,
 ): boolean {
-  return override ?? (
-    activeChannelIds.includes(channelId) ||
-    (isThread && parentId !== null && activeChannelIds.includes(parentId))
+  return (
+    override ??
+    (activeChannelIds.includes(channelId) ||
+      (isThread && parentId !== null && activeChannelIds.includes(parentId)))
   );
 }
 

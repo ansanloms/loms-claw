@@ -1,4 +1,8 @@
-import { assertEquals, assertThrows } from "@std/assert";
+import { describe, test } from "node:test";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import assert from "node:assert/strict";
+import { errorWith } from "../test-helpers.ts";
 import { join } from "@std/path/join";
 import {
   loadCronJobsFromDir,
@@ -6,14 +10,12 @@ import {
   validateCronJob,
 } from "./loader.ts";
 
-async function withTempDir(
-  fn: (dir: string) => Promise<void>,
-): Promise<void> {
-  const dir = await Deno.makeTempDir();
+async function withTempDir(fn: (dir: string) => Promise<void>): Promise<void> {
+  const dir = await mkdtemp(join(tmpdir(), "loms-claw-test-"));
   try {
     await fn(dir);
   } finally {
-    await Deno.remove(dir, { recursive: true });
+    await rm(dir, { recursive: true });
   }
 }
 
@@ -23,8 +25,8 @@ async function writeCronFile(
   content: string,
 ): Promise<void> {
   const cronDir = join(workspaceDir, "cron");
-  await Deno.mkdir(cronDir, { recursive: true });
-  await Deno.writeTextFile(join(cronDir, filename), content);
+  await mkdir(cronDir, { recursive: true });
+  await writeFile(join(cronDir, filename), content);
 }
 
 const VALID_MD = `---
@@ -35,8 +37,8 @@ channelId: "123456"
 テストプロンプト。
 `;
 
-Deno.test("validateCronJob", async (t) => {
-  await t.step("有効なメタデータと本文でジョブが作成されること", () => {
+describe("validateCronJob", () => {
+  test("有効なメタデータと本文でジョブが作成されること", () => {
     const job = validateCronJob(
       {
         schedule: "0 9 * * *",
@@ -47,83 +49,65 @@ Deno.test("validateCronJob", async (t) => {
       "prompt text",
       "test.md",
     );
-    assertEquals(job.name, "test.md");
-    assertEquals(job.schedule, "0 9 * * *");
-    assertEquals(job.channelId, "123");
-    assertEquals(job.prompt, "prompt text");
-    assertEquals(job.maxTurns, 5);
-    assertEquals(job.timeout, 60000);
+    assert.deepStrictEqual(job.name, "test.md");
+    assert.deepStrictEqual(job.schedule, "0 9 * * *");
+    assert.deepStrictEqual(job.channelId, "123");
+    assert.deepStrictEqual(job.prompt, "prompt text");
+    assert.deepStrictEqual(job.maxTurns, 5);
+    assert.deepStrictEqual(job.timeout, 60000);
   });
 
-  await t.step("name がファイル名そのものになること", () => {
+  test("name がファイル名そのものになること", () => {
     const job = validateCronJob(
       { schedule: "0 9 * * *" },
       "prompt",
       "daily-summary.md",
     );
-    assertEquals(job.name, "daily-summary.md");
+    assert.deepStrictEqual(job.name, "daily-summary.md");
   });
 
-  await t.step("channelId が数値の場合に文字列に変換されること", () => {
+  test("channelId が数値の場合に文字列に変換されること", () => {
     const job = validateCronJob(
       { schedule: "0 9 * * *", channelId: 123456 },
       "prompt",
       "test.md",
     );
-    assertEquals(job.channelId, "123456");
+    assert.deepStrictEqual(job.channelId, "123456");
   });
 
-  await t.step("channelId なしでもジョブが作成されること", () => {
+  test("channelId なしでもジョブが作成されること", () => {
     const job = validateCronJob(
       { schedule: "0 9 * * *" },
       "prompt text",
       "no-channel.md",
     );
-    assertEquals(job.name, "no-channel.md");
-    assertEquals(job.channelId, undefined);
+    assert.deepStrictEqual(job.name, "no-channel.md");
+    assert.deepStrictEqual(job.channelId, undefined);
   });
 
-  await t.step("schedule が欠けている場合はエラーになること", () => {
-    assertThrows(
-      () =>
-        validateCronJob(
-          {},
-          "prompt",
-          "test.md",
-        ),
-      Error,
-      '"schedule" is required',
+  test("schedule が欠けている場合はエラーになること", () => {
+    assert.throws(
+      () => validateCronJob({}, "prompt", "test.md"),
+      errorWith(Error, '"schedule" is required'),
     );
   });
 
-  await t.step("本文が空の場合はエラーになること", () => {
-    assertThrows(
-      () =>
-        validateCronJob(
-          { schedule: "0 9 * * *" },
-          "",
-          "test.md",
-        ),
-      Error,
-      "prompt body is empty",
+  test("本文が空の場合はエラーになること", () => {
+    assert.throws(
+      () => validateCronJob({ schedule: "0 9 * * *" }, "", "test.md"),
+      errorWith(Error, "prompt body is empty"),
     );
   });
 
-  await t.step("不正な cron 式でエラーになること", () => {
-    assertThrows(
-      () =>
-        validateCronJob(
-          { schedule: "bad" },
-          "prompt",
-          "test.md",
-        ),
-      Error,
-      "invalid cron expression",
+  test("不正な cron 式でエラーになること", () => {
+    assert.throws(
+      () => validateCronJob({ schedule: "bad" }, "prompt", "test.md"),
+      errorWith(Error, "invalid cron expression"),
     );
   });
 
-  await t.step("maxTurns が数値でない場合はエラーになること", () => {
-    assertThrows(
+  test("maxTurns が数値でない場合はエラーになること", () => {
+    assert.throws(
       () =>
         validateCronJob(
           {
@@ -133,95 +117,81 @@ Deno.test("validateCronJob", async (t) => {
           "prompt",
           "test.md",
         ),
-      Error,
-      '"maxTurns" must be a number',
+      errorWith(Error, '"maxTurns" must be a number'),
     );
   });
 
-  await t.step(
-    "既知フィールドの型違いは is not an allowed property を含まないこと",
-    () => {
-      let message = "";
-      try {
+  test("既知フィールドの型違いは is not an allowed property を含まないこと", () => {
+    assert.throws(
+      () =>
         validateCronJob(
           { schedule: "0 9 * * *", maxTurns: "abc" },
           "prompt",
           "test.md",
-        );
-      } catch (e) {
-        message = e instanceof Error ? e.message : String(e);
-      }
-      assertEquals(message.includes("is not an allowed property"), false);
-    },
-  );
+        ),
+      (e) =>
+        e instanceof Error && !e.message.includes("is not an allowed property"),
+    );
+  });
 
-  await t.step("once: true で正しくパースされること", () => {
+  test("once: true で正しくパースされること", () => {
     const job = validateCronJob(
       { schedule: "0 9 * * *", once: true },
       "prompt",
       "test.md",
     );
-    assertEquals(job.once, true);
+    assert.deepStrictEqual(job.once, true);
   });
 
-  await t.step("once 未指定で false になること", () => {
-    const job = validateCronJob(
-      { schedule: "0 9 * * *" },
-      "prompt",
-      "test.md",
+  test("once 未指定で false になること", () => {
+    const job = validateCronJob({ schedule: "0 9 * * *" }, "prompt", "test.md");
+    assert.deepStrictEqual(job.once, false);
+  });
+
+  test("channelId が string でも number でもない場合はエラーになること", () => {
+    assert.throws(
+      () =>
+        validateCronJob(
+          { schedule: "0 9 * * *", channelId: true },
+          "prompt",
+          "test.md",
+        ),
+      errorWith(Error, '"channelId" must be a string or number'),
     );
-    assertEquals(job.once, false);
   });
 
-  await t.step(
-    "channelId が string でも number でもない場合はエラーになること",
-    () => {
-      assertThrows(
-        () =>
-          validateCronJob(
-            { schedule: "0 9 * * *", channelId: true },
-            "prompt",
-            "test.md",
-          ),
-        Error,
-        '"channelId" must be a string or number',
-      );
-    },
-  );
-
-  await t.step("once が boolean でない場合はエラーになること", () => {
-    assertThrows(
+  test("once が boolean でない場合はエラーになること", () => {
+    assert.throws(
       () =>
         validateCronJob(
           { schedule: "0 9 * * *", once: "yes" },
           "prompt",
           "test.md",
         ),
-      Error,
-      '"once" must be a boolean',
+      errorWith(Error, '"once" must be a boolean'),
     );
   });
 
-  await t.step("model 指定でジョブに反映されること", () => {
+  test("model 指定でジョブに反映されること", () => {
     const job = validateCronJob(
       { schedule: "0 9 * * *", model: "opus" },
       "prompt",
       "test.md",
     );
-    assertEquals(job.model, "opus");
+    assert.deepStrictEqual(job.model, "opus");
   });
 
-  await t.step("effort 指定でジョブに反映されること", () => {
+  test("effort 指定でジョブに反映されること", () => {
     const job = validateCronJob(
       { schedule: "0 9 * * *", effort: "high" },
       "prompt",
       "test.md",
     );
-    assertEquals(job.effort, "high");
+    assert.deepStrictEqual(job.effort, "high");
   });
 
-  await t.step("effort が enum 外の値の場合はエラーになること", () => {
-    assertThrows(
+  test("effort が enum 外の値の場合はエラーになること", () => {
+    assert.throws(
       () =>
         validateCronJob(
           { schedule: "0 9 * * *", effort: "ultra" },
@@ -232,131 +202,118 @@ Deno.test("validateCronJob", async (t) => {
     );
   });
 
-  await t.step("未知のフロントマターキーがある場合はエラーになること", () => {
-    assertThrows(
+  test("未知のフロントマターキーがある場合はエラーになること", () => {
+    assert.throws(
       () =>
         validateCronJob(
           { schedule: "0 9 * * *", chanelId: "123" },
           "prompt",
           "test.md",
         ),
-      Error,
-      '"chanelId" is not an allowed property',
+      errorWith(Error, '"chanelId" is not an allowed property'),
     );
   });
 
-  await t.step("model / effort を未指定で undefined になること", () => {
-    const job = validateCronJob(
-      { schedule: "0 9 * * *" },
-      "prompt",
-      "test.md",
-    );
-    assertEquals(job.model, undefined);
-    assertEquals(job.effort, undefined);
+  test("model / effort を未指定で undefined になること", () => {
+    const job = validateCronJob({ schedule: "0 9 * * *" }, "prompt", "test.md");
+    assert.deepStrictEqual(job.model, undefined);
+    assert.deepStrictEqual(job.effort, undefined);
   });
 
-  await t.step(
-    "2^53 超の数値 channelId でエラーになること",
-    () => {
-      assertThrows(
-        () =>
-          validateCronJob(
-            { schedule: "0 9 * * *", channelId: 2 ** 53 + 1 },
-            "prompt",
-            "test.md",
-          ),
-        Error,
-        '"channelId" must be quoted as a string',
-      );
-    },
-  );
+  test("2^53 超の数値 channelId でエラーになること", () => {
+    assert.throws(
+      () =>
+        validateCronJob(
+          { schedule: "0 9 * * *", channelId: 2 ** 53 + 1 },
+          "prompt",
+          "test.md",
+        ),
+      errorWith(Error, '"channelId" must be quoted as a string'),
+    );
+  });
 
   // 安全な整数の channelId が文字列化されることは
   // 「channelId が数値の場合に文字列に変換されること」で確認済み。
 
-  await t.step("timeout が 0 の場合はエラーになること", () => {
-    assertThrows(
+  test("timeout が 0 の場合はエラーになること", () => {
+    assert.throws(
       () =>
         validateCronJob(
           { schedule: "0 9 * * *", timeout: 0 },
           "prompt",
           "test.md",
         ),
-      Error,
-      '"timeout" must be a positive number',
+      errorWith(Error, '"timeout" must be a positive number'),
     );
   });
 
-  await t.step("timeout が負数の場合はエラーになること", () => {
-    assertThrows(
+  test("timeout が負数の場合はエラーになること", () => {
+    assert.throws(
       () =>
         validateCronJob(
           { schedule: "0 9 * * *", timeout: -1 },
           "prompt",
           "test.md",
         ),
-      Error,
-      '"timeout" must be a positive number',
+      errorWith(Error, '"timeout" must be a positive number'),
     );
   });
 });
 
-Deno.test("validateCommandJob", async (t) => {
-  await t.step("最小構成 (schedule + command) でジョブが作成されること", () => {
+describe("validateCommandJob", () => {
+  test("最小構成 (schedule + command) でジョブが作成されること", () => {
     const job = validateCommandJob(
       { schedule: "0 9 * * *", command: "echo hello" },
       "check.yaml",
     );
-    assertEquals(job.kind, "command");
-    assertEquals(job.name, "check.yaml");
-    assertEquals(job.schedule, "0 9 * * *");
-    assertEquals(job.command, "echo hello");
+    assert.deepStrictEqual(job.kind, "command");
+    assert.deepStrictEqual(job.name, "check.yaml");
+    assert.deepStrictEqual(job.schedule, "0 9 * * *");
+    assert.deepStrictEqual(job.command, "echo hello");
   });
 
-  await t.step("command が欠けている場合はエラーになること", () => {
-    assertThrows(
+  test("command が欠けている場合はエラーになること", () => {
+    assert.throws(
       () => validateCommandJob({ schedule: "0 9 * * *" }, "check.yaml"),
-      Error,
-      '"command" is required',
+      errorWith(Error, '"command" is required'),
     );
   });
 
-  await t.step("command が空文字の場合はエラーになること", () => {
-    assertThrows(
+  test("command が空文字の場合はエラーになること", () => {
+    assert.throws(
       () =>
         validateCommandJob(
           { schedule: "0 9 * * *", command: "" },
           "check.yaml",
         ),
-      Error,
-      '"command" is required and must be a non-empty string',
+      (e) =>
+        e instanceof Error &&
+        e.message.includes(
+          '"command" is required and must be a non-empty string',
+        ),
     );
   });
 
-  await t.step(
-    "prompt 用フィールドを書くと additionalProperties エラーになること",
-    () => {
-      assertThrows(
-        () =>
-          validateCommandJob(
-            { schedule: "0 9 * * *", command: "echo hello", maxTurns: 5 },
-            "check.yaml",
-          ),
-        Error,
-        '"maxTurns" is not an allowed property',
-      );
-    },
-  );
+  test("prompt 用フィールドを書くと additionalProperties エラーになること", () => {
+    assert.throws(
+      () =>
+        validateCommandJob(
+          { schedule: "0 9 * * *", command: "echo hello", maxTurns: 5 },
+          "check.yaml",
+        ),
+      errorWith(Error, '"maxTurns" is not an allowed property'),
+    );
+  });
 
-  await t.step("channelId が数値の場合に文字列に変換されること", () => {
+  test("channelId が数値の場合に文字列に変換されること", () => {
     const job = validateCommandJob(
       { schedule: "0 9 * * *", command: "echo hello", channelId: 123456 },
       "check.yaml",
     );
-    assertEquals(job.channelId, "123456");
+    assert.deepStrictEqual(job.channelId, "123456");
   });
 
-  await t.step("once / timeout が通ること", () => {
+  test("once / timeout が通ること", () => {
     const job = validateCommandJob(
       {
         schedule: "0 9 * * *",
@@ -366,92 +323,85 @@ Deno.test("validateCommandJob", async (t) => {
       },
       "check.yaml",
     );
-    assertEquals(job.once, true);
-    assertEquals(job.timeout, 60000);
+    assert.deepStrictEqual(job.once, true);
+    assert.deepStrictEqual(job.timeout, 60000);
   });
 
-  await t.step("不正な cron 式でエラーになること", () => {
-    assertThrows(
+  test("不正な cron 式でエラーになること", () => {
+    assert.throws(
       () =>
         validateCommandJob(
           { schedule: "bad", command: "echo hello" },
           "check.yaml",
         ),
-      Error,
-      "invalid cron expression",
+      errorWith(Error, "invalid cron expression"),
     );
   });
 
-  await t.step(
-    "2^53 超の数値 channelId でエラーになること",
-    () => {
-      assertThrows(
-        () =>
-          validateCommandJob(
-            {
-              schedule: "0 9 * * *",
-              command: "echo hello",
-              channelId: 2 ** 53 + 1,
-            },
-            "check.yaml",
-          ),
-        Error,
-        '"channelId" must be quoted as a string',
-      );
-    },
-  );
+  test("2^53 超の数値 channelId でエラーになること", () => {
+    assert.throws(
+      () =>
+        validateCommandJob(
+          {
+            schedule: "0 9 * * *",
+            command: "echo hello",
+            channelId: 2 ** 53 + 1,
+          },
+          "check.yaml",
+        ),
+      errorWith(Error, '"channelId" must be quoted as a string'),
+    );
+  });
 
   // 安全な整数の channelId が文字列化されることは
   // 「channelId が数値の場合に文字列に変換されること」で確認済み。
 
-  await t.step("timeout が 0 の場合はエラーになること", () => {
-    assertThrows(
+  test("timeout が 0 の場合はエラーになること", () => {
+    assert.throws(
       () =>
         validateCommandJob(
           { schedule: "0 9 * * *", command: "echo hello", timeout: 0 },
           "check.yaml",
         ),
-      Error,
-      '"timeout" must be a positive number',
+      errorWith(Error, '"timeout" must be a positive number'),
     );
   });
 
-  await t.step("timeout が負数の場合はエラーになること", () => {
-    assertThrows(
+  test("timeout が負数の場合はエラーになること", () => {
+    assert.throws(
       () =>
         validateCommandJob(
           { schedule: "0 9 * * *", command: "echo hello", timeout: -1 },
           "check.yaml",
         ),
-      Error,
-      '"timeout" must be a positive number',
+      errorWith(Error, '"timeout" must be a positive number'),
     );
   });
 });
 
-Deno.test("loadCronJobsFromDir", async (t) => {
-  await t.step("ディレクトリ不在で空配列を返すこと", async () => {
+describe("loadCronJobsFromDir", () => {
+  test("ディレクトリ不在で空配列を返すこと", async () => {
     await withTempDir(async (dir) => {
       const jobs = await loadCronJobsFromDir(dir);
-      assertEquals(jobs, []);
+      assert.deepStrictEqual(jobs, []);
     });
   });
 
-  await t.step("有効なファイルを読み込めること", async () => {
+  test("有効なファイルを読み込めること", async () => {
     await withTempDir(async (dir) => {
       await writeCronFile(dir, "test-job.md", VALID_MD);
       const jobs = await loadCronJobsFromDir(dir);
-      assertEquals(jobs.length, 1);
+      assert.deepStrictEqual(jobs.length, 1);
       const job = jobs[0];
-      assertEquals(job.name, "test-job.md");
-      assertEquals(job.kind, "prompt");
+      assert.deepStrictEqual(job.name, "test-job.md");
+      assert.deepStrictEqual(job.kind, "prompt");
       if (job.kind === "prompt") {
-        assertEquals(job.prompt, "テストプロンプト。");
+        assert.deepStrictEqual(job.prompt, "テストプロンプト。");
       }
     });
   });
 
-  await t.step("複数ファイルを読み込めること", async () => {
+  test("複数ファイルを読み込めること", async () => {
     await withTempDir(async (dir) => {
       await writeCronFile(dir, "job-1.md", VALID_MD);
       await writeCronFile(
@@ -466,11 +416,11 @@ channelId: "789"
 `,
       );
       const jobs = await loadCronJobsFromDir(dir);
-      assertEquals(jobs.length, 2);
+      assert.deepStrictEqual(jobs.length, 2);
     });
   });
 
-  await t.step(".md / .yaml 以外のファイルは無視されること", async () => {
+  test(".md / .yaml 以外のファイルは無視されること", async () => {
     await withTempDir(async (dir) => {
       await writeCronFile(dir, "test-job.md", VALID_MD);
       await writeCronFile(dir, "notes.txt", "just a text file");
@@ -480,59 +430,50 @@ channelId: "789"
         'schedule: "0 9 * * *"\ncommand: "echo hello"\n',
       );
       const jobs = await loadCronJobsFromDir(dir);
-      assertEquals(jobs.length, 1);
+      assert.deepStrictEqual(jobs.length, 1);
     });
   });
 
-  await t.step("不正なファイルはスキップされること", async () => {
+  test("不正なファイルはスキップされること", async () => {
     await withTempDir(async (dir) => {
       await writeCronFile(dir, "good.md", VALID_MD);
       await writeCronFile(dir, "bad.md", "no frontmatter here");
       const jobs = await loadCronJobsFromDir(dir);
-      assertEquals(jobs.length, 1);
-      assertEquals(jobs[0].name, "good.md");
+      assert.deepStrictEqual(jobs.length, 1);
+      assert.deepStrictEqual(jobs[0].name, "good.md");
     });
   });
 
-  await t.step(
-    ".md と .yaml が混在するディレクトリで両方読めること",
-    async () => {
-      await withTempDir(async (dir) => {
-        await writeCronFile(dir, "prompt-job.md", VALID_MD);
-        await writeCronFile(
-          dir,
-          "command-job.yaml",
-          'schedule: "0 9 * * *"\ncommand: "echo hello"\n',
-        );
-        const jobs = await loadCronJobsFromDir(dir);
-        assertEquals(jobs.length, 2);
-        const kinds = jobs.map((j) => j.kind).sort();
-        assertEquals(kinds, ["command", "prompt"]);
-      });
-    },
-  );
+  test(".md と .yaml が混在するディレクトリで両方読めること", async () => {
+    await withTempDir(async (dir) => {
+      await writeCronFile(dir, "prompt-job.md", VALID_MD);
+      await writeCronFile(
+        dir,
+        "command-job.yaml",
+        'schedule: "0 9 * * *"\ncommand: "echo hello"\n',
+      );
+      const jobs = await loadCronJobsFromDir(dir);
+      assert.deepStrictEqual(jobs.length, 2);
+      const kinds = jobs.map((j) => j.kind).sort();
+      assert.deepStrictEqual(kinds, ["command", "prompt"]);
+    });
+  });
 
-  await t.step(
-    "不正な YAML の .yaml がスキップされ他のファイルは読めること",
-    async () => {
-      await withTempDir(async (dir) => {
-        await writeCronFile(dir, "good.md", VALID_MD);
-        await writeCronFile(dir, "bad.yaml", "schedule: [unterminated");
-        const jobs = await loadCronJobsFromDir(dir);
-        assertEquals(jobs.length, 1);
-        assertEquals(jobs[0].name, "good.md");
-      });
-    },
-  );
+  test("不正な YAML の .yaml がスキップされ他のファイルは読めること", async () => {
+    await withTempDir(async (dir) => {
+      await writeCronFile(dir, "good.md", VALID_MD);
+      await writeCronFile(dir, "bad.yaml", "schedule: [unterminated");
+      const jobs = await loadCronJobsFromDir(dir);
+      assert.deepStrictEqual(jobs.length, 1);
+      assert.deepStrictEqual(jobs[0].name, "good.md");
+    });
+  });
 
-  await t.step(
-    "配列などオブジェクトでない YAML がスキップされること",
-    async () => {
-      await withTempDir(async (dir) => {
-        await writeCronFile(dir, "array.yaml", "- a\n- b\n");
-        const jobs = await loadCronJobsFromDir(dir);
-        assertEquals(jobs.length, 0);
-      });
-    },
-  );
+  test("配列などオブジェクトでない YAML がスキップされること", async () => {
+    await withTempDir(async (dir) => {
+      await writeCronFile(dir, "array.yaml", "- a\n- b\n");
+      const jobs = await loadCronJobsFromDir(dir);
+      assert.deepStrictEqual(jobs.length, 0);
+    });
+  });
 });

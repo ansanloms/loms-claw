@@ -18,7 +18,7 @@ flowchart LR
     cdata["/data"]
     cwd["cwd = /data/workspace"]
     envs["ENV CLAUDE_CONFIG_DIR=/data/home<br>ENV LOMS_CLAW_CONFIG=/data/config.json"]
-    proc["deno run /app/main.ts"]
+    proc["node /app/main.ts"]
   end
   env -- "compose environment" --> proc
   data -- "bind mount" --> cdata
@@ -33,7 +33,8 @@ flowchart LR
 
 `Dockerfile` はリポジトリルートに置く。
 
-- ベースイメージは `docker.io/denoland/deno:debian-2.9.5` (Debian ベースの glibc イメージ)。
+- ベースイメージは `docker.io/node:24-bookworm-slim` (Debian ベースの glibc イメージ。既定ユーザは root)。
+- `COPY --from=docker.io/denoland/deno:bin-2.9.7 /deno /usr/local/bin/deno` で Deno バイナリを同梱する。理由: workspace の skill / cron (`google-health`, `mountain-weather`, `find-docs`) と `docs/api` の `generate` が Deno を使う。skill が Deno を離れたら外す ([#190](https://github.com/ansanloms/loms-claw/issues/190))。
 - `ENV CLAUDE_CONFIG_DIR=/data/home`: Claude Code の設定・認証情報の置き場所を既定の `~/.claude` から bind mount 先へ置き換える。
 - `ENV LOMS_CLAW_CONFIG=/data/config.json`: `config.ts` の `loadConfig()` が読む設定ファイルのパス。未設定時の既定は `./data/config.json`。
 - apt で `ca-certificates curl git jq bubblewrap socat ffmpeg tzdata` を入れる。Dockerfile のコメントに用途を 1 行ずつ記載している。
@@ -41,21 +42,21 @@ flowchart LR
   - `curl`/`jq`: workspace の skill (`discord` 等) が REST API を叩く手段。`compose.yaml` の healthcheck でも使う。
   - `git`: Claude Code (同梱バイナリ) がリポジトリ操作・文脈取得に使う。
   - `bubblewrap`/`socat`: Agent SDK 同梱 Claude Code のサンドボックス機能が使う。`@anthropic-ai/claude-agent-sdk@0.3.232` の `sdk.mjs` に `bwrapPath`/`socatPath` という設定項目があることで確認済み。
-  - `ffmpeg`: `bot/message.ts` の `resizeImageIfNeeded()` が画像添付の縮小に `Deno.Command("ffmpeg", ...)` で呼ぶ。`bluesky` skill も画像リサイズに使う。
+  - `ffmpeg`: `bot/message.ts` の `resizeImageIfNeeded()` が画像添付の縮小に `node:child_process` の `spawn("ffmpeg", ...)` で呼ぶ。`bluesky` skill も画像リサイズに使う。
   - `tzdata`: compose から渡す `TZ` を解決するため。
-- `WORKDIR /app` で `deno.json`/`deno.lock` をコピーし `deno install` を実行する。続けて Agent SDK が同梱する Claude Code バイナリ (`@anthropic-ai/claude-agent-sdk-linux-{x64,arm64}`) を `/usr/local/bin/claude` へ symlink する。Dockerfile のコメントによれば、この symlink は初回認証 `claude auth login` 等の手動操作用で、実行時の `query()` は SDK がバイナリを自動解決する。
+- `WORKDIR /app` で `package.json`/`package-lock.json`/`.npmrc` をコピーし `npm ci --omit=dev` を実行する (`.npmrc` は `@std/*` を取る JSR 互換レジストリの設定)。続けて Agent SDK が同梱する Claude Code バイナリ (`@anthropic-ai/claude-agent-sdk-linux-{x64,arm64}`) を `/app/node_modules/@anthropic-ai/` から `/usr/local/bin/claude` へ symlink する。Dockerfile のコメントによれば、この symlink は初回認証 `claude auth login` 等の手動操作用で、実行時の `query()` は SDK がバイナリを自動解決する。
   - アーキテクチャは `dpkg --print-architecture` で判定し、`amd64`/`arm64` 以外はビルド失敗にする。
-- glibc イメージでは使われない musl 用バイナリ (`claude-agent-sdk-linux-*-musl/*/claude`) を削除する。Dockerfile のコメントによれば、パッケージディレクトリごと消すと deno が起動時に再ダウンロードするため、バイナリファイルのみ削除する。
+- musl 用バイナリの削除は行わない。`npm ci` は optionalDependencies の `os`/`cpu`/`libc` 条件で glibc 版 (`claude-agent-sdk-linux-x64` 等) だけを入れ、`node_modules/@anthropic-ai/` に musl 版のディレクトリが存在しないことをビルド後に確認した。
 - `COPY . .` でソースツリー全体を `/app` に焼き込む (除外は `.dockerignore`)。
-- 最後に `WORKDIR /data/workspace` とし、`CMD ["deno", "run", "--allow-env", "--allow-sys", "--allow-ffi", "--allow-read", "--allow-write", "--allow-net", "--allow-run", "/app/main.ts"]` で起動する。Dockerfile のコメントによれば、`deno task` は `deno.json` のあるディレクトリを cwd にするためここでは使えず、権限フラグは `deno.json` の `start` タスクと手動で揃える。同期を自動化する仕組み (CI での突合、`deno task --cwd /app start` への置き換え等) は導入しておらず、コメントによる手動同期を現状維持する ([#129](https://github.com/ansanloms/loms-claw/issues/129))。
-- multi-stage build は評価の上で見送った (単一ステージを維持)。`deno install` 専用の builder ステージを切り、実行ステージで `DENO_DIR` と `claude` symlink のみ `COPY --from` する構成を検証したところ、単一ステージ (`docker build` 時点で 1.09GB) に対し multi-stage は 1.42GB と約 30% 大きくなった。単一ステージは `deno install` と musl バイナリ削除を同一レイヤーで行うため無駄なレイヤーが残らない一方、multi-stage は builder ステージで構築した `DENO_DIR` (npm キャッシュ全体) を `COPY --from` で丸ごと複製するコストがレイヤー節約分を上回った ([#124](https://github.com/ansanloms/loms-claw/issues/124))。
+- 最後に `WORKDIR /data/workspace` とし、`CMD ["node", "/app/main.ts"]` で起動する。
+- multi-stage build は採用していない (単一ステージを維持)。`npm ci` と symlink 作成を同一レイヤーで行うため無駄なレイヤーが残らない。multi-stage 化の評価は Deno 構成時点の測定 ([#124](https://github.com/ansanloms/loms-claw/issues/124)) のままで、Node 構成では再測定していない。
 
 ### .dockerignore
 
 `.dockerignore` は次を実行イメージのビルドコンテキストから除外する。
 
-- `data` (実行時データ。機密を含み、実行時に `/data` へ bind mount される)、`.env`、`.git`、`.claude`、`coverage`
-- `docs/`、`README.md`、`LICENSE`、`**/*.test.ts`、`.github/`、`compose.yaml` (実行時に不要で、`deno task generate` 等の開発時のみ使うファイル群)
+- `data` (実行時データ。機密を含み、実行時に `/data` へ bind mount される)、`.env`、`.git`、`.claude`、`coverage`、`node_modules` (イメージ内で `npm ci` するため)
+- `docs/`、`README.md`、`LICENSE`、`**/*.test.ts`、`.github/`、`compose.yaml` (実行時に不要で、`npm run generate` 等の開発時のみ使うファイル群)
 
 ## compose.yaml
 
@@ -68,6 +69,7 @@ flowchart LR
 | environment       | `TZ: ${TZ:-Asia/Tokyo}` のみ。値は host の `.env` から compose が読む                                                                                                                                         |
 | volumes           | `./data` → `/data` の bind mount 1 つ                                                                                                                                                                         |
 | healthcheck       | `jq` で `claude.apiPort` (省略時 `// 3000`) を `port` に取り、空でなければ `curl -fsS http://127.0.0.1:$port/health`。詳細は下記「healthcheck と再起動」                                                      |
+| init              | `true`。node イメージは旧 deno イメージと違い tini を持たないため、cron の timeout や中断された Claude の子プロセスの孤児を回収する目的で compose の init を有効にする                                        |
 | restart           | `unless-stopped`                                                                                                                                                                                              |
 | stop_grace_period | `15s`。`bot/mod.ts` の `shutdown()` は API サーバー停止・Discord クライアント破棄それぞれに最大 5 秒 (`SHUTDOWN_TIMEOUT_MS`) を許容し合計最大 10 秒かかり得るため、Docker の既定 (10s) より余裕を持たせている |
 
@@ -89,10 +91,10 @@ port=$(jq -r '.claude.apiPort // 3000' ${LOMS_CLAW_CONFIG:-/data/config.json}) &
 
 `jq` がポート取得に失敗する (`config.json` が壊れている・存在しない等) か `port` が空なら `curl` を呼ばず `exit 1` になり unhealthy と判定される。原因は `docker inspect` の `State.Health.Log[].Output` (`jq` のエラーメッセージ) から読める。
 
-`healthcheck:` を追加したことで `docker compose ps`/`docker inspect` に unhealthy 状態が反映されるようになるが、**docker compose 単体では unhealthy になってもコンテナは自動再起動しない** (`restart: unless-stopped` の restart policy は健全性を見ず、プロセスの exit code のみを見る)。`main.ts` は `unhandledrejection`/`error` を `preventDefault()` で握りつぶすため、Discord Gateway が切断されたままでもプロセス自体は生き続け、restart は働かない。unhealthy 検知から実際の再起動まで求めるなら、次のいずれかが別途必要になる。
+`healthcheck:` を追加したことで `docker compose ps`/`docker inspect` に unhealthy 状態が反映されるようになるが、**docker compose 単体では unhealthy になってもコンテナは自動再起動しない** (`restart: unless-stopped` の restart policy は健全性を見ず、プロセスの exit code のみを見る)。`main.ts` は `process.on("unhandledRejection")`/`process.on("uncaughtException")` でログに落とすだけでプロセスを終了させないため、Discord Gateway が切断されたままでもプロセス自体は生き続け、restart は働かない。unhealthy 検知から実際の再起動まで求めるなら、次のいずれかが別途必要になる。
 
 - autoheal 系サイドカー ([`willfarrell/autoheal`](https://github.com/willfarrell/docker-autoheal) 等)。`docker.sock` のマウントを伴う。
-- アプリ側で Gateway 切断が一定時間続いたら自ら `Deno.exit()` する watchdog。
+- アプリ側で Gateway 切断が一定時間続いたら自ら `process.exit()` する watchdog。
 
 どちらを採用するかは本 PR の対象外とし、別途判断する。
 
@@ -110,9 +112,9 @@ docker compose logs -f               # ログ確認
 
 `.devcontainer/` は本番と同じイメージ・compose 定義に、ソースツリーの bind mount を重ねただけの構成。
 
-- `.devcontainer/devcontainer.json`: `dockerComposeFile` に `../compose.yaml` と `./compose.yaml` の 2 つを順に指定し、`service` は `bot`、`workspaceFolder` は `/app`、`overrideCommand: true`。VS Code 向けに `denoland.vscode-deno` 拡張と `deno.enable: true` を設定する。
+- `.devcontainer/devcontainer.json`: `dockerComposeFile` に `../compose.yaml` と `./compose.yaml` の 2 つを順に指定し、`service` は `bot`、`workspaceFolder` は `/app`、`overrideCommand: true`。`postCreateCommand` で `npm ci` を実行する (ソースツリーの bind mount がイメージ内の `/app/node_modules` を隠すため、コンテナ作成後に入れ直す)。VS Code 向けに `oxc.oxc-vscode` 拡張を入れ、`editor.defaultFormatter` を `oxc.oxc-vscode` にする。
 - `.devcontainer/compose.yaml`: サービス `bot` に、リポジトリルート (`.`、相対パスは最初に指定した compose ファイルの場所基準) を `/app` へ重ねる bind mount を追加し、`restart: "no"` にする。
-  - コメントによれば、編集が即コンテナに反映されて `deno task dev` の `--watch` が拾い、起動・停止は devcontainer が管理する。
+  - コメントによれば、編集が即コンテナに反映されて `npm run dev` の `--watch` が拾い、起動・停止は devcontainer が管理する。
   - `healthcheck: { disable: true }` で `compose.yaml` の healthcheck を無効化する。
   - `devcontainer.json` の `overrideCommand: true` によりコンテナの CMD (本番相当の起動コマンド) が上書きされ待機状態になるため、bot プロセス自体が自動起動せず `/health` も応答しない。
 
@@ -120,7 +122,7 @@ docker compose logs -f               # ログ確認
 
 - 本番と同じ compose プロジェクト (`loms-claw`) とサービス (`bot`) を使うため、devcontainer を起動すると本番の bot コンテナは置き換わる。開発を終えたら `docker compose up -d` で本番構成に戻す。
 - 設定は本番と同じ `/data/config.json` (イメージの `ENV LOMS_CLAW_CONFIG`) を読む。
-- `deno task dev` は `deno.json` のあるディレクトリ (`/app`) を cwd に実行されるため、開発時のエージェントワークスペース (`query()` の `cwd`、`storePath` の基準) はソースリポジトリ自身になる。本番の cwd は `/data/workspace`。
+- `npm run dev` は `/app` で実行するため、開発時のエージェントワークスペース (`query()` の `cwd`、`storePath` の基準) はソースリポジトリ自身になる。本番の cwd は `/data/workspace`。
 
 ## 環境変数
 
@@ -134,38 +136,9 @@ docker compose logs -f               # ログ確認
 | `GOOGLE_HEALTH_CLIENT_SECRET` | host の `.env` → `compose.yaml` の `environment` (`${GOOGLE_HEALTH_CLIENT_SECRET:-}`)                                 | ワークスペースの `google-health` skill (`query()` の `env` 経由)                                                                                                                                                                                 |
 | `GOOGLE_HEALTH_TOKEN_PATH`    | host の `.env` → `compose.yaml` の `environment` (`${GOOGLE_HEALTH_TOKEN_PATH:-/data/home/google-health/token.json}`) | ワークスペースの `google-health` skill (`query()` の `env` 経由)                                                                                                                                                                                 |
 
-`buildQueryOptions()` は `Deno.env.toObject()` を展開した上で `DISCORD_BOT_TOKEN` を足して `env` に渡す (SDK は `env` を指定すると `process.env` を継承しないため)。
+`buildQueryOptions()` は `process.env` (値が `undefined` のキーを落としたもの) を展開した上で `DISCORD_BOT_TOKEN` を足して `env` に渡す (SDK は `env` を指定すると `process.env` を継承しないため)。
 
-## Deno の権限フラグ
-
-`deno.json` の `start`/`dev`/`test` と Dockerfile の `CMD` は、`--allow-env --allow-sys --allow-ffi --allow-read --allow-write --allow-net --allow-run` を値なし (無制限) で与えており、実質 `-A` と同等になっている。2026-08-23 に絞り込みの余地を評価し ([#134](https://github.com/ansanloms/loms-claw/issues/134))、次の理由から **現状 (無制限) を維持** と判断した。再評価するときはこの節を更新する。
-
-評価の前提となる事実:
-
-- `query()` は Agent SDK 同梱のネイティブバイナリ `claude` (プラットフォーム別パッケージ `@anthropic-ai/claude-agent-sdk-linux-{x64,arm64}` 内) を子プロセスとして直接 spawn する。spawn されたサブプロセスは Deno のサンドボックスの外で動き、コマンド実行者と同じ OS 権限を持つ (Deno 公式ドキュメント `examples/tutorials/subprocess.md`)。つまり Deno 側のフラグをどう絞っても、Claude Code とそれが実行する Bash/curl 等の到達範囲は変わらない。
-  - `.js` 以外のパスは node/bun を介さずそのまま `command` になる。SDK の `Options` には `pathToClaudeCodeExecutable`/`executable`/`executableArgs` がある。
-- 他に spawn するのは `bot/message.ts` の `ffprobe`/`ffmpeg` のみ。
-- discord.js の REST 先 (`discord.com/api`、`cdn.discordapp.com`、`media.discordapp.net`) は静的だが、Gateway の接続先は `GET /gateway/bot` の応答 `url` と READY の `resume_gateway_url` で実行時に与えられ、`@discordjs/ws` にホスト名のリテラルは無い。静的な `--allow-net` の許可リストでは列挙しきれない。
-- Deno KV (`Deno.openKv()` のローカル SQLite) は `--allow-ffi` 無しで開ける (Deno 2.x で確認)。
-- Deno 公式ドキュメント (`runtime/reference/permissions.md`、`runtime/fundamentals/security.md`) は次を明記している。
-  - `--allow-run` の許可リストはコマンド名単位であること
-  - `LD_PRELOAD` 等の環境変数を付けた spawn は無制限の `--allow-run` を要求すること
-  - `--allow-write` と `--allow-run` の併用は許可された実行ファイルを書き換えられるため危険であること
-- `--allow-env` を絞った状態での `Deno.env.toObject()` の挙動は、取得したドキュメント範囲では確認できなかった。
-
-フラグごとの判断:
-
-| フラグ          | 判断     | 理由                                                                                                                                                                                                                                                                                                                                                            |
-| --------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--allow-run`   | 絞らない | 技術的には `--allow-run=ffprobe,ffmpeg,<claude のパス>` にできるが、`claude` の実パスは SDK のバージョンを含む npm キャッシュ配下で dependabot の更新ごとに変わる (`pathToClaudeCodeExecutable` で `/usr/local/bin/claude` の symlink に固定する案はローカル実行と Docker で設定が分かれる)。そして子プロセス側は無制限なので、絞っても防御上の価値がほぼ無い。 |
-| `--allow-net`   | 絞らない | Gateway / resume のホストが動的で静的列挙が脆い。REST 先と `127.0.0.1:{apiPort}` は列挙できるが、Claude API との通信は子プロセス側であり、Deno 側を絞る効果が限定的。                                                                                                                                                                                           |
-| `--allow-write` | 絞らない | Docker では `/data` と `/tmp` に限定できる (`storePath` は cwd 相対、`approval/settings.ts` の `.claude/settings.json`、添付の一時ディレクトリ、once ジョブの削除)。ただし `deno.json` のタスク (ローカル実行。パスは環境依存) と Dockerfile の `CMD` を同じフラグ列に保つ現行方針と衝突するため、現時点では絞らない。絞るなら最初の候補。                      |
-| `--allow-read`  | 絞らない | config / workspace / npm キャッシュ / `CLAUDE_CONFIG_DIR` と読み先が広く、列挙の保守コストに見合わない。                                                                                                                                                                                                                                                        |
-| `--allow-env`   | 絞らない | `Deno.env.toObject()` を子プロセスに丸ごと渡す設計で、許可リスト下での挙動が未確認。`LOMS_CLAW_CONFIG` / `CLAUDE_CONFIG_DIR` / `TZ` だけでは足りない。                                                                                                                                                                                                          |
-| `--allow-ffi`   | 絞らない | KV には不要と確認したが、npm 依存 (discord.js / SDK) の実行経路で要るかは実機起動でしか確認できず、外して壊れた場合を検知する CI が無い。無制限でも子プロセスの到達範囲は変わらない。                                                                                                                                                                           |
-| `--allow-sys`   | 絞らない | `--allow-ffi` と同じ理由 (node 互換層の `os.*` 呼び出しの有無を静的に確定できない)。                                                                                                                                                                                                                                                                            |
-
-要するに、この bot の実体はサンドボックス外で動く Claude Code (任意の Bash を実行できる) であり、Deno 側の権限を絞っても脅威モデル上の境界にならない。Deno のフラグは「bot プロセス自身のバグによる誤書き込み・誤接続を局所化する」程度の価値しか持たず、その価値のためにフラグ列を 2 箇所で保守するコストを払わない、というのが現時点の結論。
+Node には Deno のような権限モデルが無く、プロセスは起動したユーザの権限でファイル・ネットワーク・子プロセスにアクセスできる。Dockerfile の `CMD` にも権限フラグは無い。`query()` が spawn する Claude Code はもともとプロセス側の権限モデルの外で動く。
 
 ## data/ ディレクトリ
 
@@ -179,16 +152,16 @@ docker compose logs -f               # ログ確認
 | `data/home/google-health/token.json` | Google Health API のトークン (`GOOGLE_HEALTH_TOKEN_PATH` の既定値)。初回認可時に bot が作る | `data/home/*` に含まれ管理外                                                                                                                                                                          |
 | `data/workspace/`                    | エージェントワークスペース。本番の cwd                                                      | `data/workspace/*` は管理外。`.claude/`、`CLAUDE.md`、`cron/`、`apm.yml`、`apm.lock.yaml`、`.gitkeep` を `!` で除外解除して追跡する。`cron/*.once.md` は再度 ignore する (詳細は後述の「追跡対象」節) |
 
-`.gitignore` はこのほか `**/*.kv`/`**/*.kv-shm`/`**/*.kv-wal` (Deno KV。コメントによれば `storePath` 既定値が cwd 基準のため、ローカル実行ではリポジトリ直下の `.claude/` にも作られる)、`**/apm_modules/`、`**/.claude/settings.local.json`、`.env`、`coverage/` を管理外にし、`!**/.gitkeep` で `.gitkeep` は残す。
+`.gitignore` はこのほか `**/*.sqlite`/`**/*.sqlite-shm`/`**/*.sqlite-wal` (永続化ストア。旧 KV の `**/*.kv*` も残している。コメントによれば `storePath` 既定値が cwd 基準のため、ローカル実行ではリポジトリ直下の `.claude/` にも作られる)、`**/apm_modules/`、`**/.claude/settings.local.json`、`.env`、`coverage/` を管理外にし、`!**/.gitkeep` で `.gitkeep` は残す。
 
-### cwd と KV ファイルの位置
+### cwd と SQLite ファイルの位置
 
-`config.schema.json` の `storePath` は既定 `.claude/loms-claw.kv` で、相対パスは cwd 基準 (`main.ts` が `Deno.openKv(config.storePath)` で開く)。
+`config.schema.json` の `storePath` は既定 `.claude/loms-claw.sqlite` で、相対パスは cwd 基準 (`main.ts` が `openStoreDatabase(config.storePath)` で開く。内部で `new DatabaseSync(path, { timeout: 5000 })` (`timeout` は他プロセスがロックを持つ間の待ち時間 (ミリ秒)) と `PRAGMA journal_mode = WAL` を行う)。
 
-- 本番 (cwd `/data/workspace`): `/data/workspace/.claude/loms-claw.kv`。
-- ローカル実行 (`deno task start`、cwd はリポジトリ直下): リポジトリ直下の `.claude/loms-claw.kv`。
+- 本番 (cwd `/data/workspace`): `/data/workspace/.claude/loms-claw.sqlite`。
+- ローカル実行 (`npm run start`、cwd はリポジトリ直下): リポジトリ直下の `.claude/loms-claw.sqlite`。
 
-`data/config.json.example` の `storePath` 値も `.claude/loms-claw.kv` で、schema の既定値と一致している。
+`data/config.json.example` の `storePath` 値も `.claude/loms-claw.sqlite` で、schema の既定値と一致している。
 
 ## workspace の構成 (`data/workspace/`)
 
@@ -205,7 +178,7 @@ docker compose logs -f               # ログ確認
 | `cron/*.once.md`            | `once: true` の一時ジョブ (実行後に自動削除される)                                                                                                                            | 管理外 |
 | `apm.yml` / `apm.lock.yaml` | APM の依存定義とロック                                                                                                                                                        | 追跡   |
 | `memory/`                   | エージェントのファイルベース永続メモリ (個人データ)                                                                                                                           | 管理外 |
-| `.claude/loms-claw.kv*`     | Deno KV (`storePath` 既定値)                                                                                                                                                  | 管理外 |
+| `.claude/loms-claw.sqlite*` | SQLite ストア (`storePath` 既定値)                                                                                                                                            | 管理外 |
 | `apm_modules/`              | APM が取得したモジュール                                                                                                                                                      | 管理外 |
 
 ### 追跡対象
@@ -242,14 +215,43 @@ docker compose logs -f               # ログ確認
 - `data/home/` (Claude の設定・認証情報)
 - `data/workspace/` (エージェントワークスペース)
 
+## 旧 Deno KV からのデータ移行
+
+永続化ストアは Deno KV から SQLite (`node:sqlite`) に変わった。既存のスコープ設定・セッション ID を引き継ぐには、`scripts/` の 2 本で KV を JSON にダンプして SQLite に取り込む。KV のキー `["channel", id, field]` は `settings(id, field, value)` の 1 行に対応する (詳細は [store-and-settings.md](store-and-settings.md))。この形でないエントリは `import-kv.ts` がスキップして標準エラーに出し、最後に `imported N entries, skipped M entries` を標準出力に出す。
+
+KV ファイルのパスは `data/config.json` の `storePath` の値を使う (cwd は `/data/workspace`)。稼働サーバ (ceres) の現在値は `./loms-claw.kv`、つまり `/data/workspace/loms-claw.kv` である。`storePath` を省略している場合は旧既定 `.claude/loms-claw.kv` (cwd 基準なので `/data/workspace/.claude/loms-claw.kv`) から新既定 `.claude/loms-claw.sqlite` (同 `/data/workspace/.claude/loms-claw.sqlite`) へ、同じ手順で dump / import する。以下の `<旧 storePath>` はこのパス、`<新 storePath>` は `.sqlite` 拡張子の新しいパス (例: `/data/workspace/loms-claw.sqlite`) を指す。
+
+1. 旧イメージ (Deno) のコンテナで `dump-kv.ts` を実行し、`data/kv-dump.json` を得る。旧イメージは `scripts/` を持たないため、host の `scripts/` を読み取り専用で重ねる。**このステップはイメージを切り替える前 (`docker compose build` で新イメージに置き換える前) に行う。**
+
+   ```sh
+   docker compose run --rm -v "$PWD/scripts:/scripts:ro" bot deno run --unstable-kv --allow-read --allow-write /scripts/dump-kv.ts <旧 storePath> > data/kv-dump.json
+   ```
+
+2. 新イメージ (Node) に切り替えた後、`import-kv.ts` で `<新 storePath>` に取り込む。
+
+   ```sh
+   docker compose run --rm bot node /app/scripts/import-kv.ts /data/kv-dump.json <新 storePath>
+   ```
+
+3. `data/config.json` の `storePath` を `.sqlite` のパスに変えてから起動する。順序を逆にして `.kv` のまま起動すると、起動時ガードが拒否する。
+4. 動作を確認したら、旧 `.kv` ファイル (`loms-claw.kv*`) と `data/kv-dump.json` は削除してよい。
+
+移行漏れの警告: 起動時に `settings` が空で、`storePath` の拡張子が `.sqlite` かつ同じディレクトリに `loms-claw.kv` (旧既定名) があると、`main.ts` が `log.warn` で移行節を参照するよう出す。起動は止めない。
+
+起動時ガード: `Store` のコンストラクタは、開いた DB ファイルにテーブルがあるのに `settings` が無い場合 (旧 Deno KV ファイル等) に `store file is not a loms-claw database (old Deno KV file?)` を投げる。`main.ts` は `failed to open store: ...` をログして `process.exit(1)` する。別形式のファイルを黙って開いて壊すことを防ぐための措置である。
+
 ## dependabot と GitHub Actions
 
-- `.github/dependabot.yml` は次の 4 エントリを持つ。いずれも週次 (月曜 07:00 Asia/Tokyo)。deno の 2 エントリは minor/patch を `minor-and-patch` グループにまとめ、コミットメッセージの prefix は deno/docker が `build`、github-actions が `ci`。
-  - `deno` (`/`)
-  - `deno` (`/docs/api`。独自の `deno.json`/`deno.lock` を持ちルートから参照されないため分けている)
+- `.github/dependabot.yml` は次の 4 エントリを持つ。いずれも週次 (月曜 07:00 Asia/Tokyo)。npm と deno の 2 エントリは minor/patch を `minor-and-patch` グループにまとめ、コミットメッセージの prefix は npm/deno/docker が `build`、github-actions が `ci`。
+  - `npm` (`/`。`package.json`/`package-lock.json`)
+  - `deno` (`/docs/api`。独自の `deno.json`/`deno.lock` を持ちルートから参照されないため分けている。docs/api は Deno のまま)
   - `docker` (`/`)
   - `github-actions` (`/`)
 
 ### CI
 
-`.github/workflows/ci.yml` が `push` (main)/`pull_request` で走る CI。`root` (`deno task check`/`lint`/`test`。`.claude/rules/pr.md` の検証チェーンから `deno task fix` を除いたもの)、`generated` (`deno task generate` 後に `api/internal-schemas.ts` の差分を `git diff --exit-code` で検査)、`docs-api` (`docs/api` の `lint`/`check` を `deno task --cwd ./docs/api` で実行) の 3 job を並列で実行する。使う Deno バージョンは `Dockerfile` のベースイメージと揃える。
+`.github/workflows/ci.yml` が `push` (main)/`pull_request` で走る CI。冒頭コメントのとおり、`DENO_VERSION` は Dockerfile の `denoland/deno:bin-*` タグと揃える。`env` は `DENO_VERSION: "2.9.7"`、`NODE_VERSION: "24"`。次の 3 job を並列で実行する。
+
+- `root`: Node 24 (`actions/setup-node`、`cache: npm`) で `npm ci` → `npm run check` → `npm run lint` → `npm test`。
+- `generated`: Node 24 と Deno 2.9.7 (`denoland/setup-deno`) で `npm run generate` を実行し、`api/internal-schemas.ts` の差分を `git diff --exit-code` で検査する。`generate` は docs/api の Deno タスクを呼ぶだけなので `npm ci` は不要。
+- `docs-api`: Deno 2.9.7 で `docs/api` の `lint`/`check` を `deno task --cwd ./docs/api` で実行する (Deno のまま)。

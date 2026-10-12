@@ -20,8 +20,10 @@
  * channelPrompts は単一の Map<id, string> で両方を保持する。
  */
 
+import { readdir, readFile } from "node:fs/promises";
 import { basename } from "@std/path/basename";
 import { join } from "@std/path/join";
+import { isNotFoundError } from "../errors.ts";
 import { createLogger } from "../logger.ts";
 import { replaceTemplateVariables } from "./template.ts";
 
@@ -46,9 +48,9 @@ export interface PromptScope {
  */
 async function readFileOrUndefined(path: string): Promise<string | undefined> {
   try {
-    return await Deno.readTextFile(path);
+    return await readFile(path, "utf8");
   } catch (e) {
-    if (e instanceof Deno.errors.NotFound) {
+    if (isNotFoundError(e)) {
       return undefined;
     }
     throw e;
@@ -67,23 +69,26 @@ export class SystemPromptStore {
   private chatPrompt: string | undefined;
   private cronPrompt: string | undefined;
   private channelPrompts = new Map<string, string>();
+  private readonly dir: string;
 
-  constructor(private readonly dir: string) {}
+  constructor(dir: string) {
+    this.dir = dir;
+  }
 
   /**
    * .claude/system-prompt/ 配下のファイルを全て読み込んでキャッシュする。
    * ディレクトリが存在しない場合は何もしない。
    */
   async load(): Promise<void> {
-    this.defaultPrompt = (await readFileOrUndefined(
-      join(this.dir, "DEFAULT.md"),
-    ))?.trim() || undefined;
-    this.chatPrompt = (await readFileOrUndefined(
-      join(this.dir, "CHAT.md"),
-    ))?.trim() || undefined;
-    this.cronPrompt = (await readFileOrUndefined(
-      join(this.dir, "CRON.md"),
-    ))?.trim() || undefined;
+    this.defaultPrompt =
+      (await readFileOrUndefined(join(this.dir, "DEFAULT.md")))?.trim() ||
+      undefined;
+    this.chatPrompt =
+      (await readFileOrUndefined(join(this.dir, "CHAT.md")))?.trim() ||
+      undefined;
+    this.cronPrompt =
+      (await readFileOrUndefined(join(this.dir, "CRON.md")))?.trim() ||
+      undefined;
 
     // チャンネル固有ファイルをスキャンする。
     // DEFAULT.md, CHAT.md, CRON.md 以外の .md ファイルは
@@ -91,33 +96,32 @@ export class SystemPromptStore {
     // Discord のチャンネル ID は数値文字列（Snowflake）。
     this.channelPrompts.clear();
     try {
-      for await (const entry of Deno.readDir(this.dir)) {
-        if (!entry.isFile || !entry.name.endsWith(".md")) {
+      for (const entry of await readdir(this.dir, { withFileTypes: true })) {
+        if (!entry.isFile() || !entry.name.endsWith(".md")) {
           continue;
         }
         const name = basename(entry.name, ".md");
-        if (
-          name === "DEFAULT" || name === "CHAT" || name === "CRON"
-        ) {
+        if (name === "DEFAULT" || name === "CHAT" || name === "CRON") {
           continue;
         }
-        const content = (await readFileOrUndefined(
-          join(this.dir, entry.name),
-        ))?.trim();
+        const content = (
+          await readFileOrUndefined(join(this.dir, entry.name))
+        )?.trim();
         if (content) {
           this.channelPrompts.set(name, content);
           log.info(`loaded channel prompt: ${entry.name}`);
         }
       }
     } catch (e) {
-      if (e instanceof Deno.errors.NotFound) {
+      if (isNotFoundError(e)) {
         log.info("system-prompt directory not found, skipping");
         return;
       }
       throw e;
     }
 
-    const count = (this.defaultPrompt ? 1 : 0) +
+    const count =
+      (this.defaultPrompt ? 1 : 0) +
       (this.chatPrompt ? 1 : 0) +
       (this.cronPrompt ? 1 : 0) +
       this.channelPrompts.size;
@@ -151,9 +155,8 @@ export class SystemPromptStore {
       parts.push(this.defaultPrompt);
     }
 
-    const contextPrompt = context === "chat"
-      ? this.chatPrompt
-      : this.cronPrompt;
+    const contextPrompt =
+      context === "chat" ? this.chatPrompt : this.cronPrompt;
     if (contextPrompt) {
       parts.push(contextPrompt);
     }

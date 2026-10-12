@@ -5,6 +5,10 @@
  * Agent SDK (`askClaude()`) を呼び出して応答を返す。
  */
 
+import { rm } from "node:fs/promises";
+import type { SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
+import { join } from "@std/path/join";
+import type { ServerType } from "@hono/node-server";
 import {
   Client,
   Events,
@@ -13,13 +17,16 @@ import {
   type Interaction,
   type Message,
   MessageFlags,
-  type RepliableInteraction,
   REST,
+  type RepliableInteraction,
   Routes,
   Status,
 } from "discord.js";
-import type { SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
-import type { Config } from "../config.ts";
+import type { CronRouteContext } from "../api/routes/cron.ts";
+import type { HealthRouteContext } from "../api/routes/health.ts";
+import type { SettingsRouteContext } from "../api/routes/settings.ts";
+import { startApiServer } from "../api/server.ts";
+import { ApprovalManager, createCanUseTool } from "../approval/manager.ts";
 import {
   askClaude,
   extractTopLevelTextDelta,
@@ -27,23 +34,22 @@ import {
   handleResultEvent,
   requireResultText,
 } from "../claude/mod.ts";
+import { SystemPromptStore } from "../claude/system-prompt.ts";
+import type { Config } from "../config.ts";
+import { CronExecutor } from "../cron/executor.ts";
+import { loadCronJobsFromDir } from "../cron/loader.ts";
+import { getErrorMessage, summarizeErrorForDiscord } from "../errors.ts";
+import { createLogger } from "../logger.ts";
 import type { Store } from "../store/mod.ts";
-import { ApprovalManager, createCanUseTool } from "../approval/manager.ts";
 import {
   command,
   handleSettingsSet,
   handleSettingsShow,
   handleSettingsUnset,
 } from "./commands.ts";
+import { splitAtBoundary } from "./flush.ts";
 import { isAuthorized } from "./guard.ts";
 import { resolveIncomingMessage } from "./incoming.ts";
-import {
-  SELF_MENTION_RATE_LIMIT_MAX_COUNT,
-  SELF_MENTION_RATE_LIMIT_WINDOW_MINUTES,
-  SelfMentionRateLimiter,
-} from "./ratelimit.ts";
-import { ScopeQueue } from "./queue.ts";
-import { splitAtBoundary } from "./flush.ts";
 import {
   appendImageReferences,
   cleanupImageFiles,
@@ -55,16 +61,12 @@ import {
   splitMessage,
   stripBotMentions,
 } from "./message.ts";
-import { join } from "@std/path/join";
-import { createLogger } from "../logger.ts";
-import { SystemPromptStore } from "../claude/system-prompt.ts";
-import { startApiServer } from "../api/server.ts";
-import type { CronRouteContext } from "../api/routes/cron.ts";
-import type { HealthRouteContext } from "../api/routes/health.ts";
-import type { SettingsRouteContext } from "../api/routes/settings.ts";
-import { CronExecutor } from "../cron/executor.ts";
-import { loadCronJobsFromDir } from "../cron/loader.ts";
-import { getErrorMessage, summarizeErrorForDiscord } from "../errors.ts";
+import { ScopeQueue } from "./queue.ts";
+import {
+  SELF_MENTION_RATE_LIMIT_MAX_COUNT,
+  SELF_MENTION_RATE_LIMIT_WINDOW_MINUTES,
+  SelfMentionRateLimiter,
+} from "./ratelimit.ts";
 
 const log = createLogger("bot");
 
@@ -128,10 +130,12 @@ async function runInteraction(
     const msg = getErrorMessage(error);
     log.error(`${label} interaction error:`, msg);
     if (!interaction.replied && !interaction.deferred) {
-      await interaction.reply({
-        content: errorMessage,
-        flags: MessageFlags.Ephemeral,
-      }).catch(() => {});
+      await interaction
+        .reply({
+          content: errorMessage,
+          flags: MessageFlags.Ephemeral,
+        })
+        .catch(() => {});
     }
   }
 }
@@ -144,7 +148,7 @@ export class DiscordBot {
   private config: Config;
   private store: Store;
   private approvalManager: ApprovalManager;
-  private apiServer: Deno.HttpServer | null = null;
+  private apiServer: ServerType | null = null;
   private cronExecutor: CronExecutor | null = null;
   private systemPrompts: SystemPromptStore;
   /** scope (channel / thread) 単位でメッセージ処理を直列化するキュー。 */
@@ -199,7 +203,7 @@ export class DiscordBot {
     // このタイミングは login() の解決前になり得るため、login() の後に
     // once() を登録すると発火済みイベントを取りこぼし、コマンド登録・
     // cron 初期化・API サーバー起動が永久に実行されない。
-    const ready = new Promise<void>((resolve) => {
+    const ready = new Promise<void>((resolve, reject) => {
       this.client.once(Events.ClientReady, async (c) => {
         log.info(`logged in as ${c.user.tag}`);
         await this.registerCommands();
@@ -226,13 +230,9 @@ export class DiscordBot {
 
         // once ジョブのコールバック: ファイル削除 → reload
         this.cronExecutor.setOnceCallback(async (jobName: string) => {
-          const filePath = join(
-            this.config.claude.cwd,
-            "cron",
-            jobName,
-          );
+          const filePath = join(this.config.claude.cwd, "cron", jobName);
           try {
-            await Deno.remove(filePath);
+            await rm(filePath);
             log.info(`once job file deleted: ${filePath}`);
           } catch (e) {
             log.error(`failed to delete once job file: ${filePath}`, e);
@@ -268,16 +268,22 @@ export class DiscordBot {
           // status が Status.Ready かどうかで判定する。
           isReady: () =>
             this.client.ws.shards.size > 0 &&
-            this.client.ws.shards.every((shard) =>
-              shard.status === Status.Ready
+            this.client.ws.shards.every(
+              (shard) => shard.status === Status.Ready,
             ),
         };
-        this.apiServer = startApiServer(
-          this.config.claude.apiPort,
-          settingsCtx,
-          healthCtx,
-          cronCtx,
-        );
+        try {
+          this.apiServer = await startApiServer(
+            this.config.claude.apiPort,
+            settingsCtx,
+            healthCtx,
+            cronCtx,
+          );
+        } catch (e) {
+          // ポート使用中などの listen 失敗は start() の例外として外へ出す。
+          reject(e);
+          return;
+        }
 
         resolve();
       });
@@ -295,17 +301,20 @@ export class DiscordBot {
    * 両ステップとも `SHUTDOWN_TIMEOUT_MS` (5 秒) で個別に打ち切り、超過時は
    * 警告ログを出して先へ進む (合計最大 10 秒)。`client.destroy()` の reject
    * も WARN ログに落として続行する。破棄後、呼び出し元 (main.ts) が
-   * store.close() → Deno.exit() で明示的にプロセスを終了する (Store の
+   * store.close() → process.exit() で明示的にプロセスを終了する (Store の
    * open / close は main.ts が対で所有する)。
    */
   async shutdown(): Promise<void> {
     log.info("shutting down");
     this.cronExecutor?.stop();
 
+    const apiServer = this.apiServer;
     await withTimeout(
-      this.apiServer?.shutdown().catch((e) =>
-        log.warn("api server shutdown error:", e)
-      ) ?? Promise.resolve(),
+      apiServer
+        ? new Promise<void>((resolve, reject) => {
+            apiServer.close((e) => (e ? reject(e) : resolve()));
+          }).catch((e) => log.warn("api server shutdown error:", e))
+        : Promise.resolve(),
       SHUTDOWN_TIMEOUT_MS,
       "api server shutdown",
     );
@@ -521,8 +530,9 @@ export class DiscordBot {
     await this.chatQueue.enqueue(localId, async () => {
       // 自分のターンが始まったら待機マーカー (⏳) を外す。
       if (wasQueued && this.client.user) {
-        await message.reactions.cache.get("⏳")?.users
-          .remove(this.client.user.id)
+        await message.reactions.cache
+          .get("⏳")
+          ?.users.remove(this.client.user.id)
           .catch(() => {});
       }
 
@@ -553,7 +563,10 @@ export class DiscordBot {
       // thinking (推論) を引用形式で投稿する。回答ではないのでメンションは付けず、
       // Discord の `> ` 引用で回答と視覚的に分離する。
       const sendThinking = async (text: string): Promise<void> => {
-        const quoted = text.split("\n").map((line) => `> ${line}`).join("\n");
+        const quoted = text
+          .split("\n")
+          .map((line) => `> ${line}`)
+          .join("\n");
         for (const chunk of splitMessage(quoted)) {
           await channel.send(chunk);
         }
@@ -602,9 +615,9 @@ export class DiscordBot {
           ? this.config.discord.userId
           : message.author.id;
         const speakerName = isSelfMessage
-          ? message.guild?.members.cache.get(speakerId)?.displayName ??
+          ? (message.guild?.members.cache.get(speakerId)?.displayName ??
             this.client.users.cache.get(speakerId)?.displayName ??
-            speakerId
+            speakerId)
           : message.author.displayName;
         const [sessionId, model, effort, showThinking] = await Promise.all([
           this.store.getSession(scope),
@@ -617,7 +630,7 @@ export class DiscordBot {
           "discord.guild.id": this.config.discord.guildId,
           "discord.guild.name": message.guild?.name ?? "",
           "discord.channel.id": localId,
-          "discord.channel.name": "name" in channel ? channel.name ?? "" : "",
+          "discord.channel.name": "name" in channel ? (channel.name ?? "") : "",
           "discord.channel.type": isThread ? "thread" : "text",
           "discord.user.id": speakerId,
           "discord.user.name": speakerName,

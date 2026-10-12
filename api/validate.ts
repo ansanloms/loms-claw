@@ -48,8 +48,9 @@ export function schemaErrorOf(
 ): string {
   const { errors } = validatorFor(name).validate(value);
   const first = errors[0];
-  const at = first?.instanceLocation && first.instanceLocation !== "#"
-    ? `${first.instanceLocation}: `
-    : "";
+  const at =
+    first?.instanceLocation && first.instanceLocation !== "#"
+      ? `${first.instanceLocation}: `
+      : "";
   return `${at}${first?.error ?? "invalid request body"}`;
 }

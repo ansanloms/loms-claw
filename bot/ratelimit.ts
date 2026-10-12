@@ -1,3 +1,5 @@
+import { Temporal } from "@js-temporal/polyfill";
+
 /** 自己メンション応答のレート制限: ウィンドウ内の最大応答回数。 */
 export const SELF_MENTION_RATE_LIMIT_MAX_COUNT = 6;
 /** 自己メンション応答のレート制限: ウィンドウ長 (分)。 */

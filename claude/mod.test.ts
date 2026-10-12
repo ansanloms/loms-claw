@@ -1,8 +1,10 @@
-import { assertEquals, assertRejects, assertThrows } from "@std/assert";
+import { describe, test } from "node:test";
 import type {
   SDKMessage,
   SDKResultMessage,
 } from "@anthropic-ai/claude-agent-sdk";
+import assert from "node:assert/strict";
+import { errorWith } from "../test-helpers.ts";
 import type { ClaudeConfig } from "../config.ts";
 import {
   askClaude,
@@ -105,53 +107,53 @@ function resultMessage(sessionId: string): SDKMessage {
   } as SDKMessage;
 }
 
-Deno.test("normalizeEffort", async (t) => {
-  await t.step("対応する effort をそのまま返すこと", () => {
-    assertEquals(normalizeEffort("low"), "low");
-    assertEquals(normalizeEffort("high"), "high");
-    assertEquals(normalizeEffort("xhigh"), "xhigh");
-    assertEquals(normalizeEffort("max"), "max");
+describe("normalizeEffort", () => {
+  test("対応する effort をそのまま返すこと", () => {
+    assert.deepStrictEqual(normalizeEffort("low"), "low");
+    assert.deepStrictEqual(normalizeEffort("high"), "high");
+    assert.deepStrictEqual(normalizeEffort("xhigh"), "xhigh");
+    assert.deepStrictEqual(normalizeEffort("max"), "max");
   });
 
-  await t.step("非対応の値は undefined になること", () => {
-    assertEquals(normalizeEffort("ultra"), undefined);
+  test("非対応の値は undefined になること", () => {
+    assert.deepStrictEqual(normalizeEffort("ultra"), undefined);
   });
 
-  await t.step("未指定は undefined になること", () => {
-    assertEquals(normalizeEffort(undefined), undefined);
-    assertEquals(normalizeEffort(""), undefined);
+  test("未指定は undefined になること", () => {
+    assert.deepStrictEqual(normalizeEffort(undefined), undefined);
+    assert.deepStrictEqual(normalizeEffort(""), undefined);
   });
 });
 
-Deno.test("buildQueryOptions", async (t) => {
+describe("buildQueryOptions", () => {
   const ac = new AbortController();
 
-  await t.step("settingSources に user / project を含むこと", () => {
+  test("settingSources に user / project を含むこと", () => {
     const opts = buildQueryOptions(baseConfig, {}, ac);
-    assertEquals(opts.settingSources, ["user", "project"]);
+    assert.deepStrictEqual(opts.settingSources, ["user", "project"]);
   });
 
-  await t.step("includePartialMessages が true であること", () => {
+  test("includePartialMessages が true であること", () => {
     const opts = buildQueryOptions(baseConfig, {}, ac);
-    assertEquals(opts.includePartialMessages, true);
+    assert.deepStrictEqual(opts.includePartialMessages, true);
   });
 
-  await t.step("cwd / maxTurns が config から設定されること", () => {
+  test("cwd / maxTurns が config から設定されること", () => {
     const opts = buildQueryOptions(baseConfig, {}, ac);
-    assertEquals(opts.cwd, "/workspace");
-    assertEquals(opts.maxTurns, 10);
+    assert.deepStrictEqual(opts.cwd, "/workspace");
+    assert.deepStrictEqual(opts.maxTurns, 10);
   });
 
-  await t.step("systemPrompt が claude_code preset であること", () => {
+  test("systemPrompt が claude_code preset であること", () => {
     const sp = buildQueryOptions(baseConfig, {}, ac).systemPrompt;
     if (typeof sp !== "object" || Array.isArray(sp) || sp.type !== "preset") {
       throw new Error("systemPrompt is not a preset object");
     }
-    assertEquals(sp.preset, "claude_code");
-    assertEquals(sp.append, undefined);
+    assert.deepStrictEqual(sp.preset, "claude_code");
+    assert.deepStrictEqual(sp.append, undefined);
   });
 
-  await t.step("appendSystemPrompt 指定時に append されること", () => {
+  test("appendSystemPrompt 指定時に append されること", () => {
     const sp = buildQueryOptions(
       baseConfig,
       { appendSystemPrompt: "extra prompt" },
@@ -160,39 +162,39 @@ Deno.test("buildQueryOptions", async (t) => {
     if (typeof sp !== "object" || Array.isArray(sp) || sp.type !== "preset") {
       throw new Error("systemPrompt is not a preset object");
     }
-    assertEquals(sp.append, "extra prompt");
+    assert.deepStrictEqual(sp.append, "extra prompt");
   });
 
-  await t.step("sessionId 指定時に resume が設定されること", () => {
+  test("sessionId 指定時に resume が設定されること", () => {
     const opts = buildQueryOptions(
       baseConfig,
       { sessionId: "session-123" },
       ac,
     );
-    assertEquals(opts.resume, "session-123");
+    assert.deepStrictEqual(opts.resume, "session-123");
   });
 
-  await t.step("sessionId 未指定時は resume を含まないこと", () => {
+  test("sessionId 未指定時は resume を含まないこと", () => {
     const opts = buildQueryOptions(baseConfig, {}, ac);
-    assertEquals(opts.resume, undefined);
+    assert.deepStrictEqual(opts.resume, undefined);
   });
 
-  await t.step("model / effort が設定されること", () => {
+  test("model / effort が設定されること", () => {
     const opts = buildQueryOptions(
       baseConfig,
       { model: "opus", effort: "high" },
       ac,
     );
-    assertEquals(opts.model, "opus");
-    assertEquals(opts.effort, "high");
+    assert.deepStrictEqual(opts.model, "opus");
+    assert.deepStrictEqual(opts.effort, "high");
   });
 
-  await t.step("非対応の effort は設定されないこと", () => {
+  test("非対応の effort は設定されないこと", () => {
     const opts = buildQueryOptions(baseConfig, { effort: "ultra" }, ac);
-    assertEquals(opts.effort, undefined);
+    assert.deepStrictEqual(opts.effort, undefined);
   });
 
-  await t.step("canUseTool 指定時に設定されること", () => {
+  test("canUseTool 指定時に設定されること", () => {
     const opts = buildQueryOptions(
       baseConfig,
       {
@@ -201,32 +203,26 @@ Deno.test("buildQueryOptions", async (t) => {
       },
       ac,
     );
-    assertEquals(typeof opts.canUseTool, "function");
+    assert.deepStrictEqual(typeof opts.canUseTool, "function");
   });
 
-  await t.step(
-    "discordToken 指定時に env へ DISCORD_BOT_TOKEN が注入されること",
-    () => {
-      const opts = buildQueryOptions(
-        baseConfig,
-        { discordToken: "bot-token-xyz" },
-        ac,
-      );
-      assertEquals(opts.env?.DISCORD_BOT_TOKEN, "bot-token-xyz");
-    },
-  );
+  test("discordToken 指定時に env へ DISCORD_BOT_TOKEN が注入されること", () => {
+    const opts = buildQueryOptions(
+      baseConfig,
+      { discordToken: "bot-token-xyz" },
+      ac,
+    );
+    assert.deepStrictEqual(opts.env?.DISCORD_BOT_TOKEN, "bot-token-xyz");
+  });
 
-  await t.step(
-    "discordToken 未指定時は env に DISCORD_BOT_TOKEN を含まないこと",
-    () => {
-      const opts = buildQueryOptions(baseConfig, {}, ac);
-      assertEquals(opts.env?.DISCORD_BOT_TOKEN, undefined);
-    },
-  );
+  test("discordToken 未指定時は env に DISCORD_BOT_TOKEN を含まないこと", () => {
+    const opts = buildQueryOptions(baseConfig, {}, ac);
+    assert.deepStrictEqual(opts.env?.DISCORD_BOT_TOKEN, undefined);
+  });
 });
 
-Deno.test("askClaude", async (t) => {
-  await t.step("全イベントを yield すること", async () => {
+describe("askClaude", () => {
+  test("全イベントを yield すること", async () => {
     const messages: SDKMessage[] = [
       {
         type: "system",
@@ -243,202 +239,171 @@ Deno.test("askClaude", async (t) => {
     ];
 
     const collected: SDKMessage[] = [];
-    for await (
-      const event of askClaude("hello", {
-        config: baseConfig,
-        queryFn: mockQueryFn(messages),
-      })
-    ) {
+    for await (const event of askClaude("hello", {
+      config: baseConfig,
+      queryFn: mockQueryFn(messages),
+    })) {
       collected.push(event);
     }
 
-    assertEquals(collected.length, 2);
-    assertEquals(collected[0].type, "system");
-    assertEquals(collected[1].type, "result");
+    assert.deepStrictEqual(collected.length, 2);
+    assert.deepStrictEqual(collected[0].type, "system");
+    assert.deepStrictEqual(collected[1].type, "result");
   });
 
-  await t.step("queryFn に prompt と options が渡されること", async () => {
+  test("queryFn に prompt と options が渡されること", async () => {
     let capturedPrompt: unknown;
     let capturedResume: string | undefined;
     const queryFn = mockQueryFn(
-      [{
-        type: "result",
-        subtype: "success",
-        result: "ok",
-        session_id: "s",
-        is_error: false,
-      } as SDKMessage],
+      [
+        {
+          type: "result",
+          subtype: "success",
+          result: "ok",
+          session_id: "s",
+          is_error: false,
+        } as SDKMessage,
+      ],
       (params) => {
         capturedPrompt = params.prompt;
         capturedResume = params.options?.resume;
       },
     );
 
-    for await (
-      const _ of askClaude("hello", {
-        config: baseConfig,
-        sessionId: "prev-session",
-        queryFn,
-      })
-    ) {
+    for await (const _ of askClaude("hello", {
+      config: baseConfig,
+      sessionId: "prev-session",
+      queryFn,
+    })) {
       void _;
     }
 
-    assertEquals(capturedPrompt, "hello");
-    assertEquals(capturedResume, "prev-session");
+    assert.deepStrictEqual(capturedPrompt, "hello");
+    assert.deepStrictEqual(capturedResume, "prev-session");
   });
 
-  await t.step("queryFn の例外を診断付きで再 throw すること", async () => {
-    await assertRejects(
+  test("queryFn の例外を診断付きで再 throw すること", async () => {
+    await assert.rejects(
       async () => {
-        for await (
-          const _ of askClaude("hello", {
-            config: baseConfig,
-            queryFn: throwingQueryFn("boom"),
-          })
-        ) {
+        for await (const _ of askClaude("hello", {
+          config: baseConfig,
+          queryFn: throwingQueryFn("boom"),
+        })) {
           void _;
         }
       },
-      Error,
-      "claude query failed: boom",
+      errorWith(Error, "claude query failed: boom"),
     );
   });
 
-  await t.step(
-    "resume 先セッションが存在しない場合は resume を外して新規セッションで再試行すること",
-    async () => {
-      const resumes: Array<string | undefined> = [];
-      const queryFn = sequencedQueryFn(
-        [
-          { throw: SESSION_NOT_FOUND },
-          { messages: [resultMessage("new-session")] },
-        ],
-        (resume) => resumes.push(resume),
-      );
+  test("resume 先セッションが存在しない場合は resume を外して新規セッションで再試行すること", async () => {
+    const resumes: Array<string | undefined> = [];
+    const queryFn = sequencedQueryFn(
+      [
+        { throw: SESSION_NOT_FOUND },
+        { messages: [resultMessage("new-session")] },
+      ],
+      (resume) => resumes.push(resume),
+    );
 
-      const collected: SDKMessage[] = [];
-      for await (
-        const event of askClaude("hello", {
+    const collected: SDKMessage[] = [];
+    for await (const event of askClaude("hello", {
+      config: baseConfig,
+      sessionId: "stale-session",
+      queryFn,
+    })) {
+      collected.push(event);
+    }
+
+    // 1 回目は resume あり、2 回目 (再試行) は resume 無し
+    assert.deepStrictEqual(resumes, ["stale-session", undefined]);
+    // 再試行側の result イベントが yield されること
+    assert.deepStrictEqual(collected.length, 1);
+    assert.deepStrictEqual(collected[0].type, "result");
+  });
+
+  test("再試行は 1 回限りで、再び失敗すれば throw すること", async () => {
+    let calls = 0;
+    const queryFn = sequencedQueryFn(
+      [{ throw: SESSION_NOT_FOUND }, { throw: SESSION_NOT_FOUND }],
+      () => calls++,
+    );
+
+    await assert.rejects(
+      async () => {
+        for await (const _ of askClaude("hello", {
           config: baseConfig,
           sessionId: "stale-session",
           queryFn,
-        })
-      ) {
-        collected.push(event);
-      }
+        })) {
+          void _;
+        }
+      },
+      errorWith(Error, "claude query failed:"),
+    );
+    // 初回 + 再試行の 2 回で打ち切られること
+    assert.deepStrictEqual(calls, 2);
+  });
 
-      // 1 回目は resume あり、2 回目 (再試行) は resume 無し
-      assertEquals(resumes, ["stale-session", undefined]);
-      // 再試行側の result イベントが yield されること
-      assertEquals(collected.length, 1);
-      assertEquals(collected[0].type, "result");
-    },
-  );
+  test("session-not-found 以外のエラーでは再試行しないこと", async () => {
+    let calls = 0;
+    const queryFn = sequencedQueryFn([{ throw: "boom" }], () => calls++);
 
-  await t.step(
-    "再試行は 1 回限りで、再び失敗すれば throw すること",
-    async () => {
-      let calls = 0;
-      const queryFn = sequencedQueryFn(
-        [
-          { throw: SESSION_NOT_FOUND },
-          { throw: SESSION_NOT_FOUND },
-        ],
-        () => calls++,
-      );
+    await assert.rejects(
+      async () => {
+        for await (const _ of askClaude("hello", {
+          config: baseConfig,
+          sessionId: "stale-session",
+          queryFn,
+        })) {
+          void _;
+        }
+      },
+      errorWith(Error, "claude query failed: boom"),
+    );
+    assert.deepStrictEqual(calls, 1);
+  });
 
-      await assertRejects(
-        async () => {
-          for await (
-            const _ of askClaude("hello", {
-              config: baseConfig,
-              sessionId: "stale-session",
-              queryFn,
-            })
-          ) {
-            void _;
-          }
+  test("既に yield 済みなら session-not-found でも再試行しないこと", async () => {
+    let calls = 0;
+    const queryFn = sequencedQueryFn(
+      [
+        {
+          messages: [
+            {
+              type: "system",
+              subtype: "init",
+              session_id: "s",
+            } as SDKMessage,
+          ],
+          throw: SESSION_NOT_FOUND,
         },
-        Error,
-        "claude query failed:",
-      );
-      // 初回 + 再試行の 2 回で打ち切られること
-      assertEquals(calls, 2);
-    },
-  );
+      ],
+      () => calls++,
+    );
 
-  await t.step(
-    "session-not-found 以外のエラーでは再試行しないこと",
-    async () => {
-      let calls = 0;
-      const queryFn = sequencedQueryFn([{ throw: "boom" }], () => calls++);
-
-      await assertRejects(
-        async () => {
-          for await (
-            const _ of askClaude("hello", {
-              config: baseConfig,
-              sessionId: "stale-session",
-              queryFn,
-            })
-          ) {
-            void _;
-          }
-        },
-        Error,
-        "claude query failed: boom",
-      );
-      assertEquals(calls, 1);
-    },
-  );
-
-  await t.step(
-    "既に yield 済みなら session-not-found でも再試行しないこと",
-    async () => {
-      let calls = 0;
-      const queryFn = sequencedQueryFn(
-        [
-          {
-            messages: [
-              {
-                type: "system",
-                subtype: "init",
-                session_id: "s",
-              } as SDKMessage,
-            ],
-            throw: SESSION_NOT_FOUND,
-          },
-        ],
-        () => calls++,
-      );
-
-      const collected: SDKMessage[] = [];
-      await assertRejects(
-        async () => {
-          for await (
-            const event of askClaude("hello", {
-              config: baseConfig,
-              sessionId: "stale-session",
-              queryFn,
-            })
-          ) {
-            collected.push(event);
-          }
-        },
-        Error,
-        "claude query failed:",
-      );
-      // yield 済みのイベントは消費側に届いた上で throw、再試行はしない
-      assertEquals(collected.length, 1);
-      assertEquals(calls, 1);
-    },
-  );
+    const collected: SDKMessage[] = [];
+    await assert.rejects(
+      async () => {
+        for await (const event of askClaude("hello", {
+          config: baseConfig,
+          sessionId: "stale-session",
+          queryFn,
+        })) {
+          collected.push(event);
+        }
+      },
+      errorWith(Error, "claude query failed:"),
+    );
+    // yield 済みのイベントは消費側に届いた上で throw、再試行はしない
+    assert.deepStrictEqual(collected.length, 1);
+    assert.deepStrictEqual(calls, 1);
+  });
 });
 
-Deno.test("isSessionNotFoundError", async (t) => {
-  await t.step("session 不在メッセージを検出すること", () => {
-    assertEquals(
+describe("isSessionNotFoundError", () => {
+  test("session 不在メッセージを検出すること", () => {
+    assert.deepStrictEqual(
       isSessionNotFoundError(
         "Claude Code returned an error result: No conversation found with session ID: abc",
       ),
@@ -446,91 +411,81 @@ Deno.test("isSessionNotFoundError", async (t) => {
     );
   });
 
-  await t.step("無関係なエラーは false になること", () => {
-    assertEquals(isSessionNotFoundError("boom"), false);
-    assertEquals(isSessionNotFoundError("rate limit exceeded"), false);
+  test("無関係なエラーは false になること", () => {
+    assert.deepStrictEqual(isSessionNotFoundError("boom"), false);
+    assert.deepStrictEqual(
+      isSessionNotFoundError("rate limit exceeded"),
+      false,
+    );
   });
 });
 
-Deno.test("extractResultText", async (t) => {
-  await t.step("result が文字列なら subtype を問わず返すこと", () => {
-    assertEquals(
-      extractResultText(
-        {
-          type: "result",
-          subtype: "success",
-          result: "応答テキスト",
-          session_id: "sess-1",
-          is_error: false,
-        } as unknown as SDKResultMessage,
-      ),
+describe("extractResultText", () => {
+  test("result が文字列なら subtype を問わず返すこと", () => {
+    assert.deepStrictEqual(
+      extractResultText({
+        type: "result",
+        subtype: "success",
+        result: "応答テキスト",
+        session_id: "sess-1",
+        is_error: false,
+      } as unknown as SDKResultMessage),
       "応答テキスト",
     );
     // non-success でも result があれば採用する。
-    assertEquals(
-      extractResultText(
-        {
-          type: "result",
-          subtype: "error_max_turns",
-          result: "途中まで",
-          session_id: "sess-1",
-          is_error: true,
-        } as unknown as SDKResultMessage,
-      ),
+    assert.deepStrictEqual(
+      extractResultText({
+        type: "result",
+        subtype: "error_max_turns",
+        result: "途中まで",
+        session_id: "sess-1",
+        is_error: true,
+      } as unknown as SDKResultMessage),
       "途中まで",
     );
   });
 
-  await t.step(
-    "result が無い場合は errors / subtype 付きで throw すること",
-    () => {
-      assertThrows(
-        () =>
-          extractResultText(
-            {
-              type: "result",
-              subtype: "error_max_turns",
-              session_id: "sess-1",
-              is_error: true,
-            } as unknown as SDKResultMessage,
-          ),
-        Error,
-        "claude returned error: error_max_turns",
-      );
-    },
-  );
+  test("result が無い場合は errors / subtype 付きで throw すること", () => {
+    assert.throws(
+      () =>
+        extractResultText({
+          type: "result",
+          subtype: "error_max_turns",
+          session_id: "sess-1",
+          is_error: true,
+        } as unknown as SDKResultMessage),
+      errorWith(Error, "claude returned error: error_max_turns"),
+    );
+  });
 });
 
-Deno.test("handleResultEvent", async (t) => {
-  await t.step(
-    "success では onNonSuccess は呼ばれず setSession が session_id で呼ばれること",
-    async () => {
-      let nonSuccessCalled = false;
-      let capturedSessionId: string | undefined;
-      await handleResultEvent(
-        {
-          type: "result",
-          subtype: "success",
-          result: "ok",
-          session_id: "sess-1",
-          is_error: false,
-        } as unknown as SDKResultMessage,
-        {
-          onNonSuccess: () => {
-            nonSuccessCalled = true;
-          },
-          setSession: (sessionId) => {
-            capturedSessionId = sessionId;
-            return Promise.resolve();
-          },
+describe("handleResultEvent", () => {
+  test("success では onNonSuccess は呼ばれず setSession が session_id で呼ばれること", async () => {
+    let nonSuccessCalled = false;
+    let capturedSessionId: string | undefined;
+    await handleResultEvent(
+      {
+        type: "result",
+        subtype: "success",
+        result: "ok",
+        session_id: "sess-1",
+        is_error: false,
+      } as unknown as SDKResultMessage,
+      {
+        onNonSuccess: () => {
+          nonSuccessCalled = true;
         },
-      );
-      assertEquals(nonSuccessCalled, false);
-      assertEquals(capturedSessionId, "sess-1");
-    },
-  );
+        setSession: (sessionId) => {
+          capturedSessionId = sessionId;
+          return Promise.resolve();
+        },
+      },
+    );
+    assert.deepStrictEqual(nonSuccessCalled, false);
+    assert.deepStrictEqual(capturedSessionId, "sess-1");
+  });
 
-  await t.step("非 success では onNonSuccess が呼ばれること", async () => {
+  test("非 success では onNonSuccess が呼ばれること", async () => {
     let capturedEvent: SDKResultMessage | undefined;
     await handleResultEvent(
       {
@@ -545,10 +500,10 @@ Deno.test("handleResultEvent", async (t) => {
         },
       },
     );
-    assertEquals(capturedEvent?.subtype, "error_max_turns");
+    assert.deepStrictEqual(capturedEvent?.subtype, "error_max_turns");
   });
 
-  await t.step("setSession 未指定でも動くこと", async () => {
+  test("setSession 未指定でも動くこと", async () => {
     let nonSuccessCalled = false;
     await handleResultEvent(
       {
@@ -564,20 +519,18 @@ Deno.test("handleResultEvent", async (t) => {
         },
       },
     );
-    assertEquals(nonSuccessCalled, false);
+    assert.deepStrictEqual(nonSuccessCalled, false);
   });
 });
 
-Deno.test("drainResultEvent", async (t) => {
-  async function* streamOf(
-    events: SDKMessage[],
-  ): AsyncGenerator<SDKMessage> {
+describe("drainResultEvent", () => {
+  async function* streamOf(events: SDKMessage[]): AsyncGenerator<SDKMessage> {
     for (const event of events) {
       yield event;
     }
   }
 
-  await t.step("result が複数あれば最後を返すこと", async () => {
+  test("result が複数あれば最後を返すこと", async () => {
     const first = {
       type: "result",
       subtype: "success",
@@ -597,140 +550,122 @@ Deno.test("drainResultEvent", async (t) => {
       onNonSuccess: () => {},
     });
 
-    assertEquals(
+    assert.deepStrictEqual(
       (resultEvent as unknown as SDKResultMessage | undefined)?.session_id,
       "sess-2",
     );
   });
 
-  await t.step("result が無ければ undefined を返すこと", async () => {
+  test("result が無ければ undefined を返すこと", async () => {
     const resultEvent = await drainResultEvent(
       streamOf([{ type: "system", subtype: "init" } as SDKMessage]),
       { onNonSuccess: () => {} },
     );
-    assertEquals(resultEvent, undefined);
+    assert.deepStrictEqual(resultEvent, undefined);
   });
 });
 
-Deno.test("requireResultText", async (t) => {
-  await t.step(
-    "resultEvent が undefined なら throw すること",
-    () => {
-      assertThrows(
-        () => requireResultText(undefined),
-        Error,
-        "claude stream ended without result event",
-      );
-    },
-  );
+describe("requireResultText", () => {
+  test("resultEvent が undefined なら throw すること", () => {
+    assert.throws(
+      () => requireResultText(undefined),
+      errorWith(Error, "claude stream ended without result event"),
+    );
+  });
 
-  await t.step("success なら本文を返すこと", () => {
-    assertEquals(
-      requireResultText(
-        {
-          type: "result",
-          subtype: "success",
-          result: "応答テキスト",
-          session_id: "sess-1",
-          is_error: false,
-        } as unknown as SDKResultMessage,
-      ),
+  test("success なら本文を返すこと", () => {
+    assert.deepStrictEqual(
+      requireResultText({
+        type: "result",
+        subtype: "success",
+        result: "応答テキスト",
+        session_id: "sess-1",
+        is_error: false,
+      } as unknown as SDKResultMessage),
       "応答テキスト",
     );
   });
 });
 
-Deno.test("extractTopLevelTextDelta", async (t) => {
-  await t.step("トップレベルの text_delta は差分テキストを返すこと", () => {
-    assertEquals(
-      extractTopLevelTextDelta(
-        {
-          type: "stream_event",
-          parent_tool_use_id: null,
-          event: {
-            type: "content_block_delta",
-            index: 0,
-            delta: { type: "text_delta", text: "あ" },
-          },
-        } as unknown as SDKMessage,
-      ),
+describe("extractTopLevelTextDelta", () => {
+  test("トップレベルの text_delta は差分テキストを返すこと", () => {
+    assert.deepStrictEqual(
+      extractTopLevelTextDelta({
+        type: "stream_event",
+        parent_tool_use_id: null,
+        event: {
+          type: "content_block_delta",
+          index: 0,
+          delta: { type: "text_delta", text: "あ" },
+        },
+      } as unknown as SDKMessage),
       "あ",
     );
   });
 
-  await t.step(
-    "サブエージェント (parent_tool_use_id あり) は undefined になること",
-    () => {
-      assertEquals(
-        extractTopLevelTextDelta(
-          {
-            type: "stream_event",
-            parent_tool_use_id: "tool-1",
-            event: {
-              type: "content_block_delta",
-              index: 0,
-              delta: { type: "text_delta", text: "あ" },
-            },
-          } as unknown as SDKMessage,
-        ),
-        undefined,
-      );
-    },
-  );
+  test("サブエージェント (parent_tool_use_id あり) は undefined になること", () => {
+    assert.deepStrictEqual(
+      extractTopLevelTextDelta({
+        type: "stream_event",
+        parent_tool_use_id: "tool-1",
+        event: {
+          type: "content_block_delta",
+          index: 0,
+          delta: { type: "text_delta", text: "あ" },
+        },
+      } as unknown as SDKMessage),
+      undefined,
+    );
+  });
 
-  await t.step("text_delta 以外のイベントは undefined になること", () => {
-    assertEquals(
-      extractTopLevelTextDelta(
-        { type: "result", subtype: "success" } as unknown as SDKMessage,
-      ),
+  test("text_delta 以外のイベントは undefined になること", () => {
+    assert.deepStrictEqual(
+      extractTopLevelTextDelta({
+        type: "result",
+        subtype: "success",
+      } as unknown as SDKMessage),
       undefined,
     );
   });
 });
 
-Deno.test("extractTopLevelThinkingDelta", async (t) => {
-  await t.step("トップレベルの thinking_delta は差分テキストを返すこと", () => {
-    assertEquals(
-      extractTopLevelThinkingDelta(
-        {
-          type: "stream_event",
-          parent_tool_use_id: null,
-          event: {
-            type: "content_block_delta",
-            index: 0,
-            delta: { type: "thinking_delta", thinking: "考え中" },
-          },
-        } as unknown as SDKMessage,
-      ),
+describe("extractTopLevelThinkingDelta", () => {
+  test("トップレベルの thinking_delta は差分テキストを返すこと", () => {
+    assert.deepStrictEqual(
+      extractTopLevelThinkingDelta({
+        type: "stream_event",
+        parent_tool_use_id: null,
+        event: {
+          type: "content_block_delta",
+          index: 0,
+          delta: { type: "thinking_delta", thinking: "考え中" },
+        },
+      } as unknown as SDKMessage),
       "考え中",
     );
   });
 
-  await t.step(
-    "サブエージェント (parent_tool_use_id あり) は undefined になること",
-    () => {
-      assertEquals(
-        extractTopLevelThinkingDelta(
-          {
-            type: "stream_event",
-            parent_tool_use_id: "tool-1",
-            event: {
-              type: "content_block_delta",
-              index: 0,
-              delta: { type: "thinking_delta", thinking: "考え中" },
-            },
-          } as unknown as SDKMessage,
-        ),
-        undefined,
-      );
-    },
-  );
+  test("サブエージェント (parent_tool_use_id あり) は undefined になること", () => {
+    assert.deepStrictEqual(
+      extractTopLevelThinkingDelta({
+        type: "stream_event",
+        parent_tool_use_id: "tool-1",
+        event: {
+          type: "content_block_delta",
+          index: 0,
+          delta: { type: "thinking_delta", thinking: "考え中" },
+        },
+      } as unknown as SDKMessage),
+      undefined,
+    );
+  });
 
-  await t.step("thinking_delta 以外のイベントは undefined になること", () => {
-    assertEquals(
-      extractTopLevelThinkingDelta(
-        { type: "result", subtype: "success" } as unknown as SDKMessage,
-      ),
+  test("thinking_delta 以外のイベントは undefined になること", () => {
+    assert.deepStrictEqual(
+      extractTopLevelThinkingDelta({
+        type: "result",
+        subtype: "success",
+      } as unknown as SDKMessage),
       undefined,
     );
   });

@@ -5,6 +5,14 @@
  * Discord にボタン付きメッセージを送信してユーザーの承認/拒否を待つ。
  */
 
+import type {
+  CanUseTool,
+  PermissionBehavior,
+} from "@anthropic-ai/claude-agent-sdk";
+import type {
+  ModalSubmitInteraction,
+  StringSelectMenuInteraction,
+} from "discord.js";
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -14,24 +22,16 @@ import {
   type GuildTextBasedChannel,
   MessageFlags,
 } from "discord.js";
-import type {
-  CanUseTool,
-  PermissionBehavior,
-} from "@anthropic-ai/claude-agent-sdk";
-import type {
-  ModalSubmitInteraction,
-  StringSelectMenuInteraction,
-} from "discord.js";
-import { addToSettingsAllowList, isInAllowList } from "./settings.ts";
+import { getErrorMessage } from "../errors.ts";
+import { createLogger } from "../logger.ts";
+import { INTERACTION_TIMEOUT_MS } from "./constants.ts";
 import {
   parseQuestions,
   type Question,
   QuestionManager,
   type QuestionResult,
 } from "./question.ts";
-import { INTERACTION_TIMEOUT_MS } from "./constants.ts";
-import { createLogger } from "../logger.ts";
-import { getErrorMessage } from "../errors.ts";
+import { addToSettingsAllowList, isInAllowList } from "./settings.ts";
 
 const log = createLogger("approval");
 
@@ -76,7 +76,7 @@ function defaultChannelResolver(client: Client): ApprovalChannelResolver {
   return {
     async fetchSendable(channelId) {
       const channel = await client.channels.fetch(channelId);
-      if (!channel || !channel.isTextBased()) {
+      if (!channel?.isTextBased()) {
         return null;
       }
       return channel as GuildTextBasedChannel;
@@ -98,6 +98,7 @@ export class ApprovalManager {
   private questions: QuestionManager;
   private channelResolver: ApprovalChannelResolver;
   private timeoutMs: number;
+  private settingsPath: string;
 
   /**
    * @param client - discord.js Client。既定のチャンネル解決 (`channelResolver`
@@ -110,15 +111,16 @@ export class ApprovalManager {
    */
   constructor(
     client: Client,
-    private settingsPath: string,
+    settingsPath: string,
     options?: {
       channelResolver?: ApprovalChannelResolver;
       timeoutMs?: number;
     },
   ) {
+    this.settingsPath = settingsPath;
     this.questions = new QuestionManager(client);
-    this.channelResolver = options?.channelResolver ??
-      defaultChannelResolver(client);
+    this.channelResolver =
+      options?.channelResolver ?? defaultChannelResolver(client);
     this.timeoutMs = options?.timeoutMs ?? INTERACTION_TIMEOUT_MS;
   }
 
@@ -171,9 +173,8 @@ export class ApprovalManager {
 
     const description = (toolInput.description as string) ?? "";
     const inputDump = JSON.stringify(toolInput, null, 2);
-    const truncated = inputDump.length > 1500
-      ? inputDump.slice(0, 1497) + "..."
-      : inputDump;
+    const truncated =
+      inputDump.length > 1500 ? `${inputDump.slice(0, 1497)}...` : inputDump;
 
     await channel.send({
       content: [
@@ -272,11 +273,8 @@ export class ApprovalManager {
     }
 
     const approved = action === "approve" || action === "always";
-    const label = action === "always"
-      ? "Always Allowed"
-      : approved
-      ? "Allowed"
-      : "Denied";
+    const label =
+      action === "always" ? "Always Allowed" : approved ? "Allowed" : "Denied";
 
     pending.resolve({
       decision: approved ? "allow" : "deny",
@@ -284,7 +282,7 @@ export class ApprovalManager {
     });
 
     await interaction.update({
-      content: interaction.message.content + `\n**→ ${label}**`,
+      content: `${interaction.message.content}\n**→ ${label}**`,
       components: [],
     });
 
