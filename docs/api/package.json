@@ -30,7 +30,7 @@
     "@ansanloms/textlint-rule-preset-ansanloms": "github:ansanloms/textlint-rule-preset-ansanloms#0.1.0",
     "@redocly/cli": "2.57.0",
     "@stoplight/elements": "9.0.25",
-    "@types/node": "24.19.1",
+    "@types/node": "26.6.4",
     "cli-table3": "0.6.5",
     "gunshi": "0.37.3",
     "http-server": "14.1.1",
