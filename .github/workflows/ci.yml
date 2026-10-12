@@ -1,4 +1,3 @@
-# DENO_VERSION は Dockerfile の `denoland/deno:bin-*` タグと揃えること。
 name: CI
 
 on:
@@ -10,7 +9,6 @@ permissions:
   contents: read
 
 env:
-  DENO_VERSION: "2.9.7"
   NODE_VERSION: "24"
 
 jobs:
@@ -48,11 +46,12 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: docs/api/package-lock.json
 
-      - name: Setup Deno
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: ${{ env.DENO_VERSION }}
+      - name: Install dependencies
+        run: npm ci
+        working-directory: ./docs/api
 
       - name: Regenerate api/internal-schemas.ts
         run: npm run generate
@@ -66,17 +65,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Setup Deno
-        uses: denoland/setup-deno@v2
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
         with:
-          deno-version: ${{ env.DENO_VERSION }}
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: docs/api/package-lock.json
 
       - name: Install dependencies
-        run: deno install
+        run: npm ci
         working-directory: ./docs/api
 
       - name: Lint
-        run: deno task --cwd ./docs/api lint
-
-      - name: Type check
-        run: deno task --cwd ./docs/api check
+        run: npm run lint
+        working-directory: ./docs/api

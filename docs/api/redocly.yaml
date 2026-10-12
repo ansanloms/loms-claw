@@ -5,7 +5,7 @@ apis:
   loms-claw:
     root: ./api.yaml
 plugins:
-  - "./redocly/plugins/index.ts"
+  - "./redocly/plugins/index.js"
 rules:
   info-license: off
   no-invalid-media-type-examples: off

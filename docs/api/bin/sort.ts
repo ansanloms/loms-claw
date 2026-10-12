@@ -1,8 +1,9 @@
+import { readFile, writeFile } from "node:fs/promises";
 import * as yaml from "yaml";
-import * as path from "@std/path";
+import * as path from "node:path";
 import type { OpenAPIV3_1 } from "openapi-types";
 
-const __dirname = path.dirname(path.fromFileUrl(import.meta.url));
+const __dirname = import.meta.dirname;
 
 const API_DOC_PATH = path.join(__dirname, "./../api.yaml");
 
@@ -10,13 +11,12 @@ const sortKeys = <T>(
   source: Record<string, T>,
   comparator?: (a: string, b: string) => number,
 ): Record<string, T> =>
-  (comparator
-    ? Object.keys(source).sort(comparator)
-    : Object.keys(source).sort())
-    .reduce<Record<string, T>>((acc, key) => {
-      acc[key] = source[key];
-      return acc;
-    }, {});
+  (comparator ? Object.keys(source).sort(comparator) : Object.keys(source).sort()).reduce<
+    Record<string, T>
+  >((acc, key) => {
+    acc[key] = source[key];
+    return acc;
+  }, {});
 
 const schemasComparator = (a: string, b: string): number => {
   const weight = (name: string): string => {
@@ -35,36 +35,26 @@ const schemasComparator = (a: string, b: string): number => {
 };
 
 const main = async () => {
-  const apiDoc = yaml.parse(
-    await Deno.readTextFile(API_DOC_PATH),
-  ) as OpenAPIV3_1.Document;
+  const apiDoc = yaml.parse(await readFile(API_DOC_PATH, "utf8")) as OpenAPIV3_1.Document;
 
   if (apiDoc.paths) {
     apiDoc.paths = sortKeys(apiDoc.paths);
   }
   if (apiDoc.components?.schemas) {
-    apiDoc.components.schemas = sortKeys(
-      apiDoc.components.schemas,
-      schemasComparator,
-    );
+    apiDoc.components.schemas = sortKeys(apiDoc.components.schemas, schemasComparator);
   }
   if (apiDoc.components?.securitySchemes) {
-    apiDoc.components.securitySchemes = sortKeys(
-      apiDoc.components.securitySchemes,
-    );
+    apiDoc.components.securitySchemes = sortKeys(apiDoc.components.securitySchemes);
   }
 
-  await Deno.writeTextFile(
-    API_DOC_PATH,
-    yaml.stringify(apiDoc, { lineWidth: -1 }),
-  );
+  await writeFile(API_DOC_PATH, yaml.stringify(apiDoc, { lineWidth: -1 }));
 };
 
 main()
   .then(() => {
-    Deno.exit(0);
+    process.exit(0);
   })
   .catch((err) => {
     console.error(err);
-    Deno.exit(1);
+    process.exit(1);
   });

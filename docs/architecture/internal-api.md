@@ -104,20 +104,21 @@ flowchart LR
 ```
 
 1. `docs/api/` に OpenAPI 3.1 を分割 YAML (`api.yaml` + `paths/` + `components/schemas/` + `examples/`) で書く。
-2. ルートの `npm run generate` が `deno task --cwd ./docs/api bundle:json && deno task --cwd ./docs/api emit-server-schemas ../../api/internal-schemas.ts` を実行する (docs/api は Deno のままのため、`generate` だけは Deno が必要)。`bundle:json` は redocly で `./dist/api.json` に bundle し、`emit-server-schemas` は `bin/emit-server-schemas.ts` でその `components.schemas` を抽出して TypeScript モジュールに書き出す。
+2. ルートの `npm run generate` が `npm --prefix docs/api run bundle:json && npm --prefix docs/api run emit-server-schemas -- ../../api/internal-schemas.ts` を実行する (npm は `--prefix` 先を cwd にしてスクリプトを走らせるため、出力パスは docs/api 起点。docs/api は独立した npm パッケージなので、事前に `npm --prefix docs/api ci` で依存を入れておく)。`bundle:json` は redocly で `./dist/api.json` に bundle し、`emit-server-schemas` は `bin/emit-server-schemas.ts` でその `components.schemas` を抽出して TypeScript モジュールに書き出す。
 3. `api/internal-schemas.ts` は `export const internalSchemas = { ... } as const` の自動生成物。`.oxlintrc.json` / `.oxfmtrc.json` の対象外 (`tsconfig.json` では型検査に含まれる)。生成物はコミットされているため、実行時に `docs/api/dist/` は不要。
 4. `api/validate.ts` は `@cfworker/json-schema` の `Validator` をスキーマ名ごとに遅延生成して `Map` にキャッシュする (draft は `"2020-12"`)。`matchesSchema(name, value)` が真偽を返し、`schemaErrorOf(name, value)` が先頭エラーを `<instanceLocation>: <error>` の形に整形する (API の 400 応答の文言)。
 5. 各ルートは `FromSchema<typeof internalSchemas["RequestXxx"]>` を返す型ガード (`isCronRunBody`/`isPatchSettingsBody`) をローカルに定義し、内部で `matchesSchema` を呼ぶ。ジェネリックな `FromSchema` は型の深さ爆発を招くため `validate.ts` 側では型ガードを提供しない、という分担 (`api/validate.ts` 冒頭コメント)。
 
 型・必須・配列要素・数値範囲・余剰フィールド拒否といった「構造」はこのスキーマ検証が担い、trim や既定値補完のような OpenAPI に表現できない正規化は各ルート側に残す。
 
-生成の前提: `docs/api/dist/` は `docs/api/.gitignore` で除外されているため、clean clone で `emit-server-schemas` 単体を叩いても入力が無い。`generate:internal` は `bundle:json` を先に実行するので、通常はこのタスク経由で呼べばよい。
+生成の前提: `docs/api/dist/` は `docs/api/.gitignore` で除外されているため、clean clone で `emit-server-schemas` 単体を叩いても入力が無い。`generate` は `bundle:json` を先に実行するので、通常はこのスクリプト経由で呼べばよい。
 
 ## docs/api の位置付け
 
-- テンプレート [ansanloms/openapi-template](https://github.com/ansanloms/openapi-template) 由来の OpenAPI プロジェクト。独自の `deno.json`/`deno.lock` を持ち、ルートの `.oxlintrc.json`/`.oxfmtrc.json`/`tsconfig.json` の対象外で、ルートの lint/check/test には含まれない。`.github/dependabot.yml` に `/docs/api` を directory とする別エントリがあり、ルートとは独立に依存更新が追従される (理由はそのファイルのコメントに書かれている)。
+- テンプレート [ansanloms/openapi-template](https://github.com/ansanloms/openapi-template) 由来の OpenAPI プロジェクト。独自の `package.json`/`package-lock.json` (Node 24、`.node-version`) を持ち、ルートの `.oxlintrc.json`/`.oxfmtrc.json`/`tsconfig.json` の対象外で、ルートの lint/check/test には含まれない。`.github/dependabot.yml` に `/docs/api` を directory とする別エントリがあり、ルートとは独立に依存更新が追従される (理由はそのファイルのコメントに書かれている)。git 依存の自前 3 パッケージ (`@ansanloms/*`) は dependabot の更新 PR が来なければ手動で上げる。
+- docs/api はルートとは独立した npm パッケージで、TypeScript のバージョンや oxlint/oxfmt の設定は openapi-template に合わせて持つ (ルートの設定には寄せない。次回のテンプレート追従を楽にするため)。`docs/api/.oxlintrc.json` の `correctness: error` だけはテンプレートからの意図的な差分。
 - `api.yaml` の `info.description` は `$ref: ./README.md` で、接続条件 (127.0.0.1 固定・`claude.apiPort`・認証なし) とエラー応答の形は [docs/api/README.md](../api/README.md) が正。`servers` の URL は既定ポート 3000 を使った例。
-- `redocly.yaml` は `recommended-strict` を継承し、`info-license`/`operation-2xx-response`/`operation-4xx-response`/`no-invalid-media-type-examples`/`security-defined` を off にしている (`security-defined` は loopback 専用で認証を持たないため)。`redocly/plugins/index.ts` は inline-examples plugin のローカルラッパーで、redocly の plugins ローダがローカルファイルパスしか解決できないため import map 経由で外部ソースに解決する。
+- `redocly.yaml` は `recommended-strict` を継承し、`info-license`/`operation-2xx-response`/`operation-4xx-response`/`no-invalid-media-type-examples`/`security-defined` を off にしている (`security-defined` は loopback 専用で認証を持たないため)。`redocly/plugins/index.js` は inline-examples plugin のローカルラッパーで、redocly の plugins ローダがローカルファイルパスしか解決できないため、`package.json` の git 依存 (`@ansanloms/redocly-plugin-inline-examples`) を re-export する。
 - `bin/` のスクリプト:
 
   | スクリプト               | 役割                                                                                                                                  |
@@ -128,7 +129,7 @@ flowchart LR
   | `search.ts`              | 指定 schema がどのエンドポイントから参照されているかを `$ref` を辿って表示する                                                        |
   | `sort.ts`                | `api.yaml` の `paths` と `components.schemas` のキーを並べ替えて書き戻す (schemas は Enum → Request → Response → その他の順)          |
 
-- `deno task` (docs/api 側): `lint` は `lint:deno`/`lint:textlint`/`lint:redocly` の一括、`fix` は `sort` → `fix:*` → `lint`、`build` は `dist/` のクリア → YAML bundle → `build.ts`、`dev`/`start` は `http-server` で `./`/`./dist` を配信する。
+- `npm run` (docs/api 側): `lint` は `lint:check` (tsc)/`lint:oxc` (oxlint + oxfmt)/`lint:textlint`/`lint:redocly` の一括、`fix` は `sort` → `fix:textlint` → `fix:oxc` → `lint`、`build` は `dist/` のクリア → YAML bundle → `build.ts`、`dev`/`start` は `http-server` で `./`/`./dist` を配信する。
 
 ## テスト
 
