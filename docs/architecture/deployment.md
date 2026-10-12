@@ -33,7 +33,7 @@ flowchart LR
 
 `Dockerfile` はリポジトリルートに置く。
 
-- ベースイメージは `docker.io/node:24-bookworm-slim` (Debian ベースの glibc イメージ。既定ユーザは root)。
+- ベースイメージは `docker.io/node:26-bookworm-slim` (Debian ベースの glibc イメージ。既定ユーザは root)。
 - `COPY --from=docker.io/denoland/deno:bin-2.9.7 /deno /usr/local/bin/deno` で Deno バイナリを同梱する。理由: workspace の skill / cron (`google-health`, `mountain-weather`, `find-docs`) が Deno を使う。`docs/api` は `.dockerignore` でイメージに入らず、同梱の理由ではない。skill が Deno を離れたら外す ([#190](https://github.com/ansanloms/loms-claw/issues/190))。
 - `ENV CLAUDE_CONFIG_DIR=/data/home`: Claude Code の設定・認証情報の置き場所を既定の `~/.claude` から bind mount 先へ置き換える。
 - `ENV LOMS_CLAW_CONFIG=/data/config.json`: `config.ts` の `loadConfig()` が読む設定ファイルのパス。未設定時の既定は `./data/config.json`。
@@ -250,8 +250,8 @@ KV ファイルのパスは `data/config.json` の `storePath` の値を使う (
 
 ### CI
 
-`.github/workflows/ci.yml` が `push` (main)/`pull_request` で走る CI。`env` は `NODE_VERSION: "24"`。次の 3 job を並列で実行する。
+`.github/workflows/ci.yml` が `push` (main)/`pull_request` で走る CI。`env` は `NODE_VERSION: "26"`。次の 3 job を並列で実行する。
 
-- `root`: Node 24 (`actions/setup-node`、`cache: npm`) で `npm ci` → `npm run check` → `npm run lint` → `npm test`。
-- `generated`: Node 24 (`cache: npm`、`cache-dependency-path: docs/api/package-lock.json`) で `docs/api` の `npm ci` → ルートの `npm run generate` を実行し、`api/internal-schemas.ts` の差分を `git diff --exit-code` で検査する。`generate` はルートの依存を使わず docs/api の依存だけを使うので、ルートの `npm ci` は不要。
-- `docs-api`: Node 24 (`cache` は docs/api の lock) で `docs/api` の `npm ci` → `npm run lint` (check / oxc / textlint / redocly を一括) を実行する。
+- `root`: Node 26 (`actions/setup-node`、`cache: npm`) で `npm ci` → `npm run check` → `npm run lint` → `npm test`。
+- `generated`: Node 26 (`cache: npm`、`cache-dependency-path: docs/api/package-lock.json`) で `docs/api` の `npm ci` → ルートの `npm run generate` を実行し、`api/internal-schemas.ts` の差分を `git diff --exit-code` で検査する。`generate` はルートの依存を使わず docs/api の依存だけを使うので、ルートの `npm ci` は不要。
+- `docs-api`: Node 26 (`cache` は docs/api の lock) で `docs/api` の `npm ci` → `npm run lint` (check / oxc / textlint / redocly を一括) を実行する。

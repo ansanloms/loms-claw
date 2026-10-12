@@ -19,7 +19,7 @@ Discord の単一ギルド・単一ユーザ専用のパーソナル AI エー�
 
 | 技術                               | 用途                                                                                                                                      |
 | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Node.js 24                         | ランタイム。TypeScript は型除去で直接実行する (`node main.ts`)                                                                            |
+| Node.js 26                         | ランタイム。TypeScript は型除去で直接実行する (`node main.ts`)                                                                            |
 | discord.js v14                     | Discord Gateway への接続、メッセージ受信、ボタン / select menu / Modal、スラッシュコマンド登録                                            |
 | `@anthropic-ai/claude-agent-sdk`   | `query()` による Claude 呼び出し。同梱の Claude Code バイナリを SDK が spawn する                                                         |
 | Hono (`hono`, `@hono/node-server`) | 内部 HTTP API (`127.0.0.1:{apiPort}`)                                                                                                     |
@@ -215,10 +215,10 @@ graph TD
 | `.oxlintrc.json`      | oxlint 設定 (`lint` / `fix` タスク)。`curly` を error にし、`data/`, `docs/api`, `api/internal-schemas.ts`, `.claude/` を除外                                                                                                                          |
 | `.oxfmtrc.json`       | oxfmt 設定 (`lint` / `fix` タスク)。`data/`, `docs/api`, `api/internal-schemas.ts`, `.claude/`, `.github/workflows/`, YAML 全般を除外                                                                                                                  |
 | `scripts/`            | 旧 Deno KV から SQLite へのデータ移行スクリプト (`dump-kv.ts` は Deno 専用、`import-kv.ts` は Node)。手順は [deployment.md](deployment.md)                                                                                                             |
-| `Dockerfile`          | `node:24-bookworm-slim` ベースで、`/usr/local/bin/deno` に Deno を同梱 (workspace の skill / cron 用)。`CLAUDE_CONFIG_DIR` / `LOMS_CLAW_CONFIG` を `ENV` で宣言。SDK 同梱 Claude Code を `/usr/local/bin/claude` に symlink。`WORKDIR /data/workspace` |
+| `Dockerfile`          | `node:26-bookworm-slim` ベースで、`/usr/local/bin/deno` に Deno を同梱 (workspace の skill / cron 用)。`CLAUDE_CONFIG_DIR` / `LOMS_CLAW_CONFIG` を `ENV` で宣言。SDK 同梱 Claude Code を `/usr/local/bin/claude` に symlink。`WORKDIR /data/workspace` |
 | `compose.yaml`        | 本番サービス定義。`./data` を `/data` に bind mount (マウントはこの 1 つ)。`TZ` を `.env` から渡す                                                                                                                                                     |
 | `.devcontainer/`      | 開発コンテナ定義。`compose.yaml` にソースの `/app` bind mount を重ねる                                                                                                                                                                                 |
-| `.github/`            | `dependabot.yml` (npm はルートと `docs/api` の 2 エントリ、加えて docker / github-actions)、`workflows/ci.yml` (Node 24 の `root` / `generated` / `docs-api`)、`workflows/claude.yml` (issue / PR コメントの `@claude` で起動する Claude Code Action)  |
+| `.github/`            | `dependabot.yml` (npm はルートと `docs/api` の 2 エントリ、加えて docker / github-actions)、`workflows/ci.yml` (Node 26 の `root` / `generated` / `docs-api`)、`workflows/claude.yml` (issue / PR コメントの `@claude` で起動する Claude Code Action)  |
 | `.claude/rules/pr.md` | PR 作成前の検証チェーン (`npm run fix && npm run check && npm run lint && npm test`)                                                                                                                                                                   |
 | `.worktreeinclude`    | worktree 作成時にメイン worktree から複製するローカル資産 (`.env`, `data/config.json`, `data/home/`, `data/workspace/`)                                                                                                                                |
 | `.env.example`        | docker compose が host 側で読む変数 (`TZ` のみ)                                                                                                                                                                                                        |

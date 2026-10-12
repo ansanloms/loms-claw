@@ -13,7 +13,7 @@ Discord + Claude Agent SDK のパーソナル AI エージェント。単一ギ�
 
 ## 技術スタック
 
-- Node.js 24（TypeScript は型除去で直接実行。`Temporal` は `@js-temporal/polyfill` を各ファイルで import する。Node が組み込みで提供したら外す）
+- Node.js 26（TypeScript は型除去で直接実行。`Temporal` は `@js-temporal/polyfill` を各ファイルで import する。Node が組み込みで提供したら外す）
 - discord.js v14
 - Claude Agent SDK (`@anthropic-ai/claude-agent-sdk` の `query()`)
 - Hono + `@hono/node-server`（内部 HTTP API）

@@ -1,6 +1,6 @@
 # loms-claw
 
-Discord + Claude Agent SDK のパーソナル AI エージェント。単一ギルド・単一ユーザ専用の bot として Discord のメッセージや定期実行 (cron) を受け、Claude Agent SDK の `query()` で SDK 同梱の Claude Code バイナリをエージェントワークスペース上で動かし、結果を Discord に返す。ランタイムは Node.js 24、Discord 接続は discord.js v14。
+Discord + Claude Agent SDK のパーソナル AI エージェント。単一ギルド・単一ユーザ専用の bot として Discord のメッセージや定期実行 (cron) を受け、Claude Agent SDK の `query()` で SDK 同梱の Claude Code バイナリをエージェントワークスペース上で動かし、結果を Discord に返す。ランタイムは Node.js 26、Discord 接続は discord.js v14。
 
 ## 必要なもの
 
