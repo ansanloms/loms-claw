@@ -2,7 +2,7 @@ import { describe, test } from "node:test";
 import { mkdtemp, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { assertEquals } from "@std/assert";
+import assert from "node:assert/strict";
 import type { GuildTextBasedChannel } from "discord.js";
 import {
   appendImageReferences,
@@ -16,12 +16,12 @@ import {
 
 describe("splitMessage", () => {
   test("短いテキストは 1 チャンクで返すこと", () => {
-    assertEquals(splitMessage("hello"), ["hello"]);
+    assert.deepStrictEqual(splitMessage("hello"), ["hello"]);
   });
 
   test("制限値ちょうどのテキストは 1 チャンクで返すこと", () => {
     const text = "a".repeat(2000);
-    assertEquals(splitMessage(text), [text]);
+    assert.deepStrictEqual(splitMessage(text), [text]);
   });
 
   test("改行位置で分割すること", () => {
@@ -29,67 +29,67 @@ describe("splitMessage", () => {
     const line2 = "b".repeat(600);
     const text = `${line1}\n${line2}`;
     const chunks = splitMessage(text);
-    assertEquals(chunks.length, 2);
-    assertEquals(chunks[0], line1);
-    assertEquals(chunks[1], line2);
+    assert.deepStrictEqual(chunks.length, 2);
+    assert.deepStrictEqual(chunks[0], line1);
+    assert.deepStrictEqual(chunks[1], line2);
   });
 
   test("後半に改行がない場合は強制分割すること", () => {
     const text = "a".repeat(3000);
     const chunks = splitMessage(text);
-    assertEquals(chunks.length, 2);
-    assertEquals(chunks[0].length, 2000);
-    assertEquals(chunks[1].length, 1000);
+    assert.deepStrictEqual(chunks.length, 2);
+    assert.deepStrictEqual(chunks[0].length, 2000);
+    assert.deepStrictEqual(chunks[1].length, 1000);
   });
 
   test("カスタム制限値で分割できること", () => {
     const chunks = splitMessage("abcdef", 3);
-    assertEquals(chunks, ["abc", "def"]);
+    assert.deepStrictEqual(chunks, ["abc", "def"]);
   });
 
   test("空文字列は空配列を返すこと", () => {
-    assertEquals(splitMessage(""), []);
+    assert.deepStrictEqual(splitMessage(""), []);
   });
 
   test("非常に長いテキストは複数チャンクに分割すること", () => {
     const text = "a".repeat(5000);
     const chunks = splitMessage(text);
-    assertEquals(chunks.length, 3);
-    assertEquals(chunks[0].length, 2000);
-    assertEquals(chunks[1].length, 2000);
-    assertEquals(chunks[2].length, 1000);
+    assert.deepStrictEqual(chunks.length, 3);
+    assert.deepStrictEqual(chunks[0].length, 2000);
+    assert.deepStrictEqual(chunks[1].length, 2000);
+    assert.deepStrictEqual(chunks[2].length, 1000);
   });
 
   test("後半の改行位置で分割すること", () => {
     const text = "a".repeat(1200) + "\n" + "b".repeat(900);
     const chunks = splitMessage(text);
-    assertEquals(chunks.length, 2);
-    assertEquals(chunks[0], "a".repeat(1200));
-    assertEquals(chunks[1], "b".repeat(900));
+    assert.deepStrictEqual(chunks.length, 2);
+    assert.deepStrictEqual(chunks[0], "a".repeat(1200));
+    assert.deepStrictEqual(chunks[1], "b".repeat(900));
   });
 
   test("前半の改行は無視して強制分割すること", () => {
     const text = "a".repeat(100) + "\n" + "b".repeat(2500);
     const chunks = splitMessage(text);
-    assertEquals(chunks[0].length, 2000);
+    assert.deepStrictEqual(chunks[0].length, 2000);
   });
 
   test("制限値 +1 文字のテキストは 2 チャンクに分割すること", () => {
     const text = "a".repeat(2001);
     const chunks = splitMessage(text);
-    assertEquals(chunks.length, 2);
-    assertEquals(chunks[0].length, 2000);
-    assertEquals(chunks[1].length, 1);
+    assert.deepStrictEqual(chunks.length, 2);
+    assert.deepStrictEqual(chunks[0].length, 2000);
+    assert.deepStrictEqual(chunks[1].length, 1);
   });
 
   test("コードフェンスをまたぐ場合は境界を考慮せず改行位置で分割すること（既存仕様）", () => {
     const before = "a".repeat(1990);
     const text = `${before}\n\`\`\`\n${"b".repeat(500)}\n\`\`\``;
     const chunks = splitMessage(text);
-    assertEquals(chunks.length, 2);
+    assert.deepStrictEqual(chunks.length, 2);
     // 改行位置優先のため、コードフェンスの開始行の直後で分割される
-    assertEquals(chunks[0], `${before}\n\`\`\``);
-    assertEquals(chunks[1], `${"b".repeat(500)}\n\`\`\``);
+    assert.deepStrictEqual(chunks[0], `${before}\n\`\`\``);
+    assert.deepStrictEqual(chunks[1], `${"b".repeat(500)}\n\`\`\``);
   });
 });
 
@@ -109,7 +109,7 @@ describe("keepTyping", () => {
       controller.signal,
     );
 
-    assertEquals(typingCount, 1);
+    assert.deepStrictEqual(typingCount, 1);
     controller.abort();
   });
 
@@ -129,7 +129,7 @@ describe("keepTyping", () => {
       controller.signal,
     );
 
-    assertEquals(typingCount, 0);
+    assert.deepStrictEqual(typingCount, 0);
   });
 });
 
@@ -163,9 +163,9 @@ describe("createProgressReporter", () => {
 
     await report("Bash", 5);
 
-    assertEquals(calls.length, 1);
-    assertEquals(calls[0].method, "send");
-    assertEquals(calls[0].text, "`Bash` 実行中... (5s)");
+    assert.deepStrictEqual(calls.length, 1);
+    assert.deepStrictEqual(calls[0].method, "send");
+    assert.deepStrictEqual(calls[0].text, "`Bash` 実行中... (5s)");
 
     await cleanup();
   });
@@ -180,10 +180,10 @@ describe("createProgressReporter", () => {
     fakeNow += 4000;
     await report("Bash", 5);
 
-    assertEquals(calls.length, 2);
-    assertEquals(calls[0].method, "send");
-    assertEquals(calls[1].method, "edit");
-    assertEquals(calls[1].text, "`Bash` 実行中... (5s)");
+    assert.deepStrictEqual(calls.length, 2);
+    assert.deepStrictEqual(calls[0].method, "send");
+    assert.deepStrictEqual(calls[1].method, "edit");
+    assert.deepStrictEqual(calls[1].text, "`Bash` 実行中... (5s)");
 
     await cleanup();
   });
@@ -196,7 +196,7 @@ describe("createProgressReporter", () => {
     await report("Bash", 2);
     await report("Bash", 3);
 
-    assertEquals(calls.length, 1);
+    assert.deepStrictEqual(calls.length, 1);
 
     await cleanup();
   });
@@ -208,7 +208,7 @@ describe("createProgressReporter", () => {
     await report("Read", 3);
     await cleanup();
 
-    assertEquals(calls[calls.length - 1].method, "delete");
+    assert.deepStrictEqual(calls[calls.length - 1].method, "delete");
   });
 
   test("report 未呼び出しで cleanup しても delete されないこと", async () => {
@@ -217,13 +217,13 @@ describe("createProgressReporter", () => {
 
     await cleanup();
 
-    assertEquals(calls.length, 0);
+    assert.deepStrictEqual(calls.length, 0);
   });
 });
 
 describe("appendImageReferences", () => {
   test("画像がない場合はプロンプトがそのまま返ること", () => {
-    assertEquals(appendImageReferences("hello", []), "hello");
+    assert.deepStrictEqual(appendImageReferences("hello", []), "hello");
   });
 
   test("単一画像の参照が付加されること", () => {
@@ -231,7 +231,7 @@ describe("appendImageReferences", () => {
       { path: "/tmp/test/a.jpg", originalName: "photo.jpg" },
     ];
     const result = appendImageReferences("describe this", images);
-    assertEquals(result, "describe this\n\n@/tmp/test/a.jpg");
+    assert.deepStrictEqual(result, "describe this\n\n@/tmp/test/a.jpg");
   });
 
   test("複数画像の参照がスペース区切りで付加されること", () => {
@@ -240,7 +240,10 @@ describe("appendImageReferences", () => {
       { path: "/tmp/test/b.png", originalName: "b.png" },
     ];
     const result = appendImageReferences("what are these", images);
-    assertEquals(result, "what are these\n\n@/tmp/test/a.jpg @/tmp/test/b.png");
+    assert.deepStrictEqual(
+      result,
+      "what are these\n\n@/tmp/test/a.jpg @/tmp/test/b.png",
+    );
   });
 });
 
@@ -255,13 +258,7 @@ describe("cleanupImageFiles", () => {
     ];
     await cleanupImageFiles(images);
 
-    let exists = true;
-    try {
-      await stat(dir);
-    } catch {
-      exists = false;
-    }
-    assertEquals(exists, false);
+    await assert.rejects(stat(dir), { code: "ENOENT" });
   });
 
   test("既に削除済みでもエラーにならないこと", async () => {
@@ -274,32 +271,32 @@ describe("cleanupImageFiles", () => {
 
 describe("stripBotMentions", () => {
   test("表示名のメンションが除去されること", () => {
-    assertEquals(
+    assert.deepStrictEqual(
       stripBotMentions("@loms-claw 天気教えて", ["loms-claw"]),
       "天気教えて",
     );
   });
 
   test("接頭辞関係にある名前でも残骸が残らないこと", () => {
-    assertEquals(
+    assert.deepStrictEqual(
       stripBotMentions("@loms-claw 天気教えて", ["loms", "loms-claw"]),
       "天気教えて",
     );
-    assertEquals(
+    assert.deepStrictEqual(
       stripBotMentions("@loms-claw 天気教えて", ["loms-claw", "loms"]),
       "天気教えて",
     );
   });
 
   test("複数箇所のメンションがすべて除去されること", () => {
-    assertEquals(
+    assert.deepStrictEqual(
       stripBotMentions("@loms 天気 @loms 教えて", ["loms"]),
       "天気  教えて",
     );
   });
 
   test("名前が無い・空文字の場合は trim のみ行われること", () => {
-    assertEquals(stripBotMentions("  本文  ", []), "本文");
-    assertEquals(stripBotMentions("  本文  ", [""]), "本文");
+    assert.deepStrictEqual(stripBotMentions("  本文  ", []), "本文");
+    assert.deepStrictEqual(stripBotMentions("  本文  ", [""]), "本文");
   });
 });

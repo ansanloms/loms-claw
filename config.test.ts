@@ -2,7 +2,8 @@ import { describe, test } from "node:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { assertEquals, assertStringIncludes, assertThrows } from "@std/assert";
+import assert from "node:assert/strict";
+import { errorWith } from "./test-helpers.ts";
 import { loadConfig } from "./config.ts";
 
 const ENV_KEY = "LOMS_CLAW_CONFIG";
@@ -52,33 +53,33 @@ describe("loadConfig", () => {
   test("必須フィールドのみでデフォルト値が補完されること", () => {
     withTempConfig(requiredFields, () => {
       const config = loadConfig();
-      assertEquals(config.discord.token, "test-token");
-      assertEquals(config.discord.guildId, "test-guild");
-      assertEquals(config.discord.userId, "test-user");
-      assertEquals(config.discord.activeChannelIds, []);
-      assertEquals(config.storePath, ".claude/loms-claw.sqlite");
-      assertEquals(config.claude.defaults.model, undefined);
-      assertEquals(config.claude.defaults.effort, undefined);
-      assertEquals(config.claude.maxTurns, 10);
-      assertEquals(config.claude.timeout, 300000);
-      assertEquals(config.claude.apiPort, 3000);
-      assertEquals(config.claude.defaults.showThinking, false);
-      assertEquals(config.log.level, "INFO");
-      assertEquals(config.log.bufferSize, 1000);
+      assert.deepStrictEqual(config.discord.token, "test-token");
+      assert.deepStrictEqual(config.discord.guildId, "test-guild");
+      assert.deepStrictEqual(config.discord.userId, "test-user");
+      assert.deepStrictEqual(config.discord.activeChannelIds, []);
+      assert.deepStrictEqual(config.storePath, ".claude/loms-claw.sqlite");
+      assert.deepStrictEqual(config.claude.defaults.model, undefined);
+      assert.deepStrictEqual(config.claude.defaults.effort, undefined);
+      assert.deepStrictEqual(config.claude.maxTurns, 10);
+      assert.deepStrictEqual(config.claude.timeout, 300000);
+      assert.deepStrictEqual(config.claude.apiPort, 3000);
+      assert.deepStrictEqual(config.claude.defaults.showThinking, false);
+      assert.deepStrictEqual(config.log.level, "INFO");
+      assert.deepStrictEqual(config.log.bufferSize, 1000);
     });
   });
 
   test("claude.cwd が process.cwd() で実行時注入されること", () => {
     withTempConfig(requiredFields, () => {
       const config = loadConfig();
-      assertEquals(config.claude.cwd, process.cwd());
+      assert.deepStrictEqual(config.claude.cwd, process.cwd());
     });
   });
 
   test("discord.token 未設定でエラーになること", () => {
     const { token: _omit, ...restDiscord } = requiredFields.discord;
     withTempConfig({ discord: restDiscord }, () => {
-      assertThrows(() => loadConfig(), Error, "token");
+      assert.throws(() => loadConfig(), errorWith(Error, "token"));
     });
   });
 
@@ -86,7 +87,7 @@ describe("loadConfig", () => {
     withTempConfig(
       { discord: { ...requiredFields.discord, guildId: "" } },
       () => {
-        assertThrows(() => loadConfig(), Error, "guildId");
+        assert.throws(() => loadConfig(), errorWith(Error, "guildId"));
       },
     );
   });
@@ -95,7 +96,7 @@ describe("loadConfig", () => {
     withTempConfig(
       { discord: { ...requiredFields.discord, token: "" } },
       () => {
-        assertThrows(() => loadConfig(), Error, "token");
+        assert.throws(() => loadConfig(), errorWith(Error, "token"));
       },
     );
   });
@@ -103,7 +104,7 @@ describe("loadConfig", () => {
   test("discord.userId 未設定でエラーになること", () => {
     const { userId: _omit, ...rest } = requiredFields.discord;
     withTempConfig({ discord: rest }, () => {
-      assertThrows(() => loadConfig(), Error, "userId");
+      assert.throws(() => loadConfig(), errorWith(Error, "userId"));
     });
   });
 
@@ -111,7 +112,7 @@ describe("loadConfig", () => {
     withTempConfig(
       { ...requiredFields, log: { level: "INFO", bufferSize: 0 } },
       () => {
-        assertThrows(() => loadConfig(), Error, "bufferSize");
+        assert.throws(() => loadConfig(), errorWith(Error, "bufferSize"));
       },
     );
   });
@@ -120,7 +121,7 @@ describe("loadConfig", () => {
     withTempConfig(
       { ...requiredFields, log: { level: "INFO", bufferSize: 10001 } },
       () => {
-        assertThrows(() => loadConfig(), Error, "bufferSize");
+        assert.throws(() => loadConfig(), errorWith(Error, "bufferSize"));
       },
     );
   });
@@ -129,21 +130,20 @@ describe("loadConfig", () => {
     withTempConfig(
       { ...requiredFields, claude: { defaults: { effort: "invalid" } } },
       () => {
-        assertThrows(() => loadConfig(), Error, "effort");
+        assert.throws(() => loadConfig(), errorWith(Error, "effort"));
       },
     );
   });
 
   test("maxTurns が string のとき型不一致でエラーになること", () => {
     withTempConfig({ ...requiredFields, claude: { maxTurns: "ten" } }, () => {
-      assertThrows(() => loadConfig(), Error, "maxTurns");
+      assert.throws(() => loadConfig(), errorWith(Error, "maxTurns"));
     });
   });
 
   test("未知プロパティ (additionalProperties) を拒否すること", () => {
     withTempConfig({ ...requiredFields, UNKNOWN_KEY: "nope" }, () => {
-      const err = assertThrows(() => loadConfig(), Error);
-      assertStringIncludes(err.message, "UNKNOWN_KEY");
+      assert.throws(() => loadConfig(), errorWith(Error, "UNKNOWN_KEY"));
     });
   });
 
@@ -151,7 +151,7 @@ describe("loadConfig", () => {
     withTempConfig(
       { ...requiredFields, log: { level: "VERBOSE", bufferSize: 1000 } },
       () => {
-        assertThrows(() => loadConfig(), Error, "level");
+        assert.throws(() => loadConfig(), errorWith(Error, "level"));
       },
     );
   });
@@ -166,7 +166,10 @@ describe("loadConfig", () => {
       },
       () => {
         const config = loadConfig();
-        assertEquals(config.discord.activeChannelIds, ["ch-1", "ch-2"]);
+        assert.deepStrictEqual(config.discord.activeChannelIds, [
+          "ch-1",
+          "ch-2",
+        ]);
       },
     );
   });
@@ -179,8 +182,8 @@ describe("loadConfig", () => {
       },
       () => {
         const config = loadConfig();
-        assertEquals(config.claude.defaults.model, "opus");
-        assertEquals(config.claude.defaults.effort, "high");
+        assert.deepStrictEqual(config.claude.defaults.model, "opus");
+        assert.deepStrictEqual(config.claude.defaults.effort, "high");
       },
     );
   });
@@ -197,9 +200,9 @@ describe("loadConfig", () => {
       },
       () => {
         const config = loadConfig();
-        assertEquals(config.claude.maxTurns, 5);
-        assertEquals(config.claude.timeout, 60000);
-        assertEquals(config.claude.apiPort, 4000);
+        assert.deepStrictEqual(config.claude.maxTurns, 5);
+        assert.deepStrictEqual(config.claude.timeout, 60000);
+        assert.deepStrictEqual(config.claude.apiPort, 4000);
       },
     );
   });
@@ -217,8 +220,7 @@ describe("loadConfig", () => {
         },
       },
       () => {
-        const err = assertThrows(() => loadConfig(), Error);
-        assertStringIncludes(err.message, "verbose");
+        assert.throws(() => loadConfig(), errorWith(Error, "verbose"));
       },
     );
   });
@@ -233,7 +235,7 @@ describe("loadConfig", () => {
       );
       process.env[ENV_KEY] = path;
       const config = loadConfig();
-      assertEquals(config.storePath, "/tmp/custom.kv");
+      assert.deepStrictEqual(config.storePath, "/tmp/custom.kv");
     } finally {
       if (original === undefined) {
         delete process.env[ENV_KEY];
@@ -252,7 +254,10 @@ describe("loadConfig", () => {
     const original = process.env[ENV_KEY];
     process.env[ENV_KEY] = "/tmp/__does-not-exist__.json";
     try {
-      assertThrows(() => loadConfig(), Error, "failed to read config file");
+      assert.throws(
+        () => loadConfig(),
+        errorWith(Error, "failed to read config file"),
+      );
     } finally {
       if (original === undefined) {
         delete process.env[ENV_KEY];
@@ -268,7 +273,10 @@ describe("loadConfig", () => {
     try {
       writeFileSync(path, "{ not valid json");
       process.env[ENV_KEY] = path;
-      assertThrows(() => loadConfig(), Error, "failed to parse config file");
+      assert.throws(
+        () => loadConfig(),
+        errorWith(Error, "failed to parse config file"),
+      );
     } finally {
       if (original === undefined) {
         delete process.env[ENV_KEY];

@@ -1,6 +1,6 @@
 import { Temporal } from "@js-temporal/polyfill";
 import { describe, test } from "node:test";
-import { assertEquals } from "@std/assert";
+import assert from "node:assert/strict";
 import { CronScheduler } from "./scheduler.ts";
 import type { CronJobDef } from "./types.ts";
 
@@ -37,7 +37,7 @@ describe("CronScheduler", () => {
   test("replaceAll でジョブが登録されること", () => {
     const scheduler = new CronScheduler(() => {});
     scheduler.replaceAll([makeJob("a", "* * * * *")]);
-    assertEquals(scheduler.size, 1);
+    assert.deepStrictEqual(scheduler.size, 1);
   });
 
   test("replaceAll で既存ジョブが差し替えられること", () => {
@@ -46,9 +46,9 @@ describe("CronScheduler", () => {
       makeJob("a", "* * * * *"),
       makeJob("b", "0 9 * * *"),
     ]);
-    assertEquals(scheduler.size, 2);
+    assert.deepStrictEqual(scheduler.size, 2);
     scheduler.replaceAll([makeJob("c", "0 0 * * *")]);
-    assertEquals(scheduler.size, 1);
+    assert.deepStrictEqual(scheduler.size, 1);
   });
 
   test("tick でマッチするジョブのコールバックが呼ばれること", () => {
@@ -62,7 +62,7 @@ describe("CronScheduler", () => {
 
     // 09:00 → 両方マッチ
     scheduler.tick(zdt(2026, 3, 31, 9, 0));
-    assertEquals(triggered, ["always", "nine-only"]);
+    assert.deepStrictEqual(triggered, ["always", "nine-only"]);
   });
 
   test("tick でマッチしないジョブのコールバックは呼ばれないこと", () => {
@@ -73,7 +73,7 @@ describe("CronScheduler", () => {
 
     // 10:00 → マッチしない
     scheduler.tick(zdt(2026, 3, 31, 10, 0));
-    assertEquals(triggered, []);
+    assert.deepStrictEqual(triggered, []);
   });
 
   test("同一分の二重発火が防止されること", () => {
@@ -85,7 +85,7 @@ describe("CronScheduler", () => {
     const time = zdt(2026, 3, 31, 9, 0);
     scheduler.tick(time);
     scheduler.tick(time); // 同じ時刻で再度 tick
-    assertEquals(triggered.length, 1);
+    assert.deepStrictEqual(triggered.length, 1);
   });
 
   test("異なる分では正常に発火すること", () => {
@@ -96,7 +96,7 @@ describe("CronScheduler", () => {
 
     scheduler.tick(zdt(2026, 3, 31, 9, 0));
     scheduler.tick(zdt(2026, 3, 31, 9, 1));
-    assertEquals(triggered.length, 2);
+    assert.deepStrictEqual(triggered.length, 2);
   });
 
   test("start の二重呼び出しでタイマーが重複しないこと", () => {
@@ -118,12 +118,12 @@ describe("CronScheduler", () => {
 
     scheduler.replaceAll([makeJob("old", "0 9 * * *")]);
     scheduler.tick(zdt(2026, 3, 31, 9, 0));
-    assertEquals(triggered, ["old"]);
+    assert.deepStrictEqual(triggered, ["old"]);
 
     // ジョブを差し替え
     scheduler.replaceAll([makeJob("new", "0 10 * * *")]);
     scheduler.tick(zdt(2026, 3, 31, 10, 0));
-    assertEquals(triggered, ["old", "new"]);
+    assert.deepStrictEqual(triggered, ["old", "new"]);
   });
 
   test("不正な cron 式のジョブがあっても他のジョブは実行されること", () => {
@@ -142,6 +142,6 @@ describe("CronScheduler", () => {
     ]);
 
     scheduler.tick(zdt(2026, 3, 31, 9, 0));
-    assertEquals(triggered, ["good"]);
+    assert.deepStrictEqual(triggered, ["good"]);
   });
 });

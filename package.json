@@ -5,7 +5,7 @@
   "scripts": {
     "start": "node main.ts",
     "dev": "node --watch main.ts",
-    "test": "node --test --experimental-test-coverage --test-coverage-exclude='**/*.test.ts' --test-coverage-exclude='api/internal-schemas.ts' --test-coverage-exclude='data/**' '*.test.ts' '{api,approval,bot,claude,cron,store}/**/*.test.ts'",
+    "test": "node --test --experimental-test-coverage --test-coverage-exclude='**/*.test.ts' --test-coverage-exclude='api/internal-schemas.ts' --test-coverage-exclude='data/**' --test-coverage-exclude='test-helpers.ts' '*.test.ts' '{api,approval,bot,claude,cron,store}/**/*.test.ts'",
     "check": "tsc --noEmit",
     "lint": "oxlint && oxfmt --check",
     "fix": "oxlint --fix && oxfmt",
@@ -24,7 +24,6 @@
     "json-schema-to-ts": "3.1.1"
   },
   "devDependencies": {
-    "@std/assert": "npm:@jsr/std__assert@1.0.19",
     "@types/node": "^24.19.2",
     "oxfmt": "^0.72.0",
     "oxlint": "^1.87.0",

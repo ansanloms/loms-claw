@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import { describe, test } from "node:test";
-import { assertEquals } from "@std/assert";
+import assert from "node:assert/strict";
 import { Store, type StoreDefaults, type StoreScope } from "./mod.ts";
 
 async function withStore(
@@ -27,14 +27,14 @@ describe("Store", () => {
 
   test("getSession: 未登録のキーは undefined を返すこと", async () => {
     await withStore({}, async (store) => {
-      assertEquals(await store.getSession(ch("ch-1")), undefined);
+      assert.deepStrictEqual(await store.getSession(ch("ch-1")), undefined);
     });
   });
 
   test("setSession: セットした値を getSession で取得できること", async () => {
     await withStore({}, async (store) => {
       await store.setSession(ch("ch-1"), "session-a");
-      assertEquals(await store.getSession(ch("ch-1")), "session-a");
+      assert.deepStrictEqual(await store.getSession(ch("ch-1")), "session-a");
     });
   });
 
@@ -42,7 +42,7 @@ describe("Store", () => {
     await withStore({}, async (store) => {
       await store.setSession(ch("ch-1"), "session-a");
       await store.setSession(ch("ch-1"), "session-b");
-      assertEquals(await store.getSession(ch("ch-1")), "session-b");
+      assert.deepStrictEqual(await store.getSession(ch("ch-1")), "session-b");
     });
   });
 
@@ -50,14 +50,17 @@ describe("Store", () => {
     await withStore({}, async (store) => {
       await store.setSession(ch("ch-1"), "session-a");
       await store.applyPatch(ch("ch-1"), { session: null });
-      assertEquals(await store.getSession(ch("ch-1")), undefined);
+      assert.deepStrictEqual(await store.getSession(ch("ch-1")), undefined);
     });
   });
 
   test("getSession: thread の値が channel の値にフォールバックしないこと", async () => {
     await withStore({}, async (store) => {
       await store.setSession(ch("ch-1"), "session-channel");
-      assertEquals(await store.getSession(th("ch-1", "th-1")), undefined);
+      assert.deepStrictEqual(
+        await store.getSession(th("ch-1", "th-1")),
+        undefined,
+      );
     });
   });
 
@@ -65,8 +68,11 @@ describe("Store", () => {
     await withStore({}, async (store) => {
       await store.setSession(ch("ch-1"), "session-channel");
       await store.setSession(th("ch-1", "th-1"), "session-thread");
-      assertEquals(await store.getSession(ch("ch-1")), "session-channel");
-      assertEquals(
+      assert.deepStrictEqual(
+        await store.getSession(ch("ch-1")),
+        "session-channel",
+      );
+      assert.deepStrictEqual(
         await store.getSession(th("ch-1", "th-1")),
         "session-thread",
       );
@@ -78,8 +84,14 @@ describe("Store", () => {
       await store.setSession(ch("ch-1"), "session-channel");
       await store.setSession(th("ch-1", "th-1"), "session-thread");
       await store.applyPatch(th("ch-1", "th-1"), { session: null });
-      assertEquals(await store.getSession(th("ch-1", "th-1")), undefined);
-      assertEquals(await store.getSession(ch("ch-1")), "session-channel");
+      assert.deepStrictEqual(
+        await store.getSession(th("ch-1", "th-1")),
+        undefined,
+      );
+      assert.deepStrictEqual(
+        await store.getSession(ch("ch-1")),
+        "session-channel",
+      );
     });
   });
 
@@ -87,20 +99,20 @@ describe("Store", () => {
 
   test("getModel: 未登録 + defaults 無しで undefined を返すこと", async () => {
     await withStore({}, async (store) => {
-      assertEquals(await store.getModel(ch("ch-1")), undefined);
+      assert.deepStrictEqual(await store.getModel(ch("ch-1")), undefined);
     });
   });
 
   test("getModel: 未登録時は defaults.model にフォールバックすること", async () => {
     await withStore({ model: "sonnet" }, async (store) => {
-      assertEquals(await store.getModel(ch("ch-1")), "sonnet");
+      assert.deepStrictEqual(await store.getModel(ch("ch-1")), "sonnet");
     });
   });
 
   test("getModel: channel 設定が defaults より優先されること", async () => {
     await withStore({ model: "sonnet" }, async (store) => {
       await store.applyPatch(ch("ch-1"), { model: "opus" });
-      assertEquals(await store.getModel(ch("ch-1")), "opus");
+      assert.deepStrictEqual(await store.getModel(ch("ch-1")), "opus");
     });
   });
 
@@ -108,20 +120,23 @@ describe("Store", () => {
     await withStore({ model: "sonnet" }, async (store) => {
       await store.applyPatch(ch("ch-1"), { model: "opus" });
       await store.applyPatch(ch("ch-1"), { model: null });
-      assertEquals(await store.getModel(ch("ch-1")), "sonnet");
+      assert.deepStrictEqual(await store.getModel(ch("ch-1")), "sonnet");
     });
   });
 
   test("getModel: thread 未設定時に channel の値にフォールバックすること", async () => {
     await withStore({ model: "sonnet" }, async (store) => {
       await store.applyPatch(ch("ch-1"), { model: "opus" });
-      assertEquals(await store.getModel(th("ch-1", "th-1")), "opus");
+      assert.deepStrictEqual(await store.getModel(th("ch-1", "th-1")), "opus");
     });
   });
 
   test("getModel: thread / channel どちらも未設定なら defaults にフォールバックすること", async () => {
     await withStore({ model: "sonnet" }, async (store) => {
-      assertEquals(await store.getModel(th("ch-1", "th-1")), "sonnet");
+      assert.deepStrictEqual(
+        await store.getModel(th("ch-1", "th-1")),
+        "sonnet",
+      );
     });
   });
 
@@ -129,9 +144,9 @@ describe("Store", () => {
     await withStore({ model: "sonnet" }, async (store) => {
       await store.applyPatch(ch("ch-1"), { model: "opus" });
       await store.applyPatch(th("ch-1", "th-1"), { model: "haiku" });
-      assertEquals(await store.getModel(th("ch-1", "th-1")), "haiku");
+      assert.deepStrictEqual(await store.getModel(th("ch-1", "th-1")), "haiku");
       // channel 側は影響を受けない
-      assertEquals(await store.getModel(ch("ch-1")), "opus");
+      assert.deepStrictEqual(await store.getModel(ch("ch-1")), "opus");
     });
   });
 
@@ -140,7 +155,7 @@ describe("Store", () => {
       await store.applyPatch(ch("ch-1"), { model: "opus" });
       await store.applyPatch(th("ch-1", "th-1"), { model: "haiku" });
       await store.applyPatch(th("ch-1", "th-1"), { model: null });
-      assertEquals(await store.getModel(th("ch-1", "th-1")), "opus");
+      assert.deepStrictEqual(await store.getModel(th("ch-1", "th-1")), "opus");
     });
   });
 
@@ -148,14 +163,14 @@ describe("Store", () => {
 
   test("getEffort: 未登録時は defaults.effort にフォールバックすること", async () => {
     await withStore({ effort: "medium" }, async (store) => {
-      assertEquals(await store.getEffort(ch("ch-1")), "medium");
+      assert.deepStrictEqual(await store.getEffort(ch("ch-1")), "medium");
     });
   });
 
   test("getEffort: channel 設定が defaults より優先されること", async () => {
     await withStore({ effort: "medium" }, async (store) => {
       await store.applyPatch(ch("ch-1"), { effort: "high" });
-      assertEquals(await store.getEffort(ch("ch-1")), "high");
+      assert.deepStrictEqual(await store.getEffort(ch("ch-1")), "high");
     });
   });
 
@@ -163,20 +178,23 @@ describe("Store", () => {
     await withStore({ effort: "medium" }, async (store) => {
       await store.applyPatch(ch("ch-1"), { effort: "high" });
       await store.applyPatch(ch("ch-1"), { effort: null });
-      assertEquals(await store.getEffort(ch("ch-1")), "medium");
+      assert.deepStrictEqual(await store.getEffort(ch("ch-1")), "medium");
     });
   });
 
   test("getEffort: thread / channel / defaults のフォールバックチェーンが効くこと", async () => {
     await withStore({ effort: "medium" }, async (store) => {
       // defaults のみ
-      assertEquals(await store.getEffort(th("ch-1", "th-1")), "medium");
+      assert.deepStrictEqual(
+        await store.getEffort(th("ch-1", "th-1")),
+        "medium",
+      );
       // channel のみ
       await store.applyPatch(ch("ch-1"), { effort: "high" });
-      assertEquals(await store.getEffort(th("ch-1", "th-1")), "high");
+      assert.deepStrictEqual(await store.getEffort(th("ch-1", "th-1")), "high");
       // thread が channel より優先
       await store.applyPatch(th("ch-1", "th-1"), { effort: "low" });
-      assertEquals(await store.getEffort(th("ch-1", "th-1")), "low");
+      assert.deepStrictEqual(await store.getEffort(th("ch-1", "th-1")), "low");
     });
   });
 
@@ -184,20 +202,20 @@ describe("Store", () => {
 
   test("getShowThinking: 未登録 + defaults 無しで false を返すこと", async () => {
     await withStore({}, async (store) => {
-      assertEquals(await store.getShowThinking(ch("ch-1")), false);
+      assert.deepStrictEqual(await store.getShowThinking(ch("ch-1")), false);
     });
   });
 
   test("getShowThinking: defaults が true なら true を返すこと", async () => {
     await withStore({ showThinking: true }, async (store) => {
-      assertEquals(await store.getShowThinking(ch("ch-1")), true);
+      assert.deepStrictEqual(await store.getShowThinking(ch("ch-1")), true);
     });
   });
 
   test("getShowThinking: channel 上書きが defaults より優先されること", async () => {
     await withStore({ showThinking: true }, async (store) => {
       await store.applyPatch(ch("ch-1"), { showThinking: false });
-      assertEquals(await store.getShowThinking(ch("ch-1")), false);
+      assert.deepStrictEqual(await store.getShowThinking(ch("ch-1")), false);
     });
   });
 
@@ -205,7 +223,7 @@ describe("Store", () => {
     await withStore({ showThinking: true }, async (store) => {
       await store.applyPatch(ch("ch-1"), { showThinking: false });
       await store.applyPatch(ch("ch-1"), { showThinking: null });
-      assertEquals(await store.getShowThinking(ch("ch-1")), true);
+      assert.deepStrictEqual(await store.getShowThinking(ch("ch-1")), true);
     });
   });
 
@@ -213,20 +231,29 @@ describe("Store", () => {
     await withStore({ showThinking: false }, async (store) => {
       await store.applyPatch(ch("ch-1"), { showThinking: false });
       await store.applyPatch(th("ch-1", "th-1"), { showThinking: true });
-      assertEquals(await store.getShowThinking(th("ch-1", "th-1")), true);
+      assert.deepStrictEqual(
+        await store.getShowThinking(th("ch-1", "th-1")),
+        true,
+      );
     });
   });
 
   test("getShowThinking: thread 未設定時に channel の値にフォールバックすること", async () => {
     await withStore({ showThinking: false }, async (store) => {
       await store.applyPatch(ch("ch-1"), { showThinking: true });
-      assertEquals(await store.getShowThinking(th("ch-1", "th-1")), true);
+      assert.deepStrictEqual(
+        await store.getShowThinking(th("ch-1", "th-1")),
+        true,
+      );
     });
   });
 
   test("getShowThinking: thread / channel 共に未設定なら defaults に戻ること", async () => {
     await withStore({ showThinking: true }, async (store) => {
-      assertEquals(await store.getShowThinking(th("ch-1", "th-1")), true);
+      assert.deepStrictEqual(
+        await store.getShowThinking(th("ch-1", "th-1")),
+        true,
+      );
     });
   });
 
@@ -234,28 +261,28 @@ describe("Store", () => {
 
   test("getActive: 未設定なら undefined を返すこと", async () => {
     await withStore({}, async (store) => {
-      assertEquals(await store.getActive(ch("ch-1")), undefined);
+      assert.deepStrictEqual(await store.getActive(ch("ch-1")), undefined);
     });
   });
 
   test("getActive: 設定した値を取得できること", async () => {
     await withStore({}, async (store) => {
       await store.applyPatch(ch("ch-1"), { active: true });
-      assertEquals(await store.getActive(ch("ch-1")), true);
+      assert.deepStrictEqual(await store.getActive(ch("ch-1")), true);
     });
   });
 
   test("getActive: false を設定した場合 undefined ではなく false を返すこと", async () => {
     await withStore({}, async (store) => {
       await store.applyPatch(ch("ch-1"), { active: false });
-      assertEquals(await store.getActive(ch("ch-1")), false);
+      assert.deepStrictEqual(await store.getActive(ch("ch-1")), false);
     });
   });
 
   test("getActive: thread 未設定時に channel の値にフォールバックすること", async () => {
     await withStore({}, async (store) => {
       await store.applyPatch(ch("ch-1"), { active: true });
-      assertEquals(await store.getActive(th("ch-1", "th-1")), true);
+      assert.deepStrictEqual(await store.getActive(th("ch-1", "th-1")), true);
     });
   });
 
@@ -263,7 +290,7 @@ describe("Store", () => {
     await withStore({}, async (store) => {
       await store.applyPatch(ch("ch-1"), { active: true });
       await store.applyPatch(th("ch-1", "th-1"), { active: false });
-      assertEquals(await store.getActive(th("ch-1", "th-1")), false);
+      assert.deepStrictEqual(await store.getActive(th("ch-1", "th-1")), false);
     });
   });
 
@@ -277,9 +304,9 @@ describe("Store", () => {
 
       await store.clearScope(ch("ch-1"));
 
-      assertEquals(await store.getSession(ch("ch-1")), undefined);
-      assertEquals(await store.getModel(ch("ch-1")), "sonnet");
-      assertEquals(await store.getEffort(ch("ch-1")), "medium");
+      assert.deepStrictEqual(await store.getSession(ch("ch-1")), undefined);
+      assert.deepStrictEqual(await store.getModel(ch("ch-1")), "sonnet");
+      assert.deepStrictEqual(await store.getEffort(ch("ch-1")), "medium");
     });
   });
 
@@ -290,8 +317,8 @@ describe("Store", () => {
 
       await store.clearScope(ch("ch-1"));
 
-      assertEquals(await store.getSession(ch("ch-1")), undefined);
-      assertEquals(await store.getSession(ch("ch-2")), "session-b");
+      assert.deepStrictEqual(await store.getSession(ch("ch-1")), undefined);
+      assert.deepStrictEqual(await store.getSession(ch("ch-2")), "session-b");
     });
   });
 
@@ -305,12 +332,18 @@ describe("Store", () => {
       await store.clearScope(th("ch-1", "th-1"));
 
       // thread 配下は消える
-      assertEquals(await store.getSession(th("ch-1", "th-1")), undefined);
+      assert.deepStrictEqual(
+        await store.getSession(th("ch-1", "th-1")),
+        undefined,
+      );
       // channel 値は残るので thread からのフォールバックも回復
-      assertEquals(await store.getModel(th("ch-1", "th-1")), "opus");
+      assert.deepStrictEqual(await store.getModel(th("ch-1", "th-1")), "opus");
       // channel 直接アクセスも変わらない
-      assertEquals(await store.getSession(ch("ch-1")), "session-channel");
-      assertEquals(await store.getModel(ch("ch-1")), "opus");
+      assert.deepStrictEqual(
+        await store.getSession(ch("ch-1")),
+        "session-channel",
+      );
+      assert.deepStrictEqual(await store.getModel(ch("ch-1")), "opus");
     });
   });
 
@@ -319,9 +352,9 @@ describe("Store", () => {
   test("getScopeSettings: channel スコープで全て未設定 + defaults 無しなら undefined になること", async () => {
     await withStore({}, async (store) => {
       const s = await store.getScopeSettings(ch("ch-1"));
-      assertEquals(s.session, undefined);
-      assertEquals(s.model, undefined);
-      assertEquals(s.effort, undefined);
+      assert.deepStrictEqual(s.session, undefined);
+      assert.deepStrictEqual(s.model, undefined);
+      assert.deepStrictEqual(s.effort, undefined);
     });
   });
 
@@ -329,15 +362,15 @@ describe("Store", () => {
     await withStore({ model: "sonnet" }, async (store) => {
       await store.applyPatch(ch("ch-1"), { model: "opus" });
       const s = await store.getScopeSettings(ch("ch-1"));
-      assertEquals(s.model, { value: "opus", source: "channel" });
+      assert.deepStrictEqual(s.model, { value: "opus", source: "channel" });
     });
   });
 
   test("getScopeSettings: defaults フォールバックの source が 'default' になること", async () => {
     await withStore({ model: "sonnet", effort: "medium" }, async (store) => {
       const s = await store.getScopeSettings(ch("ch-1"));
-      assertEquals(s.model, { value: "sonnet", source: "default" });
-      assertEquals(s.effort, { value: "medium", source: "default" });
+      assert.deepStrictEqual(s.model, { value: "sonnet", source: "default" });
+      assert.deepStrictEqual(s.effort, { value: "medium", source: "default" });
     });
   });
 
@@ -345,7 +378,7 @@ describe("Store", () => {
     await withStore({}, async (store) => {
       await store.setSession(ch("ch-1"), "session-x");
       const s = await store.getScopeSettings(ch("ch-1"));
-      assertEquals(s.session, "session-x");
+      assert.deepStrictEqual(s.session, "session-x");
     });
   });
 
@@ -354,7 +387,7 @@ describe("Store", () => {
       await store.applyPatch(ch("ch-1"), { model: "opus" });
       await store.applyPatch(th("ch-1", "th-1"), { model: "haiku" });
       const s = await store.getScopeSettings(th("ch-1", "th-1"));
-      assertEquals(s.model, { value: "haiku", source: "thread" });
+      assert.deepStrictEqual(s.model, { value: "haiku", source: "thread" });
     });
   });
 
@@ -362,14 +395,14 @@ describe("Store", () => {
     await withStore({ model: "sonnet" }, async (store) => {
       await store.applyPatch(ch("ch-1"), { model: "opus" });
       const s = await store.getScopeSettings(th("ch-1", "th-1"));
-      assertEquals(s.model, { value: "opus", source: "channel" });
+      assert.deepStrictEqual(s.model, { value: "opus", source: "channel" });
     });
   });
 
   test("getScopeSettings: thread スコープで thread / channel 共に未設定なら defaults を 'default' で返すこと", async () => {
     await withStore({ effort: "medium" }, async (store) => {
       const s = await store.getScopeSettings(th("ch-1", "th-1"));
-      assertEquals(s.effort, { value: "medium", source: "default" });
+      assert.deepStrictEqual(s.effort, { value: "medium", source: "default" });
     });
   });
 
@@ -377,14 +410,17 @@ describe("Store", () => {
     await withStore({}, async (store) => {
       await store.setSession(ch("ch-1"), "session-channel");
       const s = await store.getScopeSettings(th("ch-1", "th-1"));
-      assertEquals(s.session, undefined);
+      assert.deepStrictEqual(s.session, undefined);
     });
   });
 
   test("getScopeSettings: showThinking は未設定でも false (source: default) で返ること", async () => {
     await withStore({}, async (store) => {
       const s = await store.getScopeSettings(ch("ch-1"));
-      assertEquals(s.showThinking, { value: false, source: "default" });
+      assert.deepStrictEqual(s.showThinking, {
+        value: false,
+        source: "default",
+      });
     });
   });
 
@@ -392,14 +428,17 @@ describe("Store", () => {
     await withStore({ showThinking: false }, async (store) => {
       await store.applyPatch(ch("ch-1"), { showThinking: true });
       const s = await store.getScopeSettings(ch("ch-1"));
-      assertEquals(s.showThinking, { value: true, source: "channel" });
+      assert.deepStrictEqual(s.showThinking, {
+        value: true,
+        source: "channel",
+      });
     });
   });
 
   test("getScopeSettings: active は未設定時 undefined になること", async () => {
     await withStore({}, async (store) => {
       const s = await store.getScopeSettings(ch("ch-1"));
-      assertEquals(s.active, undefined);
+      assert.deepStrictEqual(s.active, undefined);
     });
   });
 
@@ -412,9 +451,12 @@ describe("Store", () => {
         effort: "high",
         showThinking: true,
       });
-      assertEquals(s.model, { value: "opus", source: "channel" });
-      assertEquals(s.effort, { value: "high", source: "channel" });
-      assertEquals(s.showThinking, { value: true, source: "channel" });
+      assert.deepStrictEqual(s.model, { value: "opus", source: "channel" });
+      assert.deepStrictEqual(s.effort, { value: "high", source: "channel" });
+      assert.deepStrictEqual(s.showThinking, {
+        value: true,
+        source: "channel",
+      });
     });
   });
 
@@ -422,8 +464,8 @@ describe("Store", () => {
     await withStore({}, async (store) => {
       await store.applyPatch(ch("ch-1"), { model: "opus" });
       await store.applyPatch(ch("ch-1"), { effort: "high" });
-      assertEquals(await store.getModel(ch("ch-1")), "opus");
-      assertEquals(await store.getEffort(ch("ch-1")), "high");
+      assert.deepStrictEqual(await store.getModel(ch("ch-1")), "opus");
+      assert.deepStrictEqual(await store.getEffort(ch("ch-1")), "high");
     });
   });
 
@@ -431,14 +473,14 @@ describe("Store", () => {
     await withStore({ model: "sonnet" }, async (store) => {
       await store.applyPatch(ch("ch-1"), { model: "opus" });
       const s = await store.applyPatch(ch("ch-1"), { model: null });
-      assertEquals(s.model, { value: "sonnet", source: "default" });
+      assert.deepStrictEqual(s.model, { value: "sonnet", source: "default" });
     });
   });
 
   test("applyPatch: active を設定できること", async () => {
     await withStore({}, async (store) => {
       const s = await store.applyPatch(ch("ch-1"), { active: true });
-      assertEquals(s.active, { value: true, source: "channel" });
+      assert.deepStrictEqual(s.active, { value: true, source: "channel" });
     });
   });
 
@@ -446,8 +488,8 @@ describe("Store", () => {
     await withStore({}, async (store) => {
       await store.applyPatch(ch("ch-1"), { active: true });
       const s = await store.applyPatch(ch("ch-1"), { active: null });
-      assertEquals(s.active, undefined);
-      assertEquals(
+      assert.deepStrictEqual(s.active, undefined);
+      assert.deepStrictEqual(
         (await store.getScopeSettings(ch("ch-1"))).active,
         undefined,
       );
@@ -458,7 +500,7 @@ describe("Store", () => {
     await withStore({}, async (store) => {
       await store.setSession(ch("ch-1"), "session-a");
       const s = await store.applyPatch(ch("ch-1"), { session: null });
-      assertEquals(s.session, undefined);
+      assert.deepStrictEqual(s.session, undefined);
     });
   });
 
@@ -467,15 +509,15 @@ describe("Store", () => {
       await store.applyPatch(ch("ch-1"), { model: "opus" });
       await store.applyPatch(ch("ch-1"), { effort: "high" });
       const s = await store.applyPatch(ch("ch-1"), {});
-      assertEquals(s.model, { value: "opus", source: "channel" });
-      assertEquals(s.effort, { value: "high", source: "channel" });
+      assert.deepStrictEqual(s.model, { value: "opus", source: "channel" });
+      assert.deepStrictEqual(s.effort, { value: "high", source: "channel" });
     });
   });
 
   test("applyPatch: 戻り値が更新後の解決結果であること", async () => {
     await withStore({}, async (store) => {
       const s = await store.applyPatch(ch("ch-1"), { model: "opus" });
-      assertEquals(s, await store.getScopeSettings(ch("ch-1")));
+      assert.deepStrictEqual(s, await store.getScopeSettings(ch("ch-1")));
     });
   });
 
@@ -483,7 +525,7 @@ describe("Store", () => {
     await withStore({}, async (store) => {
       await store.applyPatch(ch("ch-1"), { model: "opus" });
       await store.applyPatch(th("ch-1", "th-1"), { model: "haiku" });
-      assertEquals(await store.getModel(ch("ch-1")), "opus");
+      assert.deepStrictEqual(await store.getModel(ch("ch-1")), "opus");
     });
   });
 
@@ -493,8 +535,8 @@ describe("Store", () => {
       const s = await store.applyPatch(th("ch-1", "th-1"), {
         effort: "high",
       });
-      assertEquals(s.model, { value: "opus", source: "channel" });
-      assertEquals(s.effort, { value: "high", source: "thread" });
+      assert.deepStrictEqual(s.model, { value: "opus", source: "channel" });
+      assert.deepStrictEqual(s.effort, { value: "high", source: "thread" });
     });
   });
 
@@ -504,7 +546,7 @@ describe("Store", () => {
     await withStore(
       { model: "sonnet", effort: "medium", showThinking: true },
       (store) => {
-        assertEquals(store.getDefaults(), {
+        assert.deepStrictEqual(store.getDefaults(), {
           model: "sonnet",
           effort: "medium",
           showThinking: true,
@@ -518,7 +560,7 @@ describe("Store", () => {
     await withStore({ model: "sonnet" }, (store) => {
       const defaults = store.getDefaults();
       defaults.model = "opus";
-      assertEquals(store.getDefaults().model, "sonnet");
+      assert.deepStrictEqual(store.getDefaults().model, "sonnet");
       return Promise.resolve();
     });
   });
@@ -528,7 +570,10 @@ describe("Store", () => {
   test("setSession: 'cron:<name>' を channelId として使っても動作すること", async () => {
     await withStore({}, async (store) => {
       await store.setSession(ch("cron:daily"), "session-cron");
-      assertEquals(await store.getSession(ch("cron:daily")), "session-cron");
+      assert.deepStrictEqual(
+        await store.getSession(ch("cron:daily")),
+        "session-cron",
+      );
     });
   });
 });

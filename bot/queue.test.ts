@@ -1,5 +1,6 @@
 import { describe, test } from "node:test";
-import { assertEquals, assertRejects } from "@std/assert";
+import assert from "node:assert/strict";
+import { errorWith } from "../test-helpers.ts";
 import { ScopeQueue } from "./queue.ts";
 
 /**
@@ -31,12 +32,12 @@ describe("ScopeQueue", () => {
     });
 
     // gate1 を開くまでは 1 件目も完了しないので order は空のまま。
-    assertEquals(order, []);
+    assert.deepStrictEqual(order, []);
 
     gate1.resolve();
     await Promise.all([p1, p2]);
 
-    assertEquals(order, [1, 2]);
+    assert.deepStrictEqual(order, [1, 2]);
   });
 
   test("別 key のタスクは並行に走れること", async () => {
@@ -57,11 +58,11 @@ describe("ScopeQueue", () => {
 
     // A がブロック中でも B は完了する。
     await pb;
-    assertEquals(order, ["B"]);
+    assert.deepStrictEqual(order, ["B"]);
 
     gateA.resolve();
     await pa;
-    assertEquals(order, ["B", "A"]);
+    assert.deepStrictEqual(order, ["B", "A"]);
   });
 
   test("前段がスローしても後続タスクが実行されること", async () => {
@@ -78,11 +79,11 @@ describe("ScopeQueue", () => {
     });
 
     // 1 件目の reject は呼び出し側へ伝播する。
-    await assertRejects(() => p1, Error, "boom");
+    await assert.rejects(() => p1, errorWith(Error, "boom"));
     // 2 件目は前段の失敗に巻き込まれず実行される。
     await p2;
 
-    assertEquals(order, [1, 2]);
+    assert.deepStrictEqual(order, [1, 2]);
   });
 
   test("チェーン完了後に key が削除されること", async () => {
@@ -90,17 +91,17 @@ describe("ScopeQueue", () => {
 
     const p = queue.enqueue("ch", () => Promise.resolve());
     // 実行中 / 待機中は busy。
-    assertEquals(queue.isBusy("ch"), true);
+    assert.deepStrictEqual(queue.isBusy("ch"), true);
 
     await p;
     // settle 後の microtask で削除されるため 1 tick 待つ。
     await Promise.resolve();
 
-    assertEquals(queue.isBusy("ch"), false);
+    assert.deepStrictEqual(queue.isBusy("ch"), false);
   });
 
   test("未投入の key は busy でないこと", () => {
     const queue = new ScopeQueue();
-    assertEquals(queue.isBusy("nope"), false);
+    assert.deepStrictEqual(queue.isBusy("nope"), false);
   });
 });

@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import { describe, test } from "node:test";
-import { assertEquals } from "@std/assert";
+import assert from "node:assert/strict";
 import { Store, type StoreScope } from "../store/mod.ts";
 import { handleSettingsSet, handleSettingsUnset } from "./commands.ts";
 
@@ -86,16 +86,16 @@ describe("handleSettingsSet", () => {
     withStore(async (store) => {
       const interaction = mockInteraction("ch-1", { model: "opus" }) as any;
       await handleSettingsSet(interaction, store);
-      assertEquals(await store.getModel(ch("ch-1")), "opus");
-      assertEquals(await store.getEffort(ch("ch-1")), undefined);
+      assert.deepStrictEqual(await store.getModel(ch("ch-1")), "opus");
+      assert.deepStrictEqual(await store.getEffort(ch("ch-1")), undefined);
     }));
 
   test("effort のみ指定で設定されること", () =>
     withStore(async (store) => {
       const interaction = mockInteraction("ch-1", { effort: "high" }) as any;
       await handleSettingsSet(interaction, store);
-      assertEquals(await store.getEffort(ch("ch-1")), "high");
-      assertEquals(await store.getModel(ch("ch-1")), undefined);
+      assert.deepStrictEqual(await store.getEffort(ch("ch-1")), "high");
+      assert.deepStrictEqual(await store.getModel(ch("ch-1")), undefined);
     }));
 
   test("model と effort を同時に設定できること", () =>
@@ -105,17 +105,17 @@ describe("handleSettingsSet", () => {
         effort: "max",
       }) as any;
       await handleSettingsSet(interaction, store);
-      assertEquals(await store.getModel(ch("ch-1")), "sonnet");
-      assertEquals(await store.getEffort(ch("ch-1")), "max");
+      assert.deepStrictEqual(await store.getModel(ch("ch-1")), "sonnet");
+      assert.deepStrictEqual(await store.getEffort(ch("ch-1")), "max");
     }));
 
   test("どちらも未指定で何も設定されないこと", () =>
     withStore(async (store) => {
       const interaction = mockInteraction("ch-1", {}) as any;
       await handleSettingsSet(interaction, store);
-      assertEquals(await store.getModel(ch("ch-1")), undefined);
-      assertEquals(await store.getEffort(ch("ch-1")), undefined);
-      assertEquals(
+      assert.deepStrictEqual(await store.getModel(ch("ch-1")), undefined);
+      assert.deepStrictEqual(await store.getEffort(ch("ch-1")), undefined);
+      assert.deepStrictEqual(
         interaction.getReplyContent(),
         "Specify at least one of `model` / `effort` / `show_thinking` / `active`.",
       );
@@ -127,8 +127,8 @@ describe("handleSettingsSet", () => {
         show_thinking: true,
       }) as any;
       await handleSettingsSet(interaction, store);
-      assertEquals(await store.getShowThinking(ch("ch-1")), true);
-      assertEquals(await store.getModel(ch("ch-1")), undefined);
+      assert.deepStrictEqual(await store.getShowThinking(ch("ch-1")), true);
+      assert.deepStrictEqual(await store.getModel(ch("ch-1")), undefined);
     }));
 
   test("show_thinking = false も明示指定として保存されること", () =>
@@ -139,7 +139,7 @@ describe("handleSettingsSet", () => {
         show_thinking: false,
       }) as any;
       await handleSettingsSet(interaction, store);
-      assertEquals(await store.getShowThinking(ch("ch-1")), false);
+      assert.deepStrictEqual(await store.getShowThinking(ch("ch-1")), false);
     }));
 
   test("スレッド内で実行すると thread スコープに保存され channel には影響しないこと", () =>
@@ -151,9 +151,12 @@ describe("handleSettingsSet", () => {
         "ch-parent",
       ) as any;
       await handleSettingsSet(interaction, store);
-      assertEquals(await store.getModel(th("ch-parent", "thread-1")), "haiku");
+      assert.deepStrictEqual(
+        await store.getModel(th("ch-parent", "thread-1")),
+        "haiku",
+      );
       // 親チャンネルは無傷
-      assertEquals(await store.getModel(ch("ch-parent")), "opus");
+      assert.deepStrictEqual(await store.getModel(ch("ch-parent")), "opus");
     }));
 
   test("active のみ指定で設定されること", () =>
@@ -162,8 +165,8 @@ describe("handleSettingsSet", () => {
         active: true,
       }) as any;
       await handleSettingsSet(interaction, store);
-      assertEquals(await store.getActive(ch("ch-1")), true);
-      assertEquals(await store.getModel(ch("ch-1")), undefined);
+      assert.deepStrictEqual(await store.getActive(ch("ch-1")), true);
+      assert.deepStrictEqual(await store.getModel(ch("ch-1")), undefined);
     }));
 
   test("active = false も明示指定として保存されること", () =>
@@ -173,7 +176,7 @@ describe("handleSettingsSet", () => {
         active: false,
       }) as any;
       await handleSettingsSet(interaction, store);
-      assertEquals(await store.getActive(ch("ch-1")), false);
+      assert.deepStrictEqual(await store.getActive(ch("ch-1")), false);
     }));
 
   test("parentId が null の異常スレッドでは thread.id を channelId にもフォールバックして書き込めること", () =>
@@ -185,7 +188,7 @@ describe("handleSettingsSet", () => {
       ) as any;
       await handleSettingsSet(interaction, store);
       // channelId === threadId === "orphan-thread" として保存される
-      assertEquals(
+      assert.deepStrictEqual(
         await store.getModel({
           channelId: "orphan-thread",
           threadId: "orphan-thread",
@@ -207,9 +210,9 @@ describe("handleSettingsUnset", () => {
       }) as any;
       await handleSettingsUnset(interaction, store);
 
-      assertEquals(await store.getModel(ch("ch-1")), undefined);
-      assertEquals(await store.getEffort(ch("ch-1")), "high");
-      assertEquals(await store.getSession(ch("ch-1")), "sess-1");
+      assert.deepStrictEqual(await store.getModel(ch("ch-1")), undefined);
+      assert.deepStrictEqual(await store.getEffort(ch("ch-1")), "high");
+      assert.deepStrictEqual(await store.getSession(ch("ch-1")), "sess-1");
     }));
 
   test("target=effort でチャンネルの effort のみ削除されること", () =>
@@ -222,8 +225,8 @@ describe("handleSettingsUnset", () => {
       }) as any;
       await handleSettingsUnset(interaction, store);
 
-      assertEquals(await store.getEffort(ch("ch-1")), undefined);
-      assertEquals(await store.getModel(ch("ch-1")), "opus");
+      assert.deepStrictEqual(await store.getEffort(ch("ch-1")), undefined);
+      assert.deepStrictEqual(await store.getModel(ch("ch-1")), "opus");
     }));
 
   test("target=show_thinking でチャンネルの showThinking のみ削除されること", () =>
@@ -237,8 +240,8 @@ describe("handleSettingsUnset", () => {
       await handleSettingsUnset(interaction, store);
 
       // 削除後は defaults (= false) へフォールバック
-      assertEquals(await store.getShowThinking(ch("ch-1")), false);
-      assertEquals(await store.getModel(ch("ch-1")), "opus");
+      assert.deepStrictEqual(await store.getShowThinking(ch("ch-1")), false);
+      assert.deepStrictEqual(await store.getModel(ch("ch-1")), "opus");
     }));
 
   test("target=active でチャンネルの active のみ削除されること", () =>
@@ -251,8 +254,8 @@ describe("handleSettingsUnset", () => {
       }) as any;
       await handleSettingsUnset(interaction, store);
 
-      assertEquals(await store.getActive(ch("ch-1")), undefined);
-      assertEquals(await store.getModel(ch("ch-1")), "opus");
+      assert.deepStrictEqual(await store.getActive(ch("ch-1")), undefined);
+      assert.deepStrictEqual(await store.getModel(ch("ch-1")), "opus");
     }));
 
   test("target=session でチャンネルの session のみ削除されること", () =>
@@ -265,8 +268,8 @@ describe("handleSettingsUnset", () => {
       }) as any;
       await handleSettingsUnset(interaction, store);
 
-      assertEquals(await store.getSession(ch("ch-1")), undefined);
-      assertEquals(await store.getModel(ch("ch-1")), "opus");
+      assert.deepStrictEqual(await store.getSession(ch("ch-1")), undefined);
+      assert.deepStrictEqual(await store.getModel(ch("ch-1")), "opus");
     }));
 
   test("他チャンネルには影響しないこと", () =>
@@ -277,8 +280,8 @@ describe("handleSettingsUnset", () => {
       const interaction = mockInteraction("ch-1", { target: "model" }) as any;
       await handleSettingsUnset(interaction, store);
 
-      assertEquals(await store.getModel(ch("ch-1")), undefined);
-      assertEquals(await store.getModel(ch("ch-2")), "sonnet");
+      assert.deepStrictEqual(await store.getModel(ch("ch-1")), undefined);
+      assert.deepStrictEqual(await store.getModel(ch("ch-2")), "sonnet");
     }));
 
   test("スレッド内で target=session を実行すると thread の session のみ削除され channel の session は残ること", () =>
@@ -293,10 +296,13 @@ describe("handleSettingsUnset", () => {
       ) as any;
       await handleSettingsUnset(interaction, store);
 
-      assertEquals(
+      assert.deepStrictEqual(
         await store.getSession(th("ch-parent", "thread-1")),
         undefined,
       );
-      assertEquals(await store.getSession(ch("ch-parent")), "sess-channel");
+      assert.deepStrictEqual(
+        await store.getSession(ch("ch-parent")),
+        "sess-channel",
+      );
     }));
 });

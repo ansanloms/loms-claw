@@ -1,6 +1,6 @@
 import { Temporal } from "@js-temporal/polyfill";
 import { describe, test } from "node:test";
-import { assertEquals } from "@std/assert";
+import assert from "node:assert/strict";
 import { SelfMentionRateLimiter } from "./ratelimit.ts";
 
 const BASE = Temporal.Instant.from("2026-01-01T00:00:00Z");
@@ -22,55 +22,55 @@ describe("SelfMentionRateLimiter", () => {
   test("上限未満の連続 tryConsume が許可されること", () => {
     const clock = fakeClock(BASE);
     const limiter = new SelfMentionRateLimiter(3, 10, clock.now);
-    assertEquals(limiter.tryConsume(), true);
-    assertEquals(limiter.tryConsume(), true);
-    assertEquals(limiter.tryConsume(), true);
+    assert.deepStrictEqual(limiter.tryConsume(), true);
+    assert.deepStrictEqual(limiter.tryConsume(), true);
+    assert.deepStrictEqual(limiter.tryConsume(), true);
   });
 
   test("上限到達後のウィンドウ内 tryConsume が拒否されること", () => {
     const clock = fakeClock(BASE);
     const limiter = new SelfMentionRateLimiter(2, 10, clock.now);
-    assertEquals(limiter.tryConsume(), true);
-    assertEquals(limiter.tryConsume(), true);
-    assertEquals(limiter.tryConsume(), false);
+    assert.deepStrictEqual(limiter.tryConsume(), true);
+    assert.deepStrictEqual(limiter.tryConsume(), true);
+    assert.deepStrictEqual(limiter.tryConsume(), false);
   });
 
   test("ウィンドウ経過後に再び許可されること", () => {
     const clock = fakeClock(BASE);
     const limiter = new SelfMentionRateLimiter(2, 10, clock.now);
-    assertEquals(limiter.tryConsume(), true);
-    assertEquals(limiter.tryConsume(), true);
-    assertEquals(limiter.tryConsume(), false);
+    assert.deepStrictEqual(limiter.tryConsume(), true);
+    assert.deepStrictEqual(limiter.tryConsume(), true);
+    assert.deepStrictEqual(limiter.tryConsume(), false);
 
     clock.advance(11);
-    assertEquals(limiter.tryConsume(), true);
+    assert.deepStrictEqual(limiter.tryConsume(), true);
   });
 
   test("ウィンドウ境界ちょうどではまだ拒否されること", () => {
     const clock = fakeClock(BASE);
     const limiter = new SelfMentionRateLimiter(2, 10, clock.now);
-    assertEquals(limiter.tryConsume(), true);
-    assertEquals(limiter.tryConsume(), true);
-    assertEquals(limiter.tryConsume(), false);
+    assert.deepStrictEqual(limiter.tryConsume(), true);
+    assert.deepStrictEqual(limiter.tryConsume(), true);
+    assert.deepStrictEqual(limiter.tryConsume(), false);
 
     // windowStart は inclusive (>=) のため、ちょうど windowMinutes 経過した
     // 時点では最初の消費タイムスタンプがまだウィンドウ内に残り、拒否される。
     clock.advance(10);
-    assertEquals(limiter.tryConsume(), false);
+    assert.deepStrictEqual(limiter.tryConsume(), false);
   });
 
   test("isExhausted が枠を消費せずに超過状態を返すこと", () => {
     const clock = fakeClock(BASE);
     const limiter = new SelfMentionRateLimiter(2, 10, clock.now);
-    assertEquals(limiter.isExhausted(), false);
-    assertEquals(limiter.tryConsume(), true);
-    assertEquals(limiter.isExhausted(), false);
-    assertEquals(limiter.isExhausted(), false);
-    assertEquals(limiter.tryConsume(), true);
-    assertEquals(limiter.isExhausted(), true);
-    assertEquals(limiter.tryConsume(), false);
+    assert.deepStrictEqual(limiter.isExhausted(), false);
+    assert.deepStrictEqual(limiter.tryConsume(), true);
+    assert.deepStrictEqual(limiter.isExhausted(), false);
+    assert.deepStrictEqual(limiter.isExhausted(), false);
+    assert.deepStrictEqual(limiter.tryConsume(), true);
+    assert.deepStrictEqual(limiter.isExhausted(), true);
+    assert.deepStrictEqual(limiter.tryConsume(), false);
 
     clock.advance(11);
-    assertEquals(limiter.isExhausted(), false);
+    assert.deepStrictEqual(limiter.isExhausted(), false);
   });
 });

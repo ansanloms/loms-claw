@@ -1,5 +1,5 @@
 import { describe, test } from "node:test";
-import { assertEquals, assertExists } from "@std/assert";
+import assert from "node:assert/strict";
 import type {
   ActionRowBuilder,
   ButtonBuilder,
@@ -70,10 +70,10 @@ describe("createCanUseTool", () => {
     const input = { command: "ls" };
     const result = await canUseTool("Bash", input, toolOptions);
 
-    assertExists(result);
-    assertEquals(result.behavior, "allow");
+    assert.ok(result, "allow の変換結果が返ること");
+    assert.deepStrictEqual(result.behavior, "allow");
     if (result.behavior === "allow") {
-      assertEquals(result.updatedInput, input);
+      assert.deepStrictEqual(result.updatedInput, input);
     }
   });
 
@@ -84,10 +84,10 @@ describe("createCanUseTool", () => {
     );
     const result = await canUseTool("Bash", { command: "rm" }, toolOptions);
 
-    assertExists(result);
-    assertEquals(result.behavior, "deny");
+    assert.ok(result, "deny の変換結果が返ること");
+    assert.deepStrictEqual(result.behavior, "deny");
     if (result.behavior === "deny") {
-      assertEquals(result.message, "Denied by user");
+      assert.deepStrictEqual(result.message, "Denied by user");
     }
   });
 
@@ -98,10 +98,10 @@ describe("createCanUseTool", () => {
     );
     const result = await canUseTool("Bash", {}, toolOptions);
 
-    assertExists(result);
-    assertEquals(result.behavior, "deny");
+    assert.ok(result, "reason 無し deny の変換結果が返ること");
+    assert.deepStrictEqual(result.behavior, "deny");
     if (result.behavior === "deny") {
-      assertEquals(result.message, "Denied");
+      assert.deepStrictEqual(result.message, "Denied");
     }
   });
 
@@ -119,10 +119,10 @@ describe("createCanUseTool", () => {
     const input = askUserQuestionInput();
     const result = await canUseTool("AskUserQuestion", input, toolOptions);
 
-    assertExists(result);
-    assertEquals(result.behavior, "allow");
+    assert.ok(result, "AskUserQuestion の回答の変換結果が返ること");
+    assert.deepStrictEqual(result.behavior, "allow");
     if (result.behavior === "allow") {
-      assertEquals(result.updatedInput, {
+      assert.deepStrictEqual(result.updatedInput, {
         ...input,
         answers: { "Which one?": "A" },
       });
@@ -146,10 +146,13 @@ describe("createCanUseTool", () => {
       toolOptions,
     );
 
-    assertExists(result);
-    assertEquals(result.behavior, "deny");
+    assert.ok(result, "キャンセル・タイムアウトの変換結果が返ること");
+    assert.deepStrictEqual(result.behavior, "deny");
     if (result.behavior === "deny") {
-      assertEquals(result.message, "The user did not answer (Timed out)");
+      assert.deepStrictEqual(
+        result.message,
+        "The user did not answer (Timed out)",
+      );
     }
   });
 
@@ -160,10 +163,10 @@ describe("createCanUseTool", () => {
     );
     const result = await canUseTool("AskUserQuestion", {}, toolOptions);
 
-    assertExists(result);
-    assertEquals(result.behavior, "deny");
+    assert.ok(result, "不正な入力の deny 結果が返ること");
+    assert.deepStrictEqual(result.behavior, "deny");
     if (result.behavior === "deny") {
-      assertEquals(result.message, "Malformed AskUserQuestion input");
+      assert.deepStrictEqual(result.message, "Malformed AskUserQuestion input");
     }
   });
 });
@@ -289,17 +292,17 @@ describe("ApprovalManager", () => {
 
     // send() は allowlist 読み込み等の複数の await を経て呼ばれるため、送信されるまで待つ
     await waitFor(() => sent.length === 1);
-    assertEquals(sent.length, 1);
+    assert.deepStrictEqual(sent.length, 1);
     const [approveId] = buttonCustomIds(sent[0].components);
     const requestId = approveId.split(":")[1];
 
     const { interaction } = fakeButtonInteraction(`approve:${requestId}`);
     const handled = await manager.handleButton(interaction);
-    assertEquals(handled, true);
+    assert.deepStrictEqual(handled, true);
 
     const result = await pending;
-    assertEquals(result.decision, "allow");
-    assertEquals(result.reason, "Allowed");
+    assert.deepStrictEqual(result.decision, "allow");
+    assert.deepStrictEqual(result.reason, "Allowed");
   });
 
   test("requestApproval → handleButton (deny) で deny に解決すること", async () => {
@@ -313,17 +316,17 @@ describe("ApprovalManager", () => {
     const pending = manager.requestApproval("Bash", { command: "rm" }, "ch-1");
 
     await waitFor(() => sent.length === 1);
-    assertEquals(sent.length, 1);
+    assert.deepStrictEqual(sent.length, 1);
     const [, , denyId] = buttonCustomIds(sent[0].components);
     const requestId = denyId.split(":")[1];
 
     const { interaction } = fakeButtonInteraction(`deny:${requestId}`);
     const handled = await manager.handleButton(interaction);
-    assertEquals(handled, true);
+    assert.deepStrictEqual(handled, true);
 
     const result = await pending;
-    assertEquals(result.decision, "deny");
-    assertEquals(result.reason, "Denied");
+    assert.deepStrictEqual(result.decision, "deny");
+    assert.deepStrictEqual(result.reason, "Denied");
   });
 
   test("承認待ちがタイムアウトすると deny (Timed out) に解決すること", async () => {
@@ -340,8 +343,8 @@ describe("ApprovalManager", () => {
       "ch-1",
     );
 
-    assertEquals(result.decision, "deny");
-    assertEquals(result.reason, "Timed out");
+    assert.deepStrictEqual(result.decision, "deny");
+    assert.deepStrictEqual(result.reason, "Timed out");
   });
 
   test("channelId が undefined の場合は即座に deny すること", async () => {
@@ -358,7 +361,7 @@ describe("ApprovalManager", () => {
       undefined,
     );
 
-    assertEquals(result.decision, "deny");
-    assertEquals(result.reason, "No approval channel");
+    assert.deepStrictEqual(result.decision, "deny");
+    assert.deepStrictEqual(result.reason, "No approval channel");
   });
 });

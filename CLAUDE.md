@@ -112,13 +112,17 @@ docker compose logs -f               # ログ確認
 - テスト名は日本語で記述する
 - `describe` の名前はモジュール名/関数名/クラス名（英語のまま）とし、`X - Y` のような接尾辞は付けない。複数の関数・メソッドを 1 つの `describe` にまとめる場合は、`test` 名に `method: …こと` のプレフィックスを付けて区分する
 - `test` の名前は「…こと」「…であること」の形式で記述する
-- assertion は `@std/assert` を使う（`node:test` の `describe` / `test` と組み合わせる）
+- assertion は `node:assert/strict` の default import を使う（非 strict の `node:assert` は使わない。`node:test` の `describe` / `test` と組み合わせる）
+- エラーの検証は `test-helpers.ts` の `errorWith()` を使う
 
 ```typescript
+import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 describe("isAuthorized", () => {
-  test("正しいギルド・ユーザーで許可されること", () => { ... });
+  test("正しいギルド・ユーザーで許可されること", () => {
+    assert.deepStrictEqual(isAuthorized(...), true);
+  });
   test("bot ユーザーは拒否されること", () => { ... });
 });
 ```
