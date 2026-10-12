@@ -6,7 +6,7 @@ user-invocable: false
 
 # 設定操作 API
 
-bot はチャンネル/スレッド単位で model / effort / showThinking / active / session を Deno KV に永続化している。Discord のスラッシュコマンド (`/claw settings`) と同じロジックを内部 API 経由で呼べる。
+bot はチャンネル/スレッド単位で model/effort/showThinking/active/session を SQLite に永続化している。Discord のスラッシュコマンド (`/claw settings`) と同じロジックを内部 API 経由で呼べる。
 
 キー名に注意: この API の JSON キーは `showThinking` (camelCase)。Discord スラッシュコマンドのオプション名 `show_thinking` (snake_case) とは異なる。API に `show_thinking` を送ると未知キーとして 400 になる。他の 4 つ (`model`/`effort`/`active`/`session`) は両者で同名。
 
