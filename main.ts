@@ -39,7 +39,6 @@ try {
   await mkdir(dirname(config.storePath), { recursive: true });
   storeDirReady = true;
   db = openStoreDatabase(config.storePath);
-  // 別形式のファイルを黙って開かないよう、Store のガードも同じ try で受ける。
   store = new Store(db, config.claude.defaults);
 } catch (e: unknown) {
   if (!storeDirReady) {
