@@ -31,7 +31,7 @@ done
 
 ## 前提と制約
 
-- Node.js 24.2 以上。`<scripts の絶対パス>/node_modules` が無いとき、または skill を更新 (`apm update` 等) した直後は、`npm ci --omit=dev --prefix "<scripts の絶対パス>"` で依存 (gunshi) を入れる。devDependencies は実行に不要なので入れない。 `--prefix` は bin の解決先を指定するだけで、CLI の cwd は呼び出し元のまま変わらない。本 skill の CLI にファイルパス引数は無い (`--body` は JSON 文字列か `-` で標準入力) が、`GOOGLE_HEALTH_TOKEN_PATH` は cwd に依存しないよう絶対パスで設定する。
+- Node.js 24.2 以上。依存 (gunshi) は `<scripts の絶対パス>/node_modules` が無いときに `npm ci --omit=dev --prefix "<scripts の絶対パス>"` で入れる。devDependencies は実行に不要なので入れない。 `--prefix` は bin の解決先を指定するだけで、CLI の cwd は呼び出し元のまま変わらない。本 skill の CLI にファイルパス引数は無い (`--body` は JSON 文字列か `-` で標準入力) が、`GOOGLE_HEALTH_TOKEN_PATH` は cwd に依存しないよう絶対パスで設定する。
 - Google Fit REST API は廃止済み (新規登録は 2024-05-01 終了、サポートは 2026 年末まで、代替なし)。Health Connect は端末内 API でサーバから読めない。Google Health API がサーバから叩ける唯一の公式手段。出典: <https://developer.android.com/health-and-fitness/health-connect/migration/fit/faq>
 - データ源は Fitbit・Pixel Watch と、Health Connect 経由の一部データ型。公式ドキュメントでは Health Connect のデータ型は 2026 Q4 に追加予定で未提供とされていた。出典: <https://developers.google.com/health/about>。ただし 2026-09-27 時点の実測では、少なくとも体重 (`weight`) と体脂肪率 (`body-fat`) は取得できた。Health Planet アプリが Health Connect に書き込んだデータで、`dataSource.platform` が `HEALTH_CONNECT` として返る。
 - 全スコープが Restricted だが、OAuth 同意画面を Testing (External) のままにし自分をテストユーザに登録すれば審査なしで使える (100 ユーザ上限)。出典: <https://developers.google.com/health/setup>, <https://developers.google.com/health/app-verification>
@@ -168,8 +168,7 @@ npx --no --prefix "<scripts の絶対パス>" -- token-status
 - 標準出力の JSON の形は上の実測サンプルのとおり。
 - 呼び出し側は exit code 2 を「再認可が必要」と扱う。1 は「判定できなかった」であり、失効とは限らない。理由: 依存未インストールでも Node が exit code 1 で落ちるため、1 を失効とみなすと誤検知する。
 - `token-status` はサーバへ問い合わせず、トークンファイルに記録されたリフレッシュトークンの取得時刻 (`refresh_token_obtained_at`、無ければ `obtained_at`) と `refresh_token_expires_in` から期限を計算する。公称の期限より前にサーバ側で失効したリフレッシュトークンは検出できず、exit code 0 になる。その場合は他のコマンドが refresh で exit code 1 になる。
-- exit code 1 を無視しない。セットアップや設定の不備で判定できなかった状態 (`apm update` 後の `npm ci` 忘れ・未認可でトークンファイルが無い・環境変数の欠落等) なので、exit code 2 とは別に通知する。原因は stderr で見分ける。
-- `apm update` で skill の実体が置き換わると `node_modules` も消える。更新のたびに `npm ci --omit=dev --prefix "<scripts の絶対パス>"` を再実行する。
+- exit code 1 を無視しない。セットアップや設定の不備で判定できなかった状態 (依存未導入・未認可でトークンファイルが無い・環境変数の欠落等) なので、exit code 2 とは別に通知する。原因は stderr で見分ける。依存未導入は `node_modules` が無い状態で、モジュール解決エラーで exit code 1 になるので、`npm ci --omit=dev --prefix "<scripts の絶対パス>"` で解消する。
 
 ## サブコマンド
 
@@ -1374,7 +1373,7 @@ invalid_grant (実測、2026-09-26 JST 取得): OAuth token endpoint (`https://o
 
 ## 対象外
 
-- loms-claw 側の組み込み (`apm.yml` への追加、compose の環境変数、トークンファイルの置き場、system-prompt、再認可を促す cron)。
+- loms-claw 側の組み込み (compose の環境変数、トークンファイルの置き場、system-prompt、再認可を促す cron)。
 - Health Planet (別 skill `healthplanet`)、筋トレメニュー管理、PFC やカロリーの推定 (bot 側)。
 - プロフィール・ペアリング済みデバイス情報の取得・変更。
 - Fitbit Web API・Google Fit (廃止済み)・Health Connect (端末内 API) を直接扱うこと。
