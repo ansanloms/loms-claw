@@ -37,7 +37,7 @@ arguments: [host, path]
    diff -u data/config.json <(ssh <host> cat <path>/data/config.json)
    ```
 3. `git status --porcelain data/workspace` を確認する。非空の場合 (main checkout の `data/workspace` に未コミットの変更がある場合)、その内容をユーザに示し、進めてよいか確認してから次に進む。
-4. `data/workspace` の dry-run で削除・更新対象を確認する。SQLite ストア (`*.sqlite`。旧 Deno KV の `*.kv` も同様) は稼働中のデータベースであり中途半端な状態でコピーされると壊れるため、常に除外する。
+4. `data/workspace` の dry-run で削除・更新対象を確認する。SQLite ストア (`*.sqlite`。旧ストア (Deno KV) の `*.kv` も同様) は稼働中のデータベースであり中途半端な状態でコピーされると壊れるため、常に除外する。
    ```sh
    rsync -azn --delete --exclude='*.kv' --exclude='*.kv-shm' --exclude='*.kv-wal' --exclude='*.sqlite' --exclude='*.sqlite-shm' --exclude='*.sqlite-wal' <host>:<path>/data/workspace/ data/workspace/
    ```

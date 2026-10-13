@@ -19,12 +19,5 @@
     "noImplicitOverride": true
   },
   "include": ["**/*.ts"],
-  "exclude": [
-    "data",
-    "docs/api",
-    "coverage",
-    "node_modules",
-    ".claude",
-    "scripts/dump-kv.ts"
-  ]
+  "exclude": ["data", "docs/api", "coverage", "node_modules", ".claude"]
 }

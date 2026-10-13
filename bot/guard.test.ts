@@ -15,7 +15,7 @@ const baseConfig: Config = {
     userId: "user-1",
     activeChannelIds: [],
   },
-  storePath: "/tmp/test-loms-claw.kv",
+  storePath: "/tmp/test-loms-claw.sqlite",
   claude: {
     maxTurns: 10,
     timeout: 300000,

@@ -1,6 +1,11 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { describe, test } from "node:test";
+import { after, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
+import { isRecord } from "../guards.ts";
+import { errorWith } from "../test-helpers.ts";
 import { Store, type StoreDefaults, type StoreScope } from "./mod.ts";
 
 async function withStore(
@@ -575,5 +580,78 @@ describe("Store", () => {
         "session-cron",
       );
     });
+  });
+});
+
+describe("Store ガード", () => {
+  let dir: string;
+
+  before(async () => {
+    dir = await mkdtemp(join(tmpdir(), "loms-claw-store-"));
+  });
+
+  after(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  function readJournalMode(db: DatabaseSync): unknown {
+    const row = db.prepare("PRAGMA journal_mode").get();
+    return isRecord(row) ? row.journal_mode : undefined;
+  }
+
+  test("settings 以外のテーブルだけを持つ DB は拒否され、journal_mode が変わらないこと", () => {
+    const db = new DatabaseSync(join(dir, "foreign.db"));
+    try {
+      db.exec("CREATE TABLE kv (k TEXT)");
+      const journalModeBefore = readJournalMode(db);
+      assert.deepStrictEqual(journalModeBefore, "delete");
+      assert.throws(
+        () => new Store(db),
+        errorWith(Error, "not a loms-claw database"),
+      );
+      assert.deepStrictEqual(readJournalMode(db), journalModeBefore);
+      const settings = db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'settings'",
+        )
+        .get();
+      assert.deepStrictEqual(settings, undefined);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("テーブルが 1 つも無い DB は拒否されず、settings テーブルが作られること", () => {
+    const db = new DatabaseSync(join(dir, "empty.db"));
+    try {
+      new Store(db);
+      const row = db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'settings'",
+        )
+        .get();
+      assert.deepStrictEqual(isRecord(row) ? row.name : undefined, "settings");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("既存の settings テーブルを持つ DB を開き直しても拒否されず、値が読めること", async () => {
+    const path = join(dir, "reopen.db");
+    const first = new DatabaseSync(path);
+    try {
+      await new Store(first).setSession(ch("ch-1"), "session-a");
+    } finally {
+      first.close();
+    }
+    const second = new DatabaseSync(path);
+    try {
+      assert.deepStrictEqual(
+        await new Store(second).getSession(ch("ch-1")),
+        "session-a",
+      );
+    } finally {
+      second.close();
+    }
   });
 });

@@ -177,12 +177,12 @@ command: "cron/scripts/check.sh"
 
 ### セッションとスコープ
 
-| 項目                   | スコープ                                              | 備考                                                                                |
-| ---------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| session                | `{ channelId: "cron:{name}" }`                        | `resumeSession: true` のときのみ get / set。既定 (`false`) では KV を読み書きしない |
-| model / effort         | `{ channelId: job.channelId }`                        | `channelId` 省略時は読まず `defaults` へ                                            |
-| システムプロンプト     | `{ channelId: job.channelId ?? "" }` (context `cron`) | `{channelId}.md` が cron 実行にも適用される                                         |
-| 承認 / AskUserQuestion | `job.channelId`                                       | 省略時は `undefined` となり自動 deny (共有状態へのフォールバックは無い)             |
+| 項目                   | スコープ                                              | 備考                                                                                  |
+| ---------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| session                | `{ channelId: "cron:{name}" }`                        | `resumeSession: true` のときのみ get / set。既定 (`false`) ではストアを読み書きしない |
+| model / effort         | `{ channelId: job.channelId }`                        | `channelId` 省略時は読まず `defaults` へ                                              |
+| システムプロンプト     | `{ channelId: job.channelId ?? "" }` (context `cron`) | `{channelId}.md` が cron 実行にも適用される                                           |
+| 承認 / AskUserQuestion | `job.channelId`                                       | 省略時は `undefined` となり自動 deny (共有状態へのフォールバックは無い)               |
 
 command ジョブ (`runCommandJob()`) はこの表のいずれにも触れない。session / model / effort のストアも、システムプロンプトも、承認 (`ApprovalManager`) も参照・更新しない。
 

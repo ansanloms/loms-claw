@@ -4,9 +4,7 @@
  * @module
  */
 
-import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
-import { extname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { dirname } from "@std/path/dirname";
 import { DiscordBot } from "./bot/mod.ts";
@@ -41,7 +39,7 @@ try {
   await mkdir(dirname(config.storePath), { recursive: true });
   storeDirReady = true;
   db = openStoreDatabase(config.storePath);
-  // 旧 Deno KV ファイル等を黙って開かないよう、Store のガードも同じ try で受ける。
+  // 別形式のファイルを黙って開かないよう、Store のガードも同じ try で受ける。
   store = new Store(db, config.claude.defaults);
 } catch (e: unknown) {
   if (!storeDirReady) {
@@ -52,17 +50,6 @@ try {
   process.exit(1);
 }
 log.info(`store opened: ${config.storePath}`);
-
-// 移行漏れの検知: 新ストアが空で、同じディレクトリに旧既定名の Deno KV ファイルが
-// あれば警告する (起動は止めない)。
-if (store.isEmpty() && extname(config.storePath) === ".sqlite") {
-  const legacyPath = join(dirname(config.storePath), "loms-claw.kv");
-  if (existsSync(legacyPath)) {
-    log.warn(
-      `旧 Deno KV ファイルが見つかった: ${legacyPath}。データ移行は docs/architecture/deployment.md の移行節を参照`,
-    );
-  }
-}
 
 /**
  * 現在稼働中のボットインスタンス。シグナルハンドラから参照する。

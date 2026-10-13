@@ -25,7 +25,6 @@
     "docs/api/",
     "coverage/",
     "api/internal-schemas.ts",
-    "scripts/dump-kv.ts",
     ".claude/"
   ]
 }
