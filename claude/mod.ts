@@ -3,9 +3,6 @@
  *
  * `@anthropic-ai/claude-agent-sdk` の `query()` を呼び出し、
  * `SDKMessage` のストリームをそのまま逐次 yield する。
- *
- * 旧構成 (`claude -p` を `Deno.Command` で spawn し stream-json を手パース) から
- * 移行した。消費側は従来どおり `SDKMessage` の `type` で分岐する。
  */
 
 import {
@@ -65,7 +62,7 @@ export interface ClaudeCallOptions {
  *
  * `resume` に渡した session ID が Claude 側の会話履歴に無い場合、SDK は
  * `No conversation found with session ID: <uuid>` というメッセージで throw する。
- * KV に古い session ID が残ったまま該当セッションが消えている状況で発生する。
+ * ストアに古い session ID が残ったまま該当セッションが消えている状況で発生する。
  *
  * この判定が真のとき、{@link askClaude} は resume を外して新規セッションで
  * 一度だけやり直す。
@@ -330,7 +327,7 @@ export async function* askClaude(
   }
 
   // resume 先のセッションが存在しない場合、resume を外して新規セッションで
-  // 一度だけやり直す。stale な session ID が KV に残ったまま Claude 側の会話が
+  // 一度だけやり直す。stale な session ID がストアに残ったまま Claude 側の会話が
   // 消えているケースを救済する (新しい session_id は呼び出し元が result イベント
   // から保存し直す)。
   let sessionId = callOpts.sessionId;

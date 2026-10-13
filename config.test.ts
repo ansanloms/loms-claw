@@ -231,11 +231,11 @@ describe("loadConfig", () => {
     try {
       writeFileSync(
         path,
-        JSON.stringify({ ...requiredFields, storePath: "/tmp/custom.kv" }),
+        JSON.stringify({ ...requiredFields, storePath: "/tmp/custom.sqlite" }),
       );
       process.env[ENV_KEY] = path;
       const config = loadConfig();
-      assert.deepStrictEqual(config.storePath, "/tmp/custom.kv");
+      assert.deepStrictEqual(config.storePath, "/tmp/custom.sqlite");
     } finally {
       if (original === undefined) {
         delete process.env[ENV_KEY];

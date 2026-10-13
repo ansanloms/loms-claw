@@ -34,7 +34,6 @@ flowchart LR
 `Dockerfile` はリポジトリルートに置く。
 
 - ベースイメージは `docker.io/node:26-bookworm-slim` (Debian ベースの glibc イメージ。既定ユーザは root)。
-- `COPY --from=docker.io/denoland/deno:bin-2.9.7 /deno /usr/local/bin/deno` で Deno バイナリを同梱する。理由: workspace の skill / cron (`google-health`, `mountain-weather`, `find-docs`) が Deno を使う。`docs/api` は `.dockerignore` でイメージに入らず、同梱の理由ではない。skill が Deno を離れたら外す ([#190](https://github.com/ansanloms/loms-claw/issues/190))。
 - `ENV CLAUDE_CONFIG_DIR=/data/home`: Claude Code の設定・認証情報の置き場所を既定の `~/.claude` から bind mount 先へ置き換える。
 - `ENV LOMS_CLAW_CONFIG=/data/config.json`: `config.ts` の `loadConfig()` が読む設定ファイルのパス。未設定時の既定は `./data/config.json`。
 - apt で `ca-certificates curl git jq bubblewrap socat ffmpeg tzdata` を入れる。Dockerfile のコメントに用途を 1 行ずつ記載している。
@@ -49,7 +48,7 @@ flowchart LR
 - musl 用バイナリの削除は行わない。`npm ci` は optionalDependencies の `os`/`cpu`/`libc` 条件で glibc 版 (`claude-agent-sdk-linux-x64` 等) だけを入れ、`node_modules/@anthropic-ai/` に musl 版のディレクトリが存在しないことをビルド後に確認した。
 - `COPY . .` でソースツリー全体を `/app` に焼き込む (除外は `.dockerignore`)。
 - 最後に `WORKDIR /data/workspace` とし、`CMD ["node", "/app/main.ts"]` で起動する。
-- multi-stage build は採用していない (単一ステージを維持)。`npm ci` と symlink 作成を同一レイヤーで行うため無駄なレイヤーが残らない。multi-stage 化の評価は Deno 構成時点の測定 ([#124](https://github.com/ansanloms/loms-claw/issues/124)) のままで、Node 構成では再測定していない。
+- multi-stage build は採用していない (単一ステージを維持)。`npm ci` と symlink 作成を同一レイヤーで行うため無駄なレイヤーが残らない。multi-stage 化の評価 ([#124](https://github.com/ansanloms/loms-claw/issues/124)) の測定は現在とは別のベースイメージ (当時の Deno ベース) で行ったもので、Node 構成では再測定していない。
 
 ### .dockerignore
 
@@ -69,7 +68,7 @@ flowchart LR
 | environment       | `TZ: ${TZ:-Asia/Tokyo}` のみ。値は host の `.env` から compose が読む                                                                                                                                         |
 | volumes           | `./data` → `/data` の bind mount 1 つ                                                                                                                                                                         |
 | healthcheck       | `jq` で `claude.apiPort` (省略時 `// 3000`) を `port` に取り、空でなければ `curl -fsS http://127.0.0.1:$port/health`。詳細は下記「healthcheck と再起動」                                                      |
-| init              | `true`。node イメージは旧 deno イメージと違い tini を持たないため、cron の timeout や中断された Claude の子プロセスの孤児を回収する目的で compose の init を有効にする                                        |
+| init              | `true`。node イメージは tini を持たないため、cron の timeout や中断された Claude の子プロセスの孤児を回収する目的で compose の init を有効にする                                                              |
 | restart           | `unless-stopped`                                                                                                                                                                                              |
 | stop_grace_period | `15s`。`bot/mod.ts` の `shutdown()` は API サーバー停止・Discord クライアント破棄それぞれに最大 5 秒 (`SHUTDOWN_TIMEOUT_MS`) を許容し合計最大 10 秒かかり得るため、Docker の既定 (10s) より余裕を持たせている |
 
@@ -138,7 +137,7 @@ docker compose logs -f               # ログ確認
 
 `buildQueryOptions()` は `process.env` (値が `undefined` のキーを落としたもの) を展開した上で `DISCORD_BOT_TOKEN` を足して `env` に渡す (SDK は `env` を指定すると `process.env` を継承しないため)。
 
-Node には Deno のような権限モデルが無く、プロセスは起動したユーザの権限でファイル・ネットワーク・子プロセスにアクセスできる。Dockerfile の `CMD` にも権限フラグは無い。`query()` が spawn する Claude Code はもともとプロセス側の権限モデルの外で動く。
+Node には権限モデルが無く、プロセスは起動したユーザの権限でファイル・ネットワーク・子プロセスにアクセスできる。Dockerfile の `CMD` にも権限フラグは無い。`query()` が spawn する Claude Code はもともとプロセス側の権限モデルの外で動く。
 
 ## data/ ディレクトリ
 
@@ -152,11 +151,13 @@ Node には Deno のような権限モデルが無く、プロセスは起動し
 | `data/home/google-health/token.json` | Google Health API のトークン (`GOOGLE_HEALTH_TOKEN_PATH` の既定値)。初回認可時に bot が作る | `data/home/*` に含まれ管理外                                                                                                                                                                          |
 | `data/workspace/`                    | エージェントワークスペース。本番の cwd                                                      | `data/workspace/*` は管理外。`.claude/`、`CLAUDE.md`、`cron/`、`apm.yml`、`apm.lock.yaml`、`.gitkeep` を `!` で除外解除して追跡する。`cron/*.once.md` は再度 ignore する (詳細は後述の「追跡対象」節) |
 
-`.gitignore` はこのほか `**/*.sqlite`/`**/*.sqlite-shm`/`**/*.sqlite-wal` (永続化ストア。旧 KV の `**/*.kv*` も残している。コメントによれば `storePath` 既定値が cwd 基準のため、ローカル実行ではリポジトリ直下の `.claude/` にも作られる)、`**/apm_modules/`、`**/.claude/settings.local.json`、`.env`、`coverage/` を管理外にし、`!**/.gitkeep` で `.gitkeep` は残す。
+`.gitignore` はこのほか `**/*.kv`/`**/*.kv-shm`/`**/*.kv-wal` (旧ストア (Deno KV) のファイル)、`**/*.sqlite`/`**/*.sqlite-shm`/`**/*.sqlite-wal` (永続化ストア。コメントによれば `storePath` 既定値が cwd 基準のため、ローカル実行ではリポジトリ直下の `.claude/` にも作られる)、`**/apm_modules/`、`**/.claude/settings.local.json`、`.env`、`coverage/` を管理外にし、`!**/.gitkeep` で `.gitkeep` は残す。
 
 ### cwd と SQLite ファイルの位置
 
-`config.schema.json` の `storePath` は既定 `.claude/loms-claw.sqlite` で、相対パスは cwd 基準 (`main.ts` が `openStoreDatabase(config.storePath)` で開く。内部で `new DatabaseSync(path, { timeout: 5000 })` (`timeout` は他プロセスがロックを持つ間の待ち時間 (ミリ秒)) と `PRAGMA journal_mode = WAL` を行う)。
+`config.schema.json` の `storePath` は既定 `.claude/loms-claw.sqlite` で、相対パスは cwd 基準 (`main.ts` が `openStoreDatabase(config.storePath)` で開く。内部で `new DatabaseSync(path, { timeout: 5000 })` (`timeout` は他プロセスがロックを持つ間の待ち時間 (ミリ秒)) だけを行い、`PRAGMA journal_mode = WAL` は `Store` のコンストラクタがガード判定の後に実行する)。
+
+`storePath` は loms-claw の SQLite ストアを指す。別のファイル (旧 Deno KV の `.kv` 等) を指していると起動時ガードが起動を拒否するので、`.sqlite` のパスに変えるか、キーを消して既定 (`.claude/loms-claw.sqlite`) にする。
 
 - 本番 (cwd `/data/workspace`): `/data/workspace/.claude/loms-claw.sqlite`。
 - ローカル実行 (`npm run start`、cwd はリポジトリ直下): リポジトリ直下の `.claude/loms-claw.sqlite`。
@@ -214,31 +215,6 @@ Node には Deno のような権限モデルが無く、プロセスは起動し
 - `data/config.json` (ローカル実行用に調整した config)
 - `data/home/` (Claude の設定・認証情報)
 - `data/workspace/` (エージェントワークスペース)
-
-## 旧 Deno KV からのデータ移行
-
-永続化ストアは Deno KV から SQLite (`node:sqlite`) に変わった。既存のスコープ設定・セッション ID を引き継ぐには、`scripts/` の 2 本で KV を JSON にダンプして SQLite に取り込む。KV のキー `["channel", id, field]` は `settings(id, field, value)` の 1 行に対応する (詳細は [store-and-settings.md](store-and-settings.md))。この形でないエントリは `import-kv.ts` がスキップして標準エラーに出し、最後に `imported N entries, skipped M entries` を標準出力に出す。
-
-KV ファイルのパスは `data/config.json` の `storePath` の値を使う (cwd は `/data/workspace`)。稼働サーバ (ceres) の現在値は `./loms-claw.kv`、つまり `/data/workspace/loms-claw.kv` である。`storePath` を省略している場合は旧既定 `.claude/loms-claw.kv` (cwd 基準なので `/data/workspace/.claude/loms-claw.kv`) から新既定 `.claude/loms-claw.sqlite` (同 `/data/workspace/.claude/loms-claw.sqlite`) へ、同じ手順で dump / import する。以下の `<旧 storePath>` はこのパス、`<新 storePath>` は `.sqlite` 拡張子の新しいパス (例: `/data/workspace/loms-claw.sqlite`) を指す。
-
-1. 旧イメージ (Deno) のコンテナで `dump-kv.ts` を実行し、`data/kv-dump.json` を得る。旧イメージは `scripts/` を持たないため、host の `scripts/` を読み取り専用で重ねる。**このステップはイメージを切り替える前 (`docker compose build` で新イメージに置き換える前) に行う。**
-
-   ```sh
-   docker compose run --rm -v "$PWD/scripts:/scripts:ro" bot deno run --unstable-kv --allow-read --allow-write /scripts/dump-kv.ts <旧 storePath> > data/kv-dump.json
-   ```
-
-2. 新イメージ (Node) に切り替えた後、`import-kv.ts` で `<新 storePath>` に取り込む。
-
-   ```sh
-   docker compose run --rm bot node /app/scripts/import-kv.ts /data/kv-dump.json <新 storePath>
-   ```
-
-3. `data/config.json` の `storePath` を `.sqlite` のパスに変えてから起動する。順序を逆にして `.kv` のまま起動すると、起動時ガードが拒否する。
-4. 動作を確認したら、旧 `.kv` ファイル (`loms-claw.kv*`) と `data/kv-dump.json` は削除してよい。
-
-移行漏れの警告: 起動時に `settings` が空で、`storePath` の拡張子が `.sqlite` かつ同じディレクトリに `loms-claw.kv` (旧既定名) があると、`main.ts` が `log.warn` で移行節を参照するよう出す。起動は止めない。
-
-起動時ガード: `Store` のコンストラクタは、開いた DB ファイルにテーブルがあるのに `settings` が無い場合 (旧 Deno KV ファイル等) に `store file is not a loms-claw database (old Deno KV file?)` を投げる。`main.ts` は `failed to open store: ...` をログして `process.exit(1)` する。別形式のファイルを黙って開いて壊すことを防ぐための措置である。
 
 ## dependabot と GitHub Actions
 

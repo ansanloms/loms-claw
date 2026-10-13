@@ -3,7 +3,7 @@
  * スコープ抽出 → active 上書き取得 → 反応判定) を `bot/mod.ts` から切り出したもの。
  *
  * discord.js の `Message` / `Client` に直接触れず、呼び出し側 (`bot/mod.ts`)
- * が取り出した最小の値 (`IncomingMessageInput`) と、KV 読み取り・メンション判定・
+ * が取り出した最小の値 (`IncomingMessageInput`) と、ストア読み取り・メンション判定・
  * レート制限といった副作用を持つ処理を関数として注入する (`IncomingMessageDeps`)。
  * ログ出力・キュー投入・Claude 呼び出しは従来どおり `bot/mod.ts` に残す。
  *
@@ -63,7 +63,7 @@ export interface IncomingMessageDeps {
    * `client.user` が無ければ常に false を返すこと。
    */
   isMentioned: (opts: MentionCheckOptions) => boolean;
-  /** そのスコープの active 上書き設定 (KV 読み取り)。未設定なら undefined。 */
+  /** そのスコープの active 上書き設定 (ストア読み取り)。未設定なら undefined。 */
   getActiveOverride: (scope: StoreScope) => Promise<boolean | undefined>;
   /** 自己メンション応答のレート枠が尽きているか (非消費の事前判定)。 */
   isSelfMentionRateLimited: () => boolean;

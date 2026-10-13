@@ -121,13 +121,12 @@ export interface SettingsPatch {
 /**
  * ストア用の SQLite DB を開く。
  *
- * `timeout` は他プロセス (import-kv.ts 等) がロックを持つ間の待ち時間 (ミリ秒)。
- * 並行アクセスに備えて WAL モードにする。
+ * `timeout` は他プロセスがロックを持つ間の待ち時間 (ミリ秒)。
+ * WAL モードへの切り替えは `Store` のコンストラクタがガード判定の後に行う
+ * (別形式のファイルのジャーナルモードを書き換えないため)。
  */
 export function openStoreDatabase(path: string): DatabaseSync {
-  const db = new DatabaseSync(path, { timeout: 5000 });
-  db.exec("PRAGMA journal_mode = WAL");
-  return db;
+  return new DatabaseSync(path, { timeout: 5000 });
 }
 
 /**
@@ -182,11 +181,10 @@ export class Store {
   private readonly deleteAll: StatementSync;
   private readonly selectChannel: StatementSync;
   private readonly selectChannelAndThread: StatementSync;
-  private readonly countRows: StatementSync;
 
   /**
    * @throws 既存の DB ファイルにテーブルがあるのに `settings` が無いとき
-   *   (旧 Deno KV ファイルなど、別形式のファイルを黙って開かないため)。
+   *   (別形式のファイルを黙って開かないため)。
    */
   constructor(db: DatabaseSync, defaults: StoreDefaults = {}) {
     this.db = db;
@@ -197,9 +195,11 @@ export class Store {
       .map(toTableName);
     if (tables.length > 0 && !tables.includes("settings")) {
       throw new Error(
-        "store file is not a loms-claw database (old Deno KV file?)",
+        "store file is not a loms-claw database (check that storePath points to the loms-claw SQLite store)",
       );
     }
+    // 並行アクセスに備えて WAL モードにする (`:memory:` では WAL にならないが害は無い)。
+    this.db.exec("PRAGMA journal_mode = WAL");
     this.db.exec(
       `CREATE TABLE IF NOT EXISTS settings (
         id TEXT NOT NULL,
@@ -225,19 +225,6 @@ export class Store {
     this.selectChannelAndThread = this.db.prepare(
       "SELECT id, field, value FROM settings WHERE id IN ($channelId, $threadId)",
     );
-    this.countRows = this.db.prepare("SELECT COUNT(*) AS n FROM settings");
-  }
-
-  /**
-   * 設定が 1 件も保存されていないかを返す。起動時に旧 Deno KV ファイルの
-   * 取り込み忘れを検知するために使う。
-   */
-  isEmpty(): boolean {
-    const row = this.countRows.get();
-    if (!isRecord(row) || typeof row.n !== "number") {
-      throw new Error("store: unexpected row shape for settings count");
-    }
-    return row.n === 0;
   }
 
   private readValue(id: string, field: string): string | null {

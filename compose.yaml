@@ -27,8 +27,7 @@ services:
       retries: 3
       start_period: 60s
     restart: unless-stopped
-    # 旧ベースイメージ (denoland/deno) は tini を ENTRYPOINT に持っていたが、node イメージには無い。
-    # cron の timeout や中断された Claude の子プロセスの孤児を回収するため init を有効にする。
+    # node イメージには tini が無い。cron の timeout や中断された Claude の子プロセスの孤児を回収するため init を有効にする。
     init: true
     # bot/mod.ts の shutdown() は apiServer.close() / client.destroy() に
     # それぞれ最大 5 秒 (SHUTDOWN_TIMEOUT_MS) を許容するため、合計最大 10 秒

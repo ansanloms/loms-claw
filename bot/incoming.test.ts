@@ -15,7 +15,7 @@ const baseConfig: Config = {
     userId: "user-1",
     activeChannelIds: ["ch-active-1"],
   },
-  storePath: "/tmp/test-loms-claw.kv",
+  storePath: "/tmp/test-loms-claw.sqlite",
   claude: {
     maxTurns: 10,
     timeout: 300000,
@@ -151,7 +151,7 @@ describe("resolveIncomingMessage", () => {
       throw new Error("expected handle decision");
     }
     assert.deepStrictEqual(decision.isSelfMessage, true);
-    // 自己メッセージでは active 上書き (KV 読み取り) を引かない
+    // 自己メッセージでは active 上書き (ストア読み取り) を引かない
     assert.deepStrictEqual(calls.getActiveOverride.length, 0);
   });
 

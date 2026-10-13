@@ -37,7 +37,7 @@ export function isAuthorized(
  * そのスコープが active (mention 不要で全メッセージに反応する) かを解決する。
  *
  * 解決順:
- *   1. override (KV の per-scope 設定) が boolean ならそれを採用する
+ *   1. override (ストアの per-scope 設定) が boolean ならそれを採用する
  *   2. undefined なら config の activeChannelIds によるリスト判定へフォールバックする
  *      (スレッドの場合は親チャンネル ID も見る)
  *
@@ -67,12 +67,12 @@ export function resolveActive(
 /**
  * メッセージに反応すべきか判定する。
  *
- * - resolveActive() が true を返すスコープ (KV の per-scope 上書き、または
+ * - resolveActive() が true を返すスコープ (ストアの per-scope 上書き、または
  *   activeChannelIds によるリスト判定) → 原則全メッセージに反応
  *   - bot へのメンションがなく他ユーザーへのメンションがある場合は無視
  * - それ以外 → bot mention 必須
  *
- * KV の per-scope 上書き (activeOverride) は config の activeChannelIds より
+ * ストアの per-scope 上書き (activeOverride) は config の activeChannelIds より
  * 優先される。false を明示すると config で active なチャンネルでも mention
  * 必須へ落とせる。詳細な解決順は resolveActive() を参照。
  *
@@ -83,7 +83,7 @@ export function resolveActive(
  *
  * @param hasNonBotMentions - メッセージに bot 以外のユーザーメンションが含まれるか。
  *   @everyone や @role は対象外（discord.js の mentions.users にはユーザー個別メンションのみ含まれる）。
- * @param activeOverride - KV に保存された per-scope の active 上書き。未設定なら undefined。
+ * @param activeOverride - ストアに保存された per-scope の active 上書き。未設定なら undefined。
  */
 export function shouldRespond(
   channelId: string,

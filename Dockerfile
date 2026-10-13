@@ -1,11 +1,5 @@
 FROM docker.io/node:26-bookworm-slim
 
-# workspace の skill / cron (google-health, mountain-weather, find-docs) が
-# Deno を使うため、Deno バイナリを同梱する。docs/api は .dockerignore で
-# イメージに入らず、この同梱の理由ではない。
-# skill が Deno を離れたら外す (issue #190)。
-COPY --from=docker.io/denoland/deno:bin-2.9.7 /deno /usr/local/bin/deno
-
 # 実行時データは host の ./data を /data に bind mount する (compose.yaml)。
 
 # Claude Code の設定・認証情報の置き場所 (既定の ~/.claude を置き換える)。

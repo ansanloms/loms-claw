@@ -296,7 +296,7 @@ export class CronExecutor {
   ): Promise<void> {
     const sessionKey = `cron:${job.name}`;
 
-    // session / model / effort は独立した KV 読みなので並列で取得する。
+    // session / model / effort は独立したストア読みなので並列で取得する。
     // (cron はスレッドを持たないので channel スコープのみ)
     const [sessionId, channelModel, channelEffort] = await Promise.all([
       job.resumeSession
@@ -372,7 +372,7 @@ export class CronExecutor {
   /**
    * command ジョブ 1 件を実行する (`sh -c` → Discord 投稿)。
    *
-   * KV (session / model / effort)・システムプロンプト・承認には触れない。
+   * ストア (session / model / effort)・システムプロンプト・承認には触れない。
    */
   private async runCommandJob(
     job: CronCommandJob,
