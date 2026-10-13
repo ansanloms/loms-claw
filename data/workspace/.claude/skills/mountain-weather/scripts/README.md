@@ -2,7 +2,7 @@
 
 てんくらの登山指数 HTML と Open-Meteo の山頂数値予報を取得・解析し、山コード・気象庁区域コードを検索する CLI ツール。
 
-`node_modules` が無いとき、または skill を更新 (`apm update` 等) した直後は、`npm ci --omit=dev --prefix "<scripts の絶対パス>"` で依存を入れる (Node.js 24 以上)。実行に要るのは gunshi だけなので devDependencies は入れない。
+`node_modules` が無いときは `npm ci --omit=dev --prefix "<scripts の絶対パス>"` で入れる (Node.js 24 以上)。実行に要るのは gunshi だけなので devDependencies は入れない。
 
 CLI は package.json の `bin` として公開しており `npx --no -- <name> <args>` で実行する (cwd が `scripts` ディレクトリの場合。別の cwd からは `npx --no --prefix "<scripts の絶対パス>" -- <name> <args>`)。別の cwd から `--prefix` で実行する場合、`--file` 等のパスは絶対パスで渡す (`--prefix` は bin の解決先を変えるだけで、相対パスは呼び出し元の cwd 基準で解決される)。`--` は必須。無いと npm 11 が `--config` 等のフラグを自分の設定として取り込む。
 

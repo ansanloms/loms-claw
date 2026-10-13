@@ -34,6 +34,6 @@ apm install ansanloms/skills/google-health --target claude
 
 初回認可の前に `GOOGLE_HEALTH_TOKEN_PATH` の親ディレクトリを作成しておく (例: `mkdir -p -m 700 ~/.local/state/google-health`)。
 
-cron・監視スクリプトなど skill の外から `token-status` を呼ぶ場合は `npx --no --prefix "<scripts の絶対パス>" -- token-status` を使う。exit code 2 を「再認可が必要」と扱う。exit code 1 はセットアップや設定の不備で判定できなかった状態 (`npm ci` 忘れ・未認可でトークンファイルが無い・環境変数の欠落等) なので無視せず、exit code 2 とは別に通知し、原因は stderr で見分ける。`token-status` はサーバへ問い合わせずトークンファイルから期限を計算するだけなので、サーバ側で先に失効したリフレッシュトークンは検出できない (exit code 0)。`apm update` で `node_modules` が消えるため、更新のたびに `npm ci --omit=dev --prefix "<scripts の絶対パス>"` を再実行する。
+cron・監視スクリプトなど skill の外から `token-status` を呼ぶ場合は `npx --no --prefix "<scripts の絶対パス>" -- token-status` を使う。exit code 2 を「再認可が必要」と扱う。exit code 1 はセットアップや設定の不備で判定できなかった状態 (依存未導入・未認可でトークンファイルが無い・環境変数の欠落等) なので無視せず、exit code 2 とは別に通知し、原因は stderr で見分ける。依存未導入は `node_modules` が無い状態で、モジュール解決エラーで exit code 1 になるので、`npm ci --omit=dev --prefix "<scripts の絶対パス>"` で解消する。`token-status` はサーバへ問い合わせずトークンファイルから期限を計算するだけなので、サーバ側で先に失効したリフレッシュトークンは検出できない (exit code 0)。
 
 詳細は [SKILL.md](./SKILL.md) を参照。

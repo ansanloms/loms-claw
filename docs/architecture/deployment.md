@@ -207,6 +207,14 @@ Node には権限モデルが無く、プロセスは起動したユーザの権
 | `apm.yml` に列挙 (9 本) | `find-docs`, `yamareco`, `discord`, `jartic-traffic-jam-forecast`, `jartic-traffic-volume`, `bluesky`, `news-digest`, `mountain-weather`, `google-health` |
 | ローカル管理 (4 本)     | `cron`, `logs`, `settings`, `travel-note`                                                                                                                 |
 
+### apm lifecycle と skill の依存
+
+`apm install` と `apm update` は、skill の `scripts/node_modules` を入れない。`apm update` は既存の `node_modules` も消す。そこで `data/workspace/apm.yml` の `lifecycle.post-install` に、`.claude/skills/*/scripts` のうち `package-lock.json` と空でない `dependencies` を持つものへ `npm ci --omit=dev` を実行するスクリプトを置いている。`apm install` と `apm update` の後に動き、現在の対象は `google-health` と `mountain-weather`。ブロックの内容と出典は、上流 `ansanloms/skills` の README (「依存を持つ skill」節) にある。
+
+- 初回と、`lifecycle` ブロックを編集した後は、`data/workspace` で `apm lifecycle trust` を実行する。順序は `apm lifecycle trust` → `apm install`。信頼前の `apm install` では、apm が lifecycle をスキップする。
+- lifecycle の失敗は apm が表に出さない。`apm install` は何も出力せず exit 0 で終わるので、`ls -d .claude/skills/*/scripts/node_modules` で導入を確認する。
+- lifecycle が動くのは、apm を実行した環境 (ローカル・devcontainer) だけ。ceres へは git pull で反映する。`node_modules` は git の追跡外なので、skill の依存 (`package-lock.json`) が変わったデプロイでは、コンテナ内 (cwd は `/data/workspace`) で `npm ci --omit=dev --prefix .claude/skills/<skill>/scripts` を実行する。
+
 ## .worktreeinclude
 
 `.worktreeinclude` は、開発者ローカルで git worktree を作るときに `git-worktree-include` がメイン worktree から新しい worktree へ複製するローカル資産の一覧 (gitignore 構文)。コメントによれば、`data/` 配下の実行時データは本番からメイン worktree の `data/` へ同期したものを正とし、各 worktree はそこから複製する。列挙されているのは次の 4 つ。

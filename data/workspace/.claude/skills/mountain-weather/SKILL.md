@@ -23,16 +23,16 @@ for d in "$PWD/.claude/skills/mountain-weather" "$HOME/.claude/skills/mountain-w
 done
 ```
 
-- 配布先 (`apm install` 後) では、プロジェクトローカルな配置の `$PWD/.claude/skills/mountain-weather/scripts` またはユーザレベルな配置の `$HOME/.claude/skills/mountain-weather/scripts` がヒットする。
+- skill として配置された先では、プロジェクトローカルな配置の `$PWD/.claude/skills/mountain-weather/scripts` またはユーザレベルな配置の `$HOME/.claude/skills/mountain-weather/scripts` がヒットする。
 - この skill のリポジトリ本体 (`ansanloms/skills`) 内で作業している場合は `$PWD/mountain-weather/scripts` がヒットする。
 - 複数ヒットしたら先に見つかったものを使う。0 件のときは、実際のインストール先を確認してから進める (推測でパスを組み立てない)。理由: 想定した配置になっていない。
 - 以降のコマンド例中の `<scripts の絶対パス>` は、ここで確定した絶対パスに読み替える。呼び出すたびにこのパスをリテラルで書き下し、変数には入れない。
-- 最初のコマンドを実行する前に、`<scripts の絶対パス>/node_modules` が無いとき、または skill を更新 (`apm update` 等) した直後であれば、下の「実行環境」の `npm ci --omit=dev --prefix` を実行する。
+- 最初のコマンドを実行する前に、`<scripts の絶対パス>/node_modules` が無いときは、下の「実行環境」の `npm ci --omit=dev --prefix` を実行する。
 - `scripts/README.md` (内部動作の参照先として各節から案内する) のコマンド例はすべて相対形式 (`npx --no -- <name> <args>`) で、cwd が `scripts` ディレクトリ自身である前提で書かれている。この SKILL.md と併読するときも、実行時は必ずここで確定した絶対パスを `--prefix` に指定する (`scripts/README.md` の例をそのままコピーしない)。
 
 ## 実行環境
 
-Node.js 24 以上が必要。`<scripts の絶対パス>/node_modules` が無いとき、または skill を更新 (`apm update` 等) した直後は、`npm ci --omit=dev --prefix "<scripts の絶対パス>"` で依存 (gunshi) を入れる。実行に要るのは gunshi だけなので、devDependencies (typescript・oxlint・oxfmt) は入れない。依存が無いまま実行すると 4 コマンドすべてが `gunshi` の解決エラーで失敗する。
+Node.js 24 以上が必要。依存 (gunshi) は `<scripts の絶対パス>/node_modules` が無いときに `npm ci --omit=dev --prefix "<scripts の絶対パス>"` で入れる。実行に要るのは gunshi だけなので、devDependencies (typescript・oxlint・oxfmt) は入れない。依存が無いまま実行すると 4 コマンドすべてが `gunshi` の解決エラーで失敗する。
 
 `--prefix` は bin の解決先を指定するだけで、CLI の cwd は呼び出し元のまま変わらない。`--file` 等でファイルパスを渡すときは絶対パスで渡す (相対パスは呼び出し元基準で解決される)。
 
