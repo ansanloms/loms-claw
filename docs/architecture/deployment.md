@@ -155,9 +155,9 @@ Node には権限モデルが無く、プロセスは起動したユーザの権
 
 ### cwd と SQLite ファイルの位置
 
-`config.schema.json` の `storePath` は既定 `.claude/loms-claw.sqlite` で、相対パスは cwd 基準 (`main.ts` が `openStoreDatabase(config.storePath)` で開く。内部で `new DatabaseSync(path, { timeout: 5000 })` (`timeout` は他プロセスがロックを持つ間の待ち時間 (ミリ秒)) だけを行い、`PRAGMA journal_mode = WAL` は `Store` のコンストラクタがガード判定の後に実行する)。
+`config.schema.json` の `storePath` は既定 `.claude/loms-claw.sqlite` で、相対パスは cwd 基準 (`main.ts` が `openStoreDatabase(config.storePath)` で開く。内部で `new DatabaseSync(path, { timeout: 5000 })` (`timeout` は他プロセスがロックを持つ間の待ち時間 (ミリ秒)) の直後に `PRAGMA journal_mode = WAL` を実行する)。
 
-`storePath` は loms-claw の SQLite ストアを指す。別のファイル (旧 Deno KV の `.kv` 等) を指していると起動時ガードが起動を拒否するので、`.sqlite` のパスに変えるか、キーを消して既定 (`.claude/loms-claw.sqlite`) にする。
+`storePath` は loms-claw の SQLite ストアのパス。パスの中身は検証しないため、別の SQLite ファイルを指していると、そのファイルに `settings` テーブルを作って使う。
 
 - 本番 (cwd `/data/workspace`): `/data/workspace/.claude/loms-claw.sqlite`。
 - ローカル実行 (`npm run start`、cwd はリポジトリ直下): リポジトリ直下の `.claude/loms-claw.sqlite`。

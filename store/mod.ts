@@ -122,21 +122,12 @@ export interface SettingsPatch {
  * ストア用の SQLite DB を開く。
  *
  * `timeout` は他プロセスがロックを持つ間の待ち時間 (ミリ秒)。
- * WAL モードへの切り替えは `Store` のコンストラクタがガード判定の後に行う
- * (別形式のファイルのジャーナルモードを書き換えないため)。
+ * 並行アクセスに備えて WAL モードにする (`:memory:` では WAL にならないが害は無い)。
  */
 export function openStoreDatabase(path: string): DatabaseSync {
-  return new DatabaseSync(path, { timeout: 5000 });
-}
-
-/**
- * `sqlite_master` の行から name を取り出す。形が合わなければストアの破損として throw する。
- */
-function toTableName(row: unknown): string {
-  if (!isRecord(row) || typeof row.name !== "string") {
-    throw new Error("store: unexpected row shape for sqlite_master");
-  }
-  return row.name;
+  const db = new DatabaseSync(path, { timeout: 5000 });
+  db.exec("PRAGMA journal_mode = WAL");
+  return db;
 }
 
 /**
@@ -182,24 +173,9 @@ export class Store {
   private readonly selectChannel: StatementSync;
   private readonly selectChannelAndThread: StatementSync;
 
-  /**
-   * @throws 既存の DB ファイルにテーブルがあるのに `settings` が無いとき
-   *   (別形式のファイルを黙って開かないため)。
-   */
   constructor(db: DatabaseSync, defaults: StoreDefaults = {}) {
     this.db = db;
     this.defaults = defaults;
-    const tables = this.db
-      .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
-      .all()
-      .map(toTableName);
-    if (tables.length > 0 && !tables.includes("settings")) {
-      throw new Error(
-        "store file is not a loms-claw database (check that storePath points to the loms-claw SQLite store)",
-      );
-    }
-    // 並行アクセスに備えて WAL モードにする (`:memory:` では WAL にならないが害は無い)。
-    this.db.exec("PRAGMA journal_mode = WAL");
     this.db.exec(
       `CREATE TABLE IF NOT EXISTS settings (
         id TEXT NOT NULL,
