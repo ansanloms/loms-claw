@@ -14,6 +14,8 @@ timeout: 600000
 
 各ノートの frontmatter に規約違反があれば修正する。以降の手順 (index 再生成・突合) は修正後の値で行う。
 
+違反とみなすのは次の 3 つ。
+
 - status が 5 値以外
 - 日時が ISO 8601 `+09:00` 形式でない
 - `thread`・`pin_channel`・日時・`pin_messages` と `pin_packing_messages` の各要素の引用符欠落
