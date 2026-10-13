@@ -2,23 +2,25 @@
 set -u
 
 # cwd はワークスペース (/data/workspace) 前提。GOOGLE_HEALTH_* は bot プロセスの env から継承される。
-SKILL_SCRIPTS=".claude/skills/google-health/scripts"
-
-if ! command -v deno >/dev/null 2>&1; then
-  echo "deno コマンドが見つからない" >&2
-  exit 1
-fi
+# npx --prefix には絶対パスを渡す。
+SKILL_SCRIPTS="$(pwd)/.claude/skills/google-health/scripts"
 
 STDERR_FILE="$(mktemp)"
 trap 'rm -f "$STDERR_FILE"' EXIT
 
-STDOUT="$(deno task -q --cwd "$SKILL_SCRIPTS" token-status 2>"$STDERR_FILE")"
+STDOUT="$(npx --no --prefix "$SKILL_SCRIPTS" -- token-status 2>"$STDERR_FILE")"
 CODE=$?
 
-if [ "$CODE" -ne 0 ]; then
-  STDERR_LINE="$(head -n 1 "$STDERR_FILE")"
-  echo "Google Health のトークンが使えない状態 (失効・未認可・ファイル破損のいずれか)。CLI の出力: ${STDERR_LINE}。#muscle で「Google Health の再認可」と頼めば手順を案内する。"
+STDERR_LINE="$(head -n 1 "$STDERR_FILE")"
+
+if [ "$CODE" -eq 2 ]; then
+  echo "Google Health のリフレッシュトークンが失効している。#muscle で「Google Health の再認可」と頼めば手順を案内する。"
   exit 0
+fi
+
+if [ "$CODE" -ne 0 ]; then
+  echo "token-status で判定できなかった (依存未導入・環境変数の欠落・トークンファイル不在等。apm update 後なら npm ci --omit=dev --prefix \"$SKILL_SCRIPTS\" を実行する)。CLI の出力: ${STDERR_LINE}" >&2
+  exit 1
 fi
 
 DAYS="$(printf '%s' "$STDOUT" | jq -r '.refresh_token_expires_in_days' 2>/dev/null)"

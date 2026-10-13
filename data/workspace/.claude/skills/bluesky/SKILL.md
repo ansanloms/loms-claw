@@ -144,6 +144,23 @@ curl -sS -G 'https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed' \
     - 引用元は `.post.embed.record.record` にある (`app.bsky.embed.record#view` と同じ扱い)。
   - 上記に無い種別が来たら、`(埋め込みあり: <$type>)` の形で種別名を添えて本文のみ提示する。列挙外を理由に投稿を落とさない。
 
+上記 jq の出力例 (取得日: 2026-10-12。2 件中 1 件のみ抜粋、`text` は途中で切って `…` で省略)。取得コマンド: `curl -sS -G 'https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed' --data-urlencode 'actor=bsky.app' --data-urlencode 'limit=2' --data-urlencode 'filter=posts_no_replies'` の出力を、上記の jq テンプレートに通した結果。
+
+```json
+{
+  "is_repost": true,
+  "time": "2026-10-11T16:59:27.855Z",
+  "author": "nsousanis.bsky.social",
+  "text": "Students made their first minicomics in my intro making course - …",
+  "rkey": "3mxk7gsrfxs2w",
+  "embed": "app.bsky.embed.video#view",
+  "media_type": null,
+  "images": [],
+  "external": null,
+  "counts": { "like": 4825, "repost": 994, "reply": 72 }
+}
+```
+
 `recordWithMedia#view` (`media` が `images#view`) の実レスポンス例 (取得日: 2026-08-10。関係の無いフィールドは `…` で省略)。取得コマンド: `curl -sS -G 'https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed' --data-urlencode 'actor=bsky.app' --data-urlencode 'limit=100' --data-urlencode 'filter=posts_with_media'` の結果から該当投稿の `.post.embed` を抜粋。
 
 ```json
@@ -312,6 +329,15 @@ curl -sS -G 'https://public.api.bsky.app/xrpc/app.bsky.graph.getFollows' \
 curl -sS -G 'https://public.api.bsky.app/xrpc/app.bsky.graph.getFollowers' \
   --data-urlencode 'actor=<handle>' --data-urlencode 'limit=100' \
 | jq -r 'if .cursor then "cursor:\(.cursor)" else empty end, (.followers[] | "\(.handle)\t\(.displayName // "")")'
+```
+
+上記 `getFollows` の jq の出力例 (取得日: 2026-10-12。`limit=3` で取得)。取得コマンド: `curl -sS -G 'https://public.api.bsky.app/xrpc/app.bsky.graph.getFollows' --data-urlencode 'actor=bsky.app' --data-urlencode 'limit=3' | jq -r 'if .cursor then "cursor:\(.cursor)" else empty end, (.follows[] | "\(.handle)\t\(.displayName // "")")'`。1 行目が `cursor`、2 行目以降が `handle`、タブ、`displayName` である (`displayName` 末尾の空白は整形で除去した)。
+
+```text
+cursor:3mv6j4josv32b
+emilyrcwilson.bsky.social	EMILY WILSON
+pantspants.bsky.social	Mr. Joshua
+minakimes.bsky.social	Mina Kimes
 ```
 
 `cursor` を本文行と同じストリームへ単純に `-r` 出力すると、終端 (`cursor` キーが無い) では `.cursor` が `null` になり文字列 `null` が本文行に混ざって次回リクエストへ誤って渡す事故が起きる。この事故は `app.bsky.graph.getFollows` を実際に終端まで叩いて確認した (空応答では `.cursor` キー自体が存在しない)。上記のように `cursor` の有無を判定してから `cursor:` 接頭辞付きで出す形にすると、終端では cursor 行自体が出ず本文行と区別できる。

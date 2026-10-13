@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { cli, define } from "gunshi";
 import { loadTokenConfig } from "../lib/config.ts";
 import { getValidToken } from "../lib/token-file.ts";
@@ -36,24 +37,24 @@ const command = define({
     const { from, to, reconcile, filter: rawFilter } = ctx.values;
     if (dataType === undefined) {
       console.error(
-        `usage: datapoints <${
-          Object.keys(DATA_TYPE_FILTER_FIELDS).join("|")
-        }|...> (--from=<...> --to=<...> | --filter=<AIP-160>) [--reconcile]`,
+        `usage: datapoints <${Object.keys(DATA_TYPE_FILTER_FIELDS).join(
+          "|",
+        )}|...> (--from=<...> --to=<...> | --filter=<AIP-160>) [--reconcile]`,
       );
-      Deno.exit(1);
+      process.exit(1);
     }
     const known = Object.hasOwn(DATA_TYPE_FILTER_FIELDS, dataType);
     if (rawFilter === undefined && !known) {
       console.error(
-        `usage: 表に無い dataType (${dataType}) は --filter (AIP-160) を指定する (対応表: ${
-          Object.keys(DATA_TYPE_FILTER_FIELDS).join(", ")
-        })`,
+        `usage: 表に無い dataType (${dataType}) は --filter (AIP-160) を指定する (対応表: ${Object.keys(
+          DATA_TYPE_FILTER_FIELDS,
+        ).join(", ")})`,
       );
-      Deno.exit(1);
+      process.exit(1);
     }
     if (rawFilter !== undefined && (from !== undefined || to !== undefined)) {
       console.error("usage: --filter と --from/--to は同時に指定できない");
-      Deno.exit(1);
+      process.exit(1);
     }
 
     try {
@@ -63,7 +64,7 @@ const command = define({
       } else {
         if (from === undefined || to === undefined) {
           console.error("usage: --from と --to は必須 (--filter 指定時は不要)");
-          Deno.exit(1);
+          process.exit(1);
         }
         filter = buildFilter(dataType, from, to);
       }
@@ -100,11 +101,9 @@ const command = define({
       console.log(JSON.stringify({ dataPoints }));
     } catch (e) {
       console.error(e instanceof Error ? e.message : String(e));
-      Deno.exit(1);
+      process.exit(1);
     }
   },
 });
 
-if (import.meta.main) {
-  await cli(Deno.args, command);
-}
+await cli(process.argv.slice(2), command);

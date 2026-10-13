@@ -40,6 +40,29 @@ JARTIC が公開する渋滞「予測」データを取得する手順。高速�
 ### 取得失敗時の扱い
 
 - 非 200 (例 `404`) の場合、レスポンス本体は JSON ではなく HTML のエラーページになる。実際に存在しないパスへ `curl` して `HTTP/2 404`・`content-type: text/html; charset=utf-8` の HTML ページが返ることを確認済み (2026 年 8 月)。ステータスコードと `Content-Type` の両方を必ず確認し、`200` かつ `application/json` でなければ `jq` に渡さず取得失敗として扱う。
+  存在しないパスへの `curl` の実測例 (取得日: 2026-10-12)。CloudFront 関連のヘッダ `via` `x-amz-cf-pop` `x-amz-cf-id` は省略した。
+
+  ```sh
+  curl -sS -D - --max-time 30 'https://www.jartic.or.jp/d/service/trafficjam/notfound.json'
+  ```
+
+  ```text
+  HTTP/2 404
+  content-type: text/html; charset=utf-8
+  date: Mon, 12 Oct 2026 14:23:35 GMT
+  server: nginx
+  x-cache: Error from cloudfront
+  (以下のヘッダは省略)
+
+  <html>
+  <head><title>404 Not Found</title></head>
+  <body>
+  <center><h1>404 Not Found</h1></center>
+  <hr><center>nginx</center>
+  </body>
+  </html>
+  ```
+
 - 取得は一時ファイルへ書いてから検証し、成功したときだけ本番パスへ `mv` する。素の `curl -o` で本番パスへ直接書くと、失敗レスポンス (HTML 等) が直前まで正常だったファイルを上書きしてしまう。後続の「ファイルが存在するか」だけを見る復旧手順 (後述「注意」) では、壊れたファイルが「存在する」と誤判定されて再取得されない。
 
   ```sh
@@ -98,7 +121,13 @@ jq '{updateDate, minYearMonth, maxYearMonth, months: (.trafficJam|keys)}' /tmp/h
 
 ### レスポンス例 (抜粋)
 
-上記の取得コマンドで得た `highway.json` (取得日: 2026-08-10) から、構造が分かる範囲に絞った抜粋 (`routeList` は 1 件、`trafficJam` は 1 年月 × 1 路線の上り・下り各 1 区間のみ残し、他は省略)。
+取得コマンド (取得日: 2026-08-10)。本節の取得コードの `curl` 行で、成功を確認して `mv` した `/tmp/highway.json` を抜粋した。
+
+```sh
+curl -sS -o /tmp/highway.json.tmp -w '%{http_code} %{content_type}' --max-time 60 'https://www.jartic.or.jp/d/service/trafficjam/highway.json'
+```
+
+上の取得で得た `highway.json` から、構造が分かる範囲に絞った抜粋 (`routeList` は 1 件、`trafficJam` は 1 年月 × 1 路線の上り・下り各 1 区間のみ残し、他は省略)。
 
 ```json
 {
@@ -255,7 +284,13 @@ jq '{updateDate, prefsWithData: [to_entries[] | select(.value|type=="array" and 
 
 ### レスポンス例 (抜粋)
 
-上記の取得コマンドで得た `general.json` (取得日: 2026-08-10) から、神奈川県の `R14` の 1 件目のイベントのみ残した抜粋。他の都道府県キー・他のイベントは省略している。`targetDays` は改行区切りの各行末に全角スペース (`U+3000`) の連続が付くことがある。下記はその生の値をそのまま載せており、除去していない。行によって末尾の全角スペースの個数は 0〜8 個とばらつく。エディタや端末によっては見た目上ほぼ判別できないので、日付をパースする側は末尾の空白混入を前提にトリムする。
+取得コマンド (取得日: 2026-08-10)。本節の取得コードの `curl` 行で、成功を確認して `mv` した `/tmp/general.json` を抜粋した。
+
+```sh
+curl -sS -o /tmp/general.json.tmp -w '%{http_code} %{content_type}' --max-time 30 'https://www.jartic.or.jp/d/service/trafficjam/general.json'
+```
+
+上の取得で得た `general.json` から、神奈川県の `R14` の 1 件目のイベントのみ残した抜粋。他の都道府県キー・他のイベントは省略している。`targetDays` は改行区切りの各行末に全角スペース (`U+3000`) の連続が付くことがある。下記はその生の値をそのまま載せており、除去していない。行によって末尾の全角スペースの個数は 0〜8 個とばらつく。エディタや端末によっては見た目上ほぼ判別できないので、日付をパースする側は末尾の空白混入を前提にトリムする。
 
 ```json
 {

@@ -1,0 +1,35 @@
+{
+  "name": "google-health-scripts",
+  "private": true,
+  "bin": {
+    "auth": "./cli/auth.ts",
+    "auth-url": "./cli/auth-url.ts",
+    "batch-delete": "./cli/batch-delete.ts",
+    "create": "./cli/create.ts",
+    "daily-rollup": "./cli/daily-rollup.ts",
+    "datapoints": "./cli/datapoints.ts",
+    "get": "./cli/get.ts",
+    "rollup": "./cli/rollup.ts",
+    "token": "./cli/token.ts",
+    "token-status": "./cli/token-status.ts",
+    "update": "./cli/update.ts"
+  },
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "lint": "oxlint && oxfmt --check && tsc --noEmit",
+    "fix": "oxlint --fix && oxfmt"
+  },
+  "dependencies": {
+    "gunshi": "0.37.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "oxfmt": "0.72.0",
+    "oxlint": "1.87.0",
+    "typescript": "7.0.2"
+  },
+  "engines": {
+    "node": ">=24.2"
+  }
+}

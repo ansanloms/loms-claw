@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { cli, define } from "gunshi";
 import { DEFAULT_PORT, loadTokenConfig } from "../lib/config.ts";
 import {
@@ -22,8 +23,7 @@ const command = define({
       type: "number",
       short: "p",
       default: DEFAULT_PORT,
-      description:
-        `待ち受ける port (既定 ${DEFAULT_PORT})。変える場合は Cloud Console の Authorized redirect URIs も同じ値の http://localhost:<port> に変更しておく`,
+      description: `待ち受ける port (既定 ${DEFAULT_PORT})。変える場合は Cloud Console の Authorized redirect URIs も同じ値の http://localhost:<port> に変更しておく`,
     },
     scope: {
       type: "string",
@@ -43,9 +43,8 @@ const command = define({
       const url = buildAuthUrl({
         clientId: config.clientId,
         redirectUri: config.redirectUri,
-        scopes: scope !== undefined && scope.length > 0
-          ? scope
-          : DEFAULT_SCOPES,
+        scopes:
+          scope !== undefined && scope.length > 0 ? scope : DEFAULT_SCOPES,
         state,
       });
       console.log(url);
@@ -70,18 +69,14 @@ const command = define({
 
       if (!result.ok) {
         console.error(result.reason);
-        Deno.exit(1);
+        process.exit(1);
       }
-      console.log(
-        JSON.stringify({ token_path: config.tokenPath }, null, 2),
-      );
+      console.log(JSON.stringify({ token_path: config.tokenPath }, null, 2));
     } catch (e) {
       console.error(e instanceof Error ? e.message : String(e));
-      Deno.exit(1);
+      process.exit(1);
     }
   },
 });
 
-if (import.meta.main) {
-  await cli(Deno.args, command);
-}
+await cli(process.argv.slice(2), command);

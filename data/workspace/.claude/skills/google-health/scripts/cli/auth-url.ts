@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { cli, define } from "gunshi";
 import { DEFAULT_PORT, loadAuthUrlConfig } from "../lib/config.ts";
 import { buildAuthUrl, DEFAULT_SCOPES, generateState } from "../lib/oauth.ts";
@@ -11,8 +12,7 @@ const command = define({
       type: "number",
       short: "p",
       default: DEFAULT_PORT,
-      description:
-        `redirect_uri (http://localhost:<port>) に使う port (既定 ${DEFAULT_PORT})。auth コマンドの --port・token コマンドの --port と揃える`,
+      description: `redirect_uri (http://localhost:<port>) に使う port (既定 ${DEFAULT_PORT})。auth コマンドの --port・token コマンドの --port と揃える`,
     },
     scope: {
       type: "string",
@@ -31,20 +31,17 @@ const command = define({
         buildAuthUrl({
           clientId: config.clientId,
           redirectUri: config.redirectUri,
-          scopes: scope !== undefined && scope.length > 0
-            ? scope
-            : DEFAULT_SCOPES,
+          scopes:
+            scope !== undefined && scope.length > 0 ? scope : DEFAULT_SCOPES,
           state,
         }),
       );
       console.error(`state: ${state}`);
     } catch (e) {
       console.error(e instanceof Error ? e.message : String(e));
-      Deno.exit(1);
+      process.exit(1);
     }
   },
 });
 
-if (import.meta.main) {
-  await cli(Deno.args, command);
-}
+await cli(process.argv.slice(2), command);

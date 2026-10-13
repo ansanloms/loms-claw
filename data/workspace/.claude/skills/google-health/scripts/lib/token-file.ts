@@ -1,10 +1,15 @@
 /**
  * トークンファイル (access_token・refresh_token・expires_in 等) の読み書きと期限判定・更新。
  */
-import { dirname } from "@std/path";
+import { open, readFile, rename, unlink } from "node:fs/promises";
+import type { FileHandle } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 import type { TokenConfig } from "./config.ts";
 import type { ExchangeCodeResponse, RefreshResponse } from "./oauth.ts";
 import { refreshToken as requestRefreshToken } from "./oauth.ts";
+
+/** この package の scripts ディレクトリ (エラー文のコマンド案内用)。 */
+const SCRIPTS_DIR = resolve(import.meta.dirname, "..");
 
 export type StoredToken = {
   access_token: string;
@@ -39,19 +44,19 @@ const REQUIRED_NUMBER_FIELDS = [
 export async function readTokenFile(path: string): Promise<StoredToken> {
   let text: string;
   try {
-    text = await Deno.readTextFile(path);
+    text = await readFile(path, "utf-8");
   } catch (e) {
     throw new Error(
-      `トークンファイル (${path}) が読めない。先に token コマンドで取得する (親ディレクトリ ${
-        dirname(path)
-      } が無い場合は事前に作成しておく): ${
+      `トークンファイル (${path}) が読めない。先に token コマンドで取得する (親ディレクトリ ${dirname(
+        path,
+      )} が無い場合は事前に作成しておく): ${
         e instanceof Error ? e.message : String(e)
       }`,
     );
   }
   if (text.length === 0) {
     throw new Error(
-      `トークンファイル (${path}) が空。未認可の可能性がある。deno task auth を実行する (localhost に届かない端末では auth-url と token <code> の組み合わせ)。`,
+      `トークンファイル (${path}) が空。未認可の可能性がある。\`npx --no --prefix "${SCRIPTS_DIR}" -- auth\` を実行する (localhost に届かない端末では auth-url と token <code> の組み合わせ)。`,
     );
   }
   let body: unknown;
@@ -60,10 +65,12 @@ export async function readTokenFile(path: string): Promise<StoredToken> {
   } catch {
     throw new Error(`トークンファイル (${path}) が JSON として解釈できない`);
   }
-  const rec = typeof body === "object" && body !== null
-    ? (body as Record<string, unknown>)
-    : undefined;
-  const ok = rec !== undefined &&
+  const rec =
+    typeof body === "object" && body !== null
+      ? (body as Record<string, unknown>)
+      : undefined;
+  const ok =
+    rec !== undefined &&
     REQUIRED_STRING_FIELDS.every((k) => typeof rec[k] === "string") &&
     REQUIRED_NUMBER_FIELDS.every((k) => typeof rec[k] === "number");
   if (!ok) {
@@ -76,27 +83,24 @@ export async function readTokenFile(path: string): Promise<StoredToken> {
 
 /**
  * トークンファイルの親ディレクトリが存在し書き込めるかを、ネットワークに出る前に検査する。
- * dirname 自体には --allow-read/--allow-write が及ばない前提のため、ファイルパス自身への試し書き
- * (Deno.open。既存ファイルの内容は変更せず、位置を進めずに閉じる) で判定する。
- * ファイルが元から存在しなかった場合は `createNew` (--allow-write のみで存在確認と作成を兼ねられる) で
- * probe し、probe 後に Deno.remove で削除して空ファイルを残さない (既存ファイルがある場合は上書き可否だけを見る)。
+ * ファイルのパスだけを扱い、親ディレクトリの mkdir はしない。ファイルパス自身への試し書き
+ * (open。既存ファイルの内容は変更せず、位置を進めずに閉じる) で判定する。
+ * ファイルが元から存在しなかった場合は排他作成 (`wx`) で存在確認と作成を兼ねて
+ * probe し、probe 後に unlink で削除して空ファイルを残さない (既存ファイルがある場合は上書き可否だけを見る)。
  */
 export async function assertTokenPathWritable(path: string): Promise<void> {
-  let file: Deno.FsFile;
+  let file: FileHandle;
   let created: boolean;
   try {
     try {
-      file = await Deno.open(path, {
-        write: true,
-        createNew: true,
-        mode: 0o600,
-      });
+      file = await open(path, "wx", 0o600);
       created = true;
     } catch (e) {
-      if (!(e instanceof Deno.errors.AlreadyExists)) {
+      if ((e as NodeJS.ErrnoException).code !== "EEXIST") {
         throw e;
       }
-      file = await Deno.open(path, { write: true });
+      // 書き込み専用・切り詰め無し。ディレクトリなら EISDIR で止まる。
+      file = await open(path, "a");
       created = false;
     }
   } catch (e) {
@@ -107,20 +111,19 @@ export async function assertTokenPathWritable(path: string): Promise<void> {
       }`,
     );
   }
-  file.close();
+  await file.close();
   if (created) {
-    await Deno.remove(path);
+    await unlink(path);
   }
 }
 
 /**
  * トークンファイルを書く (パーミッション 0o600)。
- * 親ディレクトリは事前に存在している必要がある (作成はしない。deno task の --allow-write はファイル自身のパスにしか
- * 及ばず、親ディレクトリの mkdir はパーミッションエラーになるため)。
+ * 親ディレクトリは事前に存在している必要がある (作成はしない。ファイルのパスだけを扱う)。
  * 並列実行中の読み取りが truncate 中の内容を掴んだり、書き込み中断で refresh_token を失ったりしないよう、
- * `<path>.tmp` へ書いてから Deno.rename で置き換える (rename は同一ファイルシステム内ではアトミック)。
- * `.tmp` は `createNew` (O_EXCL 相当) で排他作成する。datapoints と daily-rollup が同時に refresh すると
- * どちらも同じ `.tmp` へ書こうとし得るため、先着以外は AlreadyExists になり、先着の rename でパスが空くのを
+ * `<path>.tmp` へ書いてから rename で置き換える (rename は同一ファイルシステム内ではアトミック)。
+ * `.tmp` は 排他作成 (`wx`。O_EXCL 相当)する。datapoints と daily-rollup が同時に refresh すると
+ * どちらも同じ `.tmp` へ書こうとし得るため、先着以外は EEXIST になり、先着の rename でパスが空くのを
  * 待って再試行する (intervalMs 間隔、最大 retries 回)。再試行しても空かない場合は他プロセスが書き込み中の
  * 可能性があるとして例外を投げる (他プロセスの `.tmp` を無断で削除はしない)。
  */
@@ -131,17 +134,13 @@ export async function writeTokenFile(
 ): Promise<void> {
   const { retries = 40, intervalMs = 50 } = retry;
   const tmpPath = `${path}.tmp`;
-  let file: Deno.FsFile;
-  for (let attempt = 0;; attempt++) {
+  let file: FileHandle;
+  for (let attempt = 0; ; attempt++) {
     try {
-      file = await Deno.open(tmpPath, {
-        write: true,
-        createNew: true,
-        mode: 0o600,
-      });
+      file = await open(tmpPath, "wx", 0o600);
       break;
     } catch (e) {
-      if (e instanceof Deno.errors.AlreadyExists) {
+      if ((e as NodeJS.ErrnoException).code === "EEXIST") {
         if (attempt >= retries) {
           throw new Error(
             `${tmpPath} が残っている。他のプロセスが書き込み中でなければ削除して再実行する。`,
@@ -151,31 +150,26 @@ export async function writeTokenFile(
         continue;
       }
       throw new Error(
-        `トークンファイル (${path}) が書けない。親ディレクトリ (${
-          dirname(path)
-        }) が無い場合は事前に作成しておく: ${
+        `トークンファイル (${path}) が書けない。親ディレクトリ (${dirname(
+          path,
+        )}) が無い場合は事前に作成しておく: ${
           e instanceof Error ? e.message : String(e)
         }`,
       );
     }
   }
   try {
-    await file.write(
-      new TextEncoder().encode(JSON.stringify(token, null, 2) + "\n"),
-    );
-    file.close();
-    await Deno.rename(tmpPath, path);
+    await file.writeFile(JSON.stringify(token, null, 2) + "\n");
+    await file.close();
+    await rename(tmpPath, path);
   } catch (e) {
-    try {
-      file.close();
-    } catch {
-      // 上の file.write/file.close が成功済みなら二重 close になるだけなので無視する。
-    }
-    await Deno.remove(tmpPath).catch(() => {});
+    // 上の writeFile/close が成功済みなら二重 close になるだけなので無視する。
+    await file.close().catch(() => {});
+    await unlink(tmpPath).catch(() => {});
     throw new Error(
-      `トークンファイル (${path}) が書けない。親ディレクトリ (${
-        dirname(path)
-      }) が無い場合は事前に作成しておく: ${
+      `トークンファイル (${path}) が書けない。親ディレクトリ (${dirname(
+        path,
+      )}) が無い場合は事前に作成しておく: ${
         e instanceof Error ? e.message : String(e)
       }`,
     );
@@ -236,9 +230,9 @@ export function applyRefresh(
     refresh_token: resp.refresh_token ?? prev.refresh_token,
     ...(resp.refresh_token_expires_in !== undefined
       ? {
-        refresh_token_expires_in: resp.refresh_token_expires_in,
-        refresh_token_obtained_at: now.toISOString(),
-      }
+          refresh_token_expires_in: resp.refresh_token_expires_in,
+          refresh_token_obtained_at: now.toISOString(),
+        }
       : {}),
   };
 }
@@ -266,20 +260,23 @@ export function computeTokenStatus(
     token.refresh_token_obtained_at ?? token.obtained_at,
   ).getTime();
   if (
-    !Number.isFinite(obtainedAt) || !Number.isFinite(refreshTokenObtainedAt)
+    !Number.isFinite(obtainedAt) ||
+    !Number.isFinite(refreshTokenObtainedAt)
   ) {
     throw new Error(
-      "トークンファイルが壊れている (obtained_at を解釈できない)。deno task auth で再認可すること (localhost に届かない端末では auth-url と token <code> の組み合わせ)。",
+      `トークンファイルが壊れている (obtained_at を解釈できない)。\`npx --no --prefix "${SCRIPTS_DIR}" -- auth\` で再認可すること (localhost に届かない端末では auth-url と token <code> の組み合わせ)。`,
     );
   }
   const accessTokenExpiresInSec = Math.round(
     (obtainedAt + token.expires_in * 1000 - now.getTime()) / 1000,
   );
   const refreshTokenExpiresInRawSec =
-    (refreshTokenObtainedAt + token.refresh_token_expires_in * 1000 -
-      now.getTime()) / 1000;
+    (refreshTokenObtainedAt +
+      token.refresh_token_expires_in * 1000 -
+      now.getTime()) /
+    1000;
   const refreshTokenExpiresInDays =
-    Math.round(refreshTokenExpiresInRawSec / (60 * 60 * 24) * 10) / 10;
+    Math.round((refreshTokenExpiresInRawSec / (60 * 60 * 24)) * 10) / 10;
   return {
     access_token_expires_in_sec: accessTokenExpiresInSec,
     refresh_token_expires_in_days: refreshTokenExpiresInDays,
@@ -289,7 +286,7 @@ export function computeTokenStatus(
 
 /**
  * 有効なアクセストークンを返す。期限切れなら refresh_token で更新し、トークンファイルへ書き戻す。
- * refresh に失敗した場合は `deno task auth` での再認可が必要な旨を添えた例外を投げる。
+ * refresh に失敗した場合は auth コマンド (SKILL.md 参照) での再認可が必要な旨を添えた例外を投げる。
  */
 export async function getValidToken(
   config: TokenConfig,
@@ -314,7 +311,7 @@ export async function getValidToken(
     throw new Error(
       `アクセストークンの更新に失敗した (${
         e instanceof Error ? e.message : String(e)
-      })。refresh_token が失効している可能性がある。deno task auth で再認可すること (localhost に届かない端末では auth-url と token <code> の組み合わせ)。`,
+      })。refresh_token が失効している可能性がある。\`npx --no --prefix "${SCRIPTS_DIR}" -- auth\` で再認可すること (localhost に届かない端末では auth-url と token <code> の組み合わせ)。`,
     );
   }
   const next = applyRefresh(token, resp, now);

@@ -39,11 +39,9 @@ export type OpenMeteoResponse = {
 };
 
 /** 時刻 1 点分のレコード。取得変数は数値または null (欠測はそのまま残す)。 */
-export type HourlyRecord =
-  & { time: string }
-  & {
-    [K in HourlyVar]: number | null;
-  };
+export type HourlyRecord = { time: string } & {
+  [K in HourlyVar]: number | null;
+};
 
 export type Result = {
   source: string;

@@ -70,6 +70,30 @@ curl -sS "https://discord.com/api/v10/guilds/${GUILD_ID}/channels" \
 - ギルド内の全チャンネルを返す。`type` は数値で表される (0 = テキスト/2 = ボイス/4 = カテゴリ/5 = アナウンス/11 = パブリックスレッド/15 = フォーラムなど)。
 - スレッドはこの一覧に含まれないことがある。既存スレッドの `id` を名前から引く手順は「既存スレッドの ID 解決」を参照。
 
+実レスポンス例 (取得日: 2026-10-12)。取得コマンド: `curl -sS "https://discord.com/api/v10/guilds/${GUILD_ID}/channels" -H "Authorization: Bot ${DISCORD_BOT_TOKEN}"` (`GUILD_ID` は環境変数 `DISCORD_GUILD_ID` の値)
+
+```json
+[
+  {
+    "id": "<CATEGORY_ID>",
+    "name": "Text Channels",
+    "type": 4,
+    "parent_id": null,
+    "…": "…"
+  },
+  {
+    "id": "<CHANNEL_ID>",
+    "name": "general",
+    "type": 0,
+    "parent_id": "<CATEGORY_ID>",
+    "…": "…"
+  },
+  "…"
+]
+```
+
+配列の先頭 2 件を抜粋した。各要素の `id`/`parent_id` は ID を `<...>` のプレースホルダに置き換えた (値は伏せた)。省略した `…` の位置には `position`/`guild_id` 等のフィールドや後続の要素が入る。カテゴリ (`type` 4) の `parent_id` は `null` で、その下のチャンネルはカテゴリの `id` を `parent_id` に持つ。
+
 ## チャンネル情報
 
 ```bash
@@ -77,6 +101,21 @@ curl -sS "https://discord.com/api/v10/channels/${CHANNEL_ID}" \
   -H "Authorization: Bot ${DISCORD_BOT_TOKEN}" \
 | jq '{id, name, type, topic, parent_id, nsfw}'
 ```
+
+実レスポンス例 (取得日: 2026-10-12)。取得コマンド: `curl -sS "https://discord.com/api/v10/channels/${CHANNEL_ID}" -H "Authorization: Bot ${DISCORD_BOT_TOKEN}" | jq '{id, name, type, topic, parent_id, nsfw}'` (`CHANNEL_ID` は環境変数 `DISCORD_CHANNEL_ID` の値)
+
+```json
+{
+  "id": "<CHANNEL_ID>",
+  "name": "dev",
+  "type": 0,
+  "topic": null,
+  "parent_id": "<CATEGORY_ID>",
+  "nsfw": false
+}
+```
+
+`id`/`parent_id` はプレースホルダに置き換えた (値は伏せた)。`jq` の絞り込み後の出力で、素の応答はこれ以外のフィールドも持つ。
 
 ## メッセージ送信
 
@@ -179,6 +218,41 @@ curl -sS "https://discord.com/api/v10/channels/${CHANNEL_ID}/messages?limit=50" 
 - `limit` は 1〜100 (既定 50)。新しい順に返る。
 - ページングは `before`/`after`/`around` にメッセージ ID を渡す。さらに過去をたどるなら最古のメッセージ ID を `before` に渡して再取得する。
 
+実レスポンス例 (取得日: 2026-10-12)。取得コマンド: `curl -sS "https://discord.com/api/v10/channels/${CHANNEL_ID}/messages?limit=2" -H "Authorization: Bot ${DISCORD_BOT_TOKEN}"` (`CHANNEL_ID` は環境変数 `DISCORD_CHANNEL_ID` の値。`limit=2` に絞った)
+
+```json
+[
+  {
+    "type": 0,
+    "content": "<redacted>",
+    "timestamp": "2026-09-16T01:00:15.387000+00:00",
+    "id": "<MESSAGE_ID_1>",
+    "channel_id": "<CHANNEL_ID>",
+    "author": {
+      "id": "<USER_ID>",
+      "username": "<redacted>",
+      "…": "…"
+    },
+    "…": "…"
+  },
+  {
+    "type": 0,
+    "content": "<redacted>",
+    "timestamp": "2026-09-15T10:08:33.164000+00:00",
+    "id": "<MESSAGE_ID_2>",
+    "channel_id": "<CHANNEL_ID>",
+    "author": {
+      "id": "<USER_ID>",
+      "username": "<redacted>",
+      "…": "…"
+    },
+    "…": "…"
+  }
+]
+```
+
+応答は配列で、`timestamp` の降順 (新しい順) に並んでいる。`content` は文字列。`content`・`author.username`・各 ID はプレースホルダに置き換えた (値は伏せた)。`author` の内側と、`attachments`/`embeds`/`mentions` 等のトップレベルの他フィールドを省略した (`…`)。`timestamp` は実際の値。
+
 ## メッセージ検索 (履歴の取得 + フィルタ)
 
 bot トークンで叩けるメッセージ検索 API は無い (検索はユーザトークンと GUI 限定)。履歴を取得して jq でフィルタする。
@@ -198,6 +272,7 @@ curl -sS "https://discord.com/api/v10/channels/${CHANNEL_ID}/messages?limit=100"
 - 1 回で取れるのは直近 100 件まで。マッチが見つからない場合でも、それより古いメッセージにある可能性がある。`before` で遡って追加取得する。
 - `contains` は部分一致。検索語 `bot` は `Bottom` のような語にもマッチする。語単位で絞るなら正規表現で語境界を指定する (例: `select(.content | test("\\bbot\\b"; "i"))`。語境界は `\\b` とエスケープして書く。理由: jq 文字列内である)。
 - 大量に遡るとレート制限に当たる。必要な範囲に絞る。
+- 検索用の `jq` は上の「メッセージ取得 (履歴)」と同じ応答配列に `select` をかけるだけなので、応答の形はそちらのサンプルを参照。
 
 ## 単一メッセージ取得
 
@@ -485,6 +560,45 @@ curl -sS "https://discord.com/api/v10/guilds/${GUILD_ID}/threads/active" \
 - `members` は各スレッドに対応する thread member オブジェクトの配列。
 - ギルド内の全アクティブスレッド (公開・非公開とも) を `id` の降順で返す。アーカイブ済みスレッドはここに含まれない。
 
+実レスポンス例 (取得日: 2026-10-12)。取得コマンド: `curl -sS "https://discord.com/api/v10/guilds/${GUILD_ID}/threads/active" -H "Authorization: Bot ${DISCORD_BOT_TOKEN}"` (`GUILD_ID` は環境変数 `DISCORD_GUILD_ID` の値)
+
+```json
+{
+  "threads": [
+    {
+      "id": "<THREAD_ID>",
+      "type": 11,
+      "name": "<redacted>",
+      "parent_id": "<CHANNEL_ID>",
+      "guild_id": "<GUILD_ID>",
+      "owner_id": "<USER_ID>",
+      "thread_metadata": {
+        "archived": false,
+        "auto_archive_duration": 1440,
+        "locked": false,
+        "archive_timestamp": "2026-09-27T06:50:00.652000+00:00",
+        "…": "…"
+      },
+      "…": "…"
+    },
+    "…"
+  ],
+  "members": [
+    {
+      "id": "<THREAD_ID>",
+      "user_id": "<USER_ID>",
+      "join_timestamp": "2026-09-27T06:50:00.673000+00:00",
+      "flags": 1,
+      "muted": false,
+      "mute_config": null
+    },
+    "…"
+  ]
+}
+```
+
+`threads` の先頭 1 件と `members` の先頭 1 件を抜粋した (実際は各 3 件)。`name` はプレースホルダに置き換え、各 ID も伏せた。`threads[].…` の位置には `message_count`/`member_count`/`last_message_id` 等が入る。`thread_metadata` の `…` にはこのサンプルで省略した他のキーが入りうる。`members[].id` は対応するスレッドの `id` と同じ値。
+
 ### アーカイブ済みのスレッド
 
 アーカイブ済みのスレッドはギルド単位ではなくチャンネル単位で取得する。
@@ -504,6 +618,30 @@ curl -sS "https://discord.com/api/v10/channels/${CHANNEL_ID}/threads/archived/pr
 - こちらも応答は `{"threads": [...], "members": [...], "has_more": ...}` のオブジェクト。`has_more` が `true` なら未取得の古いスレッドが残っている。
 - ページングの `before` はここでは ISO8601 タイムスタンプで、「このタイムスタンプより前にアーカイブされたスレッド」を返す。snowflake をそのまま渡さない。理由:「メッセージ取得 (履歴)」や「メッセージ検索」の `before` (メッセージ ID の snowflake) とは型が違う。
 - 名前が一致するスレッドが複数見つかった場合、どれが対象か推測せずユーザに確認する。
+
+実レスポンス例 (取得日: 2026-10-12)。取得コマンド: `curl -sS "https://discord.com/api/v10/channels/${CHANNEL_ID}/threads/archived/public" -H "Authorization: Bot ${DISCORD_BOT_TOKEN}"` (`CHANNEL_ID` は環境変数 `DISCORD_CHANNEL_ID` の値)
+
+```json
+{
+  "threads": [
+    {
+      "id": "<THREAD_ID>",
+      "type": 11,
+      "name": "<redacted>",
+      "parent_id": "<CHANNEL_ID>",
+      "thread_metadata": {
+        "archived": true,
+        "…": "…"
+      },
+      "…": "…"
+    }
+  ],
+  "members": [],
+  "has_more": false
+}
+```
+
+`threads` は 1 件のみ返ったので全件を載せ、各要素の内側を省略した (`…`)。`name` と各 ID はプレースホルダに置き換えた。この取得では `members` は空配列だった。非公開アーカイブ (`/threads/archived/private`) は権限条件が異なるため取得していない。
 
 ## スレッド名の変更
 
@@ -532,6 +670,42 @@ curl -sS "https://discord.com/api/v10/guilds/${GUILD_ID}/members?limit=100" \
 - `limit` は 1〜1000 (既定 1)。多人数のサーバでは `after` に最後のユーザ ID を渡してページングする。
 - Server Members Intent が無いと `403` になる (前提条件を参照)。
 
+実レスポンス例 (取得日: 2026-10-12)。取得コマンド: `curl -sS "https://discord.com/api/v10/guilds/${GUILD_ID}/members?limit=2" -H "Authorization: Bot ${DISCORD_BOT_TOKEN}"` (`GUILD_ID` は環境変数 `DISCORD_GUILD_ID` の値。`limit=2` に絞った)
+
+```json
+[
+  {
+    "user": {
+      "id": "<USER_ID_1>",
+      "username": "<redacted>",
+      "global_name": "<redacted>",
+      "avatar": "<redacted>",
+      "…": "…"
+    },
+    "nick": null,
+    "roles": ["<ROLE_ID>"],
+    "joined_at": "<redacted>",
+    "…": "…"
+  },
+  {
+    "user": {
+      "id": "<USER_ID_2>",
+      "username": "<redacted>",
+      "global_name": null,
+      "avatar": "<redacted>",
+      "bot": true,
+      "…": "…"
+    },
+    "nick": null,
+    "roles": ["<ROLE_ID>", "<ROLE_ID>"],
+    "joined_at": "<redacted>",
+    "…": "…"
+  }
+]
+```
+
+応答は配列で、各要素に `user` オブジェクトと `nick`/`roles`/`joined_at` 等のメンバー固有のフィールドが入る。`username`/`global_name`/`avatar`/`joined_at` と各 ID はプレースホルダに置き換えた (値は伏せた)。`global_name` は未設定なら `null`、`nick` も未設定なら `null`。`user.bot` は bot のときだけ存在し、人間のユーザでは `bot` キー自体が無い (上の 1 件目)。`jq` の `.user.bot` は人間では `null` になる。
+
 ## メンバー検索
 
 ```bash
@@ -543,6 +717,10 @@ curl -sS "https://discord.com/api/v10/guilds/${GUILD_ID}/members/search?query=lo
 - `query` はユーザ名・ニックネーム・表示名 (`global_name`) のいずれかへの前方一致。ユーザ名が前方一致しなくても、ニックネームや表示名が前方一致すればヒットする。`limit` は 1〜1000 (既定 1)。
 - 出力の表示名は、ニックネーム `nick`、アカウント表示名 `global_name`、ユーザ名 `username` の順で解決する。先にあるものを優先する。
 - こちらは Server Members Intent 無しでも通る。
+
+実レスポンス例 (取得日: 2026-10-12)。取得コマンド: `curl -sS "https://discord.com/api/v10/guilds/${GUILD_ID}/members/search?query=loms&limit=2" -H "Authorization: Bot ${DISCORD_BOT_TOKEN}"` (`GUILD_ID` は環境変数 `DISCORD_GUILD_ID` の値。`limit=2` に絞った)
+
+応答の形は「メンバー一覧」と同じ配列で、要素は同じ構造のメンバーオブジェクト (`user`/`nick`/`roles`/`joined_at` 等)。この実行では 2 件返り、うち 1 件は `global_name` が文字列、もう 1 件は `null` だった。個人情報を含むため、検索の応答そのものは載せず、構造は「メンバー一覧」のサンプルを参照。
 
 ## レート制限
 
@@ -593,6 +771,13 @@ fi
 - **404 Not Found**: 指定した `guild_id`/`channel_id`/`message_id` が存在しないか、bot からアクセスできない。ID を疑い、呼び出し側のコンテキストと突き合わせる。推測で別の ID を試さない。
 - **429 Too Many Requests**: 上記のレート制限を参照。
 - **5xx (500/502/503/504)**: Discord 側の一時的な障害。数秒待って 1〜2 回まで再試行し、直らなければユーザに報告する (無限リトライしない)。
+
+実レスポンス例 (401、取得日: 2026-10-12)。取得コマンド: `curl -sS -w '\n%{http_code}\n' 'https://discord.com/api/v10/users/@me' -H "Authorization: Bot invalid-token"` (無効なダミートークンで実行)
+
+```text
+{"message": "401: Unauthorized", "code": 0}
+401
+```
 
 ## 注意
 

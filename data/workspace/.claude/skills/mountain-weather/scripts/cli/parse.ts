@@ -33,7 +33,10 @@ function tds(rowInner: string): string[] {
 
 /** タグ・&nbsp;・空白を除いたセルのテキスト。 */
 function cellText(cell: string): string {
-  return cell.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, "").replace(/\s/g, "");
+  return cell
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/g, "")
+    .replace(/\s/g, "");
 }
 
 /**
@@ -59,10 +62,11 @@ function alignRow<T>(
   map: (cell: string) => T,
   missing: T,
 ): T[] {
-  const vals = tds(rowInner).filter((c) => !isLabelCell(c)).map(map);
-  return Array.from(
-    { length: n },
-    (_, i) => (i < vals.length ? vals[i] : missing),
+  const vals = tds(rowInner)
+    .filter((c) => !isLabelCell(c))
+    .map(map);
+  return Array.from({ length: n }, (_, i) =>
+    i < vals.length ? vals[i] : missing,
   );
 }
 
@@ -95,7 +99,12 @@ function headerColumns(segment: string): string[] {
     return [];
   }
   return tds(tb[1])
-    .map((c) => c.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim())
+    .map((c) =>
+      c
+        .replace(/<[^>]*>/g, "")
+        .replace(/&nbsp;/g, " ")
+        .trim(),
+    )
     .filter((t) => /^\d{2}$/.test(t) || /\d+\/\d+/.test(t));
 }
 
@@ -148,9 +157,10 @@ export function parseDayTables(html: string): DayTable[] {
       const hpa = inner.match(/高度([\s\S]*?)（(\d+)hPa）/);
       if (hpa) {
         levels.push({
-          alt: `高度${
-            hpa[1].replace(/<[^>]*>/g, "").replace(/&nbsp;/g, "").trim()
-          }`,
+          alt: `高度${hpa[1]
+            .replace(/<[^>]*>/g, "")
+            .replace(/&nbsp;/g, "")
+            .trim()}`,
           hPa: Number(hpa[2]),
           temp: alignRow(inner, n, mapTemp, null),
           // 風は直後の風行で埋める。見つからなければ null のまま。

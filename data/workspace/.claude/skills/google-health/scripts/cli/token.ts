@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { cli, define } from "gunshi";
 import { DEFAULT_PORT, loadTokenConfig } from "../lib/config.ts";
 import { exchangeCode } from "../lib/oauth.ts";
@@ -16,8 +17,7 @@ const command = define({
       type: "number",
       short: "p",
       default: DEFAULT_PORT,
-      description:
-        `redirect_uri (http://localhost:<port>) に使う port (既定 ${DEFAULT_PORT})。auth-url 実行時と同じ値を指定する`,
+      description: `redirect_uri (http://localhost:<port>) に使う port (既定 ${DEFAULT_PORT})。auth-url 実行時と同じ値を指定する`,
     },
   },
   run: async (ctx) => {
@@ -25,7 +25,7 @@ const command = define({
     const { port } = ctx.values;
     if (code === undefined) {
       console.error("usage: token <code>");
-      Deno.exit(1);
+      process.exit(1);
     }
 
     try {
@@ -53,11 +53,9 @@ const command = define({
       );
     } catch (e) {
       console.error(e instanceof Error ? e.message : String(e));
-      Deno.exit(1);
+      process.exit(1);
     }
   },
 });
 
-if (import.meta.main) {
-  await cli(Deno.args, command);
-}
+await cli(process.argv.slice(2), command);

@@ -1,0 +1,28 @@
+{
+  "name": "mountain-weather-scripts",
+  "private": true,
+  "bin": {
+    "fetch-index": "./cli/fetch-index.ts",
+    "fetch-openmeteo": "./cli/fetch-openmeteo.ts",
+    "find-area": "./cli/find-area.ts",
+    "find-mountain": "./cli/find-mountain.ts"
+  },
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "lint": "oxlint && oxfmt --check && tsc --noEmit",
+    "fix": "oxlint --fix && oxfmt"
+  },
+  "dependencies": {
+    "gunshi": "0.37.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "oxfmt": "0.72.0",
+    "oxlint": "1.87.0",
+    "typescript": "7.0.2"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

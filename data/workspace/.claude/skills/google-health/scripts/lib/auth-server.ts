@@ -2,11 +2,12 @@
  * OAuth2 のリダイレクトを localhost で受け取る一時 HTTP サーバ (`auth` コマンドから使う)。
  * 認可コードの交換 (ネットワークアクセスを伴う) は呼び出し側から注入し、このモジュール自体はネットワーク非依存にする。
  */
+import { createServer } from "node:http";
+import type { ServerResponse } from "node:http";
+import type { AddressInfo } from "node:net";
 
 /** 認可コード受信後の結果。ok: false のときは reason に失敗理由 (人が読める文言) を持つ。 */
-export type AuthServerOutcome =
-  | { ok: true }
-  | { ok: false; reason: string };
+export type AuthServerOutcome = { ok: true } | { ok: false; reason: string };
 
 export type RunAuthServerParams = {
   /** listen する port。0 を渡すと OS が空き port を選ぶ (テスト用)。 */
@@ -43,12 +44,17 @@ function escapeHtml(text: string): string {
   );
 }
 
-function htmlResponse(status: number, message: string): Response {
-  return new Response(
-    `<!doctype html><meta charset="utf-8"><title>Google Health 認可</title><p>${
-      escapeHtml(message)
-    }</p>`,
-    { status, headers: { "content-type": "text/html; charset=utf-8" } },
+function textResponse(res: ServerResponse, status: number, text: string) {
+  res.writeHead(status, { "content-type": "text/plain;charset=UTF-8" });
+  res.end(text);
+}
+
+function htmlResponse(res: ServerResponse, status: number, message: string) {
+  res.writeHead(status, { "content-type": "text/html; charset=utf-8" });
+  res.end(
+    `<!doctype html><meta charset="utf-8"><title>Google Health 認可</title><p>${escapeHtml(
+      message,
+    )}</p>`,
   );
 }
 
@@ -70,63 +76,77 @@ export async function runAuthServer(
     settle = resolve;
   });
 
-  const server = Deno.serve({
-    hostname,
-    port: params.port,
-    onListen: () => {}, // 既定の "Listening on ..." ログを抑止する (案内は呼び出し側が出す)
-  }, async (req) => {
-    const url = new URL(req.url);
-    if (url.pathname !== "/") {
-      return new Response("not found", { status: 404 });
-    }
+  const server = createServer(async (req, res) => {
+    try {
+      const url = new URL(req.url ?? "/", "http://127.0.0.1");
+      if (url.pathname !== "/") {
+        textResponse(res, 404, "not found");
+        return;
+      }
 
-    const error = url.searchParams.get("error");
-    if (error !== null) {
-      if (url.searchParams.get("state") !== params.state) {
-        return new Response("bad request (invalid or missing state)", {
-          status: 400,
+      const error = url.searchParams.get("error");
+      if (error !== null) {
+        if (url.searchParams.get("state") !== params.state) {
+          textResponse(res, 400, "bad request (invalid or missing state)");
+          return;
+        }
+        settle({
+          ok: false,
+          reason: `認可がエラーで終わった (error=${error})`,
         });
+        htmlResponse(res, 400, "認可に失敗した。このタブは閉じてよい。");
+        return;
       }
-      settle({ ok: false, reason: `認可がエラーで終わった (error=${error})` });
-      return htmlResponse(400, "認可に失敗した。このタブは閉じてよい。");
-    }
 
-    const code = url.searchParams.get("code");
-    if (code !== null) {
-      if (url.searchParams.get("state") !== params.state) {
-        return new Response("bad request (invalid or missing state)", {
-          status: 400,
-        });
+      const code = url.searchParams.get("code");
+      if (code !== null) {
+        if (url.searchParams.get("state") !== params.state) {
+          textResponse(res, 400, "bad request (invalid or missing state)");
+          return;
+        }
+        try {
+          await params.exchangeCode(code);
+        } catch (e) {
+          const reason = e instanceof Error ? e.message : String(e);
+          settle({ ok: false, reason });
+          htmlResponse(
+            res,
+            400,
+            "認可コードの交換に失敗した。このタブは閉じてよい。",
+          );
+          return;
+        }
+        settle({ ok: true });
+        htmlResponse(res, 200, "認可完了。このタブは閉じてよい。");
+        return;
       }
-      try {
-        await params.exchangeCode(code);
-      } catch (e) {
-        const reason = e instanceof Error ? e.message : String(e);
-        settle({ ok: false, reason });
-        return htmlResponse(
-          400,
-          "認可コードの交換に失敗した。このタブは閉じてよい。",
-        );
-      }
-      settle({ ok: true });
-      return htmlResponse(200, "認可完了。このタブは閉じてよい。");
-    }
 
-    return new Response("not found", { status: 404 });
+      textResponse(res, 404, "not found");
+    } catch {
+      // 想定外の例外でプロセスを落とさず、500 を返して listen を継続する (settle は呼ばない)。
+      textResponse(res, 500, "internal error");
+    }
   });
+
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(params.port, hostname, () => resolve());
+  });
+  const port = (server.address() as AddressInfo).port;
 
   const timer = setTimeout(() => {
     settle({
       ok: false,
-      reason:
-        `${timeoutMs}ms 以内に認可コードを受信できなかった (タイムアウト)`,
+      reason: `${timeoutMs}ms 以内に認可コードを受信できなかった (タイムアウト)`,
     });
   }, timeoutMs);
 
-  params.onListen?.({ port: server.addr.port });
+  params.onListen?.({ port });
 
   const result = await outcome;
   clearTimeout(timer);
-  await server.shutdown();
-  return { port: server.addr.port, ...result };
+  // keep-alive の待機接続だけを切って close を即時に完了させる。処理中の要求は切らず完了まで待つ。
+  server.closeIdleConnections();
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  return { port, ...result };
 }

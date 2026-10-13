@@ -6,23 +6,23 @@ import { parseCivilDate } from "./civil.ts";
 
 export type FilterFieldEntry =
   | {
-    kind: "interval";
-    /** filter 文字列で使う snake_case のフィールド名。 */
-    field: string;
-    /** 日付形式 (YYYY-MM-DD) のとき interval.<member> に使うメンバー名。undefined なら日付形式は非対応。 */
-    dateMember?: string;
-    /** RFC3339 のとき interval.<member> に使うメンバー名。undefined なら RFC3339 は非対応。 */
-    rfc3339Member?: string;
-    /** dataPoints.list に付ける pageSize (公式リファレンス実測値)。 */
-    pageSize: number;
-  }
+      kind: "interval";
+      /** filter 文字列で使う snake_case のフィールド名。 */
+      field: string;
+      /** 日付形式 (YYYY-MM-DD) のとき interval.<member> に使うメンバー名。undefined なら日付形式は非対応。 */
+      dateMember?: string;
+      /** RFC3339 のとき interval.<member> に使うメンバー名。undefined なら RFC3339 は非対応。 */
+      rfc3339Member?: string;
+      /** dataPoints.list に付ける pageSize (公式リファレンス実測値)。 */
+      pageSize: number;
+    }
   | {
-    kind: "sample";
-    /** filter 文字列で使う snake_case のフィールド名。 */
-    field: string;
-    /** dataPoints.list に付ける pageSize (公式リファレンス実測値)。 */
-    pageSize: number;
-  };
+      kind: "sample";
+      /** filter 文字列で使う snake_case のフィールド名。 */
+      field: string;
+      /** dataPoints.list に付ける pageSize (公式リファレンス実測値)。 */
+      pageSize: number;
+    };
 
 /**
  * 実 API (2026-09-26、Pixel Watch 4 で実測) で通った filter メンバーの表。
@@ -44,7 +44,7 @@ export type FilterFieldEntry =
 export const DATA_TYPE_FILTER_FIELDS: Readonly<
   Record<string, FilterFieldEntry>
 > = {
-  "steps": {
+  steps: {
     kind: "interval",
     field: "steps",
     dateMember: "civil_start_time",
@@ -65,20 +65,20 @@ export const DATA_TYPE_FILTER_FIELDS: Readonly<
     rfc3339Member: "start_time",
     pageSize: 10000,
   },
-  "distance": {
+  distance: {
     kind: "interval",
     field: "distance",
     dateMember: "civil_start_time",
     rfc3339Member: "start_time",
     pageSize: 10000,
   },
-  "exercise": {
+  exercise: {
     kind: "interval",
     field: "exercise",
     dateMember: "civil_start_time",
     pageSize: 25,
   },
-  "sleep": {
+  sleep: {
     kind: "interval",
     field: "sleep",
     dateMember: "civil_end_time",
@@ -92,7 +92,7 @@ export const DATA_TYPE_FILTER_FIELDS: Readonly<
     pageSize: 10000,
   },
   "heart-rate": { kind: "sample", field: "heart_rate", pageSize: 10000 },
-  "weight": { kind: "sample", field: "weight", pageSize: 10000 },
+  weight: { kind: "sample", field: "weight", pageSize: 10000 },
   "body-fat": { kind: "sample", field: "body_fat", pageSize: 10000 },
 };
 
@@ -142,9 +142,9 @@ export function buildFilter(
   const entry = DATA_TYPE_FILTER_FIELDS[dataType];
   if (entry === undefined) {
     throw new Error(
-      `未対応の dataType: ${dataType} (対応: ${
-        Object.keys(DATA_TYPE_FILTER_FIELDS).join(", ")
-      })`,
+      `未対応の dataType: ${dataType} (対応: ${Object.keys(
+        DATA_TYPE_FILTER_FIELDS,
+      ).join(", ")})`,
     );
   }
 

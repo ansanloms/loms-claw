@@ -30,9 +30,8 @@ async function ensureOk(
 ): Promise<string> {
   const text = await res.text();
   if (!res.ok) {
-    const label = method === "GET"
-      ? `${url} 取得失敗`
-      : `${method} ${url} 失敗`;
+    const label =
+      method === "GET" ? `${url} 取得失敗` : `${method} ${url} 失敗`;
     throw new HttpError(
       res.status,
       text,
@@ -59,25 +58,28 @@ function extractPage(
     body = JSON.parse(text);
   } catch {
     throw new Error(
-      `レスポンスが JSON として解釈できない (API 構造変化の可能性)。応答本文 (先頭 200 文字): ${
-        text.slice(0, 200)
-      }`,
+      `レスポンスが JSON として解釈できない (API 構造変化の可能性)。応答本文 (先頭 200 文字): ${text.slice(
+        0,
+        200,
+      )}`,
     );
   }
   if (typeof body !== "object" || body === null) {
     throw new Error(
-      `レスポンスがオブジェクトでない (API 構造変化の可能性)。応答本文 (先頭 200 文字): ${
-        text.slice(0, 200)
-      }`,
+      `レスポンスがオブジェクトでない (API 構造変化の可能性)。応答本文 (先頭 200 文字): ${text.slice(
+        0,
+        200,
+      )}`,
     );
   }
   const rec = body as Record<string, unknown>;
   const page = rec[arrayKey];
   if (page !== undefined && !Array.isArray(page)) {
     throw new Error(
-      `レスポンスの ${arrayKey} が配列でない (API 構造変化の可能性)。応答本文 (先頭 200 文字): ${
-        text.slice(0, 200)
-      }`,
+      `レスポンスの ${arrayKey} が配列でない (API 構造変化の可能性)。応答本文 (先頭 200 文字): ${text.slice(
+        0,
+        200,
+      )}`,
     );
   }
   const next = rec.nextPageToken;
