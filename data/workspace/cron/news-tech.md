@@ -35,7 +35,6 @@ news-digest skill を使い、次の引数で記事を集めろ。収集・要�
   - Hacker News(news.ycombinator.com)
   - www.publickey1.jp
   - zenn.dev トレンド
-  - Deno Weekly(https://uki00a.github.io/deno-weekly/index.xml)
   - Hugging News(https://huggingnews.com/)
 - 件数: 3
 - 期間: 直近 5 日
