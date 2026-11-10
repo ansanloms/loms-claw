@@ -35,12 +35,14 @@ news-digest skill を使い、次の引数で記事を集めろ。収集・要�
   - Hacker News(news.ycombinator.com)
   - www.publickey1.jp
   - zenn.dev トレンド
+  - Deno Weekly(https://uki00a.github.io/deno-weekly/index.xml)
   - Hugging News(https://huggingnews.com/)
 - 件数: 3
 - 期間: 直近 5 日
 - 除外リスト: 上の重複チェックで得た既出記事のタイトル・URL
 - 除外ソース: 次のドメインの記事は収集・投稿しない（このジョブ固有のリスト。追加・削除はこのファイルで行う）
   - news.livedoor.com
+  - zenn.dev/shougo
 
 ---
 
