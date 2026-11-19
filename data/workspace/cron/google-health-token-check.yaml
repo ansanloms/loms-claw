@@ -1,3 +1,0 @@
-schedule: "0 21 * * *"
-command: "sh cron/scripts/google-health-token-check.sh"
-channelId: "1552474919693062184"

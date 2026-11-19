@@ -1,11 +1,11 @@
 lockfile_version: '1'
-generated_at: '2026-10-13T03:33:31.964395+00:00'
-apm_version: 0.33.0
+generated_at: '2026-11-19T10:57:10.745002+00:00'
+apm_version: 0.35.0
 dependencies:
 - repo_url: ansanloms/skills
   name: bluesky
   host: github.com
-  resolved_commit: aa8ecc611f38801a3f5416dfc14223945a59e1ba
+  resolved_commit: 392133e5c6d32f32910e5f38c35d9f2f0649ee6f
   version: unknown
   virtual_path: bluesky
   is_virtual: true
@@ -21,7 +21,7 @@ dependencies:
 - repo_url: ansanloms/skills
   name: discord
   host: github.com
-  resolved_commit: aa8ecc611f38801a3f5416dfc14223945a59e1ba
+  resolved_commit: 392133e5c6d32f32910e5f38c35d9f2f0649ee6f
   version: unknown
   virtual_path: discord
   is_virtual: true
@@ -37,7 +37,7 @@ dependencies:
 - repo_url: ansanloms/skills
   name: find-docs
   host: github.com
-  resolved_commit: aa8ecc611f38801a3f5416dfc14223945a59e1ba
+  resolved_commit: 392133e5c6d32f32910e5f38c35d9f2f0649ee6f
   version: unknown
   virtual_path: find-docs
   is_virtual: true
@@ -53,7 +53,7 @@ dependencies:
 - repo_url: ansanloms/skills
   name: google-health
   host: github.com
-  resolved_commit: aa8ecc611f38801a3f5416dfc14223945a59e1ba
+  resolved_commit: 392133e5c6d32f32910e5f38c35d9f2f0649ee6f
   version: unknown
   virtual_path: google-health
   is_virtual: true
@@ -140,14 +140,14 @@ dependencies:
     .claude/skills/google-health/scripts/lib/oauth.ts: sha256:7d12b784596e233858e9b13db9e602aab503a2fad247ee896ff52397ec8141da
     .claude/skills/google-health/scripts/lib/token-file.test.ts: sha256:8ae417eec1b54ea07d940e0bbc94de9d0b1f67a481bf5d4c6bf8ebd14ffb36f5
     .claude/skills/google-health/scripts/lib/token-file.ts: sha256:e1dc715f175689386105ab542fbeef30ac0dcc25ce66d126007abb79ec9438a5
-    .claude/skills/google-health/scripts/package-lock.json: sha256:8914f20b2348c1774cdcf06f660007002a947b56c39b0a6354cf844dd328989c
-    .claude/skills/google-health/scripts/package.json: sha256:7a58e8eec8330b94508ce52723b7d41f719b4402e54554ffe43809c3aba6a847
+    .claude/skills/google-health/scripts/package-lock.json: sha256:80e8d27e6e51e571472d761dc830d324f369b2ddcd324e14c8e3d0184178f562
+    .claude/skills/google-health/scripts/package.json: sha256:c6c805190539af2a7248f270e7c00b06aa51f70a51203999bef94f57b6d3e0fe
     .claude/skills/google-health/scripts/tsconfig.json: sha256:411621ee3819f89f3d68e7745a47b69f087103950ebee7686a967fa31141f06a
-  content_hash: sha256:7dece509fc7e6aac7534f519de1252ec9072fd0d9a09cb39704ef5fa9fd4e0a4
+  content_hash: sha256:ae4b5d67ec614ae2acc6c8302509aa718da6d1c8782a139f7a96175dc80f1015
 - repo_url: ansanloms/skills
   name: jartic-traffic-jam-forecast
   host: github.com
-  resolved_commit: aa8ecc611f38801a3f5416dfc14223945a59e1ba
+  resolved_commit: 392133e5c6d32f32910e5f38c35d9f2f0649ee6f
   version: unknown
   virtual_path: jartic-traffic-jam-forecast
   is_virtual: true
@@ -163,7 +163,7 @@ dependencies:
 - repo_url: ansanloms/skills
   name: jartic-traffic-volume
   host: github.com
-  resolved_commit: aa8ecc611f38801a3f5416dfc14223945a59e1ba
+  resolved_commit: 392133e5c6d32f32910e5f38c35d9f2f0649ee6f
   version: unknown
   virtual_path: jartic-traffic-volume
   is_virtual: true
@@ -179,7 +179,7 @@ dependencies:
 - repo_url: ansanloms/skills
   name: mountain-weather
   host: github.com
-  resolved_commit: aa8ecc611f38801a3f5416dfc14223945a59e1ba
+  resolved_commit: 392133e5c6d32f32910e5f38c35d9f2f0649ee6f
   version: unknown
   virtual_path: mountain-weather
   is_virtual: true
@@ -233,15 +233,15 @@ dependencies:
     .claude/skills/mountain-weather/scripts/cli/openmeteo.ts: sha256:be321c0ac464f517fd8f6ddeef629966aa22b9fce14466585eb50c5730f36858
     .claude/skills/mountain-weather/scripts/cli/parse.test.ts: sha256:17591d366f5f6f3c9f0898a37c7fc25eea71182d6d3f995524c18411312e32e5
     .claude/skills/mountain-weather/scripts/cli/parse.ts: sha256:f1b4e114bd713300947a064acff1e86b42afb40796a76bbf1f2c8c67ebe34fc0
-    .claude/skills/mountain-weather/scripts/package-lock.json: sha256:f20c52789c2097365611ad3681b3c6526c23a38f5a24a872f3733d42103ca9fc
-    .claude/skills/mountain-weather/scripts/package.json: sha256:2378033a6340dbf5cfca4501b7b7fc4633499d0077a58ffc27fa9198d17f0d7e
+    .claude/skills/mountain-weather/scripts/package-lock.json: sha256:e2a2d0a8bb403af3a86840546584378d2fe76a7d31e3a7458e48a9c1d525a267
+    .claude/skills/mountain-weather/scripts/package.json: sha256:b0933f4c97a8f58543e09c38c5f2d062a23baa58cbce40d0a3b04cdac86429db
     .claude/skills/mountain-weather/scripts/testdata/aoyama-kad.utf8.html: sha256:4307c936a30115aae1fe9727fa026e91ac0de6d625c16345d33508e5720c0d3f
     .claude/skills/mountain-weather/scripts/tsconfig.json: sha256:468e3050bef780b74c9a62cf4bc9f8d25abbd1fd4e86b1938f5f6c0f05409bb3
-  content_hash: sha256:0b0bf678c3d5899bf1662bb9883a62a17d4de8be713ff8f50e653083267ab18f
+  content_hash: sha256:111976eafd09194c5531fd986f96420b64dc712a7500fcf53e3984dda0fb967f
 - repo_url: ansanloms/skills
   name: news-digest
   host: github.com
-  resolved_commit: aa8ecc611f38801a3f5416dfc14223945a59e1ba
+  resolved_commit: 392133e5c6d32f32910e5f38c35d9f2f0649ee6f
   version: unknown
   virtual_path: news-digest
   is_virtual: true
@@ -257,7 +257,7 @@ dependencies:
 - repo_url: ansanloms/skills
   name: yamareco
   host: github.com
-  resolved_commit: aa8ecc611f38801a3f5416dfc14223945a59e1ba
+  resolved_commit: 392133e5c6d32f32910e5f38c35d9f2f0649ee6f
   version: unknown
   virtual_path: yamareco
   is_virtual: true
@@ -711,7 +711,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:8914f20b2348c1774cdcf06f660007002a947b56c39b0a6354cf844dd328989c
+  content_hash: sha256:80e8d27e6e51e571472d761dc830d324f369b2ddcd324e14c8e3d0184178f562
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/package.json
@@ -720,7 +720,7 @@ deployments:
   owners:
   - ansanloms/skills/google-health
   active_owner: ansanloms/skills/google-health
-  content_hash: sha256:7a58e8eec8330b94508ce52723b7d41f719b4402e54554ffe43809c3aba6a847
+  content_hash: sha256:c6c805190539af2a7248f270e7c00b06aa51f70a51203999bef94f57b6d3e0fe
 - kind: project-relative
   target: claude
   value: .claude/skills/google-health/scripts/tsconfig.json
@@ -990,7 +990,7 @@ deployments:
   owners:
   - ansanloms/skills/mountain-weather
   active_owner: ansanloms/skills/mountain-weather
-  content_hash: sha256:f20c52789c2097365611ad3681b3c6526c23a38f5a24a872f3733d42103ca9fc
+  content_hash: sha256:e2a2d0a8bb403af3a86840546584378d2fe76a7d31e3a7458e48a9c1d525a267
 - kind: project-relative
   target: claude
   value: .claude/skills/mountain-weather/scripts/package.json
@@ -999,7 +999,7 @@ deployments:
   owners:
   - ansanloms/skills/mountain-weather
   active_owner: ansanloms/skills/mountain-weather
-  content_hash: sha256:2378033a6340dbf5cfca4501b7b7fc4633499d0077a58ffc27fa9198d17f0d7e
+  content_hash: sha256:b0933f4c97a8f58543e09c38c5f2d062a23baa58cbce40d0a3b04cdac86429db
 - kind: project-relative
   target: claude
   value: .claude/skills/mountain-weather/scripts/testdata/aoyama-kad.utf8.html
