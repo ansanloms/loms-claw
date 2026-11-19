@@ -8,6 +8,7 @@ import {
   appendImageReferences,
   cleanupImageFiles,
   createProgressReporter,
+  runTurnCleanup,
   type DownloadedImage,
   keepTyping,
   splitMessage,
@@ -134,8 +135,9 @@ describe("keepTyping", () => {
 });
 
 /** send/edit/delete を記録するフェイクチャンネルを生成する。 */
-function fakeProgressChannel() {
+function fakeProgressChannel(options: { failFirstSend?: boolean } = {}) {
   const calls: { method: string; text: string }[] = [];
+  let failNextSend = options.failFirstSend ?? false;
   const fakeMessage = {
     edit: (text: string) => {
       calls.push({ method: "edit", text });
@@ -148,6 +150,10 @@ function fakeProgressChannel() {
   };
   const channel = {
     send: (text: string) => {
+      if (failNextSend) {
+        failNextSend = false;
+        return Promise.reject(new Error("send failed"));
+      }
       calls.push({ method: "send", text });
       return Promise.resolve(fakeMessage);
     },
@@ -218,6 +224,27 @@ describe("createProgressReporter", () => {
     await cleanup();
 
     assert.deepStrictEqual(calls.length, 0);
+  });
+
+  test("初回 send が reject しても report が reject せず、間引き間隔の後の report で再送されること", async () => {
+    const { channel, calls } = fakeProgressChannel({ failFirstSend: true });
+    let fakeNow = 10000;
+    const { report, cleanup } = createProgressReporter(channel, () => fakeNow);
+
+    await report("Bash", 1);
+    assert.deepStrictEqual(calls.length, 0);
+
+    // 失敗後も間引きは保たれるので、間隔内の report では送られない
+    fakeNow += 1000;
+    await report("Bash", 2);
+    assert.deepStrictEqual(calls.length, 0);
+
+    fakeNow += 4000;
+    await report("Bash", 5);
+    assert.deepStrictEqual(calls.length, 1);
+    assert.deepStrictEqual(calls[0].method, "send");
+
+    await cleanup();
   });
 });
 
@@ -298,5 +325,26 @@ describe("stripBotMentions", () => {
   test("名前が無い・空文字の場合は trim のみ行われること", () => {
     assert.deepStrictEqual(stripBotMentions("  本文  ", []), "本文");
     assert.deepStrictEqual(stripBotMentions("  本文  ", [""]), "本文");
+  });
+});
+
+describe("runTurnCleanup", () => {
+  test("step が throw しても abortTyping が呼ばれ、後続 step も実行されること", async () => {
+    const order: string[] = [];
+    await runTurnCleanup(
+      () => order.push("abort"),
+      [
+        () => {
+          order.push("step1");
+          return Promise.reject(new Error("boom"));
+        },
+        () => {
+          order.push("step2");
+          return Promise.resolve();
+        },
+      ],
+    );
+
+    assert.deepStrictEqual(order, ["abort", "step1", "step2"]);
   });
 });

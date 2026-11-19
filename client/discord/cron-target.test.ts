@@ -122,11 +122,15 @@ describe("createDiscordCronPorts", () => {
     };
     const ports = createPorts(createFakeClient(null), approvalManager);
 
-    await ports.createCanUseTool("ch-approval")("Bash", { command: "ls" }, {
-      signal: new AbortController().signal,
-      toolUseID: "tu-1",
-      requestId: "req-1",
-    } as never);
+    await ports.createCanUseTool("ch-approval", new AbortController().signal)(
+      "Bash",
+      { command: "ls" },
+      {
+        signal: new AbortController().signal,
+        toolUseID: "tu-1",
+        requestId: "req-1",
+      } as never,
+    );
 
     assert.deepStrictEqual(calls, ["ch-approval"]);
   });

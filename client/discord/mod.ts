@@ -56,6 +56,7 @@ import {
   type DownloadedImage,
   downloadImageAttachments,
   keepTyping,
+  runTurnCleanup,
   splitMessage,
   stripBotMentions,
 } from "./message.ts";
@@ -177,8 +178,8 @@ export class DiscordBot {
       systemPrompts: this.systemPrompts,
       claudeConfig: config.claude,
       env: this.queryEnv,
-      createCanUseTool: (localId) =>
-        createCanUseTool(this.approvalManager, localId),
+      createCanUseTool: (localId, signal) =>
+        createCanUseTool(this.approvalManager, localId, signal),
       // 自己メンション応答のレート制限 (bot 全体のスライディングウィンドウ)。
       selfMentionLimiter: new SelfMentionRateLimiter(
         SELF_MENTION_RATE_LIMIT_MAX_COUNT,
@@ -638,11 +639,19 @@ export class DiscordBot {
       notifyError: (error) => sendChunks(summarizeError(error)),
 
       onTurnEnd: async () => {
-        if (downloadedImages.length > 0) {
-          await cleanupImageFiles(downloadedImages);
-        }
-        await progress?.cleanup();
-        typingController.abort();
+        await runTurnCleanup(
+          () => typingController.abort(),
+          [
+            async () => {
+              if (downloadedImages.length > 0) {
+                await cleanupImageFiles(downloadedImages);
+              }
+            },
+            async () => {
+              await progress?.cleanup();
+            },
+          ],
+        );
       },
     };
   }

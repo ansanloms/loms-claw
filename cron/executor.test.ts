@@ -72,7 +72,7 @@ function createMockPorts(
         "discord.guild.name": "test-guild",
       };
     },
-    createCanUseTool(channelId: string | undefined) {
+    createCanUseTool(channelId: string | undefined, _signal: AbortSignal) {
       return () => {
         approvalCalls.push({ channelId });
         return Promise.resolve({ behavior: "allow", updatedInput: {} });

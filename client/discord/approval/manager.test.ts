@@ -27,6 +27,7 @@ function mockManager(
       _toolName: string,
       _toolInput: Record<string, unknown>,
       _channelId: string | undefined,
+      _signal?: AbortSignal,
     ) => Promise.resolve(result),
     requestAnswers: () =>
       Promise.resolve(
@@ -189,11 +190,16 @@ interface SentApprovalPayload {
 }
 
 /** requestApproval() が送信した payload を記録する fake チャンネル解決。 */
-function fakeChannelResolver(sendableChannelIds: Set<string>): {
+function fakeChannelResolver(
+  sendableChannelIds: Set<string>,
+  options: { failSend?: boolean } = {},
+): {
   resolver: ApprovalChannelResolver;
   sent: SentApprovalPayload[];
+  edits: { content: string; components: [] }[];
 } {
   const sent: SentApprovalPayload[] = [];
+  const edits: { content: string; components: [] }[] = [];
   const resolver: ApprovalChannelResolver = {
     fetchSendable: (channelId) => {
       if (!sendableChannelIds.has(channelId)) {
@@ -201,13 +207,22 @@ function fakeChannelResolver(sendableChannelIds: Set<string>): {
       }
       return Promise.resolve({
         send: (payload) => {
+          if (options.failSend) {
+            return Promise.reject(new Error("send failed"));
+          }
           sent.push(payload);
-          return Promise.resolve({ id: "msg-1" });
+          return Promise.resolve({
+            content: payload.content,
+            edit: (edit) => {
+              edits.push(edit);
+              return Promise.resolve();
+            },
+          });
         },
       });
     },
   };
-  return { resolver, sent };
+  return { resolver, sent, edits };
 }
 
 /** 送信されたボタン行 (先頭行) から customId 一覧を取り出す。 */
@@ -229,14 +244,17 @@ function buttonCustomIds(
  * (このテストでは既存コード (`client/discord/message.test.ts`) と同じ `as unknown as X`
  * のキャストで最小 fake を渡す)。
  */
-function fakeButtonInteraction(customId: string): {
+function fakeButtonInteraction(
+  customId: string,
+  messageContent = "original content",
+): {
   interaction: ButtonInteraction;
   calls: { method: "reply" | "update"; payload: unknown }[];
 } {
   const calls: { method: "reply" | "update"; payload: unknown }[] = [];
   const interaction = {
     customId,
-    message: { content: "original content" },
+    message: { content: messageContent },
     reply: (payload: unknown) => {
       calls.push({ method: "reply", payload });
       return Promise.resolve();
@@ -363,5 +381,221 @@ describe("ApprovalManager", () => {
 
     assert.deepStrictEqual(result.decision, "deny");
     assert.deepStrictEqual(result.reason, "No approval channel");
+  });
+  test("長い description でも送信内容と結果追記後の本文が 2000 文字以内に収まること", async () => {
+    const { resolver, sent } = fakeChannelResolver(new Set(["ch-1"]));
+    const manager = new ApprovalManagerClass(
+      fakeClient(),
+      "/tmp/loms-claw-test-nonexistent/settings.json",
+      { channelResolver: resolver },
+    );
+
+    const pending = manager.requestApproval(
+      "Bash",
+      { command: "ls", description: "あ".repeat(600) },
+      "ch-1",
+    );
+
+    await waitFor(() => sent.length === 1);
+    assert.ok(sent[0].content.length <= 2000, "送信内容が 2000 文字以内");
+    const [approveId] = buttonCustomIds(sent[0].components);
+    const requestId = approveId.split(":")[1];
+
+    // メッセージが上限ちょうどでも、追記後に上限を超えず末尾が残ること
+    const { interaction, calls } = fakeButtonInteraction(
+      `approve:${requestId}`,
+      "x".repeat(2000),
+    );
+    await manager.handleButton(interaction);
+    await pending;
+
+    const payload = calls[0].payload as { content: string };
+    assert.ok(payload.content.length <= 2000, "update 後も 2000 文字以内");
+    assert.ok(payload.content.endsWith("**→ Allowed**"));
+  });
+
+  test("送信に失敗した場合は deny (Failed to post approval request) を返すこと", async () => {
+    const { resolver } = fakeChannelResolver(new Set(["ch-1"]), {
+      failSend: true,
+    });
+    const manager = new ApprovalManagerClass(
+      fakeClient(),
+      "/tmp/loms-claw-test-nonexistent/settings.json",
+      { channelResolver: resolver },
+    );
+
+    const result = await manager.requestApproval(
+      "Bash",
+      { command: "ls" },
+      "ch-1",
+    );
+
+    assert.deepStrictEqual(result.decision, "deny");
+    assert.deepStrictEqual(result.reason, "Failed to post approval request");
+  });
+
+  test("abort されると deny (Aborted) に解決しメッセージが編集され、以後のクリックは pending を解決しないこと", async () => {
+    const { resolver, sent, edits } = fakeChannelResolver(new Set(["ch-1"]));
+    const manager = new ApprovalManagerClass(
+      fakeClient(),
+      "/tmp/loms-claw-test-nonexistent/settings.json",
+      { channelResolver: resolver },
+    );
+    const controller = new AbortController();
+
+    const pending = manager.requestApproval(
+      "Bash",
+      { command: "ls" },
+      "ch-1",
+      controller.signal,
+    );
+    await waitFor(() => sent.length === 1);
+    controller.abort();
+
+    const result = await pending;
+    assert.deepStrictEqual(result.decision, "deny");
+    assert.deepStrictEqual(result.reason, "Aborted");
+    await waitFor(() => edits.length === 1);
+    assert.ok(edits[0].content.endsWith("\n**→ Aborted**"));
+    assert.deepStrictEqual(edits[0].components, []);
+
+    const [approveId] = buttonCustomIds(sent[0].components);
+    const { interaction, calls } = fakeButtonInteraction(
+      `approve:${approveId.split(":")[1]}`,
+    );
+    await manager.handleButton(interaction);
+    assert.deepStrictEqual(calls.length, 1);
+    assert.deepStrictEqual(calls[0].method, "reply");
+  });
+
+  test("送信前に abort 済みなら投稿せず deny (Aborted) を返すこと", async () => {
+    const { resolver, sent } = fakeChannelResolver(new Set(["ch-1"]));
+    const manager = new ApprovalManagerClass(
+      fakeClient(),
+      "/tmp/loms-claw-test-nonexistent/settings.json",
+      { channelResolver: resolver },
+    );
+
+    const result = await manager.requestApproval(
+      "Bash",
+      { command: "ls" },
+      "ch-1",
+      AbortSignal.abort(),
+    );
+
+    assert.deepStrictEqual(result.reason, "Aborted");
+    assert.deepStrictEqual(sent.length, 0);
+  });
+
+  test("タイムアウトで投稿メッセージが Timed out に編集されること", async () => {
+    const { resolver, edits } = fakeChannelResolver(new Set(["ch-1"]));
+    const manager = new ApprovalManagerClass(
+      fakeClient(),
+      "/tmp/loms-claw-test-nonexistent/settings.json",
+      { channelResolver: resolver, timeoutMs: 10 },
+    );
+
+    await manager.requestApproval("Bash", { command: "ls" }, "ch-1");
+
+    await waitFor(() => edits.length === 1);
+    assert.ok(edits[0].content.endsWith("\n**→ Timed out**"));
+    assert.deepStrictEqual(edits[0].components, []);
+  });
+
+  test("createCanUseTool に渡したターンの signal を abort すると承認待ちが打ち切られること", async () => {
+    const { resolver, sent } = fakeChannelResolver(new Set(["ch-1"]));
+    const manager = new ApprovalManagerClass(
+      fakeClient(),
+      "/tmp/loms-claw-test-nonexistent/settings.json",
+      { channelResolver: resolver },
+    );
+    const turn = new AbortController();
+    const canUseTool = createCanUseTool(manager, "ch-1", turn.signal);
+
+    const pending = canUseTool("Bash", { command: "ls" }, toolOptions);
+    await waitFor(() => sent.length === 1);
+    turn.abort();
+
+    const result = await pending;
+    assert.ok(result, "結果が返ること");
+    assert.deepStrictEqual(result.behavior, "deny");
+    if (result.behavior === "deny") {
+      assert.deepStrictEqual(result.message, "Aborted");
+    }
+  });
+  test("send の待機中に abort されたら直ちに Aborted へ編集して deny を返し、pending を残さないこと", async () => {
+    const controller = new AbortController();
+    const edits: { content: string; components: [] }[] = [];
+    const resolver: ApprovalChannelResolver = {
+      fetchSendable: () =>
+        Promise.resolve({
+          send: (payload) => {
+            controller.abort();
+            return Promise.resolve({
+              content: payload.content,
+              edit: (edit) => {
+                edits.push(edit);
+                return Promise.resolve();
+              },
+            });
+          },
+        }),
+    };
+    const manager = new ApprovalManagerClass(
+      fakeClient(),
+      "/tmp/loms-claw-test-nonexistent/settings.json",
+      { channelResolver: resolver, timeoutMs: 10 },
+    );
+
+    const result = await manager.requestApproval(
+      "Bash",
+      { command: "ls" },
+      "ch-1",
+      controller.signal,
+    );
+
+    assert.deepStrictEqual(result.reason, "Aborted");
+    await waitFor(() => edits.length === 1);
+    assert.ok(edits[0].content.endsWith("\n**→ Aborted**"));
+    // timer が残っていれば Timed out の編集が増える
+    await new Promise((r) => setTimeout(r, 50));
+    assert.deepStrictEqual(edits.length, 1);
+  });
+
+  test("description が文字列以外でも承認メッセージが投稿されること", async () => {
+    const { resolver, sent } = fakeChannelResolver(new Set(["ch-1"]));
+    const manager = new ApprovalManagerClass(
+      fakeClient(),
+      "/tmp/loms-claw-test-nonexistent/settings.json",
+      { channelResolver: resolver, timeoutMs: 10 },
+    );
+
+    const pending = manager.requestApproval(
+      "Bash",
+      { command: "ls", description: 123 },
+      "ch-1",
+    );
+    await waitFor(() => sent.length === 1);
+    await pending;
+    assert.ok(sent[0].content.startsWith("**Tool: `Bash`**\n```json"));
+  });
+
+  test("巨大な input と長い description・ツール名でも閉じフェンスを含み 2000 文字以内であること", async () => {
+    const { resolver, sent } = fakeChannelResolver(new Set(["ch-1"]));
+    const manager = new ApprovalManagerClass(
+      fakeClient(),
+      "/tmp/loms-claw-test-nonexistent/settings.json",
+      { channelResolver: resolver, timeoutMs: 10 },
+    );
+
+    await manager.requestApproval(
+      "T".repeat(80),
+      { command: "x".repeat(10000), description: "あ".repeat(600) },
+      "ch-1",
+    );
+
+    const content = sent[0].content;
+    assert.ok(content.length <= 2000 - 20, "追記の余白を残して収まること");
+    assert.ok(content.endsWith("\n```"), "閉じフェンスで終わること");
   });
 });

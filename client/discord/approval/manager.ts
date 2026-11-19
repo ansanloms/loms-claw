@@ -24,12 +24,15 @@ import {
 } from "discord.js";
 import { getErrorMessage } from "../../../errors.ts";
 import { createLogger } from "../../../logger.ts";
+import { DISCORD_MESSAGE_LIMIT } from "../message.ts";
 import { INTERACTION_TIMEOUT_MS } from "./constants.ts";
 import {
+  appendStatus,
   parseQuestions,
   type Question,
   QuestionManager,
   type QuestionResult,
+  truncate,
 } from "./question.ts";
 import {
   addToSettingsAllowList,
@@ -37,6 +40,11 @@ import {
 } from "../../../core/approval-settings.ts";
 
 const log = createLogger("approval");
+
+/**
+ * 本文に残す結果表示 (`appendStatus` の最長 suffix `\n**→ Always Allowed**` 等) の余白。
+ */
+const STATUS_RESERVE = 32;
 
 /**
  * 承認結果。
@@ -54,7 +62,10 @@ export interface ApprovalSendableChannel {
   send(payload: {
     content: string;
     components: ActionRowBuilder<ButtonBuilder>[];
-  }): Promise<unknown>;
+  }): Promise<{
+    content: string;
+    edit(payload: { content: string; components: [] }): Promise<unknown>;
+  }>;
 }
 
 /**
@@ -96,6 +107,8 @@ export class ApprovalManager {
     {
       resolve: (result: ApprovalResult) => void;
       timeout: ReturnType<typeof setTimeout>;
+      /** abort listener の解除。解決時に呼ぶ。 */
+      cleanup: () => void;
     }
   >();
   private questions: QuestionManager;
@@ -134,11 +147,13 @@ export class ApprovalManager {
    * @param toolInput - ツールへの入力。承認ボタンの詳細表示に使う。
    * @param channelId - 承認ボタンの送信先チャンネル ID。呼び出し元が必須で渡す
    * (cron でジョブに channelId が無ければ undefined を渡す。undefined なら自動 deny)。
+   * @param signal - ターンの中断シグナル。abort されたら承認待ちを打ち切る。
    */
   async requestApproval(
     toolName: string,
     toolInput: Record<string, unknown>,
     channelId: string | undefined,
+    signal?: AbortSignal,
   ): Promise<ApprovalResult> {
     // allow list に含まれるツールは即座に許可する。
     if (await isInAllowList(this.settingsPath, toolName)) {
@@ -151,10 +166,17 @@ export class ApprovalManager {
       return { decision: "deny", reason: "No approval channel" };
     }
 
+    if (signal?.aborted) {
+      return { decision: "deny", reason: "Aborted" };
+    }
+
     const channel = await this.channelResolver.fetchSendable(channelId);
     if (!channel) {
       log.warn("approval channel not found:", channelId);
       return { decision: "deny", reason: "Channel not found" };
+    }
+    if (signal?.aborted) {
+      return { decision: "deny", reason: "Aborted" };
     }
 
     const requestId = crypto.randomUUID().slice(0, 8);
@@ -174,32 +196,81 @@ export class ApprovalManager {
         .setStyle(ButtonStyle.Danger),
     );
 
-    const description = (toolInput.description as string) ?? "";
+    const description =
+      typeof toolInput.description === "string"
+        ? truncate(toolInput.description, 300)
+        : "";
+    const header = [
+      `**Tool: \`${truncate(toolName, 100)}\`**`,
+      ...(description ? [description] : []),
+    ].join("\n");
+    // 閉じフェンスと結果表示 (appendStatus の最長 suffix) の分を空けて JSON ダンプを切る。
+    const dumpBudget = Math.max(
+      0,
+      DISCORD_MESSAGE_LIMIT -
+        STATUS_RESERVE -
+        header.length -
+        "\n```json\n\n```".length,
+    );
     const inputDump = JSON.stringify(toolInput, null, 2);
     const truncated =
-      inputDump.length > 1500 ? `${inputDump.slice(0, 1497)}...` : inputDump;
+      inputDump.length > Math.min(1500, dumpBudget)
+        ? `${inputDump.slice(0, Math.max(0, Math.min(1500, dumpBudget) - 3))}...`
+        : inputDump;
+    const content = `${header}\n\`\`\`json\n${truncated}\n\`\`\``;
 
-    await channel.send({
-      content: [
-        `**Tool: \`${toolName}\`**`,
-        ...(description ? [description] : []),
-        "```json",
-        truncated,
-        "```",
-      ].join("\n"),
-      components: [row],
-    });
+    let message: Awaited<ReturnType<ApprovalSendableChannel["send"]>>;
+    try {
+      message = await channel.send({ content, components: [row] });
+    } catch (error: unknown) {
+      log.warn("failed to post approval request:", getErrorMessage(error));
+      return { decision: "deny", reason: "Failed to post approval request" };
+    }
 
     log.info("approval requested:", requestId, toolName);
 
+    const editStatus = (suffix: string, label: string) => {
+      message
+        .edit({
+          content: appendStatus(message.content, suffix),
+          components: [],
+        })
+        .catch((error: unknown) => {
+          log.warn(`failed to edit ${label} message:`, getErrorMessage(error));
+        });
+    };
+
+    // send の待機中に abort されると listener は発火しないので、ここで確かめる。
+    if (signal?.aborted) {
+      log.warn("approval aborted:", requestId);
+      editStatus("\n**→ Aborted**", "aborted");
+      return { decision: "deny", reason: "Aborted" };
+    }
+
     return new Promise<ApprovalResult>((resolve) => {
+      const onAbort = () => {
+        const pending = this.pending.get(requestId);
+        if (!pending) {
+          return;
+        }
+        clearTimeout(pending.timeout);
+        this.pending.delete(requestId);
+        log.warn("approval aborted:", requestId);
+        editStatus("\n**→ Aborted**", "aborted");
+        resolve({ decision: "deny", reason: "Aborted" });
+      };
+      const cleanup = () => signal?.removeEventListener("abort", onAbort);
+
       const timeout = setTimeout(() => {
         this.pending.delete(requestId);
+        cleanup();
         log.warn("approval timed out:", requestId);
+        editStatus("\n**→ Timed out**", "timed out");
         resolve({ decision: "deny", reason: "Timed out" });
       }, this.timeoutMs);
 
-      this.pending.set(requestId, { resolve, timeout });
+      this.pending.set(requestId, { resolve, timeout, cleanup });
+      signal?.addEventListener("abort", onAbort, { once: true });
     });
   }
 
@@ -212,8 +283,9 @@ export class ApprovalManager {
   requestAnswers(
     questions: Question[],
     channelId: string | undefined,
+    signal?: AbortSignal,
   ): Promise<QuestionResult> {
-    return this.questions.requestAnswers(questions, channelId);
+    return this.questions.requestAnswers(questions, channelId, signal);
   }
 
   /**
@@ -261,6 +333,7 @@ export class ApprovalManager {
     }
 
     clearTimeout(pending.timeout);
+    pending.cleanup();
     this.pending.delete(requestId);
 
     if (action === "always") {
@@ -285,7 +358,7 @@ export class ApprovalManager {
     });
 
     await interaction.update({
-      content: `${interaction.message.content}\n**→ ${label}**`,
+      content: appendStatus(interaction.message.content, `\n**→ ${label}**`),
       components: [],
     });
 
@@ -311,19 +384,26 @@ export class ApprovalManager {
  *
  * channelId は呼び出し元が必須で渡す (`requestApproval` / `requestAnswers` と
  * 揃える。cron でジョブに channelId が無ければ undefined を渡す)。
+ *
+ * `turnSignal` (ターン全体のタイムアウト) と SDK が渡す `options.signal` を
+ * `AbortSignal.any` で合成し、どちらかが abort されたら承認・質問の待ちを打ち切る。
  */
 export function createCanUseTool(
   manager: ApprovalManager,
   channelId: string | undefined,
+  turnSignal?: AbortSignal,
 ): CanUseTool {
-  return async (toolName, input) => {
+  return async (toolName, input, options) => {
+    const signal = turnSignal
+      ? AbortSignal.any([options.signal, turnSignal])
+      : options.signal;
     if (toolName === "AskUserQuestion") {
       const questions = parseQuestions(input);
       if (!questions) {
         log.warn("malformed AskUserQuestion input");
         return { behavior: "deny", message: "Malformed AskUserQuestion input" };
       }
-      const result = await manager.requestAnswers(questions, channelId);
+      const result = await manager.requestAnswers(questions, channelId, signal);
       if (result.kind === "answered") {
         return {
           behavior: "allow",
@@ -336,7 +416,12 @@ export function createCanUseTool(
       };
     }
 
-    const result = await manager.requestApproval(toolName, input, channelId);
+    const result = await manager.requestApproval(
+      toolName,
+      input,
+      channelId,
+      signal,
+    );
     if (result.decision === "allow") {
       return { behavior: "allow", updatedInput: input };
     }
