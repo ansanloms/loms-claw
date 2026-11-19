@@ -87,7 +87,9 @@ Discord のボタン承認が発火するのは、上の表のとおり SDK 上�
 
 ### `addToSettingsAllowList(settingsPath, toolName)` (`core/approval-settings.ts`)
 
-ファイルが無ければ空オブジェクトから作る (NotFound 以外の読み込みエラーは throw)。JSON 不正なら WARN ログを出して上書きする。`permissions`/`permissions.allow` が無ければ作り、既存フィールドは保持してマージする。重複なら追加しない。親ディレクトリを `mkdir -p` 相当で作り、`JSON.stringify(settings, null, 2) + "\n"` で書き出す。
+ファイルが無ければ空オブジェクトから作る (NotFound 以外の読み込みエラーは throw)。JSON 不正なら `settings.json is invalid JSON: {path}` で throw し、ファイルには触れない (呼び出し側の `handleButton` が WARN ログに落とし、今回 1 回の allow は有効なまま)。`permissions`/`permissions.allow` の形が不正なとき (JSON 自体は有効) は作り直す。既存フィールドは保持してマージし、重複なら追加しない。
+
+同一 path への呼び出しはモジュールスコープの Promise チェーンで直列化し、read-modify-write を 1 つずつ実行する (先行が失敗しても後続は走る)。親ディレクトリを `mkdir -p` 相当で作り、同ディレクトリの一時ファイル (`{path}.{pid}.{uuid}.tmp`) に `JSON.stringify(settings, null, 2) + "\n"` を書いて `rename` で置き換える。`settings.json` が symlink なら `realpath` で実体を解決し、実体と同じディレクトリの一時ファイルから実体へ `rename` する (symlink は保たれる)。既存ファイルがあればその mode を一時ファイルへ `chmod` で写す。失敗時は一時ファイルを消して (消せなくても握って) 元のエラーを再 throw する。プロセス間ロックは持たない (単一プロセス前提)。
 
 ## QuestionManager (`client/discord/approval/question.ts`)
 
