@@ -67,6 +67,11 @@ Claude Code 組み込みの auto memory（`~/.claude/projects/` 配下の memory
 
 旅行 1 件につき 1 ノート。`travel-note` skill の手順で扱う。
 
+旅行を越えて効く教訓は `memory/travel/lessons/` に 1 教訓 1 ファイルで持つ。これも `travel-note` skill の手順で扱う。`memory/knowledge/` との境界は次のとおり。
+
+- 旅行の計画・実施に効く教訓 (ペースの見積もり・予約の時機・持ち物の過不足・現地の注意等) → `memory/travel/lessons/`
+- 分野の一般知識と台帳 (ギア・車体・登山の安全規則等) → `memory/knowledge/`
+
 ## 参照ルール
 
 - 過去の文脈・ユーザの好み・以前の判断が必要と判断したとき、memory/MEMORY.md を読み、索引から必要なファイルへ降りろ。
