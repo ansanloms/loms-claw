@@ -141,6 +141,49 @@ describe("loadConfig", () => {
     });
   });
 
+  test("claude の数値設定が整数・範囲外で検証エラーになること", () => {
+    const cases: Array<[string, unknown]> = [
+      ["timeout", 1.5],
+      ["timeout", -1],
+      ["timeout", 0],
+      ["timeout", 2147483648],
+      ["maxTurns", 1.5],
+      ["maxTurns", 0],
+      ["apiPort", 1.5],
+      ["apiPort", 0],
+      ["apiPort", 65536],
+    ];
+    for (const [key, value] of cases) {
+      withTempConfig({ ...requiredFields, claude: { [key]: value } }, () => {
+        assert.throws(() => loadConfig(), errorWith(Error, key));
+      });
+    }
+  });
+
+  test("log.bufferSize が小数でエラーになること", () => {
+    withTempConfig(
+      { ...requiredFields, log: { level: "INFO", bufferSize: 1.5 } },
+      () => {
+        assert.throws(() => loadConfig(), errorWith(Error, "bufferSize"));
+      },
+    );
+  });
+
+  test("timeout・apiPort の境界値が通ること", () => {
+    withTempConfig(
+      {
+        ...requiredFields,
+        claude: { timeout: 2147483647, apiPort: 65535, maxTurns: 1 },
+      },
+      () => {
+        const config = loadConfig();
+        assert.deepStrictEqual(config.claude.timeout, 2147483647);
+        assert.deepStrictEqual(config.claude.apiPort, 65535);
+        assert.deepStrictEqual(config.claude.maxTurns, 1);
+      },
+    );
+  });
+
   test("未知プロパティ (additionalProperties) を拒否すること", () => {
     withTempConfig({ ...requiredFields, UNKNOWN_KEY: "nope" }, () => {
       assert.throws(() => loadConfig(), errorWith(Error, "UNKNOWN_KEY"));

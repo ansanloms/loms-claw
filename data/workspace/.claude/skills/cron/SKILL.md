@@ -166,8 +166,8 @@ effort: medium
 | `schedule`      | yes  | string  | —          | cron 式（5フィールド、TZ 環境変数依存）           |
 | `channelId`     | no   | string  | —          | 結果の自動投稿先と承認ボタン送信先のチャンネル ID |
 | `resumeSession` | no   | boolean | `false`    | 前回のセッションを引き継ぐか                      |
-| `maxTurns`      | no   | number  | ※          | Claude の最大ターン数                             |
-| `timeout`       | no   | number  | ※          | タイムアウト（ミリ秒、0 より大きい数）            |
+| `maxTurns`      | no   | integer | ※          | Claude の最大ターン数（1 以上の整数）             |
+| `timeout`       | no   | integer | ※          | タイムアウト（ミリ秒、1〜2147483647 の整数）      |
 | `once`          | no   | boolean | `false`    | `true` で1回実行後にファイル自動削除              |
 | `model`         | no   | string  | —          | モデル alias または full name（後述）             |
 | `effort`        | no   | string  | —          | effort level（後述）                              |
@@ -281,7 +281,7 @@ channelId: "1234567890123456789"
 | `schedule`  | yes  | string  | —          | cron 式（prompt ジョブと同じ）                                                     |
 | `command`   | yes  | string  | —          | `sh -c` に渡すコマンド文字列                                                       |
 | `channelId` | no   | string  | —          | 結果の投稿先チャンネル ID                                                          |
-| `timeout`   | no   | number  | ※          | タイムアウト（ミリ秒、0 より大きい数）。省略時は `config.json` の `claude.timeout` |
+| `timeout`   | no   | integer | ※          | タイムアウト（ミリ秒、1〜2147483647 の整数）。省略時は `config.json` の `claude.timeout` |
 | `once`      | no   | boolean | `false`    | `true` で 1 回実行後にファイル自動削除                                             |
 
 `maxTurns`/`resumeSession`/`model`/`effort` 等 prompt ジョブ専用のフィールドは command ジョブには無い（書くと `"maxTurns" is not an allowed property` 等のエラーになる）。
