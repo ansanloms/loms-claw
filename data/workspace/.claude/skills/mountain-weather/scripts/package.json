@@ -17,9 +17,9 @@
     "gunshi": "0.37.3"
   },
   "devDependencies": {
-    "@types/node": "26.6.4",
-    "oxfmt": "0.72.0",
-    "oxlint": "1.87.0",
+    "@types/node": "26.6.6",
+    "oxfmt": "0.75.0",
+    "oxlint": "1.90.0",
     "typescript": "7.0.2"
   },
   "engines": {
