@@ -123,7 +123,7 @@ model/effort/showThinking/active に対する個別の setter/deleter は無く�
 
 ## Discord スラッシュコマンド `/claw settings`
 
-`client/discord/commands.ts` にコマンド定義 (`SlashCommandBuilder`) とハンドラを置き、`client/discord/mod.ts` の `onInteraction()` がサブコマンド名でディスパッチする。interaction は `isAuthorized()` を通過したものだけが処理される。応答はすべて `MessageFlags.Ephemeral`。
+`client/discord/commands.ts` にコマンド定義 (`SlashCommandBuilder`) とハンドラを置き、`client/discord/mod.ts` の `handleCommand()` がサブコマンド名でディスパッチする。全種別の interaction は `dispatchInteraction()` (`client/discord/interaction.ts`) の先頭で `isAuthorized()` を通り、通過したものだけがここへ届く (拒否時は ephemeral の「この操作は許可されていません。」を返す。[message-flow](message-flow.md))。応答はすべて `MessageFlags.Ephemeral`。
 
 | サブコマンド | オプション                                                                                                                                             | 処理                                                                                      |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |

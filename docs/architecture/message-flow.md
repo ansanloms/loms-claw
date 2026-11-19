@@ -4,7 +4,7 @@
 
 関連: [README](README.md)/[lifecycle](lifecycle.md)/[claude-integration](claude-integration.md)/[store-and-settings](store-and-settings.md)/[approval](approval.md)/[cron](cron.md)/[deployment](deployment.md)
 
-対象ソース: `client/discord/mod.ts`, `client/discord/guard.ts`, `client/discord/incoming.ts`, `core/conversation.ts`, `core/queue.ts`, `core/ratelimit.ts`, `core/flush.ts`, `client/discord/message.ts`, `client/discord/commands.ts`, `claude/mod.ts` (抽出ヘルパー), `client/discord/approval/manager.ts` (`createCanUseTool()` の入口)
+対象ソース: `client/discord/mod.ts`, `client/discord/guard.ts`, `client/discord/incoming.ts`, `client/discord/interaction.ts`, `core/conversation.ts`, `core/queue.ts`, `core/ratelimit.ts`, `core/flush.ts`, `client/discord/message.ts`, `client/discord/commands.ts`, `claude/mod.ts` (抽出ヘルパー), `client/discord/approval/manager.ts` (`createCanUseTool()` の入口)
 
 ## 中核とアダプタの境界
 
@@ -208,14 +208,18 @@ per-scope の停止手段は無い。連鎖を止めるにはレート制限に�
 
 ## インタラクション (`interactionCreate`, `DiscordBot.onInteraction`)
 
-| 種別                                           | 判定                                                 | 委譲先                                                                                                                                                                                                               |
-| ---------------------------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ボタン (承認 / 拒否、質問の Cancel)            | `interaction.isButton()`                             | `approvalManager.handleButton(interaction)`                                                                                                                                                                          |
-| string select (AskUserQuestion の回答)         | `interaction.isStringSelectMenu()`                   | `approvalManager.handleSelect(interaction)`                                                                                                                                                                          |
-| modal 送信 (AskUserQuestion の Other 自由入力) | `interaction.isModalSubmit()`                        | `approvalManager.handleModal(interaction)`                                                                                                                                                                           |
-| chat input `/claw settings show\|set\|unset`   | `isChatInputCommand()` かつ `commandName === "claw"` | `isAuthorized(guildId, user.id, user.bot, config)` を通過後、サブコマンド群 `settings` の `show` → `handleSettingsShow`、`set` → `handleSettingsSet`、`unset` → `handleSettingsUnset` (`client/discord/commands.ts`) |
+`DiscordBot.onInteraction` は `dispatchInteraction(interaction, deps)` (`client/discord/interaction.ts`) を呼ぶだけで、認可と振り分けはここに集約してある。discord.js への依存は `Interaction` 型の判定メソッドだけで、`deps` は `{ config, approvalManager: { handleButton, handleSelect, handleModal }, handleCommand }` の最小の型で受ける。
 
-- ボタン/select/modal のハンドラが throw した場合は ERROR ログを出し、未応答なら ephemeral のエラー文言で `reply()` する。この 3 分岐は同形のため `runInteraction(interaction, label, handler, errorMessage)` (`client/discord/mod.ts`) に共通化してある。ログの label とエラー文言は分岐ごとに異なる (button: `"承認処理中にエラーが発生しました。"`、select/modal: `"回答処理中にエラーが発生しました。"`)。
+先頭で全種別に `isAuthorized(guildId, user.id, user.bot, config)` を適用する。承認メッセージが見えるギルドメンバーなら誰でも押せるため、ボタン・select・modal も例外にしない。不通過なら、`interaction.isRepliable()` のときに ephemeral で「この操作は許可されていません。」を返し (失敗は WARN ログ)、どのハンドラも呼ばずに終わる。承認の pending と `settings.json` は触れない。通過後に次の表で振り分ける。
+
+| 種別                                           | 判定                                                 | 委譲先                                                                                                                                                                                                             |
+| ---------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| ボタン (承認 / 拒否、質問の Cancel)            | `interaction.isButton()`                             | `approvalManager.handleButton(interaction)`                                                                                                                                                                        |
+| string select (AskUserQuestion の回答)         | `interaction.isStringSelectMenu()`                   | `approvalManager.handleSelect(interaction)`                                                                                                                                                                        |
+| modal 送信 (AskUserQuestion の Other 自由入力) | `interaction.isModalSubmit()`                        | `approvalManager.handleModal(interaction)`                                                                                                                                                                         |
+| chat input `/claw settings show\|set\|unset`   | `isChatInputCommand()` かつ `commandName === "claw"` | 認可通過後、`handleCommand` (`DiscordBot.handleCommand`) がサブコマンド群 `settings` の `show` → `handleSettingsShow`、`set` → `handleSettingsSet`、`unset` → `handleSettingsUnset` (`client/discord/commands.ts`) |
+
+- ボタン/select/modal のハンドラが throw した場合は ERROR ログを出し、未応答なら ephemeral のエラー文言で `reply()` する。この 3 分岐は同形のため `runInteraction(interaction, label, handler, errorMessage)` (`client/discord/interaction.ts`) に共通化してある。ログの label とエラー文言は分岐ごとに異なる (button: `"承認処理中にエラーが発生しました。"`、select/modal: `"回答処理中にエラーが発生しました。"`)。
 - スラッシュコマンドは `registerCommands()` で対象ギルドにのみ登録される ([lifecycle](lifecycle.md))。設定コマンドの意味は [store-and-settings](store-and-settings.md)、承認・質問の詳細は [approval](approval.md) を参照。
 
 ## 定数一覧

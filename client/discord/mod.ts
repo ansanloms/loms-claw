@@ -12,12 +12,11 @@ import {
   Client,
   Events,
   GatewayIntentBits,
+  type ChatInputCommandInteraction,
   type GuildTextBasedChannel,
   type Interaction,
   type Message,
-  MessageFlags,
   REST,
-  type RepliableInteraction,
   Routes,
   Status,
 } from "discord.js";
@@ -35,7 +34,7 @@ import {
 } from "../../core/ratelimit.ts";
 import { CronExecutor } from "../../cron/executor.ts";
 import { loadCronJobsFromDir } from "../../cron/loader.ts";
-import { getErrorMessage, summarizeError } from "../../errors.ts";
+import { summarizeError } from "../../errors.ts";
 import { createLogger } from "../../logger.ts";
 import type { Store } from "../../store/mod.ts";
 import { ApprovalManager, createCanUseTool } from "./approval/manager.ts";
@@ -46,8 +45,8 @@ import {
   handleSettingsShow,
   handleSettingsUnset,
 } from "./commands.ts";
-import { isAuthorized } from "./guard.ts";
 import { resolveIncomingMessage } from "./incoming.ts";
+import { dispatchInteraction } from "./interaction.ts";
 import {
   appendImageReferences,
   cleanupImageFiles,
@@ -92,36 +91,6 @@ async function withTimeout(
   });
   await Promise.race([promise, timeout]);
   clearTimeout(timeoutId);
-}
-
-/**
- * インタラクションのハンドラを実行し、失敗時にログとエフェメラル返信で揃える。
- *
- * button / select メニュー / Modal 送信の 3 ハンドラが同形の
- * `try { handler } catch { log.error; if (!replied && !deferred) reply(ephemeral) }`
- * を持っていたため、ここに集約する。ログ文言・エラー返信文言は呼び出し側から渡す
- * (各分岐の現行の文言を変えない)。
- */
-async function runInteraction(
-  interaction: RepliableInteraction,
-  label: string,
-  handler: () => Promise<unknown>,
-  errorMessage: string,
-): Promise<void> {
-  try {
-    await handler();
-  } catch (error: unknown) {
-    const msg = getErrorMessage(error);
-    log.error(`${label} interaction error:`, msg);
-    if (!interaction.replied && !interaction.deferred) {
-      await interaction
-        .reply({
-          content: errorMessage,
-          flags: MessageFlags.Ephemeral,
-        })
-        .catch(() => {});
-    }
-  }
 }
 
 /**
@@ -359,58 +328,25 @@ export class DiscordBot {
   }
 
   /**
-   * スラッシュコマンドのハンドラ。
+   * interaction のハンドラ。認可と種別ごとの振り分けは `dispatchInteraction()`
+   * (`client/discord/interaction.ts`) が担う。
    */
   private async onInteraction(interaction: Interaction): Promise<void> {
-    // ボタンインタラクション（承認/拒否、質問の Cancel）
-    if (interaction.isButton()) {
-      await runInteraction(
-        interaction,
-        "button",
-        () => this.approvalManager.handleButton(interaction),
-        "承認処理中にエラーが発生しました。",
-      );
-      return;
-    }
+    await dispatchInteraction(interaction, {
+      config: this.config,
+      approvalManager: this.approvalManager,
+      handleCommand: (i) => this.handleCommand(i),
+    });
+  }
 
-    // select メニュー（AskUserQuestion の回答）
-    if (interaction.isStringSelectMenu()) {
-      await runInteraction(
-        interaction,
-        "select",
-        () => this.approvalManager.handleSelect(interaction),
-        "回答処理中にエラーが発生しました。",
-      );
-      return;
-    }
-
-    // Modal 送信（AskUserQuestion の Other 自由入力）
-    if (interaction.isModalSubmit()) {
-      await runInteraction(
-        interaction,
-        "modal",
-        () => this.approvalManager.handleModal(interaction),
-        "回答処理中にエラーが発生しました。",
-      );
-      return;
-    }
-
-    if (!interaction.isChatInputCommand()) {
-      return;
-    }
+  /**
+   * スラッシュコマンド (`/claw settings <sub>`) のハンドラ。
+   * 認可は呼び出し元の `dispatchInteraction()` で済んでいる。
+   */
+  private async handleCommand(
+    interaction: ChatInputCommandInteraction,
+  ): Promise<void> {
     if (interaction.commandName !== command.name) {
-      return;
-    }
-
-    // 認可チェック
-    if (
-      !isAuthorized(
-        interaction.guildId,
-        interaction.user.id,
-        interaction.user.bot,
-        this.config,
-      )
-    ) {
       return;
     }
 

@@ -71,7 +71,7 @@ Discord のボタン承認が発火するのは、上の表のとおり SDK 上�
 
 ### `handleButton(interaction)`
 
-`client/discord/mod.ts` の `onInteraction()` から `interaction.isButton()` のとき呼ばれる (振り分けは [message-flow](message-flow.md))。
+`client/discord/interaction.ts` の `dispatchInteraction()` から `interaction.isButton()` のとき呼ばれる。先頭で `isAuthorized()` を通った interaction だけが届く (振り分けは [message-flow](message-flow.md))。
 
 1. まず `QuestionManager.handleButton()` に渡し、質問側の Cancel ボタン (`question-cancel:{requestId}`) なら終了。
 2. `customId` を `:` で分割し、`approve`/`always`/`deny` 以外、または `requestId` 欠落なら `false` を返す。
@@ -153,7 +153,7 @@ cron で `channelId` 未指定のジョブでは、`createCanUseTool()` に渡�
 
 自己メンション起動ターンでは承認ボタン・質問は通常どおりそのスコープに投稿される。承認・質問メッセージの本文はユーザーメンションを含まないため本人宛てのピングは無く、本人が見ていなければ 5 分の timeout で deny になり、依頼元には通知されない。
 
-`InteractionCreate` からの振り分け (`isButton()` → `handleButton`、`isStringSelectMenu()` → `handleSelect`、`isModalSubmit()` → `handleModal`、それ以外はスラッシュコマンド) と各ハンドラのエラー時の ephemeral 応答は `client/discord/mod.ts` の `onInteraction()` にあり、[message-flow](message-flow.md) で扱う。`canUseTool` を `query()` の options に載せる箇所は [claude-integration](claude-integration.md) を参照。
+`InteractionCreate` からの振り分け (`isButton()` → `handleButton`、`isStringSelectMenu()` → `handleSelect`、`isModalSubmit()` → `handleModal`、それ以外はスラッシュコマンド) と各ハンドラのエラー時の ephemeral 応答 (`runInteraction()`) は `client/discord/interaction.ts` の `dispatchInteraction()` にある。承認ボタン・select・modal も含む全種別が、振り分けの前に `isAuthorized()` を通り、認可されない操作は pending に触れず ephemeral で拒否される。詳細は [message-flow](message-flow.md) で扱う。`canUseTool` を `query()` の options に載せる箇所は [claude-integration](claude-integration.md) を参照。
 
 ## テスト
 
