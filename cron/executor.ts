@@ -18,7 +18,12 @@ import { summarizeError } from "../errors.ts";
 import { createLogger } from "../logger.ts";
 import type { Store } from "../store/mod.ts";
 import { CronScheduler } from "./scheduler.ts";
-import type { CronCommandJob, CronJobDef, CronPromptJob } from "./types.ts";
+import type {
+  CronCommandJob,
+  CronJobDef,
+  CronPromptJob,
+  CronRunResult,
+} from "./types.ts";
 
 const log = createLogger("cron");
 
@@ -247,10 +252,10 @@ export class CronExecutor {
    * `job.kind` で prompt ジョブ ({@link runPromptJob}) と command ジョブ
    * ({@link runCommandJob}) に処理を振り分ける。
    */
-  async runJob(job: CronJobDef): Promise<void> {
+  async runJob(job: CronJobDef): Promise<CronRunResult> {
     if (this.running.has(job.name)) {
       log.warn(`cron job "${job.name}" is already running, skipping`);
-      return;
+      return "skipped";
     }
 
     this.running.add(job.name);
@@ -258,6 +263,7 @@ export class CronExecutor {
 
     // channelId 指定時は送信先を事前取得（catch 内でもエラー通知に使う）
     let target: CronTarget | undefined;
+    let result: CronRunResult = "succeeded";
 
     try {
       if (job.channelId) {
@@ -274,6 +280,7 @@ export class CronExecutor {
     } catch (error: unknown) {
       // logger は Error の stack を自動で展開する。全文はここに残す。
       log.error(`cron job "${job.name}" failed:`, error);
+      result = "failed";
 
       // channelId 指定時かつ送信先取得済みならエラーを通知 (要約のみ、全文は上記ログ)。
       if (target) {
@@ -293,6 +300,7 @@ export class CronExecutor {
       }
       this.running.delete(job.name);
     }
+    return result;
   }
 
   /**

@@ -116,7 +116,7 @@ describe("createCronRoutes", () => {
       createCronRoutes({
         runJob: (name: string) => {
           executed.push(name);
-          return Promise.resolve();
+          return Promise.resolve("succeeded");
         },
       }),
     );
@@ -128,16 +128,43 @@ describe("createCronRoutes", () => {
     });
 
     assert.deepStrictEqual(res.status, 200);
-    assert.deepStrictEqual(await res.json(), { ok: true, name: "my-job" });
+    assert.deepStrictEqual(await res.json(), {
+      ok: true,
+      name: "my-job",
+      result: "succeeded",
+    });
     assert.deepStrictEqual(executed, ["my-job"]);
   });
+
+  for (const result of ["failed", "skipped"] as const) {
+    test(`POST /run: runJob が ${result} を返しても 200 で result がそのまま載ること`, async () => {
+      const app = new Hono();
+      app.route(
+        "/cron",
+        createCronRoutes({ runJob: () => Promise.resolve(result) }),
+      );
+
+      const res = await app.request("/cron/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "my-job" }),
+      });
+
+      assert.deepStrictEqual(res.status, 200);
+      assert.deepStrictEqual(await res.json(), {
+        ok: true,
+        name: "my-job",
+        result,
+      });
+    });
+  }
 
   test("POST /run: name 未指定で 400 を返すこと", async () => {
     const app = new Hono();
     app.route(
       "/cron",
       createCronRoutes({
-        runJob: async () => {},
+        runJob: () => Promise.resolve("succeeded"),
       }),
     );
 
@@ -195,7 +222,7 @@ describe("createCronRoutes", () => {
     app.route(
       "/cron",
       createCronRoutes({
-        runJob: () => Promise.resolve(),
+        runJob: () => Promise.resolve("succeeded"),
       }),
     );
 

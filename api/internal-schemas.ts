@@ -337,16 +337,26 @@ export const internalSchemas = {
     "description": "cron ジョブ手動実行結果。",
     "required": [
       "ok",
-      "name"
+      "name",
+      "result"
     ],
     "properties": {
       "ok": {
         "type": "boolean",
-        "description": "実行を受け付けたか。"
+        "description": "リクエストを受け付けて処理したか (常に true。ジョブの成否は result で返す)。"
       },
       "name": {
         "type": "string",
         "description": "実行したジョブ名。"
+      },
+      "result": {
+        "type": "string",
+        "description": "ジョブの実行結果。succeeded はジョブが最後まで実行された、 failed は実行中に例外が起きた、 skipped は同名ジョブが実行中のため実行しなかった。",
+        "enum": [
+          "succeeded",
+          "failed",
+          "skipped"
+        ]
       }
     }
   }

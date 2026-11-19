@@ -73,9 +73,9 @@ DB の open/close は `main.ts` が対で所有する。`openStoreDatabase()` �
 3. `ClientReady` ハンドラ内の処理 (この順):
    1. `registerCommands()`: `REST` に token をセットし、`Routes.applicationGuildCommands(client.user.id, config.discord.guildId)` へ `[command.toJSON()]` (`client/discord/commands.ts` の `command`) を `PUT` する。ギルドスコープのコマンド登録で、グローバルコマンドは登録しない。
    2. `new CronExecutor({ ports: createDiscordCronPorts({ client, guildId, approvalManager }), config: config.claude, env: { DISCORD_BOT_TOKEN }, store, defaults: config.claude.defaults, systemPrompts })` (`cron/executor.ts`、`ports` は `client/discord/cron-target.ts`)。
-   3. `loadCronJobsFromDir(config.claude.cwd)` (`cron/loader.ts`) で `{cwd}/cron/*.md` を読み、`cronExecutor.start(jobs)` でスケジューラを開始する。`cron/` が無ければ空配列で開始する。
-   4. `reloadJobs` (再読込 → `cronExecutor.reload()`) を定義し、`cronExecutor.setOnceCallback()` に once ジョブ実行後の処理 (`{cwd}/cron/{name}.md` を `rm()` → `reloadJobs()`) を登録する。削除失敗はログのみで、reload は行う。
-   5. `runJobByName` (`findJob()` → `runJob()`、未登録なら throw) を定義する。
+   3. `loadCronJobsFromDir(config.claude.cwd)` (`cron/loader.ts`) で `{cwd}/cron/*.md` と `{cwd}/cron/*.yaml` を読み、`cronExecutor.start(jobs)` でスケジューラを開始する。`cron/` が無ければ空配列で開始する。
+   4. `reloadJobs` (再読込 → `cronExecutor.reload()`) を定義し、`cronExecutor.setOnceCallback()` に once ジョブ実行後の処理 (`{cwd}/cron/{name}` を `rm()`。`name` は拡張子を含む → `reloadJobs()`) を登録する。削除失敗はログのみで、reload は行う。
+   5. `runJobByName` (`findJob()` → `runJob()`、未登録なら throw。`runJob()` の結果 `succeeded`/`failed`/`skipped` を返す) を定義する。`POST /cron/run` はこの結果を `result` として返す。
    6. `CronRouteContext { reloadCronJobs, runJob, listJobs }`、`SettingsRouteContext { store, resolveParentId }`、`HealthRouteContext { isReady }` を組み立て、`startApiServer(config.claude.apiPort, settingsCtx, healthCtx, cronCtx)` (`api/server.ts`) を呼ぶ。サーバーは `127.0.0.1` にバインドされる。詳細は [internal-api](internal-api.md)。
    7. `ready` Promise を resolve する。
 4. `await this.client.login(config.discord.token)`。
@@ -88,7 +88,7 @@ cron の詳細は [cron](cron.md)、`SettingsRouteContext` の中身は [store-a
 `async shutdown(): Promise<void>`。次の順に呼ぶ。
 
 1. `this.cronExecutor?.stop()`: スケジューラの interval を止める。
-2. `this.apiServer?.shutdown()` (reject は `log.warn("api server shutdown error:", e)` で握る) を `withTimeout()` (module 内ヘルパ) で `SHUTDOWN_TIMEOUT_MS` (5 秒、モジュール定数) のタイムアウトと競わせて待つ。タイムアウトした場合は `log.warn("api server shutdown timed out; proceeding")` を出して先へ進む。
+2. `apiServer.close()` (コールバック形式) を Promise で包んだもの (reject は `log.warn("api server shutdown error:", e)` で握る。`apiServer` が無ければ即 resolve) を `withTimeout()` (module 内ヘルパ) で `SHUTDOWN_TIMEOUT_MS` (5 秒、モジュール定数) のタイムアウトと競わせて待つ。タイムアウトした場合は `log.warn("api server shutdown timed out; proceeding")` を出して先へ進む。
 3. `this.client.destroy()` (reject は `log.warn("client destroy error:", e)` で握る) も同様に `withTimeout()` で `SHUTDOWN_TIMEOUT_MS` と競わせて待つ。タイムアウト時は `log.warn("client destroy timed out; proceeding")`。
 
 `withTimeout(promise, ms, label)` は `promise` と `ms` のタイマーを `Promise.race` させ、タイマーが先に発火したら `log.warn("<label> timed out; proceeding")` を出して resolve する (reject しない)。渡す `promise` 自体の reject は呼び出し側が事前に `.catch()` で処理する。どちらが先に決着してもタイマーは `clearTimeout()` する。ステップ 2・3 それぞれに独立してタイムアウトが掛かるため、`shutdown()` 全体の最大所要時間は合計最大 10 秒になり得る (`compose.yaml` の `stop_grace_period: 15s` はこれに合わせている)。
@@ -167,7 +167,7 @@ cwd 基準で解決されるもの:
 | SQLite                       | `storePath` が相対なら cwd 基準 (既定 `.claude/loms-claw.sqlite`) | `main.ts` `openStoreDatabase()`                              |
 | システムプロンプト           | `{cwd}/.claude/system-prompt/`                                    | `client/discord/mod.ts` コンストラクタ → `SystemPromptStore` |
 | ツール許可リスト             | `{cwd}/.claude/settings.json`                                     | `client/discord/mod.ts` コンストラクタ → `ApprovalManager`   |
-| cron ジョブ定義              | `{cwd}/cron/*.md`                                                 | `cron/loader.ts` `loadCronJobsFromDir()`、once コールバック  |
+| cron ジョブ定義              | `{cwd}/cron/*.md`, `{cwd}/cron/*.yaml`                            | `cron/loader.ts` `loadCronJobsFromDir()`、once コールバック  |
 | `query()` の作業ディレクトリ | `{cwd}`                                                           | `claude/mod.ts` `buildQueryOptions()` (`cwd: config.cwd`)    |
 
 Docker/compose/devcontainer/`data/` の構成と環境変数 (`CLAUDE_CONFIG_DIR`/`LOMS_CLAW_CONFIG`/`TZ`) は [deployment](deployment.md) を参照。

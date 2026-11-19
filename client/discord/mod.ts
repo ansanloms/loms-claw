@@ -215,7 +215,7 @@ export class DiscordBot {
           if (!job) {
             throw new Error(`job not found: ${name}`);
           }
-          await this.cronExecutor!.runJob(job);
+          return await this.cronExecutor!.runJob(job);
         };
 
         // 統合 API サーバーを起動する（cron + ログ取得 + 設定）。

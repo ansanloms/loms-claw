@@ -273,7 +273,7 @@ describe("CronExecutor", () => {
         // するため、タイムアウトと race させてアサーション失敗に落とす。
         let timeoutId!: ReturnType<typeof setTimeout>;
         const raced = await Promise.race<string>([
-          executor.runJob(job).then(() => "returned"),
+          executor.runJob(job).then((r) => `returned:${r}`),
           new Promise<string>((resolve) => {
             timeoutId = setTimeout(() => resolve("timeout"), 1000);
           }),
@@ -281,7 +281,7 @@ describe("CronExecutor", () => {
         clearTimeout(timeoutId);
         assert.deepStrictEqual(
           raced,
-          "returned",
+          "returned:skipped",
           "2 回目の runJob はガードで即座に return すること",
         );
       } finally {
@@ -291,7 +291,7 @@ describe("CronExecutor", () => {
       }
 
       // ブロックを解除して 1 回目を完了させる
-      await firstRun;
+      assert.deepStrictEqual(await firstRun, "succeeded");
       assert.deepStrictEqual(sent.includes(resultText), true);
       assert.deepStrictEqual(sent.length, 1); // 2 回目は何も投稿しない
       assert.deepStrictEqual(executor.isRunning("test-job"), false);
@@ -315,7 +315,7 @@ describe("CronExecutor", () => {
         channelId: "nonexistent",
       };
 
-      await executor.runJob(job);
+      assert.deepStrictEqual(await executor.runJob(job), "failed");
 
       // running Set から除去されていること
       assert.deepStrictEqual(executor.isRunning("bad-channel-job"), false);
@@ -407,7 +407,7 @@ describe("CronExecutor", () => {
         resumeSession: true,
       };
 
-      await executor.runJob(job);
+      assert.deepStrictEqual(await executor.runJob(job), "succeeded");
       assert.deepStrictEqual(
         await store.getSession({ channelId: "cron:resume-job" }),
         "session-xyz",
@@ -662,7 +662,7 @@ describe("CronExecutor", () => {
         channelId: "ch-cmd",
       };
 
-      await executor.runJob(job);
+      assert.deepStrictEqual(await executor.runJob(job), "succeeded");
 
       assert.deepStrictEqual(sent, ["command result"]);
     }));
@@ -731,7 +731,7 @@ describe("CronExecutor", () => {
         channelId: "ch-cmd",
       };
 
-      await executor.runJob(job);
+      assert.deepStrictEqual(await executor.runJob(job), "failed");
 
       assert.deepStrictEqual(sent.length, 1);
       assert.deepStrictEqual(

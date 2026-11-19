@@ -6,7 +6,7 @@
 
 import { Hono } from "hono";
 import type { FromSchema } from "json-schema-to-ts";
-import type { CronJobDef } from "../../cron/types.ts";
+import type { CronJobDef, CronRunResult } from "../../cron/types.ts";
 import { createLogger } from "../../logger.ts";
 import type { internalSchemas } from "../internal-schemas.ts";
 import { matchesSchema, schemaErrorOf } from "../validate.ts";
@@ -19,8 +19,12 @@ const log = createLogger("api-cron");
 export interface CronRouteContext {
   /** cron ジョブ定義を再読み込みする。 */
   reloadCronJobs?: () => Promise<void>;
-  /** 名前を指定してジョブを手動実行する。ジョブが見つからない場合は Error を throw する。 */
-  runJob?: (name: string) => Promise<void>;
+  /**
+   * 名前を指定してジョブを手動実行する。
+   * ジョブの失敗と実行中による skip は例外でなく戻り値 ({@link CronRunResult}) で返る。
+   * throw するのは未登録 (`job not found:` で始まる Error) のときだけ。
+   */
+  runJob?: (name: string) => Promise<CronRunResult>;
   /** 登録済みジョブ一覧を返す。 */
   listJobs?: () => CronJobDef[];
 }
@@ -70,8 +74,8 @@ export function createCronRoutes(ctx: CronRouteContext = {}) {
     const { name } = body;
     try {
       log.debug(`manual run: ${name}`);
-      await ctx.runJob(name);
-      return c.json({ ok: true, name });
+      const result = await ctx.runJob(name);
+      return c.json({ ok: true, name, result });
     } catch (e) {
       if (e instanceof Error && e.message.startsWith("job not found:")) {
         return c.json({ error: e.message }, 404);

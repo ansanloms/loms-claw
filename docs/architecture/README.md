@@ -89,6 +89,7 @@ graph TD
   botmod[client/discord/mod.ts]
   commands[client/discord/commands.ts]
   guard[client/discord/guard.ts]
+  incoming[client/discord/incoming.ts]
   message[client/discord/message.ts]
   conversation[core/conversation.ts]
   queue[core/queue.ts]
@@ -106,6 +107,7 @@ graph TD
   aconstants[client/discord/approval/constants.ts]
   server[api/server.ts]
   rcron[api/routes/cron.ts]
+  rhealth[api/routes/health.ts]
   rlogs[api/routes/logs.ts]
   rsettings[api/routes/settings.ts]
   validate[api/validate.ts]
@@ -123,12 +125,16 @@ graph TD
   schema --> schemajson
 
   botmod -.-> config
-  botmod --> claude
   botmod --> sysprompt
   botmod -.-> store
   botmod --> approval
   botmod --> commands
   botmod --> guard
+  botmod --> incoming
+  incoming -.-> config
+  incoming -.-> store
+  incoming --> guard
+  incoming --> scope
   botmod --> conversation
   botmod --> ratelimit
   botmod --> message
@@ -136,6 +142,7 @@ graph TD
   botmod --> server
   botmod -.-> rcron
   botmod -.-> rsettings
+  botmod -.-> rhealth
   botmod --> executor
   botmod --> loader
 
@@ -168,13 +175,14 @@ graph TD
   question --> aconstants
 
   server --> rcron
+  server --> rhealth
   server --> rlogs
   server --> rsettings
   rcron -.-> ctypes
-  rcron --> ischemas
+  rcron -.-> ischemas
   rcron --> validate
   rsettings -.-> store
-  rsettings --> ischemas
+  rsettings -.-> ischemas
   rsettings --> validate
   validate --> ischemas
 
