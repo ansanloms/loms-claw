@@ -117,7 +117,94 @@ describe("validateCronJob", () => {
           "prompt",
           "test.md",
         ),
-      errorWith(Error, '"maxTurns" must be a number'),
+      errorWith(Error, '"maxTurns" must be an integer'),
+    );
+  });
+
+  test("maxTurns が 0 の場合はエラーになること", () => {
+    assert.throws(
+      () =>
+        validateCronJob(
+          { schedule: "0 9 * * *", maxTurns: 0 },
+          "prompt",
+          "test.md",
+        ),
+      errorWith(Error, '"maxTurns" must be a positive number'),
+    );
+  });
+
+  test("prompt ジョブの timeout が上限値ちょうどの場合は通ること", () => {
+    const job = validateCronJob(
+      { schedule: "0 9 * * *", timeout: 2147483647 },
+      "prompt",
+      "test.md",
+    );
+    assert.deepStrictEqual(job.timeout, 2147483647);
+  });
+
+  test("command ジョブの timeout が上限値ちょうどの場合は通ること", () => {
+    const job = validateCommandJob(
+      { schedule: "0 9 * * *", command: "echo hi", timeout: 2147483647 },
+      "test.yaml",
+    );
+    assert.deepStrictEqual(job.timeout, 2147483647);
+  });
+
+  test("maxTurns が小数の場合はエラーになること", () => {
+    assert.throws(
+      () =>
+        validateCronJob(
+          { schedule: "0 9 * * *", maxTurns: 1.5 },
+          "prompt",
+          "test.md",
+        ),
+      errorWith(Error, '"maxTurns" must be an integer'),
+    );
+  });
+
+  test("prompt ジョブの timeout が小数の場合はエラーになること", () => {
+    assert.throws(
+      () =>
+        validateCronJob(
+          { schedule: "0 9 * * *", timeout: 0.5 },
+          "prompt",
+          "test.md",
+        ),
+      errorWith(Error, '"timeout" must be an integer'),
+    );
+  });
+
+  test("prompt ジョブの timeout が上限超過の場合はエラーになること", () => {
+    assert.throws(
+      () =>
+        validateCronJob(
+          { schedule: "0 9 * * *", timeout: 2147483648 },
+          "prompt",
+          "test.md",
+        ),
+      errorWith(Error, '"timeout" must be at most 2147483647'),
+    );
+  });
+
+  test("command ジョブの timeout が小数の場合はエラーになること", () => {
+    assert.throws(
+      () =>
+        validateCommandJob(
+          { schedule: "0 9 * * *", command: "echo hi", timeout: 0.5 },
+          "test.yaml",
+        ),
+      errorWith(Error, '"timeout" must be an integer'),
+    );
+  });
+
+  test("command ジョブの timeout が上限超過の場合はエラーになること", () => {
+    assert.throws(
+      () =>
+        validateCommandJob(
+          { schedule: "0 9 * * *", command: "echo hi", timeout: 2147483648 },
+          "test.yaml",
+        ),
+      errorWith(Error, '"timeout" must be at most 2147483647'),
     );
   });
 

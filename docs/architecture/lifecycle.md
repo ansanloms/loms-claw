@@ -122,14 +122,14 @@ schema はトップレベル・`discord`・`claude`・`claude.defaults`・`log` 
 | `discord.userId`               | string (minLength 1)                             |                              | 必須。操作を許可する唯一のユーザー ID                  |
 | `discord.activeChannelIds`     | string[]                                         | `[]`                         | mention 不要で反応するチャンネル ID の静的ベースライン |
 | `storePath`                    | string                                           | `".claude/loms-claw.sqlite"` | SQLite ファイルのパス。相対パスはプロセス cwd 基準     |
-| `claude.maxTurns`              | number                                           | `10`                         | `query()` の `maxTurns`                                |
-| `claude.timeout`               | number                                           | `300000`                     | Claude 呼び出しのタイムアウト (ms)                     |
-| `claude.apiPort`               | number                                           | `3000`                       | 内部 HTTP API のポート (cron + ログ + 設定 (settings)) |
+| `claude.maxTurns`              | integer (1 以上)                                 | `10`                         | `query()` の `maxTurns`                                |
+| `claude.timeout`               | integer (1..2147483647)                          | `300000`                     | Claude 呼び出しのタイムアウト (ms)                     |
+| `claude.apiPort`               | integer (1..65535)                               | `3000`                       | 内部 HTTP API のポート (cron + ログ + 設定 (settings)) |
 | `claude.defaults.model`        | string                                           |                              | 省略可。グローバルデフォルトのモデル                   |
 | `claude.defaults.effort`       | enum `low` / `medium` / `high` / `xhigh` / `max` |                              | 省略可。グローバルデフォルトの effort                  |
 | `claude.defaults.showThinking` | boolean                                          | `false`                      | thinking を Discord に表示するかのグローバルデフォルト |
 | `log.level`                    | enum `DEBUG` / `INFO` / `WARN` / `ERROR`         | `"INFO"`                     | コンソールに出力する最低ログレベル                     |
-| `log.bufferSize`               | number (1..10000)                                | `1000`                       | リングバッファ容量                                     |
+| `log.bufferSize`               | integer (1..10000)                               | `1000`                       | リングバッファ容量                                     |
 
 `claude.cwd` (`process.cwd()` 注入) は表に無い。`Config`/`ClaudeConfig`/`ClaudeDefaults`/`LogConfig`/`DiscordConfig` の型は `config.ts` にあり、JSON 側の shape は `ConfigFile` (`claude.cwd` を除いた `Config`) である。
 

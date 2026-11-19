@@ -39,6 +39,16 @@ interface CronFrontMatter {
   effort?: EffortLevel;
 }
 
+// `AbortSignal.timeout()` が受け付ける最大値 (ミリ秒)。超えると Node が 1 ms に丸める。
+const MAX_TIMEOUT_MS = 2147483647;
+
+// prompt / command ジョブ共通の `timeout` のスキーマ。
+const timeoutSchema: Schema = {
+  type: "integer",
+  exclusiveMinimum: 0,
+  maximum: MAX_TIMEOUT_MS,
+};
+
 // フロントマターの構造検証スキーマ。cron 式の妥当性は @cfworker の拡張点が無いため
 // schema には含めず、構造検証通過後に parseCronExpression で別途チェックする。
 const frontMatterSchema: Schema = {
@@ -46,8 +56,8 @@ const frontMatterSchema: Schema = {
   properties: {
     schedule: { type: "string", minLength: 1 },
     channelId: { oneOf: [{ type: "string" }, { type: "number" }] },
-    maxTurns: { type: "number" },
-    timeout: { type: "number", exclusiveMinimum: 0 },
+    maxTurns: { type: "integer", exclusiveMinimum: 0 },
+    timeout: timeoutSchema,
     resumeSession: { type: "boolean" },
     once: { type: "boolean" },
     model: { type: "string" },
@@ -99,7 +109,7 @@ const commandSchema: Schema = {
     schedule: { type: "string", minLength: 1 },
     command: { type: "string", minLength: 1 },
     channelId: { oneOf: [{ type: "string" }, { type: "number" }] },
-    timeout: { type: "number", exclusiveMinimum: 0 },
+    timeout: timeoutSchema,
     once: { type: "boolean" },
   },
   required: ["schedule", "command"],
@@ -120,6 +130,17 @@ function matchesCommandSchema(
   meta: Record<string, unknown>,
 ): meta is Record<string, unknown> & CronCommandFrontMatter {
   return commandValidator.validate(meta).valid;
+}
+
+/** スキーマの `properties` に宣言された `maximum` をフィールド名から引く。 */
+function maximumOf(field: string): number | undefined {
+  for (const schema of [frontMatterSchema, commandSchema]) {
+    const prop = schema.properties?.[field];
+    if (typeof prop === "object" && prop.maximum !== undefined) {
+      return prop.maximum;
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -153,11 +174,22 @@ function formatSchemaErrors(
         continue;
       }
       const expected = /Expected "([^"]+)"/.exec(err.error)?.[1] ?? "value";
-      messages.push(`"${field}" must be a ${expected}`);
+      messages.push(
+        expected === "integer"
+          ? `"${field}" must be an integer`
+          : `"${field}" must be a ${expected}`,
+      );
     } else if (err.keyword === "oneOf" && field === "channelId") {
       messages.push('"channelId" must be a string or number');
     } else if (err.keyword === "exclusiveMinimum") {
       messages.push(`"${field}" must be a positive number`);
+    } else if (err.keyword === "maximum") {
+      const limit = maximumOf(field);
+      messages.push(
+        limit === undefined
+          ? `"${field}" is too large`
+          : `"${field}" must be at most ${limit}`,
+      );
     } else if (err.keyword === "enum") {
       messages.push(`"${field}" must be one of the allowed values`);
     } else if (err.keyword === "additionalProperties") {

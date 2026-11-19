@@ -52,17 +52,22 @@
       "required": ["maxTurns", "timeout", "apiPort", "defaults"],
       "properties": {
         "maxTurns": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 1,
           "default": 10,
           "description": "エージェントの最大ターン数（query() の maxTurns に渡される）。"
         },
         "timeout": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
           "default": 300000,
-          "description": "Claude 呼び出しのタイムアウト（ミリ秒）。query() の abortController に渡される。"
+          "description": "Claude 呼び出しのタイムアウト（ミリ秒）。AbortSignal.timeout() に渡される。"
         },
         "apiPort": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
           "default": 3000,
           "description": "内部 API サーバーのポート（cron + ログ + 設定 (settings)）。"
         },
@@ -104,7 +109,7 @@
           "description": "出力する最低ログレベル。"
         },
         "bufferSize": {
-          "type": "number",
+          "type": "integer",
           "default": 1000,
           "minimum": 1,
           "maximum": 10000,

@@ -62,16 +62,16 @@ channelId: "{channelId}"
 
 `cron/loader.ts` の `frontMatterSchema` (JSON Schema、`@cfworker/json-schema` で検証) が受け付けるキーは次のとおり。
 
-| フィールド      | 必須 | 型                  | 既定                     | 説明                                                                                                               |
-| --------------- | ---- | ------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| `schedule`      | yes  | string (1 文字以上) | —                        | 5 フィールド cron 式。構造検証通過後に `parseCronExpression()` で構文を別途検証する。評価は TZ 依存 (後述)         |
-| `channelId`     | no   | string \| number    | —                        | 結果の投稿先、かつ承認ボタン / `AskUserQuestion` の送信先。`String()` で文字列化して保持。省略時は結果を投稿しない |
-| `resumeSession` | no   | boolean             | `false`                  | `true` のときだけ前回セッションを resume する                                                                      |
-| `maxTurns`      | no   | number              | `config.claude.maxTurns` | `ClaudeConfig.maxTurns` のオーバーライド                                                                           |
-| `timeout`       | no   | number (ms)         | `config.claude.timeout`  | `askClaude()` に渡す `AbortSignal.timeout()` のミリ秒                                                              |
-| `once`          | no   | boolean             | `false`                  | `true` なら 1 回実行後 (成否を問わず) にジョブファイルを削除して reload する                                       |
-| `model`         | no   | string              | —                        | モデル alias / full name のオーバーライド                                                                          |
-| `effort`        | no   | string (enum)       | —                        | `claude/mod.ts` の `EFFORT_LEVELS` (`low` / `medium` / `high` / `xhigh` / `max`) のいずれか                        |
+| フィールド      | 必須 | 型                          | 既定                     | 説明                                                                                                               |
+| --------------- | ---- | --------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `schedule`      | yes  | string (1 文字以上)         | —                        | 5 フィールド cron 式。構造検証通過後に `parseCronExpression()` で構文を別途検証する。評価は TZ 依存 (後述)         |
+| `channelId`     | no   | string \| number            | —                        | 結果の投稿先、かつ承認ボタン / `AskUserQuestion` の送信先。`String()` で文字列化して保持。省略時は結果を投稿しない |
+| `resumeSession` | no   | boolean                     | `false`                  | `true` のときだけ前回セッションを resume する                                                                      |
+| `maxTurns`      | no   | integer (1 以上)            | `config.claude.maxTurns` | `ClaudeConfig.maxTurns` のオーバーライド                                                                           |
+| `timeout`       | no   | integer (ms, 1..2147483647) | `config.claude.timeout`  | `askClaude()` に渡す `AbortSignal.timeout()` のミリ秒                                                              |
+| `once`          | no   | boolean                     | `false`                  | `true` なら 1 回実行後 (成否を問わず) にジョブファイルを削除して reload する                                       |
+| `model`         | no   | string                      | —                        | モデル alias / full name のオーバーライド                                                                          |
+| `effort`        | no   | string (enum)               | —                        | `claude/mod.ts` の `EFFORT_LEVELS` (`low` / `medium` / `high` / `xhigh` / `max`) のいずれか                        |
 
 - `additionalProperties: false` のため、上記以外のキー (typo 等) は検証エラーになる。ファイル単位の失敗として扱われるため、当該ジョブだけが loader (下記) でスキップされ、他のジョブの読み込みは続く。
 - 本文が空 (trim 後に空文字) のファイルは検証エラーになる。エラーメッセージは `prompt body is empty` である。
@@ -92,13 +92,13 @@ command: "cron/scripts/check.sh"
 
 `cron/loader.ts` の `commandSchema` (JSON Schema、`@cfworker/json-schema` で検証) が受け付けるキーは次のとおり。
 
-| フィールド  | 必須 | 型                  | 既定                    | 説明                                            |
-| ----------- | ---- | ------------------- | ----------------------- | ----------------------------------------------- |
-| `schedule`  | yes  | string (1 文字以上) | —                       | prompt ジョブと同じ                             |
-| `command`   | yes  | string (1 文字以上) | —                       | `sh -c` に渡すコマンド文字列                    |
-| `channelId` | no   | string \| number    | —                       | prompt ジョブと同じ (結果の投稿先)              |
-| `timeout`   | no   | number (ms)         | `config.claude.timeout` | コマンド実行の `AbortSignal.timeout()` のミリ秒 |
-| `once`      | no   | boolean             | `false`                 | prompt ジョブと同じ                             |
+| フィールド  | 必須 | 型                          | 既定                    | 説明                                            |
+| ----------- | ---- | --------------------------- | ----------------------- | ----------------------------------------------- |
+| `schedule`  | yes  | string (1 文字以上)         | —                       | prompt ジョブと同じ                             |
+| `command`   | yes  | string (1 文字以上)         | —                       | `sh -c` に渡すコマンド文字列                    |
+| `channelId` | no   | string \| number            | —                       | prompt ジョブと同じ (結果の投稿先)              |
+| `timeout`   | no   | integer (ms, 1..2147483647) | `config.claude.timeout` | コマンド実行の `AbortSignal.timeout()` のミリ秒 |
+| `once`      | no   | boolean                     | `false`                 | prompt ジョブと同じ                             |
 
 - `additionalProperties: false` のため、`maxTurns`/`model`/`effort` 等 prompt ジョブ専用のキーを書くと検証エラーになる。
 - 判断が必要な処理は prompt ジョブ (Claude) に任せ、command ジョブは定型処理 (固定のチェック・通知等) に使う想定。
