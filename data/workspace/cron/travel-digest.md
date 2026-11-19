@@ -8,7 +8,7 @@ timeout: 600000
 
 ## 1. ノートの読み取り
 
-`memory/travel/` 配下の `.md` のうち `PLANS.md` と `index.md` を除く全ファイルの frontmatter (status・title・description・start_at・end_at・tags・pin_channel・pin_messages・pin_packing_messages) を読み取る。
+`memory/travel/` 直下の `.md` のうち `PLANS.md` と `index.md` を除く全ファイル (`memory/travel/lessons/` 配下の教訓は含めない。手順 5 で扱う) の frontmatter (status・title・description・start_at・end_at・tags・pin_channel・pin_messages・pin_packing_messages) を読み取る。
 
 ## 2. frontmatter の規約チェック
 
@@ -37,13 +37,23 @@ timeout: 600000
 ## 4. PLANS.md の突合
 
 - 「行きたい場所の種」の各項目を全ノートと突合し、既にノート化されている種は PLANS.md から除去する。「ノート化されている」とは、行き先と目的の両方が同じ旅行を指すノートが存在すること (例:「奥多摩湖 月見」ノートがあっても「奥多摩〜柳沢峠 新緑ツーリング」の種は別物として残す)。迷ったら消さない
-- 直近 completed 5 件 (index.md のサマリと同じ範囲) の「次回への申し送り」のうち、個別の旅行を越えて繰り返し効く知見があれば「よく使う旅行情報」へ昇格する。
-  - 昇格対象の例: ペース倍率の一般則・装備の定番化・施設や道路の恒常的な情報。
-  - 非対象の例: 単発の TODO、特定の旅行にしか効かない注意。
-  - 既存内容と重複する追記はしない。迷ったら昇格しない
-- 直近 completed 5 件の「参照した知見の検証」で「外れた」と書かれた項目のうち、出典が PLANS.md の「よく使う旅行情報」のものは、該当項目に外れた旨と理由を注記する。繰り返し外れている項目は削ってよい。迷ったら変えない
+- 申し送りから教訓への昇格はこの cron では行わない。理由: 昇格はユーザの承認を要し、cron からはユーザに確認できない。昇格は事後振り返りの会話の中で行う (`travel-note` skill の「教訓」節)
 
-## 5. Discord ピン投稿の整合
+## 5. 教訓の点検
+
+`memory/travel/lessons/` 配下の全ファイルの frontmatter を `travel-note` skill の「教訓」節の規約で点検する。
+
+- 形式違反を修正する。違反とみなすのは次のもの。
+  - `type` が `lesson` でない、または `status` が `hypothesis`・`verified`・`retired` のいずれでもない
+  - `title`・`status`・`tags`・`sources`・`timestamp` のいずれかが欠落
+  - `outcomes` の `result` が `効いた`・`外れた`・`適用外` のいずれでもない
+  - `sources`・`outcomes` の `trip`・`timestamp` の引用符欠落、`timestamp` が ISO 8601 `+09:00` 形式でない
+- `status: hypothesis` で `outcomes` の `効いた` が 2 件以上ある教訓を `verified` にする
+- 直近 2 件の `outcomes` が続けて `外れた` の教訓は、`retired` にせず最終報告に残す。理由: retired への遷移はユーザの確認を要する
+- 修正・遷移した教訓は `timestamp` を現在時刻へ更新する
+- 値の妥当性への疑義 (`sources` のノートが存在しない等) は修正せず、最終報告に残す
+
+## 6. Discord ピン投稿の整合
 
 `travel-note` skill の「Discord ピン投稿」節 (本文の骨格は同 skill の `assets/PIN-SCHEDULE.md`・`assets/PIN-PACKING.md`) に従う。新規に作る場合の投稿先は、ノートに `thread` があればそのスレッド、無ければ travel チャンネル (ID `1259284949698088981`)。既存の組があるノートは `pin_channel` の値を使う。
 
@@ -56,5 +66,5 @@ timeout: 600000
 ## ルール
 
 - 値の捏造は禁止。ノートに無い情報は書かない
-- ノート本文 (計画・当日メモ・振り返り) の内容には手を入れない。触ってよいのは frontmatter の形式修正・手順 5 の `pin_channel`/`pin_messages`/`pin_packing_messages`・index.md・PLANS.md だけ
+- ノート本文 (計画・当日メモ・振り返り) と教訓の本文には手を入れない。触ってよいのはノートと教訓の frontmatter の形式修正・手順 5 の教訓の `status` 遷移・手順 6 の `pin_channel`/`pin_messages`/`pin_packing_messages`・index.md・PLANS.md だけ
 - 変更が無い項目は何もしなくてよい。最終報告は変更点の列挙だけで簡潔に
