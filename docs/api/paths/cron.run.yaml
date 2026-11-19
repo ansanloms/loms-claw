@@ -16,7 +16,7 @@ post:
               $ref: ../examples/RequestPostCronRun.yaml
   responses:
     200:
-      description: 処理成功時。
+      description: ジョブの実行が終わった場合。成否は result で判断する。
       content:
         application/json:
           schema:
@@ -46,7 +46,7 @@ post:
               value:
                 $ref: ../examples/ResponseError.yaml
     500:
-      description: 処理失敗時。
+      description: ルート内で想定外の例外が起きた場合 (onError)。ジョブの失敗では返らない。
       content:
         application/json:
           schema:

@@ -18,7 +18,7 @@ cron ジョブの管理はファイル操作で行う。`RemoteTrigger`、`CronC
 - ジョブ編集: 該当ファイルを編集し、reload API を叩く
 - ジョブ削除: 該当ファイルを削除し、reload API を叩く
 - ジョブ一覧: `curl -s http://127.0.0.1:3000/cron` または `ls cron/`
-- 手動実行: `curl -s -X POST -H 'Content-Type: application/json' -d '{"name":"ジョブ名"}' http://127.0.0.1:3000/cron/run`（`200` はジョブの成功を意味しない。後述「`POST /cron/run`」）
+- 手動実行: `curl -s -X POST -H 'Content-Type: application/json' -d '{"name":"ジョブ名"}' http://127.0.0.1:3000/cron/run`（`200` でもジョブの成否は応答の `result` で判断する。後述「`POST /cron/run`」）
 
 **ファイルを変更したら必ず reload API を叩くこと。** reload しないと変更が反映されない。
 
@@ -93,7 +93,7 @@ curl -s 'http://127.0.0.1:3000/logs?namespace=cron-loader&level=ERROR'
 
 ジョブの実行が終わるまで待ってから応答を返す（prompt ジョブなら Claude の応答完了まで。最長でジョブの `timeout` 程度かかる）。
 
-`200` はジョブの成功を意味しない。ジョブ内の失敗（チャンネルが存在しない、Claude の実行エラー、command ジョブの非 0 終了、タイムアウト等）は内部で捕捉されてログに出るだけで、応答は `200` のままになる。同名ジョブが実行中で skip された場合も `200` になる。手動実行の結果は次で確認すること。
+`200` でもジョブの成功とは限らない。成否は応答の `result` で分かる。`succeeded` は最後まで実行された、`failed` は実行中に例外が起きた（チャンネルが存在しない、Claude の実行エラー、command ジョブの非 0 終了、タイムアウト等。内容はログに出る）、`skipped` は同名ジョブが実行中で実行しなかった。いずれも HTTP は `200` で、`500` はルート内の想定外の例外のときだけ返る。`succeeded` でも投稿の有無とログは次で確認すること。
 
 - `channelId` があるジョブ: 投稿先チャンネルに結果、または `[cron: {name}] ...` のエラー通知が届いているか。ただしチャンネルの取得自体に失敗した場合（存在しない ID 等）は通知されない。
 - 共通: `GET /logs?namespace=cron&level=ERROR` に `cron job "{name}" failed: ...` が出ていないか。
@@ -101,7 +101,7 @@ curl -s 'http://127.0.0.1:3000/logs?namespace=cron-loader&level=ERROR'
 #### 成功（200）
 
 ```json
-{ "ok": true, "name": "news.md" }
+{ "ok": true, "name": "news.md", "result": "succeeded" }
 ```
 
 #### ジョブが見つからない場合（404）

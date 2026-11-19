@@ -211,7 +211,7 @@ command ジョブ (`runCommandJob()`) はこの表のいずれにも触れない
 2. `loadCronJobsFromDir(config.claude.cwd)` → `cronExecutor.start(jobs)`。`config.claude.cwd` はワークスペースルート (本番は `/data/workspace`、devcontainer では `/app`。[deployment](deployment.md))。
 3. `reloadJobs = () => loadCronJobsFromDir(cwd) → cronExecutor.reload(jobs)` を定義する。
 4. `cronExecutor.setOnceCallback()` で once 後処理を登録する: `join(cwd, "cron", name)` (`name` は拡張子込みのファイル名) を `rm()` し (失敗は ERROR ログ)、続けて `reloadJobs()` を呼ぶ。エージェント側の手動 reload は不要。
-5. `runJobByName(name)`: `cronExecutor.findJob(name)` が無ければ `job not found: {name}` を throw、あれば `runJob(job)` を await する。
+5. `runJobByName(name)`: `cronExecutor.findJob(name)` が無ければ `job not found: {name}` を throw、あれば `runJob(job)` を await してその結果を返す。
 6. `CronRouteContext { reloadCronJobs: reloadJobs, runJob: runJobByName, listJobs: () => cronExecutor.listJobs() }` を `startApiServer(config.claude.apiPort, settingsCtx, healthCtx, cronCtx)` に渡す。
 
 `shutdown()` では最初に `cronExecutor.stop()` を呼ぶ。
@@ -225,10 +225,10 @@ command ジョブ (`runCommandJob()`) はこの表のいずれにも触れない
 | エンドポイント      | 入力               | 出力                                                                                    |
 | ------------------- | ------------------ | --------------------------------------------------------------------------------------- |
 | `GET /cron`         | —                  | `{ jobs: [{ name, kind, schedule, channelId?, once }] }` (`channelId` は未指定なら省略) |
-| `POST /cron/run`    | `{ name: string }` | `{ ok: true, name }`。`name` 不正は 400、未登録は 404 (`job not found: ...`)            |
+| `POST /cron/run`    | `{ name: string }` | `{ ok: true, name, result }`。`name` 不正は 400、未登録は 404 (`job not found: ...`)    |
 | `POST /cron/reload` | —                  | `{ ok: true }` (ファイル単位の読み込み失敗があっても 200)                               |
 
-`POST /cron/run` は `runJob()` の完了まで await するため、レスポンスはジョブの実行が終わってから返る。実行中の同名ジョブがあればガードにより skip され、その場合も 200 が返る。
+`POST /cron/run` は `runJob()` の完了まで await するため、レスポンスはジョブの実行が終わってから返る。`runJob()` は結果を `CronRunResult` (`succeeded`/`failed`/`skipped`) で返し、レスポンスの `result` に載る。実行中の同名ジョブがあればガードにより skip され (`skipped`)、ジョブ内で例外が起きれば `failed` になるが、どちらも HTTP は 200 のままで 500 にはならない (500 はルート内の想定外の例外のみ)。
 
 ## 利用規約との関係
 

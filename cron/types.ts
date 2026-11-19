@@ -56,3 +56,12 @@ export interface CronCommandJob extends CronJobBase {
  * `kind` で prompt ジョブ (`cron/*.md`) と command ジョブ (`cron/*.yaml`) を判別する。
  */
 export type CronJobDef = CronPromptJob | CronCommandJob;
+
+/**
+ * `CronExecutor.runJob` の結果。
+ *
+ * - `succeeded`: ジョブが最後まで実行された。
+ * - `failed`: 実行中に例外が起きた。
+ * - `skipped`: 同名ジョブが実行中のため実行しなかった。
+ */
+export type CronRunResult = "succeeded" | "failed" | "skipped";
