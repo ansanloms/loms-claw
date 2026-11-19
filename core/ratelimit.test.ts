@@ -73,4 +73,12 @@ describe("SelfMentionRateLimiter", () => {
     clock.advance(11);
     assert.deepStrictEqual(limiter.isExhausted(), false);
   });
+
+  test("now を省略すると実時計で動作すること", () => {
+    const limiter = new SelfMentionRateLimiter(1, 10);
+    assert.deepStrictEqual(limiter.isExhausted(), false);
+    assert.deepStrictEqual(limiter.tryConsume(), true);
+    assert.deepStrictEqual(limiter.isExhausted(), true);
+    assert.deepStrictEqual(limiter.tryConsume(), false);
+  });
 });

@@ -4,7 +4,7 @@
  * コマンド定義（SlashCommandBuilder）とハンドラ関数を同一ファイルに配置し、
  * コマンド追加時の変更箇所を 1 ファイルに集約する。
  * 各ハンドラはインタラクションの応答（reply/deferReply/editReply）まで責任を持つ。
- * bot/mod.ts はディスパッチのみを行い、ここに委譲する。
+ * client/discord/mod.ts はディスパッチのみを行い、ここに委譲する。
  */
 
 import {
@@ -12,15 +12,15 @@ import {
   MessageFlags,
   SlashCommandBuilder,
 } from "discord.js";
-import type { ClaudeDefaults } from "../config.ts";
-import type { CronExecutor } from "../cron/executor.ts";
-import { createLogger } from "../logger.ts";
+import type { ClaudeDefaults } from "../../config.ts";
+import type { CronExecutor } from "../../cron/executor.ts";
+import { createLogger } from "../../logger.ts";
 import type {
   ScopeSettingEntry,
   SettingsPatch,
   Store,
   StoreScope,
-} from "../store/mod.ts";
+} from "../../store/mod.ts";
 import { resolveActive } from "./guard.ts";
 import { scopeFromChannel } from "./scope.ts";
 
@@ -342,7 +342,7 @@ function formatSetting(entry: ScopeSettingEntry | undefined): string {
 /**
  * インタラクションが起きた場所からスコープを抽出する。
  *
- * 組み立て方の詳細は scopeFromChannel (bot/scope.ts) にまとめてある。
+ * 組み立て方の詳細は scopeFromChannel (client/discord/scope.ts) にまとめてある。
  */
 function scopeFromInteraction(
   interaction: ChatInputCommandInteraction,

@@ -40,13 +40,13 @@ interface StoreScope {
 }
 ```
 
-| 発話場所 / 用途 | scope                                         | 抽出箇所                                                                                                                 |
-| --------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| スレッド外      | `{ channelId }`                               | `bot/scope.ts` `scopeFromChannel()`。`bot/mod.ts` (messageCreate) と `bot/commands.ts` `scopeFromInteraction()` から呼ぶ |
-| スレッド内      | `{ channelId: parentId, threadId }`           | 同上。`parentId` が null のときは thread id 自体を `channelId` に入れる                                                  |
-| cron ジョブ     | `{ channelId: "cron:{name}" }` (session のみ) | `cron/executor.ts`。詳細は後述                                                                                           |
+| 発話場所 / 用途 | scope                                         | 抽出箇所                                                                                                                                                  |
+| --------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| スレッド外      | `{ channelId }`                               | `client/discord/scope.ts` `scopeFromChannel()`。`client/discord/mod.ts` (messageCreate) と `client/discord/commands.ts` `scopeFromInteraction()` から呼ぶ |
+| スレッド内      | `{ channelId: parentId, threadId }`           | 同上。`parentId` が null のときは thread id 自体を `channelId` に入れる                                                                                   |
+| cron ジョブ     | `{ channelId: "cron:{name}" }` (session のみ) | `cron/executor.ts`。詳細は後述                                                                                                                            |
 
-`api/routes/settings.ts` (`GET`/`PATCH`/`DELETE /settings/{id}`) は `bot/scope.ts` を使わず、`resolveParentId` で親を引いて別途スコープを組む (詳細は後述の `resolveScope()`)。親が取れないスレッドの扱いは bot 側 (`{ channelId: id, threadId: id }`) と API 側 (`{ channelId: id }`) で異なる。これは既存挙動で、統一は別 issue とする。
+`api/routes/settings.ts` (`GET`/`PATCH`/`DELETE /settings/{id}`) は `client/discord/scope.ts` を使わず、`resolveParentId` で親を引いて別途スコープを組む (詳細は後述の `resolveScope()`)。親が取れないスレッドの扱いは bot 側 (`{ channelId: id, threadId: id }`) と API 側 (`{ channelId: id }`) で異なる。これは既存挙動で、統一は別 issue とする。
 
 `setSession`/`applyPatch`/`clearScope` による書き込みは常に leaf id (`threadId ?? channelId`) に対して行われる。スレッド内で `/claw settings set` を叩いても親チャンネルのキーには触れない。
 
@@ -54,13 +54,13 @@ interface StoreScope {
 
 読み取り側 (`getModel`/`getEffort`/`getShowThinking`/`getActive`/`getSession`/`getScopeSettings`) のフォールバックはキーごとに異なる。
 
-| キー           | 解決順                                                      | どこにも無いとき                                                                                                      |
-| -------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `session`      | leaf id のみ (thread と channel で独立、フォールバック無し) | `undefined` (新規セッション)                                                                                          |
-| `model`        | thread → channel → `config.claude.defaults.model`           | `undefined`                                                                                                           |
-| `effort`       | thread → channel → `config.claude.defaults.effort`          | `undefined`                                                                                                           |
-| `showThinking` | thread → channel → `config.claude.defaults.showThinking`    | `false`                                                                                                               |
-| `active`       | thread → channel                                            | `undefined`。呼び出し側 `resolveActive()` (`bot/guard.ts`) が config の `activeChannelIds` リスト判定へフォールバック |
+| キー           | 解決順                                                      | どこにも無いとき                                                                                                                 |
+| -------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `session`      | leaf id のみ (thread と channel で独立、フォールバック無し) | `undefined` (新規セッション)                                                                                                     |
+| `model`        | thread → channel → `config.claude.defaults.model`           | `undefined`                                                                                                                      |
+| `effort`       | thread → channel → `config.claude.defaults.effort`          | `undefined`                                                                                                                      |
+| `showThinking` | thread → channel → `config.claude.defaults.showThinking`    | `false`                                                                                                                          |
+| `active`       | thread → channel                                            | `undefined`。呼び出し側 `resolveActive()` (`client/discord/guard.ts`) が config の `activeChannelIds` リスト判定へフォールバック |
 
 ```mermaid
 flowchart LR
@@ -70,7 +70,7 @@ flowchart LR
   C -.->|active のみ| A["undefined → resolveActive()<br/>activeChannelIds 判定"]
 ```
 
-`resolveActive(channelId, activeChannelIds, isThread, parentId, override)` は `override` (ストアの値) が boolean ならそれを返し、`undefined` なら `activeChannelIds.includes(channelId) || (isThread && activeChannelIds.includes(parentId))` を返す。スレッドでは親チャンネル ID もリスト判定の対象になる。ストアで `false` を明示すると config で active なチャンネルでも mention 必須へ落ちる。`bot/mod.ts` は人間のメッセージに対してのみ `getActive(scope)` を引いて `shouldRespond()` に渡す (bot 自身の投稿には `active` を適用しない。詳細は [message-flow.md](message-flow.md))。
+`resolveActive(channelId, activeChannelIds, isThread, parentId, override)` は `override` (ストアの値) が boolean ならそれを返し、`undefined` なら `activeChannelIds.includes(channelId) || (isThread && activeChannelIds.includes(parentId))` を返す。スレッドでは親チャンネル ID もリスト判定の対象になる。ストアで `false` を明示すると config で active なチャンネルでも mention 必須へ落ちる。`client/discord/mod.ts` は人間のメッセージに対してのみ `getActive(scope)` を引いて `shouldRespond()` に渡す (bot 自身の投稿には `active` を適用しない。詳細は [message-flow.md](message-flow.md))。
 
 ### `getScopeSettings(scope)` の返り値
 
@@ -117,13 +117,13 @@ interface SettingsPatch {
 
 ### 個別 setter
 
-`setSession` のみが個別 setter として残る。`bot/mod.ts` と `cron/executor.ts` が `result` イベント受信時に `event.session_id` を保存する (ジェネレータが非ゼロ終了で throw してもセッションが残るよう、result を受け取った時点で即座に書く)。
+`setSession` のみが個別 setter として残る。`core/conversation.ts` (chat) と `cron/executor.ts` (cron の `resumeSession: true`) が `result` イベント受信時に `event.session_id` を保存する (ジェネレータが非ゼロ終了で throw してもセッションが残るよう、result を受け取った時点で即座に書く)。
 
 model/effort/showThinking/active に対する個別の setter/deleter は無く、書き込みは `setSession`/`applyPatch`/`clearScope` の 3 つに集約されている。読み取り側の thread → channel → (defaults) 解決も 4 つの getter (`getModel`/`getEffort`/`getShowThinking`/`getActive`) が共通の private ヘルパ (`resolveScoped()`) を呼ぶ形にまとまっている。
 
 ## Discord スラッシュコマンド `/claw settings`
 
-`bot/commands.ts` にコマンド定義 (`SlashCommandBuilder`) とハンドラを置き、`bot/mod.ts` の `onInteraction()` がサブコマンド名でディスパッチする。interaction は `isAuthorized()` を通過したものだけが処理される。応答はすべて `MessageFlags.Ephemeral`。
+`client/discord/commands.ts` にコマンド定義 (`SlashCommandBuilder`) とハンドラを置き、`client/discord/mod.ts` の `onInteraction()` がサブコマンド名でディスパッチする。interaction は `isAuthorized()` を通過したものだけが処理される。応答はすべて `MessageFlags.Ephemeral`。
 
 | サブコマンド | オプション                                                                                                                                             | 処理                                                                                      |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
@@ -133,7 +133,7 @@ model/effort/showThinking/active に対する個別の setter/deleter は無く�
 
 - `set` に `session` オプションは無い。session は `unset` (削除) のみ。`SettingsPatch.session?: null` の型と一致する。
 - スラッシュコマンドのオプション名は snake_case (`show_thinking`)、Store/API のキー名は camelCase (`showThinking`)。ハンドラが `patch.showThinking` に詰め替える。他の 4 つ (`model`/`effort`/`active`/`session`) は同名。
-- `scopeFromInteraction()` は `interaction.channel` を `bot/scope.ts` の `scopeFromChannel()` に渡すだけの薄いラッパ。messageCreate 側 (`bot/mod.ts`) のスコープ抽出も同じ `scopeFromChannel()` を使う。
+- `scopeFromInteraction()` は `interaction.channel` を `client/discord/scope.ts` の `scopeFromChannel()` に渡すだけの薄いラッパ。messageCreate 側 (`client/discord/mod.ts`) のスコープ抽出も同じ `scopeFromChannel()` を使う。
 - `show` が表示する内容:
   - 現在スコープ (Thread + parent、または Channel) の `session`/`model`/`effort`/`show_thinking`/`active`。文字列設定は `value (source)`、`active` は `resolveActive()` で求めた実効値と出所 (ストアに無ければ `config activeChannelIds`)
   - グローバルデフォルト (`config.claude.defaults` の `model`/`effort`/`show_thinking`)
@@ -141,7 +141,7 @@ model/effort/showThinking/active に対する個別の setter/deleter は無く�
 
 ## 内部 HTTP API `/settings`
 
-`api/routes/settings.ts` の `createSettingsRoutes(ctx)` が Hono ルートを返し、`api/server.ts` が `/settings` にマウントする。`ctx: SettingsRouteContext { store, resolveParentId? }` は `bot/mod.ts` が `startApiServer()` に渡す (`resolveParentId` には `DiscordBot.resolveThreadParentId()` を注入)。API 全体の構成は [internal-api.md](internal-api.md)、エージェント向けの curl 手順は `data/workspace/.claude/skills/settings/SKILL.md` を参照。
+`api/routes/settings.ts` の `createSettingsRoutes(ctx)` が Hono ルートを返し、`api/server.ts` が `/settings` にマウントする。`ctx: SettingsRouteContext { store, resolveParentId? }` は `client/discord/mod.ts` が `startApiServer()` に渡す (`resolveParentId` には `DiscordBot.resolveThreadParentId()` を注入)。API 全体の構成は [internal-api.md](internal-api.md)、エージェント向けの curl 手順は `data/workspace/.claude/skills/settings/SKILL.md` を参照。
 
 | メソッド / パス         | 処理                                                                                                                                                                         |
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

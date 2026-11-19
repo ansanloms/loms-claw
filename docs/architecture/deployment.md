@@ -41,7 +41,7 @@ flowchart LR
   - `curl`/`jq`: workspace の skill (`discord` 等) が REST API を叩く手段。`compose.yaml` の healthcheck でも使う。
   - `git`: Claude Code (同梱バイナリ) がリポジトリ操作・文脈取得に使う。
   - `bubblewrap`/`socat`: Agent SDK 同梱 Claude Code のサンドボックス機能が使う。`@anthropic-ai/claude-agent-sdk@0.3.232` の `sdk.mjs` に `bwrapPath`/`socatPath` という設定項目があることで確認済み。
-  - `ffmpeg`: `bot/message.ts` の `resizeImageIfNeeded()` が画像添付の縮小に `node:child_process` の `spawn("ffmpeg", ...)` で呼ぶ。`bluesky` skill も画像リサイズに使う。
+  - `ffmpeg`: `client/discord/message.ts` の `resizeImageIfNeeded()` が画像添付の縮小に `node:child_process` の `spawn("ffmpeg", ...)` で呼ぶ。`bluesky` skill も画像リサイズに使う。
   - `tzdata`: compose から渡す `TZ` を解決するため。
 - `WORKDIR /app` で `package.json`/`package-lock.json`/`.npmrc` をコピーし `npm ci --omit=dev` を実行する (`.npmrc` は `@std/*` を取る JSR 互換レジストリの設定)。続けて Agent SDK が同梱する Claude Code バイナリ (`@anthropic-ai/claude-agent-sdk-linux-{x64,arm64}`) を `/app/node_modules/@anthropic-ai/` から `/usr/local/bin/claude` へ symlink する。Dockerfile のコメントによれば、この symlink は初回認証 `claude auth login` 等の手動操作用で、実行時の `query()` は SDK がバイナリを自動解決する。
   - アーキテクチャは `dpkg --print-architecture` で判定し、`amd64`/`arm64` 以外はビルド失敗にする。
@@ -61,16 +61,16 @@ flowchart LR
 
 `compose.yaml` はリポジトリルートに置き、compose のコマンドはすべてリポジトリルートで実行する。
 
-| 項目              | 内容                                                                                                                                                                                                          |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| プロジェクト名    | `loms-claw`                                                                                                                                                                                                   |
-| サービス          | `bot` (`build: .`)                                                                                                                                                                                            |
-| environment       | `TZ: ${TZ:-Asia/Tokyo}` のみ。値は host の `.env` から compose が読む                                                                                                                                         |
-| volumes           | `./data` → `/data` の bind mount 1 つ                                                                                                                                                                         |
-| healthcheck       | `jq` で `claude.apiPort` (省略時 `// 3000`) を `port` に取り、空でなければ `curl -fsS http://127.0.0.1:$port/health`。詳細は下記「healthcheck と再起動」                                                      |
-| init              | `true`。node イメージは tini を持たないため、cron の timeout や中断された Claude の子プロセスの孤児を回収する目的で compose の init を有効にする                                                              |
-| restart           | `unless-stopped`                                                                                                                                                                                              |
-| stop_grace_period | `15s`。`bot/mod.ts` の `shutdown()` は API サーバー停止・Discord クライアント破棄それぞれに最大 5 秒 (`SHUTDOWN_TIMEOUT_MS`) を許容し合計最大 10 秒かかり得るため、Docker の既定 (10s) より余裕を持たせている |
+| 項目              | 内容                                                                                                                                                                                                                     |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| プロジェクト名    | `loms-claw`                                                                                                                                                                                                              |
+| サービス          | `bot` (`build: .`)                                                                                                                                                                                                       |
+| environment       | `TZ: ${TZ:-Asia/Tokyo}` のみ。値は host の `.env` から compose が読む                                                                                                                                                    |
+| volumes           | `./data` → `/data` の bind mount 1 つ                                                                                                                                                                                    |
+| healthcheck       | `jq` で `claude.apiPort` (省略時 `// 3000`) を `port` に取り、空でなければ `curl -fsS http://127.0.0.1:$port/health`。詳細は下記「healthcheck と再起動」                                                                 |
+| init              | `true`。node イメージは tini を持たないため、cron の timeout や中断された Claude の子プロセスの孤児を回収する目的で compose の init を有効にする                                                                         |
+| restart           | `unless-stopped`                                                                                                                                                                                                         |
+| stop_grace_period | `15s`。`client/discord/mod.ts` の `shutdown()` は API サーバー停止・Discord クライアント破棄それぞれに最大 5 秒 (`SHUTDOWN_TIMEOUT_MS`) を許容し合計最大 10 秒かかり得るため、Docker の既定 (10s) より余裕を持たせている |
 
 `.env` は docker compose が host 側で参照する変数 (現状 `TZ` のみ) を持つファイルである。アプリ自体は `.env` を読まない (`.env.example` のコメント)。`.env` は `.gitignore` で管理外。
 
@@ -80,7 +80,7 @@ flowchart LR
 
 ### healthcheck と再起動
 
-`GET /health` は Discord Gateway の全シャードの status が `Status.Ready` のときのみ `ok` (200) を返す。`bot/mod.ts` の `healthCtx.isReady` は `Client#isReady()` (一度 Ready になると切断後も戻らない) ではなく `client.ws.shards` の各 `status` を見て判定する ([internal-api.md](internal-api.md) 参照)。
+`GET /health` は Discord Gateway の全シャードの status が `Status.Ready` のときのみ `ok` (200) を返す。`client/discord/mod.ts` の `healthCtx.isReady` は `Client#isReady()` (一度 Ready になると切断後も戻らない) ではなく `client.ws.shards` の各 `status` を見て判定する ([internal-api.md](internal-api.md) 参照)。
 
 `compose.yaml` の healthcheck コマンド (実際にコンテナ内 shell で評価される形。compose ファイル上は `$` を `$$` でエスケープする) は次のとおり。
 
@@ -125,17 +125,17 @@ docker compose logs -f               # ログ確認
 
 ## 環境変数
 
-| 変数                          | 供給元                                                                                                                | 消費者                                                                                                                                                                                                                                           |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `CLAUDE_CONFIG_DIR`           | Dockerfile の `ENV` (`/data/home`)                                                                                    | Claude Code (既定の `~/.claude` を置き換える)                                                                                                                                                                                                    |
-| `LOMS_CLAW_CONFIG`            | Dockerfile の `ENV` (`/data/config.json`)                                                                             | `config.ts` の `loadConfig()` (未設定時 `./data/config.json`)。`compose.yaml` の `healthcheck:` もこの値 (既定 `/data/config.json`) から `jq` で `claude.apiPort` を読む (未指定時は `// 3000` で `config.schema.json` の既定値にフォールバック) |
-| `TZ`                          | host の `.env` → `compose.yaml` の `environment` (`${TZ:-Asia/Tokyo}`)                                                | コンテナ全体 (cron 式のローカルタイム評価等)                                                                                                                                                                                                     |
-| `DISCORD_BOT_TOKEN`           | bot プロセスが `config.discord.token` を `query()` の `env` に注入する (`claude/mod.ts` の `buildQueryOptions()`)     | SDK 同梱バイナリが spawn する Bash/curl。`discord` skill が `Authorization: Bot ${DISCORD_BOT_TOKEN}` で使う                                                                                                                                     |
-| `GOOGLE_HEALTH_CLIENT_ID`     | host の `.env` → `compose.yaml` の `environment` (`${GOOGLE_HEALTH_CLIENT_ID:-}`)                                     | ワークスペースの `google-health` skill (`query()` の `env` 経由)                                                                                                                                                                                 |
-| `GOOGLE_HEALTH_CLIENT_SECRET` | host の `.env` → `compose.yaml` の `environment` (`${GOOGLE_HEALTH_CLIENT_SECRET:-}`)                                 | ワークスペースの `google-health` skill (`query()` の `env` 経由)                                                                                                                                                                                 |
-| `GOOGLE_HEALTH_TOKEN_PATH`    | host の `.env` → `compose.yaml` の `environment` (`${GOOGLE_HEALTH_TOKEN_PATH:-/data/home/google-health/token.json}`) | ワークスペースの `google-health` skill (`query()` の `env` 経由)                                                                                                                                                                                 |
+| 変数                          | 供給元                                                                                                                                     | 消費者                                                                                                                                                                                                                                           |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CLAUDE_CONFIG_DIR`           | Dockerfile の `ENV` (`/data/home`)                                                                                                         | Claude Code (既定の `~/.claude` を置き換える)                                                                                                                                                                                                    |
+| `LOMS_CLAW_CONFIG`            | Dockerfile の `ENV` (`/data/config.json`)                                                                                                  | `config.ts` の `loadConfig()` (未設定時 `./data/config.json`)。`compose.yaml` の `healthcheck:` もこの値 (既定 `/data/config.json`) から `jq` で `claude.apiPort` を読む (未指定時は `// 3000` で `config.schema.json` の既定値にフォールバック) |
+| `TZ`                          | host の `.env` → `compose.yaml` の `environment` (`${TZ:-Asia/Tokyo}`)                                                                     | コンテナ全体 (cron 式のローカルタイム評価等)                                                                                                                                                                                                     |
+| `DISCORD_BOT_TOKEN`           | `client/discord/mod.ts` が `config.discord.token` を `{ DISCORD_BOT_TOKEN }` として `Conversation` と `CronExecutor` の両方へ `env` で渡す | SDK 同梱バイナリが spawn する Bash/curl。`discord` skill が `Authorization: Bot ${DISCORD_BOT_TOKEN}` で使う                                                                                                                                     |
+| `GOOGLE_HEALTH_CLIENT_ID`     | host の `.env` → `compose.yaml` の `environment` (`${GOOGLE_HEALTH_CLIENT_ID:-}`)                                                          | ワークスペースの `google-health` skill (`query()` の `env` 経由)                                                                                                                                                                                 |
+| `GOOGLE_HEALTH_CLIENT_SECRET` | host の `.env` → `compose.yaml` の `environment` (`${GOOGLE_HEALTH_CLIENT_SECRET:-}`)                                                      | ワークスペースの `google-health` skill (`query()` の `env` 経由)                                                                                                                                                                                 |
+| `GOOGLE_HEALTH_TOKEN_PATH`    | host の `.env` → `compose.yaml` の `environment` (`${GOOGLE_HEALTH_TOKEN_PATH:-/data/home/google-health/token.json}`)                      | ワークスペースの `google-health` skill (`query()` の `env` 経由)                                                                                                                                                                                 |
 
-`buildQueryOptions()` は `process.env` (値が `undefined` のキーを落としたもの) を展開した上で `DISCORD_BOT_TOKEN` を足して `env` に渡す (SDK は `env` を指定すると `process.env` を継承しないため)。
+`buildQueryOptions()` は `process.env` (値が `undefined` のキーを落としたもの) のスナップショットを展開した上で `opts.env` を重ねて `env` に渡す (SDK は `env` を指定すると `process.env` を継承しないため)。`client/discord/mod.ts` は `{ DISCORD_BOT_TOKEN }` をこの `opts.env` として `Conversation` と `CronExecutor` の両方へ渡す。
 
 Node には権限モデルが無く、プロセスは起動したユーザの権限でファイル・ネットワーク・子プロセスにアクセスできる。Dockerfile の `CMD` にも権限フラグは無い。`query()` が spawn する Claude Code はもともとプロセス側の権限モデルの外で動く。
 

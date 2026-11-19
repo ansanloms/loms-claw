@@ -6,11 +6,11 @@ bot プロセス内で `127.0.0.1:{config.claude.apiPort}` に Hono アプリを
 
 ## 検証・エラー応答の方針
 
-検証失敗は拒否する (HTTP は 400 + `{ error }`、cron 定義はロードエラーで当該ジョブのみ skip)。黙って丸める場合は明示的に記録する (`logger.ts` の `limit` clamp は防御のみで、route が先に 400 を返す)。Discord へのエラー投稿は要約 + 先頭 1 行に留め、全文はログ (`GET /logs`) に残す (`errors.ts` の `summarizeErrorForDiscord()`)。
+検証失敗は拒否する (HTTP は 400 + `{ error }`、cron 定義はロードエラーで当該ジョブのみ skip)。黙って丸める場合は明示的に記録する (`logger.ts` の `limit` clamp は防御のみで、route が先に 400 を返す)。Discord へのエラー投稿は要約 + 先頭 1 行に留め、全文はログ (`GET /logs`) に残す (`errors.ts` の `summarizeError()`)。
 
 ## サーバー (`api/server.ts`)
 
-`createApp(settingsCtx, healthCtx, cronCtx?)` が `Hono` アプリの組み立て (ルートのマウント、`notFound`/`onError`) だけを行い、`startApiServer(port, settingsCtx, healthCtx, cronCtx?)` はそれを `serve({ fetch: app.fetch, port, hostname: "127.0.0.1" })` に渡して `ServerType` (Node の `http.Server` 等) を返す薄いラッパー。呼び出し側 (`bot/mod.ts` の `DiscordBot.shutdown()`) が `ServerType` を保持し、停止時に `close(cb)` を 5 秒の `withTimeout` で包んで呼ぶ。失敗は WARN ログに落とすだけで握りつぶす。`createApp()` を分離してあるのは、`serve()` を起動せず `app.request()` で直接ルーティング (404/500/マウント) を検証できるようにするためである。詳細は下記「テスト」を参照。
+`createApp(settingsCtx, healthCtx, cronCtx?)` が `Hono` アプリの組み立て (ルートのマウント、`notFound`/`onError`) だけを行い、`startApiServer(port, settingsCtx, healthCtx, cronCtx?)` はそれを `serve({ fetch: app.fetch, port, hostname: "127.0.0.1" })` に渡して `ServerType` (Node の `http.Server` 等) を返す薄いラッパー。呼び出し側 (`client/discord/mod.ts` の `DiscordBot.shutdown()`) が `ServerType` を保持し、停止時に `close(cb)` を 5 秒の `withTimeout` で包んで呼ぶ。失敗は WARN ログに落とすだけで握りつぶす。`createApp()` を分離してあるのは、`serve()` を起動せず `app.request()` で直接ルーティング (404/500/マウント) を検証できるようにするためである。詳細は下記「テスト」を参照。
 
 | 要素           | 内容                                                                                                                                                                                       |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -39,7 +39,7 @@ bot プロセス内で `127.0.0.1:{config.claude.apiPort}` に Hono アプリを
 
 ### health (`api/routes/health.ts`)
 
-注入される `HealthRouteContext` は `isReady: () => boolean` を必須で持つ。`bot/mod.ts` は `client.ws.shards` の全シャードの `status` が `Status.Ready` かどうかを渡す (discord.js の `Client#isReady()` は一度 Ready になった後の Gateway 切断を検知できないため使わない)。応答は Discord Gateway の接続状態を反映する。`compose.yaml` の `healthcheck:` から `curl` で定期的に叩かれる想定 (`deployment.md` 参照)。
+注入される `HealthRouteContext` は `isReady: () => boolean` を必須で持つ。`client/discord/mod.ts` は `client.ws.shards` の全シャードの `status` が `Status.Ready` かどうかを渡す (discord.js の `Client#isReady()` は一度 Ready になった後の Gateway 切断を検知できないため使わない)。応答は Discord Gateway の接続状態を反映する。`compose.yaml` の `healthcheck:` から `curl` で定期的に叩かれる想定 (`deployment.md` 参照)。
 
 | メソッド / パス | リクエスト | 正常応答                 | エラー                                                  |
 | --------------- | ---------- | ------------------------ | ------------------------------------------------------- |
@@ -77,7 +77,7 @@ bot プロセス内で `127.0.0.1:{config.claude.apiPort}` に Hono アプリを
 
 PATCH/DELETE の書き込みは Store の仕様どおり leaf id (`threadId ?? channelId`) 単位なので、スレッド解決の成否で書き込み先は変わらない。差が出るのは GET/PATCH の応答に含まれる解決結果 (親チャンネルへのフォールバックの有無) だけ。
 
-## コンテキスト注入 (`bot/mod.ts`)
+## コンテキスト注入 (`client/discord/mod.ts`)
 
 `DiscordBot.start()` の `ClientReady` ハンドラ内で、`CronExecutor` の初期化とジョブ読み込みの後に次を組み立てて `startApiServer(this.config.claude.apiPort, settingsCtx, healthCtx, cronCtx)` を呼ぶ。
 

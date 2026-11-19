@@ -44,4 +44,27 @@ describe("splitAtBoundary", () => {
     const result = splitAtBoundary("   。 次の文", 800, false);
     assert.deepStrictEqual(result, { send: "。", rest: " 次の文" });
   });
+
+  test("境界が先頭 (index 0) にあってもそこで区切ること", () => {
+    assert.deepStrictEqual(splitAtBoundary("。後続", 800, false), {
+      send: "。",
+      rest: "後続",
+    });
+    assert.deepStrictEqual(splitAtBoundary("\n後続", 800, false), {
+      send: "",
+      rest: "後続",
+    });
+  });
+
+  test("境界が無いときの強制フラッシュは threshold の 2 倍ちょうどから始まること", () => {
+    assert.deepStrictEqual(splitAtBoundary("x".repeat(19), 10, false), null);
+    assert.deepStrictEqual(splitAtBoundary("x".repeat(20), 10, false), {
+      send: "x".repeat(20),
+      rest: "",
+    });
+  });
+
+  test("境界が無く threshold 以上 2 倍未満なら null を返すこと", () => {
+    assert.deepStrictEqual(splitAtBoundary("x".repeat(10), 10, false), null);
+  });
 });

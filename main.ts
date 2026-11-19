@@ -7,7 +7,7 @@
 import { mkdir } from "node:fs/promises";
 import type { DatabaseSync } from "node:sqlite";
 import { dirname } from "@std/path/dirname";
-import { DiscordBot } from "./bot/mod.ts";
+import { DiscordBot } from "./client/discord/mod.ts";
 import { loadConfig } from "./config.ts";
 import { createLogger, initLogger } from "./logger.ts";
 import { openStoreDatabase, Store } from "./store/mod.ts";

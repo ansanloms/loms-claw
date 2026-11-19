@@ -14,7 +14,7 @@ ENV LOMS_CLAW_CONFIG=/data/config.json
 # jq: workspace の skill が REST API 応答を整形する手段。healthcheck (compose.yaml) でも使う。
 # bubblewrap / socat: Agent SDK 同梱 Claude Code のサンドボックス機能が使う
 # (@anthropic-ai/claude-agent-sdk の sdk.mjs に bwrapPath / socatPath 設定がある)。
-# ffmpeg: bot/message.ts の resizeImageIfNeeded() と bluesky skill が画像リサイズに使う。
+# ffmpeg: client/discord/message.ts の resizeImageIfNeeded() と bluesky skill が画像リサイズに使う。
 # tzdata: compose から渡す TZ を解決するため。
 RUN <<EOF
 	apt-get update

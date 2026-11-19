@@ -6,7 +6,6 @@
  */
 
 import { rm } from "node:fs/promises";
-import type { SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
 import { join } from "@std/path/join";
 import type { ServerType } from "@hono/node-server";
 import {
@@ -22,32 +21,31 @@ import {
   Routes,
   Status,
 } from "discord.js";
-import type { CronRouteContext } from "../api/routes/cron.ts";
-import type { HealthRouteContext } from "../api/routes/health.ts";
-import type { SettingsRouteContext } from "../api/routes/settings.ts";
-import { startApiServer } from "../api/server.ts";
-import { ApprovalManager, createCanUseTool } from "../approval/manager.ts";
+import type { CronRouteContext } from "../../api/routes/cron.ts";
+import type { HealthRouteContext } from "../../api/routes/health.ts";
+import type { SettingsRouteContext } from "../../api/routes/settings.ts";
+import { startApiServer } from "../../api/server.ts";
+import { SystemPromptStore } from "../../claude/system-prompt.ts";
+import type { Config } from "../../config.ts";
+import { Conversation, type TurnOutput } from "../../core/conversation.ts";
 import {
-  askClaude,
-  extractTopLevelTextDelta,
-  extractTopLevelThinkingDelta,
-  handleResultEvent,
-  requireResultText,
-} from "../claude/mod.ts";
-import { SystemPromptStore } from "../claude/system-prompt.ts";
-import type { Config } from "../config.ts";
-import { CronExecutor } from "../cron/executor.ts";
-import { loadCronJobsFromDir } from "../cron/loader.ts";
-import { getErrorMessage, summarizeErrorForDiscord } from "../errors.ts";
-import { createLogger } from "../logger.ts";
-import type { Store } from "../store/mod.ts";
+  SELF_MENTION_RATE_LIMIT_MAX_COUNT,
+  SELF_MENTION_RATE_LIMIT_WINDOW_MINUTES,
+  SelfMentionRateLimiter,
+} from "../../core/ratelimit.ts";
+import { CronExecutor } from "../../cron/executor.ts";
+import { loadCronJobsFromDir } from "../../cron/loader.ts";
+import { getErrorMessage, summarizeError } from "../../errors.ts";
+import { createLogger } from "../../logger.ts";
+import type { Store } from "../../store/mod.ts";
+import { ApprovalManager, createCanUseTool } from "./approval/manager.ts";
+import { createDiscordCronPorts } from "./cron-target.ts";
 import {
   command,
   handleSettingsSet,
   handleSettingsShow,
   handleSettingsUnset,
 } from "./commands.ts";
-import { splitAtBoundary } from "./flush.ts";
 import { isAuthorized } from "./guard.ts";
 import { resolveIncomingMessage } from "./incoming.ts";
 import {
@@ -61,12 +59,6 @@ import {
   splitMessage,
   stripBotMentions,
 } from "./message.ts";
-import { ScopeQueue } from "./queue.ts";
-import {
-  SELF_MENTION_RATE_LIMIT_MAX_COUNT,
-  SELF_MENTION_RATE_LIMIT_WINDOW_MINUTES,
-  SelfMentionRateLimiter,
-} from "./ratelimit.ts";
 
 const log = createLogger("bot");
 
@@ -101,14 +93,6 @@ async function withTimeout(
   await Promise.race([promise, timeout]);
   clearTimeout(timeoutId);
 }
-
-/**
- * AI to AI 自己メンションで起動したターンのプロンプト先頭に付ける注記。
- * 発話者のテンプレート変数は認可ユーザーに差し替えるため、この注記が無いと
- * モデルは人間の発話と区別できない。
- */
-const SELF_MENTION_PROMPT_NOTE =
-  "[AI to AI 自己メンション] この依頼は認可ユーザー本人の発話ではなく、別のチャンネル/スレッドで動いている自 bot のセッションが投稿したもの。";
 
 /**
  * インタラクションのハンドラを実行し、失敗時にログとエフェメラル返信で揃える。
@@ -151,18 +135,18 @@ export class DiscordBot {
   private apiServer: ServerType | null = null;
   private cronExecutor: CronExecutor | null = null;
   private systemPrompts: SystemPromptStore;
-  /** scope (channel / thread) 単位でメッセージ処理を直列化するキュー。 */
-  private chatQueue = new ScopeQueue();
-  /** 自己メンション応答のレート制限 (bot 全体のスライディングウィンドウ)。 */
-  private selfMentionLimiter: SelfMentionRateLimiter;
+  /** 会話の中核 (キュー・セッション・ストリーム消費)。Discord には依存しない。 */
+  private conversation: Conversation;
+  /**
+   * `query()` の env へ注入する環境変数。discord skill の curl がここから
+   * bot トークンを取る (skill 側は config.json を直読みしない)。
+   */
+  private readonly queryEnv: Record<string, string>;
 
   constructor(config: Config, store: Store) {
     this.config = config;
     this.store = store;
-    this.selfMentionLimiter = new SelfMentionRateLimiter(
-      SELF_MENTION_RATE_LIMIT_MAX_COUNT,
-      SELF_MENTION_RATE_LIMIT_WINDOW_MINUTES,
-    );
+    this.queryEnv = { DISCORD_BOT_TOKEN: config.discord.token };
     this.systemPrompts = new SystemPromptStore(
       join(config.claude.cwd, ".claude", "system-prompt"),
     );
@@ -188,6 +172,20 @@ export class DiscordBot {
       join(config.claude.cwd, ".claude", "settings.json"),
     );
 
+    this.conversation = new Conversation({
+      store,
+      systemPrompts: this.systemPrompts,
+      claudeConfig: config.claude,
+      env: this.queryEnv,
+      createCanUseTool: (localId) =>
+        createCanUseTool(this.approvalManager, localId),
+      // 自己メンション応答のレート制限 (bot 全体のスライディングウィンドウ)。
+      selfMentionLimiter: new SelfMentionRateLimiter(
+        SELF_MENTION_RATE_LIMIT_MAX_COUNT,
+        SELF_MENTION_RATE_LIMIT_WINDOW_MINUTES,
+      ),
+    });
+
     this.client.on(Events.MessageCreate, (msg) => this.onMessage(msg));
     this.client.on(Events.InteractionCreate, (i) => this.onInteraction(i));
   }
@@ -209,16 +207,18 @@ export class DiscordBot {
         await this.registerCommands();
 
         // cron 初期化。
-        this.cronExecutor = new CronExecutor(
-          this.client,
-          this.config.claude,
-          this.config.discord.guildId,
-          this.config.discord.token,
-          this.store,
-          this.config.claude.defaults,
-          this.approvalManager,
-          this.systemPrompts,
-        );
+        this.cronExecutor = new CronExecutor({
+          ports: createDiscordCronPorts({
+            client: this.client,
+            guildId: this.config.discord.guildId,
+            approvalManager: this.approvalManager,
+          }),
+          config: this.config.claude,
+          env: this.queryEnv,
+          store: this.store,
+          defaults: this.config.claude.defaults,
+          systemPrompts: this.systemPrompts,
+        });
 
         const cronJobs = await loadCronJobsFromDir(this.config.claude.cwd);
         this.cronExecutor.start(cronJobs);
@@ -450,7 +450,7 @@ export class DiscordBot {
     const parentId = isThread ? message.channel.parentId : null;
 
     // 認可 → 自己メンション判定 (+ レート制限) → スコープ抽出 → active 上書き
-    // 取得 → 反応判定の一連の分岐は bot/incoming.ts に集約してある。discord.js
+    // 取得 → 反応判定の一連の分岐は client/discord/incoming.ts に集約してある。discord.js
     // 依存部分 (mentions.has() / Store 読み取り / レート制限) は関数として注入する。
     const decision = await resolveIncomingMessage(
       {
@@ -476,7 +476,8 @@ export class DiscordBot {
             ? message.mentions.has(this.client.user, opts)
             : false,
         getActiveOverride: (scope) => this.store.getActive(scope),
-        isSelfMentionRateLimited: () => this.selfMentionLimiter.isExhausted(),
+        isSelfMentionRateLimited: () =>
+          this.conversation.isSelfMentionExhausted(),
       },
     );
 
@@ -495,7 +496,7 @@ export class DiscordBot {
 
     // cleanContent は `<@botId>` を guild ニックネーム優先の表示名 (`@Nick`) に
     // 展開するため、グローバル表示名とニックネームの両方を除去対象に渡す。
-    let prompt = stripBotMentions(message.cleanContent, [
+    const prompt = stripBotMentions(message.cleanContent, [
       this.client.user?.displayName ?? "",
       message.guild?.members.me?.displayName ?? "",
     ]);
@@ -513,56 +514,112 @@ export class DiscordBot {
     // 内で行い済み (枠の予約はせず、消費は query 実行直前の tryConsume で行うため、
     // busy なスコープに複数の自己メンションが積まれた場合は実行時に改めて弾かれる)。
 
-    // bot が応答中の scope に届いたメッセージは直列キューに積み、現在のターンが
-    // 終わってから同一セッションで処理する (Claude Code が応答生成中の入力を
-    // キューに積み、ターン終了後に処理するのと同じ挙動)。これにより同一 scope
-    // への並行 query を防ぎ、session_id の競合を構造的に無くす。
-    //
-    // isBusy 判定と enqueue 登録の間に await を挟まないこと。挟むと連投時に後続
-    // メッセージの enqueue が先に登録されて順序が入れ替わりうる。react は
-    // fire-and-forget にして await しない。
-    const wasQueued = this.chatQueue.isBusy(localId);
-    if (wasQueued) {
-      // 待機に入ったことを発言者へ可視化する。失敗は致命的でないので握り潰す。
-      message.react("⏳").catch(() => {});
-    }
+    // テンプレート変数の発話者。自己メンション起動時の message.author は自 bot
+    // だが、そのまま渡すと「発話者へメンションせよ」というプロンプト指示が
+    // `<@botId>` を生み、自己メンションの再発火 (連鎖) につながる。自己起動時は
+    // 認可ユーザー (本人) を発話者として渡す。
+    const speakerId = isSelfMessage
+      ? this.config.discord.userId
+      : message.author.id;
+    const speakerName = isSelfMessage
+      ? (message.guild?.members.cache.get(speakerId)?.displayName ??
+        this.client.users.cache.get(speakerId)?.displayName ??
+        speakerId)
+      : message.author.displayName;
 
-    await this.chatQueue.enqueue(localId, async () => {
-      // 自分のターンが始まったら待機マーカー (⏳) を外す。
-      if (wasQueued && this.client.user) {
-        await message.reactions.cache
-          .get("⏳")
-          ?.users.remove(this.client.user.id)
-          .catch(() => {});
+    const templateVars: Record<string, string> = {
+      "discord.guild.id": this.config.discord.guildId,
+      "discord.guild.name": message.guild?.name ?? "",
+      "discord.channel.id": localId,
+      "discord.channel.name": "name" in channel ? (channel.name ?? "") : "",
+      "discord.channel.type": isThread ? "thread" : "text",
+      "discord.user.id": speakerId,
+      "discord.user.name": speakerName,
+    };
+
+    await this.conversation.submit(
+      { scope, localId, prompt, isSelfMessage, templateVars },
+      this.createTurnOutput(message, channel, isSelfMessage, hasAttachments),
+    );
+  }
+
+  /**
+   * 1 ターン分の出力先 ({@link TurnOutput}) を Discord 向けに組み立てる。
+   *
+   * typing・進捗 reporter・ダウンロードした画像はターン単位の状態なので、
+   * ターンごとにこの関数のクロージャで持つ。
+   */
+  private createTurnOutput(
+    message: Message,
+    channel: GuildTextBasedChannel,
+    isSelfMessage: boolean,
+    hasAttachments: boolean,
+  ): TurnOutput {
+    const typingController = new AbortController();
+    let progress: ReturnType<typeof createProgressReporter> | undefined;
+    let downloadedImages: DownloadedImage[] = [];
+    let wasQueued = false;
+
+    // 応答は発言者宛にする: 分割後のすべての投稿の先頭にメンションを付ける。
+    // メンション分を引いた上限で分割してから各チャンク先頭に付与することで、
+    // どのチャンクでも上限ぎりぎりでメンション分が溢れない（2000 字超過しない）。
+    // 自己メッセージ起動時は空文字にする: 応答冒頭に自 bot メンションを付けると、
+    // 応答自体が再度メンション条件を満たし連鎖の火種になるため。
+    // 発話者 (認可ユーザー) へのピングは Client 既定の allowedMentions で通る。
+    const mention = isSelfMessage ? "" : `<@${message.author.id}> `;
+    const sendChunks = async (text: string): Promise<void> => {
+      const chunks = splitMessage(text, DISCORD_MESSAGE_LIMIT - mention.length);
+      for (const chunk of chunks) {
+        await channel.send(mention + chunk);
       }
+    };
 
-      // typing インジケーター開始
-      const typingController = new AbortController();
-      keepTyping(channel, typingController.signal);
+    return {
+      onQueued: () => {
+        wasQueued = true;
+        // 待機に入ったことを発言者へ可視化する。失敗は致命的でないので握り潰す。
+        // react は fire-and-forget にして await しない (Conversation.submit の
+        // isBusy 判定と enqueue の間に await を挟まないため)。
+        message.react("⏳").catch(() => {});
+      },
 
-      const progress = createProgressReporter(channel);
-      let downloadedImages: DownloadedImage[] = [];
-
-      // 応答は発言者宛にする: 分割後のすべての投稿の先頭にメンションを付ける。
-      // メンション分を引いた上限で分割してから各チャンク先頭に付与することで、
-      // どのチャンクでも上限ぎりぎりでメンション分が溢れない（2000 字超過しない）。
-      // 自己メッセージ起動時は空文字にする: 応答冒頭に自 bot メンションを付けると、
-      // 応答自体が再度メンション条件を満たし連鎖の火種になるため。
-      // 発話者 (認可ユーザー) へのピングは Client 既定の allowedMentions で通る。
-      const mention = isSelfMessage ? "" : `<@${message.author.id}> `;
-      const sendChunks = async (text: string): Promise<void> => {
-        const chunks = splitMessage(
-          text,
-          DISCORD_MESSAGE_LIMIT - mention.length,
-        );
-        for (const chunk of chunks) {
-          await channel.send(mention + chunk);
+      onTurnStart: async () => {
+        // 自分のターンが始まったら待機マーカー (⏳) を外す。
+        if (wasQueued && this.client.user) {
+          await message.reactions.cache
+            .get("⏳")
+            ?.users.remove(this.client.user.id)
+            .catch(() => {});
         }
-      };
+
+        // typing インジケーター開始
+        keepTyping(channel, typingController.signal);
+
+        progress = createProgressReporter(channel);
+      },
+
+      // 画像添付をダウンロード（画像フィルタは downloadImageAttachments 内で行う）
+      preparePrompt: async (prompt) => {
+        if (!hasAttachments) {
+          return prompt;
+        }
+        downloadedImages = await downloadImageAttachments(
+          message.attachments.values(),
+        );
+        if (downloadedImages.length > 0) {
+          return appendImageReferences(
+            prompt || "この画像について説明して",
+            downloadedImages,
+          );
+        }
+        return prompt;
+      },
+
+      sendReply: sendChunks,
 
       // thinking (推論) を引用形式で投稿する。回答ではないのでメンションは付けず、
       // Discord の `> ` 引用で回答と視覚的に分離する。
-      const sendThinking = async (text: string): Promise<void> => {
+      sendThinking: async (text) => {
         const quoted = text
           .split("\n")
           .map((line) => `> ${line}`)
@@ -570,195 +627,23 @@ export class DiscordBot {
         for (const chunk of splitMessage(quoted)) {
           await channel.send(chunk);
         }
-      };
+      },
 
-      try {
-        // 画像添付をダウンロード（画像フィルタは downloadImageAttachments 内で行う）
-        if (hasAttachments) {
-          downloadedImages = await downloadImageAttachments(
-            message.attachments.values(),
-          );
-          if (downloadedImages.length > 0) {
-            prompt = appendImageReferences(
-              prompt || "この画像について説明して",
-              downloadedImages,
-            );
-          }
-        }
+      reportProgress: async (toolName, elapsedSeconds) => {
+        await progress?.report(toolName, elapsedSeconds);
+      },
 
-        // 画像ダウンロード後もプロンプトが空なら終了
-        if (!prompt) {
-          return;
-        }
+      // エラーもまだ何も送っていなければ発言者宛にする（content 送出済みなら継続扱い）。
+      // Discord へは要約のみ送り、全文はログ (GET /logs) を参照させる。
+      notifyError: (error) => sendChunks(summarizeError(error)),
 
-        // 自己メンション応答のレート枠は、実際に query を実行する直前にのみ消費する
-        // (空プロンプト等で応答しないメッセージに枠を浪費しない)。
-        if (isSelfMessage && !this.selfMentionLimiter.tryConsume()) {
-          log.warn(
-            `self-mention rate limit exceeded, ignoring message in ${message.channelId}`,
-          );
-          return;
-        }
-
-        // 自己起動ターンでは、この依頼が人間の発話ではなく別スコープの自 bot
-        // セッションからのものだとモデルに伝える (発話者変数は本人に差し替える
-        // ため、これが無いと人間の発話と区別できない)。
-        if (isSelfMessage) {
-          prompt = `${SELF_MENTION_PROMPT_NOTE}\n\n${prompt}`;
-        }
-
-        // テンプレート変数の発話者。自己メンション起動時の message.author は自 bot
-        // だが、そのまま渡すと「発話者へメンションせよ」というプロンプト指示が
-        // `<@botId>` を生み、自己メンションの再発火 (連鎖) につながる。自己起動時は
-        // 認可ユーザー (本人) を発話者として渡す。
-        const speakerId = isSelfMessage
-          ? this.config.discord.userId
-          : message.author.id;
-        const speakerName = isSelfMessage
-          ? (message.guild?.members.cache.get(speakerId)?.displayName ??
-            this.client.users.cache.get(speakerId)?.displayName ??
-            speakerId)
-          : message.author.displayName;
-        const [sessionId, model, effort, showThinking] = await Promise.all([
-          this.store.getSession(scope),
-          this.store.getModel(scope),
-          this.store.getEffort(scope),
-          this.store.getShowThinking(scope),
-        ]);
-
-        const templateVars: Record<string, string> = {
-          "discord.guild.id": this.config.discord.guildId,
-          "discord.guild.name": message.guild?.name ?? "",
-          "discord.channel.id": localId,
-          "discord.channel.name": "name" in channel ? (channel.name ?? "") : "",
-          "discord.channel.type": isThread ? "thread" : "text",
-          "discord.user.id": speakerId,
-          "discord.user.name": speakerName,
-        };
-
-        const appendSystemPrompt = this.systemPrompts.resolve(
-          "chat",
-          scope,
-          templateVars,
-        );
-
-        const stream = askClaude(prompt, {
-          sessionId,
-          config: this.config.claude,
-          discordToken: this.config.discord.token,
-          signal: AbortSignal.timeout(this.config.claude.timeout),
-          appendSystemPrompt,
-          model,
-          effort,
-          canUseTool: createCanUseTool(this.approvalManager, localId),
-        });
-
-        // ストリーミング応答: text_delta をバッファに蓄積し、
-        // 閾値を超えたら文境界で区切って中間投稿する。
-        // 分割アルゴリズム自体は splitAtBoundary (bot/flush.ts) に切り出してある。
-        const FLUSH_THRESHOLD = 800;
-        let textBuffer = "";
-        let hasStreamedText = false;
-        let resultEvent: SDKResultMessage | undefined;
-
-        const flushBuffer = async (force: boolean) => {
-          const result = splitAtBoundary(textBuffer, FLUSH_THRESHOLD, force);
-          if (!result) {
-            return;
-          }
-          textBuffer = result.rest;
-          if (result.send) {
-            hasStreamedText = true;
-            await sendChunks(result.send);
-          }
-        };
-
-        // thinking 用バッファ。回答テキストとは独立に文境界でフラッシュする。
-        // 回答より閾値を高めにして、推論の中間投稿で本文が埋もれないようにする。
-        const THINKING_FLUSH_THRESHOLD = 1500;
-        let thinkingBuffer = "";
-
-        const flushThinking = async (force: boolean) => {
-          const result = splitAtBoundary(
-            thinkingBuffer,
-            THINKING_FLUSH_THRESHOLD,
-            force,
-          );
-          if (!result) {
-            return;
-          }
-          thinkingBuffer = result.rest;
-          if (result.send) {
-            await sendThinking(result.send);
-          }
-        };
-
-        for await (const event of stream) {
-          const delta = extractTopLevelTextDelta(event);
-          const thinkingDelta = showThinking
-            ? extractTopLevelThinkingDelta(event)
-            : undefined;
-          if (delta !== undefined) {
-            // 回答テキストが来たら、未送出の thinking を先に出して順序を保つ。
-            if (thinkingBuffer) {
-              await flushThinking(true);
-            }
-            textBuffer += delta;
-            if (textBuffer.length >= FLUSH_THRESHOLD) {
-              await flushBuffer(false);
-            }
-          } else if (thinkingDelta !== undefined) {
-            thinkingBuffer += thinkingDelta;
-            if (thinkingBuffer.length >= THINKING_FLUSH_THRESHOLD) {
-              await flushThinking(false);
-            }
-          } else if (event.type === "assistant" && !event.parent_tool_use_id) {
-            // トップレベルの assistant メッセージ 1 件が完成した時点で強制フラッシュ。
-            // Claude が「テキスト → ツール実行 → テキスト」と複数の応答に分かれて
-            // 喋る場合、各応答を別々の Discord 投稿として区切るため。閾値による
-            // 途中フラッシュ (上の delta 分岐) は応答内のストリーミング体感のために残す。
-            await flushThinking(true);
-            await flushBuffer(true);
-          } else if (event.type === "result") {
-            resultEvent = event;
-            // 非 success の subtype (error_max_turns 等) は Docker logs から原因を追えるよう詳細を残す。
-            // 非ゼロ終了でジェネレータがスローしてもセッションが残るよう即座に保存する。
-            await handleResultEvent(event, {
-              onNonSuccess: (event) =>
-                log.warn(
-                  `claude returned non-success subtype "${event.subtype}":`,
-                  JSON.stringify(event),
-                ),
-              setSession: (sessionId) =>
-                this.store.setSession(scope, sessionId),
-            });
-          } else if (event.type === "tool_progress") {
-            await progress.report(event.tool_name, event.elapsed_time_seconds);
-          }
-        }
-
-        // バッファに残った thinking / テキストを投稿。
-        await flushThinking(true);
-        await flushBuffer(true);
-
-        // stream_event がなかった場合は result.result からフォールバック。
-        if (!hasStreamedText) {
-          const text = requireResultText(resultEvent);
-          await sendChunks(text);
-        }
-      } catch (error: unknown) {
-        // logger は Error の stack を自動で展開する。全文はここに残す。
-        log.error("failed to process message:", error);
-        // エラーもまだ何も送っていなければ発言者宛にする（content 送出済みなら継続扱い）。
-        // Discord へは要約のみ送り、全文は上記ログ (GET /logs) を参照させる。
-        await sendChunks(summarizeErrorForDiscord(error)).catch(() => {});
-      } finally {
+      onTurnEnd: async () => {
         if (downloadedImages.length > 0) {
           await cleanupImageFiles(downloadedImages);
         }
-        await progress.cleanup();
+        await progress?.cleanup();
         typingController.abort();
-      }
-    });
+      },
+    };
   }
 }

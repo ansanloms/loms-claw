@@ -1,26 +1,20 @@
 /**
  * cron ジョブの実行エンジン。
  *
- * CronScheduler からのコールバックで askClaude() を呼び出す。
- * channelId 指定時は結果テキストを executor が Discord に送信する。
- * channelId 省略時は投稿しない。
+ * CronScheduler からのコールバックで中核 (`runOneShot()`) を呼び出す。
+ * channelId 指定時は結果テキストを executor が {@link CronPorts} 経由で送信する。
+ * channelId 省略時は投稿しない。特定の client (discord.js 等) には依存しない。
  *
  * @module
  */
 
 import { spawn } from "node:child_process";
-import type { Client, GuildTextBasedChannel } from "discord.js";
-import { type ApprovalManager, createCanUseTool } from "../approval/manager.ts";
-import { splitMessage } from "../bot/message.ts";
-import {
-  askClaude,
-  drainResultEvent,
-  type QueryFn,
-  requireResultText,
-} from "../claude/mod.ts";
+import type { CanUseTool } from "@anthropic-ai/claude-agent-sdk";
+import type { QueryFn } from "../claude/mod.ts";
 import type { SystemPromptStore } from "../claude/system-prompt.ts";
 import type { ClaudeConfig, ClaudeDefaults } from "../config.ts";
-import { summarizeErrorForDiscord } from "../errors.ts";
+import { runOneShot } from "../core/conversation.ts";
+import { summarizeError } from "../errors.ts";
 import { createLogger } from "../logger.ts";
 import type { Store } from "../store/mod.ts";
 import { CronScheduler } from "./scheduler.ts";
@@ -29,13 +23,51 @@ import type { CronCommandJob, CronJobDef, CronPromptJob } from "./types.ts";
 const log = createLogger("cron");
 
 /**
- * command ジョブの stdout を Discord へ投稿する際の文字数上限。
+ * command ジョブの stdout を投稿する際の文字数上限。
  *
  * Discord メッセージ 2 通分 (`DISCORD_MESSAGE_LIMIT` * 2 相当) を目安にし、
- * 大量出力のコマンドで `channel.send()` が何十通も連発されるのを防ぐ。
+ * 大量出力のコマンドで送信が何十通も連発されるのを防ぐ。
  * 超過分は切り詰めて注記を付ける (ログには全量を出す)。
  */
 const MAX_COMMAND_OUTPUT_CHARS = 4000;
+
+/** cron ジョブの結果の送信先。 */
+export interface CronTarget {
+  /** テキストを送る。client のメッセージ長上限に合わせた分割は実装側が行う。 */
+  send(text: string): Promise<void>;
+}
+
+/**
+ * cron 実行器が client (Discord 等) に求める操作。
+ *
+ * 実行器が定義し、client が実装する (Discord 実装は
+ * `client/discord/cron-target.ts`)。
+ */
+export interface CronPorts {
+  /**
+   * channelId から送信先を解決する。見つからない・送信できない種別の場合は
+   * throw する。
+   */
+  resolveTarget(channelId: string): Promise<CronTarget>;
+  /** システムプロンプトのテンプレート変数 (ギルドレベルのみ)。 */
+  guildTemplateVars(): Record<string, string>;
+  /** ツール承認コールバックを生成する。`channelId` 省略時は承認先が無い。 */
+  createCanUseTool(channelId: string | undefined): CanUseTool;
+}
+
+/** {@link CronExecutor} のコンストラクタ引数。 */
+export interface CronExecutorOptions {
+  ports: CronPorts;
+  config: ClaudeConfig;
+  /** `query()` の env へ追加で注入する環境変数。 */
+  env?: Record<string, string>;
+  store: Store;
+  defaults: ClaudeDefaults;
+  systemPrompts: SystemPromptStore;
+  queryFn?: QueryFn;
+  /** command ジョブの実行関数 (テスト用の DI)。既定は {@link runShellCommand}。 */
+  runCommandFn?: RunCommandFn;
+}
 
 /** `runCommandFn` (`RunCommandFn`) の実行結果。 */
 export interface CommandResult {
@@ -128,40 +160,24 @@ export class CronExecutor {
   private running = new Set<string>();
   private scheduler: CronScheduler;
   private onceCallback?: (jobName: string) => Promise<void>;
-  private readonly client: Client;
+  private readonly ports: CronPorts;
   private readonly config: ClaudeConfig;
-  private readonly guildId: string;
-  /** discord skill の curl に渡す bot トークン (query() env へ注入)。 */
-  private readonly discordToken: string;
+  private readonly env?: Record<string, string>;
   private readonly store: Store;
   private readonly defaults: ClaudeDefaults;
-  private readonly approvalManager: ApprovalManager;
   private readonly systemPrompts: SystemPromptStore;
   private readonly queryFn?: QueryFn;
   private readonly runCommandFn: RunCommandFn;
 
-  constructor(
-    client: Client,
-    config: ClaudeConfig,
-    guildId: string,
-    discordToken: string,
-    store: Store,
-    defaults: ClaudeDefaults,
-    approvalManager: ApprovalManager,
-    systemPrompts: SystemPromptStore,
-    queryFn?: QueryFn,
-    runCommandFn: RunCommandFn = runShellCommand,
-  ) {
-    this.client = client;
-    this.config = config;
-    this.guildId = guildId;
-    this.discordToken = discordToken;
-    this.store = store;
-    this.defaults = defaults;
-    this.approvalManager = approvalManager;
-    this.systemPrompts = systemPrompts;
-    this.queryFn = queryFn;
-    this.runCommandFn = runCommandFn;
+  constructor(options: CronExecutorOptions) {
+    this.ports = options.ports;
+    this.config = options.config;
+    this.env = options.env;
+    this.store = options.store;
+    this.defaults = options.defaults;
+    this.systemPrompts = options.systemPrompts;
+    this.queryFn = options.queryFn;
+    this.runCommandFn = options.runCommandFn ?? runShellCommand;
     this.scheduler = new CronScheduler((job) => this.runJob(job));
   }
 
@@ -226,7 +242,7 @@ export class CronExecutor {
    * 単一の cron ジョブを実行する。
    *
    * 重複実行防止のため、同名ジョブが既に実行中の場合はスキップする。
-   * channelId 指定時: 結果テキストを executor がチャンネルに送信する。
+   * channelId 指定時: 結果テキストを executor が送信先 ({@link CronPorts}) に送信する。
    * channelId 省略時: 投稿しない。
    * `job.kind` で prompt ジョブ ({@link runPromptJob}) と command ジョブ
    * ({@link runCommandJob}) に処理を振り分ける。
@@ -240,24 +256,18 @@ export class CronExecutor {
     this.running.add(job.name);
     log.info(`cron job "${job.name}" started`);
 
-    // channelId 指定時はチャンネルを事前取得（catch 内でもエラー通知に使う）
-    let textChannel: GuildTextBasedChannel | undefined;
+    // channelId 指定時は送信先を事前取得（catch 内でもエラー通知に使う）
+    let target: CronTarget | undefined;
 
     try {
       if (job.channelId) {
-        const channel = await this.client.channels.fetch(job.channelId);
-        if (!channel || !("send" in channel)) {
-          throw new Error(
-            `channel ${job.channelId} not found or not a text channel`,
-          );
-        }
-        textChannel = channel as GuildTextBasedChannel;
+        target = await this.ports.resolveTarget(job.channelId);
       }
 
       if (job.kind === "command") {
-        await this.runCommandJob(job, textChannel);
+        await this.runCommandJob(job, target);
       } else {
-        await this.runPromptJob(job, textChannel);
+        await this.runPromptJob(job, target);
       }
 
       log.info(`cron job "${job.name}" completed`);
@@ -265,12 +275,10 @@ export class CronExecutor {
       // logger は Error の stack を自動で展開する。全文はここに残す。
       log.error(`cron job "${job.name}" failed:`, error);
 
-      // channelId 指定時かつチャンネル取得済みならエラーを通知 (要約のみ、全文は上記ログ)。
-      if (textChannel) {
+      // channelId 指定時かつ送信先取得済みならエラーを通知 (要約のみ、全文は上記ログ)。
+      if (target) {
         try {
-          await textChannel.send(
-            `[cron: ${job.name}] ${summarizeErrorForDiscord(error)}`,
-          );
+          await target.send(`[cron: ${job.name}] ${summarizeError(error)}`);
         } catch {
           // チャンネルへの通知も失敗した場合はログのみ
         }
@@ -288,11 +296,11 @@ export class CronExecutor {
   }
 
   /**
-   * prompt ジョブ 1 件を実行する (`askClaude()` → Discord 投稿)。
+   * prompt ジョブ 1 件を実行する (`runOneShot()` → 送信)。
    */
   private async runPromptJob(
     job: CronPromptJob,
-    textChannel: GuildTextBasedChannel | undefined,
+    target: CronTarget | undefined,
   ): Promise<void> {
     const sessionKey = `cron:${job.name}`;
 
@@ -315,11 +323,7 @@ export class CronExecutor {
     const effort = job.effort ?? channelEffort ?? this.defaults.effort;
 
     // テンプレート変数はギルドレベルのみ（cron にはユーザー/チャンネルコンテキストが無い）
-    const guild = this.client.guilds.cache.get(this.guildId);
-    const templateVars: Record<string, string> = {
-      "discord.guild.id": this.guildId,
-      "discord.guild.name": guild?.name ?? "",
-    };
+    const templateVars = this.ports.guildTemplateVars();
 
     const appendSystemPrompt = this.systemPrompts.resolve(
       "cron",
@@ -333,50 +337,45 @@ export class CronExecutor {
     };
     const timeout = job.timeout ?? this.config.timeout;
 
-    const stream = askClaude(job.prompt, {
-      sessionId,
+    // runOneShot() は target の有無に関わらず結果テキストを評価する。
+    // result が無い/エラーなら target が無くても throw され、catch で
+    // ログされる (取得済みならエラー通知も行われる)。
+    const text = await runOneShot({
+      prompt: job.prompt,
       config: jobConfig,
-      discordToken: this.discordToken,
+      env: this.env,
+      sessionId,
+      setSession: job.resumeSession
+        ? (newSessionId) =>
+            this.store.setSession({ channelId: sessionKey }, newSessionId)
+        : undefined,
       signal: AbortSignal.timeout(timeout),
       appendSystemPrompt,
       model,
       effort,
-      canUseTool: createCanUseTool(this.approvalManager, job.channelId),
-      queryFn: this.queryFn,
-    });
-
-    const resultEvent = await drainResultEvent(stream, {
+      canUseTool: this.ports.createCanUseTool(job.channelId),
       onNonSuccess: (event) =>
         log.warn(
           `cron job "${job.name}" non-success subtype "${event.subtype}":`,
           JSON.stringify(event),
         ),
-      setSession: job.resumeSession
-        ? (newSessionId) =>
-            this.store.setSession({ channelId: sessionKey }, newSessionId)
-        : undefined,
+      queryFn: this.queryFn,
     });
 
-    // requireResultText() は textChannel の有無に関わらず先に評価する。
-    // result が無い/エラーなら textChannel が無くても throw され、catch で
-    // ログされる (取得済みならエラー通知も行われる)。
-    const text = requireResultText(resultEvent);
     // channelId 指定時のみ executor が投稿する
-    if (textChannel) {
-      for (const chunk of splitMessage(text)) {
-        await textChannel.send(chunk);
-      }
+    if (target) {
+      await target.send(text);
     }
   }
 
   /**
-   * command ジョブ 1 件を実行する (`sh -c` → Discord 投稿)。
+   * command ジョブ 1 件を実行する (`sh -c` → 送信)。
    *
    * ストア (session / model / effort)・システムプロンプト・承認には触れない。
    */
   private async runCommandJob(
     job: CronCommandJob,
-    textChannel: GuildTextBasedChannel | undefined,
+    target: CronTarget | undefined,
   ): Promise<void> {
     const timeout = job.timeout ?? this.config.timeout;
     const signal = AbortSignal.timeout(timeout);
@@ -423,10 +422,8 @@ export class CronExecutor {
         MAX_COMMAND_OUTPUT_CHARS,
       )}\n... (truncated, ${originalLength} chars)`;
     }
-    if (output && textChannel) {
-      for (const chunk of splitMessage(output)) {
-        await textChannel.send(chunk);
-      }
+    if (output && target) {
+      await target.send(output);
     }
   }
 }

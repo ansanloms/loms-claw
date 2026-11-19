@@ -1,17 +1,45 @@
 # メッセージ処理 (Discord → Claude → Discord)
 
-`bot/mod.ts` の `DiscordBot` が discord.js の `messageCreate`/`interactionCreate` を受け取り、認可・反応判定・スコープ単位の直列化・画像添付の前処理を経て `askClaude()` を呼び、ストリームを Discord へ流し込むまでの流れを記す。AI to AI 自己メンション (bot 自身の投稿で別スコープのセッションを起動する経路) の発火条件と連鎖制御も本章で扱う。加えて、インタラクション (ボタン/select/modal/スラッシュコマンド) の振り分けも扱う。
+`client/discord/mod.ts` の `DiscordBot` が discord.js の `messageCreate`/`interactionCreate` を受け取り、認可・反応判定・入力の組み立てを行ったうえで、会話の中核 (`core/conversation.ts` の `Conversation`) へ 1 ターンを投入し、ストリームを Discord へ流し込むまでの流れを記す。スコープ単位の直列化・設定取得・`askClaude()` 呼び出し・ストリーム消費は中核が担い、Discord への入出力 (⏳・typing・画像添付・送信) は `DiscordBot` が `TurnOutput` として実装して渡す。AI to AI 自己メンション (bot 自身の投稿で別スコープのセッションを起動する経路) の発火条件と連鎖制御も本章で扱う。加えて、インタラクション (ボタン/select/modal/スラッシュコマンド) の振り分けも扱う。
 
 関連: [README](README.md)/[lifecycle](lifecycle.md)/[claude-integration](claude-integration.md)/[store-and-settings](store-and-settings.md)/[approval](approval.md)/[cron](cron.md)/[deployment](deployment.md)
 
-対象ソース: `bot/mod.ts`, `bot/guard.ts`, `bot/incoming.ts`, `bot/queue.ts`, `bot/ratelimit.ts`, `bot/message.ts`, `bot/commands.ts`, `claude/mod.ts` (抽出ヘルパー), `approval/manager.ts` (`createCanUseTool()` の入口)
+対象ソース: `client/discord/mod.ts`, `client/discord/guard.ts`, `client/discord/incoming.ts`, `core/conversation.ts`, `core/queue.ts`, `core/ratelimit.ts`, `core/flush.ts`, `client/discord/message.ts`, `client/discord/commands.ts`, `claude/mod.ts` (抽出ヘルパー), `client/discord/approval/manager.ts` (`createCanUseTool()` の入口)
+
+## 中核とアダプタの境界
+
+依存は client → core の一方向で、`core/` は discord.js を import しない (`.oxlintrc.json` の `no-restricted-imports` で検査)。`DiscordBot.onMessage` は `TurnInput` を組み立て、`TurnOutput` を実装した出力先と共に `Conversation.submit(input, output)` を呼ぶ。
+
+```ts
+interface TurnInput {
+  scope: StoreScope;
+  localId: string; // 直列化の単位 (スレッドならスレッド ID、そうでなければチャンネル ID)
+  prompt: string;
+  isSelfMessage: boolean;
+  templateVars: Record<string, string>; // discord.* は client が組み立てる
+}
+
+interface TurnOutput {
+  onQueued(): void; // 同一 scope が busy のときだけ。同期 (await しない)
+  onTurnStart(): Promise<void>;
+  preparePrompt(prompt: string): Promise<string | undefined>; // 空なら何もせず終了
+  sendReply(text: string): Promise<void>;
+  sendThinking(text: string): Promise<void>;
+  reportProgress(toolName: string, elapsedSeconds: number): Promise<void>;
+  notifyError(error: unknown): Promise<void>; // 失敗は握り潰される
+  onTurnEnd(): Promise<void>; // onTurnStart 後は成否に関わらず必ず 1 回
+}
+```
+
+Discord 側の実装 (`DiscordBot.createTurnOutput()`) は typing の `AbortController`・進捗 reporter・ダウンロード済み画像をターン単位のクロージャで持つ。`Conversation` は `ConversationDeps` (`store`, `systemPrompts`, `claudeConfig`, `env`, `createCanUseTool`, `selfMentionLimiter`, `queryFn?`) を受け取り、`DiscordBot` のコンストラクタが生成する (`env` は `{ DISCORD_BOT_TOKEN }`、`createCanUseTool` は `ApprovalManager` へ橋渡しする)。認可 (`isAuthorized` / `isAuthorizedSelfMessage`) は中核に入れず、アダプタ側で完結する。
 
 ## 全体像
 
 ```mermaid
 sequenceDiagram
     participant D as Discord
-    participant B as DiscordBot.onMessage
+    participant B as DiscordBot.onMessage (client)
+    participant K as Conversation (core)
     participant S as Store (SQLite)
     participant Q as ScopeQueue
     participant C as askClaude (Agent SDK)
@@ -25,38 +53,41 @@ sequenceDiagram
         B->>B: shouldRespond()
     end
     B->>B: stripBotMentions / 空判定 / 自己メンションの枠事前判定
-    B->>Q: enqueue(localId, task)
-    Note over Q: 同一 scope は直列。busy なら ⏳ を付ける
-    Q->>B: ターン開始
-    B->>D: keepTyping / ⏳ 除去
-    B->>B: 画像添付ダウンロード (任意)
-    B->>S: getSession / getModel / getEffort / getShowThinking
-    B->>C: askClaude(prompt, opts (canUseTool: createCanUseTool(A, localId)))
+    B->>B: 発話者・テンプレート変数 (discord.*) の組み立て
+    B->>K: submit(TurnInput, TurnOutput)
+    K->>Q: enqueue(localId, turn)
+    Note over Q: 同一 scope は直列。busy なら output.onQueued() (⏳)
+    Q->>K: ターン開始
+    K->>B: onTurnStart (⏳ 除去 / typing / 進捗 reporter)
+    K->>B: preparePrompt (画像添付ダウンロード)
+    K->>S: getSession / getModel / getEffort / getShowThinking
+    K->>C: askClaude(prompt, opts (canUseTool: createCanUseTool(localId)))
     loop SDKMessage
-        C-->>B: stream_event / assistant / result / tool_progress
+        C-->>K: stream_event / assistant / result / tool_progress
         C-->>A: canUseTool → 承認ボタン / 質問
-        B->>S: setSession (result 受信時)
+        K->>S: setSession (result 受信時)
+        K->>B: sendReply / sendThinking / reportProgress
         B->>D: 本文 / thinking / 進捗を逐次投稿
     end
-    B->>D: 最終 flush (または result テキスト)
-    B->>B: finally: 画像削除・進捗削除・typing 停止
+    K->>B: 最終 flush (または result テキスト) を sendReply
+    K->>B: finally: onTurnEnd (画像削除・進捗削除・typing 停止)
 ```
 
 ## `messageCreate` ハンドラ (`DiscordBot.onMessage`)
 
-手順 1〜3 (認可・自己メンション判定 (+ レート枠の事前判定)・スコープ抽出・反応判定) は `resolveIncomingMessage()` (`bot/incoming.ts`) に集約してある。discord.js の `Message`/`Client` には直接触れず、`DiscordBot.onMessage` が取り出した最小の値 (`IncomingMessageInput`) と、ストア読み取り・メンション判定・レート制限といった副作用を持つ処理を関数として注入する (`IncomingMessageDeps`)。内部では既存の `isAuthorized`/`isAuthorizedSelfMessage`/`shouldRespond` (`bot/guard.ts`)/`scopeFromChannel` (`bot/scope.ts`) をそのまま呼ぶ (再実装しない)。戻り値は `{ kind: "ignore"; reason }` (`"unauthorized"`/`"self-not-mentioned"`/`"rate-limited"`/`"not-responding"`) または `{ kind: "handle"; scope; localId; isSelfMessage }` の判別共用体で、`onMessage` はこれを見て早期 return するか後続処理 (ログ出力・キュー投入・Claude 呼び出し) へ進む。
+手順 1〜3 (認可・自己メンション判定 (+ レート枠の事前判定)・スコープ抽出・反応判定) は `resolveIncomingMessage()` (`client/discord/incoming.ts`) に集約してある。discord.js の `Message`/`Client` には直接触れず、`DiscordBot.onMessage` が取り出した最小の値 (`IncomingMessageInput`) と、ストア読み取り・メンション判定・レート制限といった副作用を持つ処理を関数として注入する (`IncomingMessageDeps`)。内部では既存の `isAuthorized`/`isAuthorizedSelfMessage`/`shouldRespond` (`client/discord/guard.ts`)/`scopeFromChannel` (`client/discord/scope.ts`) をそのまま呼ぶ (再実装しない)。戻り値は `{ kind: "ignore"; reason }` (`"unauthorized"`/`"self-not-mentioned"`/`"rate-limited"`/`"not-responding"`) または `{ kind: "handle"; scope; localId; isSelfMessage }` の判別共用体で、`onMessage` はこれを見て早期 return するか後続処理 (ログ出力・キュー投入・Claude 呼び出し) へ進む。
 
 ### 1. 認可
 
-1. `isAuthorizedSelfMessage(message.guildId, message.author.id, botUserId, config)` (`bot/guard.ts`) で「自 bot の user ID かつ `discord.guildId` と一致」なら自己メッセージ (`isSelfMessage = true`) として後続へ進む。`botUserId` は `client.user?.id ?? null`。
+1. `isAuthorizedSelfMessage(message.guildId, message.author.id, botUserId, config)` (`client/discord/guard.ts`) で「自 bot の user ID かつ `discord.guildId` と一致」なら自己メッセージ (`isSelfMessage = true`) として後続へ進む。`botUserId` は `client.user?.id ?? null`。
 2. それ以外は `isAuthorized(message.guildId, message.author.id, message.author.bot, config)` で判定する。bot は無条件に拒否、ギルド ID と `discord.userId` の完全一致を要求する。不一致なら `{ kind: "ignore", reason: "unauthorized" }`。
 
 ### 2. 自己メンション判定 (+ レート枠の事前判定) とスコープ抽出
 
 - `isMentioned = message.mentions.has(client.user, opts)`。自己メッセージのときだけ `opts = { ignoreRepliedUser: true, ignoreEveryone: true, ignoreRoles: true }` を渡し、本文中の明示メンション `<@botId>` のみを数える (bot 投稿への返信ピング・@everyone・role メンションでは true にならない)。人間のメッセージは既定の判定。
 - 自己メッセージでメンションが無ければ `{ kind: "ignore", reason: "self-not-mentioned" }`。bot 自身の全投稿 (応答の分割送信・thinking・進捗・cron 投稿等) がこのハンドラを通るため、ストア読み取りの前に落とす。
-- 自己メッセージでメンションがあれば、`SelfMentionRateLimiter.isExhausted()` (`bot/ratelimit.ts`) を非消費で事前判定する。枠が尽きていれば `{ kind: "ignore", reason: "rate-limited" }` (呼び出し側の `onMessage` が WARN ログを出す)。枠は消費しない (消費は手順 7 の `tryConsume()`)。ここで落とすことで typing・添付ダウンロード等の副作用を起こさない。
-- 自己メッセージがここまで通過すれば (メンションあり・レート枠あり) `scopeFromChannel(message.channel, message.channelId)` (`bot/scope.ts`) で `StoreScope` を組み立て、`{ kind: "handle", scope, localId, isSelfMessage: true }` を返す。`scopeFromChannel` はスレッドなら `{ channelId: parentId ?? message.channelId, threadId: message.channelId }`、それ以外は `{ channelId: message.channelId }` を組み立てる。`bot/commands.ts` の `scopeFromInteraction()` も同じ関数を使う。
+- 自己メッセージでメンションがあれば、`SelfMentionRateLimiter.isExhausted()` (`core/ratelimit.ts`) を非消費で事前判定する。枠が尽きていれば `{ kind: "ignore", reason: "rate-limited" }` (呼び出し側の `onMessage` が WARN ログを出す)。枠は消費しない (消費は手順 8 の `tryConsume()`)。ここで落とすことで typing・添付ダウンロード等の副作用を起こさない。
+- 自己メッセージがここまで通過すれば (メンションあり・レート枠あり) `scopeFromChannel(message.channel, message.channelId)` (`client/discord/scope.ts`) で `StoreScope` を組み立て、`{ kind: "handle", scope, localId, isSelfMessage: true }` を返す。`scopeFromChannel` はスレッドなら `{ channelId: parentId ?? message.channelId, threadId: message.channelId }`、それ以外は `{ channelId: message.channelId }` を組み立てる。`client/discord/commands.ts` の `scopeFromInteraction()` も同じ関数を使う。
 
 `localId = threadId ?? channelId` を「発話があった場所」として、キューのキー・承認ボタンの送信先・テンプレート変数 `discord.channel.id` に使う。スコープの意味は [store-and-settings](store-and-settings.md) を参照。
 
@@ -74,41 +105,50 @@ bot 側でメッセージをスレッドへ自動分離する機能は実装し�
 
 ### 4. プロンプト抽出
 
-`stripBotMentions(message.cleanContent, [client.user.displayName, guild.members.me.displayName])` (`bot/message.ts`) で bot 宛てメンションの展開結果 (`@表示名`) を除去する。`cleanContent` は `<@botId>` を guild ニックネーム優先の表示名に展開するため、グローバル表示名とニックネームの両方を渡し、長い名前から順に除去する。本文が空で添付も無ければ return。
+`stripBotMentions(message.cleanContent, [client.user.displayName, guild.members.me.displayName])` (`client/discord/message.ts`) で bot 宛てメンションの展開結果 (`@表示名`) を除去する。`cleanContent` は `<@botId>` を guild ニックネーム優先の表示名に展開するため、グローバル表示名とニックネームの両方を渡し、長い名前から順に除去する。本文が空で添付も無ければ return。
 
-### 5. スコープ単位の直列化 (`ScopeQueue`)
+### 5. 入力の組み立てと中核への投入
 
-`chatQueue.isBusy(localId)` を見てから `chatQueue.enqueue(localId, task)` に積む (`bot/queue.ts`)。同一 key のタスクは投入順に 1 件ずつ実行され、別 key は並行に走る。前のタスクが失敗しても後続は実行される。busy だった場合はメッセージに ⏳ リアクションを付け (fire-and-forget)、自分のターン開始時に bot 自身のリアクションを外す。`isBusy` 判定と `enqueue` の間に await を挟まないことで連投時の順序を保つ。これにより同一セッションへの並行 `query()` と session ID の競合を防ぐ。
+`DiscordBot.onMessage` はここまでで確定した値から次を組み立てて `Conversation.submit()` に渡す (以降は特記が無い限り中核 `core/conversation.ts` の処理)。
 
-以降はキュー内のタスクとして実行される。
+- 発話者: 人間なら `message.author.id`/`message.author.displayName`。自己メッセージなら `config.discord.userId` と、その表示名 (guild member cache → users cache → ID の順で解決)。
+- テンプレート変数 `discord.guild.id / discord.guild.name / discord.channel.id (= localId) / discord.channel.name / discord.channel.type ("thread" | "text") / discord.user.id / discord.user.name`。いずれも cache の同期参照で、キュー投入前に算出する。
+- `TurnOutput` (`createTurnOutput()`)。応答は `mention = isSelfMessage ? "" : "<@authorId> "` を付け、`splitMessage(text, DISCORD_MESSAGE_LIMIT - mention.length)` で分割してから各チャンク先頭に付与して `channel.send()` する (`sendReply`)。`sendThinking` は各行の先頭に `>` と半角スペース (Discord の引用記法) を付け、`splitMessage()` の既定上限で分割し、メンション無しで送る。
 
-### 6. ターン開始時の準備
+### 6. スコープ単位の直列化 (`ScopeQueue`)
 
+`submit()` は `chatQueue.isBusy(localId)` を見てから `chatQueue.enqueue(localId, turn)` に積む (`core/queue.ts`)。同一 key のターンは投入順に 1 件ずつ実行され、別 key は並行に走る。前のターンが失敗しても後続は実行される。busy だった場合は `output.onQueued()` を呼び (Discord 側はメッセージへ ⏳ リアクションを付ける。fire-and-forget)、自分のターン開始時 (`onTurnStart`) に bot 自身のリアクションを外す。`isBusy` 判定と `enqueue` の間に await を挟まないことで連投時の順序を保つ (`onQueued()` を同期にしているのはこのため)。これにより同一セッションへの並行 `query()` と session ID の競合を防ぐ。
+
+以降はキュー内のターンとして実行される。
+
+### 7. ターン開始時の準備
+
+`output.onTurnStart()` を await する。Discord 側の実装は次のとおり。
+
+- 待機していたなら ⏳ リアクションを外す。
 - `keepTyping(channel, signal)`: 初回 `sendTyping()` の後、10 秒間隔で送り続け、`AbortSignal` で停止する。
 - `createProgressReporter(channel)`: `tool_progress` 用。最初の `report()` で 1 件投稿し、以降は同じメッセージを `edit()` する。3 秒未満の呼び出しはスロットルで捨てる。`cleanup()` で削除する。
-- `mention = isSelfMessage ? "" : "<@authorId> "`。`sendChunks(text)` は `splitMessage(text, DISCORD_MESSAGE_LIMIT - mention.length)` で分割してから各チャンク先頭に `mention` を付けて `channel.send()` する。`sendThinking(text)` は各行の先頭に `>` と半角スペース (Discord の引用記法) を付け、`splitMessage()` の既定上限で分割し、メンション無しで送る。
 
-### 7. 画像添付とプロンプトの確定
+### 8. 画像添付とプロンプトの確定
 
-- 添付があれば `downloadImageAttachments(message.attachments.values())`:
+- `output.preparePrompt(prompt)` が加工済みのプロンプトを返す。Discord 側は添付があれば `downloadImageAttachments(message.attachments.values())`:
   - `contentType` が `image/` で始まるものだけ対象。
   - `fetch(att.url, { signal: AbortSignal.timeout(30_000) })` で取得。非 2xx は WARN を出してスキップ。
   - `resizeImageIfNeeded()`: `ffprobe` で幅・高さを取り、長辺が 1568 px を超える場合のみ `ffmpeg` で縮小して JPEG (`-q:v 4`) に再エンコードする。超えなければ元データのまま。
   - 最初の成功時に `mkdtemp(join(tmpdir(), "loms-claw-img-"))` を作り、`{uuid}{ext}` で保存する (縮小した場合は `.jpg`、それ以外は元の拡張子、無ければ `.bin`)。個別の失敗は WARN を出して次へ進む。
   - `ffmpeg`/`ffprobe` は実行時依存。Dockerfile で `ffmpeg` を apt install している ([deployment](deployment.md))。
 - 1 件以上ダウンロードできたら `appendImageReferences(prompt || "この画像について説明して", images)` で `@/abs/path` を空行を挟んで末尾に付加する。
-- ここでプロンプトが空なら return (finally の後始末は走る)。
-- 自己メッセージなら `tryConsume()` で枠を消費する。超過なら WARN を出して return。消費は query 直前に置く。理由: 応答しないメッセージで枠を浪費しないため。
-- 自己メッセージなら `SELF_MENTION_PROMPT_NOTE` (`[AI to AI 自己メンション] この依頼は認可ユーザー本人の発話ではなく、別のチャンネル/スレッドで動いている自 bot のセッションが投稿したもの。`) を空行を挟んでプロンプト先頭に付ける。
+- 戻り値が空なら中核は return する (finally の後始末 `onTurnEnd` は走る)。
+- 自己メッセージなら `selfMentionLimiter.tryConsume()` で枠を消費する。超過なら WARN を出して return。消費は query 直前に置く。理由: 応答しないメッセージで枠を浪費しないため。
+- 自己メッセージなら `SELF_MENTION_PROMPT_NOTE` (`core/conversation.ts`。`[AI to AI 自己メンション] この依頼は認可ユーザー本人の発話ではなく、別のチャンネル/スレッドで動いている自 bot のセッションが投稿したもの。`) を空行を挟んでプロンプト先頭に付ける。
 
-### 8. 設定の取得と `askClaude()` の呼び出し
+### 9. 設定の取得と `askClaude()` の呼び出し
 
-- 発話者: 人間なら `message.author.id`/`message.author.displayName`。自己メッセージなら `config.discord.userId` と、その表示名 (guild member cache → users cache → ID の順で解決)。
 - `store.getSession / getModel / getEffort / getShowThinking` を `Promise.all` で並列取得する (解決順は [store-and-settings](store-and-settings.md))。
-- テンプレート変数 `discord.guild.id / discord.guild.name / discord.channel.id (= localId) / discord.channel.name / discord.channel.type ("thread" | "text") / discord.user.id / discord.user.name` を組み、`systemPrompts.resolve("chat", scope, vars)` で追記システムプロンプトを得る ([claude-integration](claude-integration.md))。
-- `askClaude(prompt, { sessionId, config: config.claude, discordToken: config.discord.token, signal: AbortSignal.timeout(config.claude.timeout), appendSystemPrompt, model, effort, canUseTool: createCanUseTool(approvalManager, localId) })`。`createCanUseTool()` は `AskUserQuestion` を `requestAnswers()` へ、それ以外を `requestApproval()` へ振り分ける ([approval](approval.md))。
+- `systemPrompts.resolve("chat", scope, templateVars)` で追記システムプロンプトを得る ([claude-integration](claude-integration.md))。
+- `askClaude(prompt, { sessionId, config: claudeConfig, env, signal: AbortSignal.timeout(claudeConfig.timeout), appendSystemPrompt, model, effort, canUseTool: createCanUseTool(localId), queryFn })`。`env` は `ConversationDeps.env` (Discord では `{ DISCORD_BOT_TOKEN }`)。`createCanUseTool(localId)` は Discord 側で `ApprovalManager` へ橋渡しされ、`AskUserQuestion` を `requestAnswers()` へ、それ以外を `requestApproval()` へ振り分ける ([approval](approval.md))。
 
-### 9. ストリーム消費
+### 10. ストリーム消費
 
 `for await` で `SDKMessage` を 1 件ずつ見る。各イベントは次の順で 1 つの分岐にだけ入る。
 
@@ -118,22 +158,23 @@ bot 側でメッセージをスレッドへ自動分離する機能は実装し�
 | 2    | `showThinking` かつ `extractTopLevelThinkingDelta(event)` が文字列 (`thinking_delta`)                     | `thinkingBuffer` に追記し、1500 文字以上なら境界 flush                                                                                                                                        |
 | 3    | `event.type === "assistant"` かつ `parent_tool_use_id` 無し                                               | thinking → text の順に強制 flush (assistant ターン 1 件ごとに別投稿へ区切る)                                                                                                                  |
 | 4    | `event.type === "result"`                                                                                 | `resultEvent` に保持し `handleResultEvent()` (`claude/mod.ts`) を呼ぶ。`subtype !== "success"` なら WARN (イベント全体を JSON で記録)。`store.setSession(scope, event.session_id)` を即時保存 |
-| 5    | `event.type === "tool_progress"`                                                                          | `progress.report(tool_name, elapsed_time_seconds)`                                                                                                                                            |
+| 5    | `event.type === "tool_progress"`                                                                          | `output.reportProgress(tool_name, elapsed_time_seconds)`                                                                                                                                      |
 
+- flush は回答なら `output.sendReply()`、thinking なら `output.sendThinking()` を呼ぶ。
 - `system`/`user`/サブエージェント由来 (`parent_tool_use_id` 有り) のイベントは扱わない。
-- 境界 flush: バッファ内で最後の `。` または改行までを送り、残りを保持する。境界が無い場合は何もしないが、閾値の 2 倍以上に達したら全量を強制 flush する (コードブロック・英語・URL が続くケース対策)。
+- 境界 flush: バッファ内で最後の `。` または改行までを送り、残りを保持する (`core/flush.ts` の `splitAtBoundary()`)。境界が無い場合は何もしないが、閾値の 2 倍以上に達したら全量を強制 flush する (コードブロック・英語・URL が続くケース対策)。
 - `showThinking` が false のときは thinking を抽出しない。thinking が流れるかは model/effort 依存。
 - `result` 受信時に session を即保存する。理由: その後ジェネレータが throw しても session を残すため。`askClaude()` 側で「resume 先が無い」エラー時に新規セッションで 1 回やり直す挙動は [claude-integration](claude-integration.md) を参照。
 
-### 10. ループ後
+### 11. ループ後
 
 - thinking → text の順に最終 flush。
-- 一度もテキストを送っていなければ (`hasStreamedText` が false)、`requireResultText(resultEvent)` (`claude/mod.ts`) で本文を取り出し `sendChunks` に渡す。`resultEvent` が無ければ `claude stream ended without result event` を throw する。取り出し自体は `extractResultText(resultEvent)` (`result` フィールドが文字列なら `subtype` を問わず採用し、無ければ `errors`/`subtype` から組み立てた Error を throw する)。cron 側の同じ組み合わせは [cron](cron.md) を参照。
+- 一度もテキストを送っていなければ (`hasStreamedText` が false)、`requireResultText(resultEvent)` (`claude/mod.ts`) で本文を取り出し `output.sendReply()` に渡す。`resultEvent` が無ければ `claude stream ended without result event` を throw する。取り出し自体は `extractResultText(resultEvent)` (`result` フィールドが文字列なら `subtype` を問わず採用し、無ければ `errors`/`subtype` から組み立てた Error を throw する)。cron 側の同じ組み合わせ (`runOneShot()`) は [cron](cron.md) を参照。
 
-### 11. エラーと後始末
+### 12. エラーと後始末
 
-- catch: `log.error` (全文) の後、`sendChunks(summarizeErrorForDiscord(error))` (`errors.ts`) で定型文 + エラーメッセージの先頭 1 行 (最大 200 文字) をチャンネルへ送る。全文は `GET /logs` を参照させる (送信失敗は握り潰す)。
-- finally: 次を行う。
+- catch: `log.error` (全文) の後、`output.notifyError(error)` を呼ぶ (中核側で失敗は握り潰す)。Discord 側は `sendChunks(summarizeError(error))` (`errors.ts`) で定型文 + エラーメッセージの先頭 1 行 (最大 200 文字) をチャンネルへ送る。全文は `GET /logs` を参照させる。
+- finally: `output.onTurnEnd()`。Discord 側は次を順に行う。
   - ダウンロードした画像の temp ディレクトリを削除 (`cleanupImageFiles`)
   - 進捗メッセージを削除 (`progress.cleanup`)
   - typing を停止 (`typingController.abort()`)
@@ -167,28 +208,28 @@ per-scope の停止手段は無い。連鎖を止めるにはレート制限に�
 
 ## インタラクション (`interactionCreate`, `DiscordBot.onInteraction`)
 
-| 種別                                           | 判定                                                 | 委譲先                                                                                                                                                                                                    |
-| ---------------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ボタン (承認 / 拒否、質問の Cancel)            | `interaction.isButton()`                             | `approvalManager.handleButton(interaction)`                                                                                                                                                               |
-| string select (AskUserQuestion の回答)         | `interaction.isStringSelectMenu()`                   | `approvalManager.handleSelect(interaction)`                                                                                                                                                               |
-| modal 送信 (AskUserQuestion の Other 自由入力) | `interaction.isModalSubmit()`                        | `approvalManager.handleModal(interaction)`                                                                                                                                                                |
-| chat input `/claw settings show\|set\|unset`   | `isChatInputCommand()` かつ `commandName === "claw"` | `isAuthorized(guildId, user.id, user.bot, config)` を通過後、サブコマンド群 `settings` の `show` → `handleSettingsShow`、`set` → `handleSettingsSet`、`unset` → `handleSettingsUnset` (`bot/commands.ts`) |
+| 種別                                           | 判定                                                 | 委譲先                                                                                                                                                                                                               |
+| ---------------------------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ボタン (承認 / 拒否、質問の Cancel)            | `interaction.isButton()`                             | `approvalManager.handleButton(interaction)`                                                                                                                                                                          |
+| string select (AskUserQuestion の回答)         | `interaction.isStringSelectMenu()`                   | `approvalManager.handleSelect(interaction)`                                                                                                                                                                          |
+| modal 送信 (AskUserQuestion の Other 自由入力) | `interaction.isModalSubmit()`                        | `approvalManager.handleModal(interaction)`                                                                                                                                                                           |
+| chat input `/claw settings show\|set\|unset`   | `isChatInputCommand()` かつ `commandName === "claw"` | `isAuthorized(guildId, user.id, user.bot, config)` を通過後、サブコマンド群 `settings` の `show` → `handleSettingsShow`、`set` → `handleSettingsSet`、`unset` → `handleSettingsUnset` (`client/discord/commands.ts`) |
 
-- ボタン/select/modal のハンドラが throw した場合は ERROR ログを出し、未応答なら ephemeral のエラー文言で `reply()` する。この 3 分岐は同形のため `runInteraction(interaction, label, handler, errorMessage)` (`bot/mod.ts`) に共通化してある。ログの label とエラー文言は分岐ごとに異なる (button: `"承認処理中にエラーが発生しました。"`、select/modal: `"回答処理中にエラーが発生しました。"`)。
+- ボタン/select/modal のハンドラが throw した場合は ERROR ログを出し、未応答なら ephemeral のエラー文言で `reply()` する。この 3 分岐は同形のため `runInteraction(interaction, label, handler, errorMessage)` (`client/discord/mod.ts`) に共通化してある。ログの label とエラー文言は分岐ごとに異なる (button: `"承認処理中にエラーが発生しました。"`、select/modal: `"回答処理中にエラーが発生しました。"`)。
 - スラッシュコマンドは `registerCommands()` で対象ギルドにのみ登録される ([lifecycle](lifecycle.md))。設定コマンドの意味は [store-and-settings](store-and-settings.md)、承認・質問の詳細は [approval](approval.md) を参照。
 
 ## 定数一覧
 
-| 定数 / 値                                | 場所                                        | 値      | 用途                                                 |
-| ---------------------------------------- | ------------------------------------------- | ------- | ---------------------------------------------------- |
-| `DISCORD_MESSAGE_LIMIT`                  | `bot/message.ts`                            | 2000    | 分割送信の上限。本文はメンション長を引いて分割       |
-| `FLUSH_THRESHOLD`                        | `bot/mod.ts`                                | 800     | 本文の境界 flush 開始。2 倍 (1600) で強制 flush      |
-| `THINKING_FLUSH_THRESHOLD`               | `bot/mod.ts`                                | 1500    | thinking の境界 flush 開始。2 倍 (3000) で強制 flush |
-| typing 間隔                              | `bot/message.ts` `keepTyping`               | 10 秒   | `sendTyping()` の再送間隔                            |
-| `PROGRESS_THROTTLE_MS`                   | `bot/message.ts`                            | 3000    | 進捗メッセージ更新の最短間隔                         |
-| `MAX_IMAGE_DIMENSION`                    | `bot/message.ts`                            | 1568 px | 長辺がこれを超える画像を縮小                         |
-| 添付ダウンロードのタイムアウト           | `bot/message.ts` `downloadImageAttachments` | 30 秒   | `fetch` の `AbortSignal.timeout`                     |
-| `SELF_MENTION_RATE_LIMIT_MAX_COUNT`      | `bot/ratelimit.ts`                          | 6       | 自己メンション応答の上限回数                         |
-| `SELF_MENTION_RATE_LIMIT_WINDOW_MINUTES` | `bot/ratelimit.ts`                          | 10      | 同ウィンドウ長 (分)                                  |
-| `claude.timeout`                         | `config.json`                               | 設定値  | `askClaude()` の `AbortSignal.timeout`               |
-| `INTERACTION_TIMEOUT_MS`                 | `approval/constants.ts`                     | 5 分    | 承認 / 質問の待ち時間 ([approval](approval.md))      |
+| 定数 / 値                                | 場所                                                   | 値      | 用途                                                 |
+| ---------------------------------------- | ------------------------------------------------------ | ------- | ---------------------------------------------------- |
+| `DISCORD_MESSAGE_LIMIT`                  | `client/discord/message.ts`                            | 2000    | 分割送信の上限。本文はメンション長を引いて分割       |
+| `FLUSH_THRESHOLD`                        | `core/conversation.ts`                                 | 800     | 本文の境界 flush 開始。2 倍 (1600) で強制 flush      |
+| `THINKING_FLUSH_THRESHOLD`               | `core/conversation.ts`                                 | 1500    | thinking の境界 flush 開始。2 倍 (3000) で強制 flush |
+| typing 間隔                              | `client/discord/message.ts` `keepTyping`               | 10 秒   | `sendTyping()` の再送間隔                            |
+| `PROGRESS_THROTTLE_MS`                   | `client/discord/message.ts`                            | 3000    | 進捗メッセージ更新の最短間隔                         |
+| `MAX_IMAGE_DIMENSION`                    | `client/discord/message.ts`                            | 1568 px | 長辺がこれを超える画像を縮小                         |
+| 添付ダウンロードのタイムアウト           | `client/discord/message.ts` `downloadImageAttachments` | 30 秒   | `fetch` の `AbortSignal.timeout`                     |
+| `SELF_MENTION_RATE_LIMIT_MAX_COUNT`      | `core/ratelimit.ts`                                    | 6       | 自己メンション応答の上限回数                         |
+| `SELF_MENTION_RATE_LIMIT_WINDOW_MINUTES` | `core/ratelimit.ts`                                    | 10      | 同ウィンドウ長 (分)                                  |
+| `claude.timeout`                         | `config.json`                                          | 設定値  | `askClaude()` の `AbortSignal.timeout`               |
+| `INTERACTION_TIMEOUT_MS`                 | `client/discord/approval/constants.ts`                 | 5 分    | 承認 / 質問の待ち時間 ([approval](approval.md))      |

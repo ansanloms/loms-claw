@@ -22,8 +22,8 @@ import {
   type GuildTextBasedChannel,
   MessageFlags,
 } from "discord.js";
-import { getErrorMessage } from "../errors.ts";
-import { createLogger } from "../logger.ts";
+import { getErrorMessage } from "../../../errors.ts";
+import { createLogger } from "../../../logger.ts";
 import { INTERACTION_TIMEOUT_MS } from "./constants.ts";
 import {
   parseQuestions,
@@ -31,7 +31,10 @@ import {
   QuestionManager,
   type QuestionResult,
 } from "./question.ts";
-import { addToSettingsAllowList, isInAllowList } from "./settings.ts";
+import {
+  addToSettingsAllowList,
+  isInAllowList,
+} from "../../../core/approval-settings.ts";
 
 const log = createLogger("approval");
 

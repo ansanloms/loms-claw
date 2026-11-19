@@ -3,7 +3,7 @@ import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import assert from "node:assert/strict";
 import { join } from "@std/path/join";
-import { addToSettingsAllowList, isInAllowList } from "./settings.ts";
+import { addToSettingsAllowList, isInAllowList } from "./approval-settings.ts";
 
 describe("addToSettingsAllowList", () => {
   test("ファイルが存在しない場合は新規作成すること", async () => {
@@ -74,6 +74,65 @@ describe("addToSettingsAllowList", () => {
 
     const result = JSON.parse(await readFile(settingsPath, "utf8"));
     assert.deepStrictEqual(result.permissions.allow, ["Read"]);
+  });
+
+  // 現状の挙動を固定する特性化テスト。仕様として望ましい挙動ではない
+  // (既存内容を失う)。#232 で修正したらこのテストの期待値も変えること。
+  test("JSON が不正な場合は現状は既存内容を捨てて新規に書き直すこと (#232 で修正予定)", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "loms-claw-test-"));
+    const settingsPath = join(dir, "settings.json");
+    await writeFile(settingsPath, "not json");
+
+    await addToSettingsAllowList(settingsPath, "Read");
+
+    const result = JSON.parse(await readFile(settingsPath, "utf8"));
+    assert.deepStrictEqual(result, { permissions: { allow: ["Read"] } });
+  });
+
+  test("ENOENT 以外の読み取りエラーは握り潰さず投げること", async () => {
+    // ファイルの代わりにディレクトリを指すと readFile は EISDIR で失敗する。
+    // 読み取り時点のエラーが伝わること (後段の writeFile の失敗ではないこと) を
+    // code と syscall (read) で確かめる。
+    const dir = await mkdtemp(join(tmpdir(), "loms-claw-test-"));
+
+    await assert.rejects(
+      addToSettingsAllowList(dir, "Read"),
+      (e: unknown) =>
+        e instanceof Error &&
+        "code" in e &&
+        e.code === "EISDIR" &&
+        "syscall" in e &&
+        e.syscall === "read",
+    );
+  });
+
+  test("permissions が null や非オブジェクトなら作り直して追記すること", async () => {
+    for (const permissions of [null, "bad", 1]) {
+      const dir = await mkdtemp(join(tmpdir(), "loms-claw-test-"));
+      const settingsPath = join(dir, "settings.json");
+      await writeFile(settingsPath, JSON.stringify({ permissions }));
+
+      await addToSettingsAllowList(settingsPath, "Read");
+
+      const result = JSON.parse(await readFile(settingsPath, "utf8"));
+      assert.deepStrictEqual(result, { permissions: { allow: ["Read"] } });
+    }
+  });
+
+  test("permissions.allow が配列でなければ配列を作り直して追記すること", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "loms-claw-test-"));
+    const settingsPath = join(dir, "settings.json");
+    await writeFile(
+      settingsPath,
+      JSON.stringify({ permissions: { allow: "Read", deny: ["Bash"] } }),
+    );
+
+    await addToSettingsAllowList(settingsPath, "Edit");
+
+    const result = JSON.parse(await readFile(settingsPath, "utf8"));
+    assert.deepStrictEqual(result, {
+      permissions: { allow: ["Edit"], deny: ["Bash"] },
+    });
   });
 });
 
