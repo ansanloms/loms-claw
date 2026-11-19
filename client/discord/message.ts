@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { dirname } from "@std/path/dirname";
 import { join } from "@std/path/join";
 import type { Attachment, GuildTextBasedChannel } from "discord.js";
+import { getErrorMessage } from "../../errors.ts";
 import { createLogger } from "../../logger.ts";
 
 const log = createLogger("message");
@@ -375,7 +376,12 @@ export function createProgressReporter(
       const text = `\`${toolName}\` 実行中... (${Math.round(elapsedSeconds)}s)`;
 
       if (!message) {
-        message = await channel.send(text);
+        try {
+          message = await channel.send(text);
+        } catch (error: unknown) {
+          // 間引きは保ったまま、次の report で再送を試みる。report() は reject しない。
+          log.warn("failed to send progress message:", getErrorMessage(error));
+        }
       } else {
         await message.edit(text).catch(() => {});
       }
@@ -388,4 +394,24 @@ export function createProgressReporter(
       }
     },
   };
+}
+
+/**
+ * ターン終了時の後始末を実行する。
+ *
+ * 最初に `abortTyping()` を呼び、続けて各 step を順に実行する。step が失敗しても
+ * `log.warn` して残りを続行する (typing の停止が後始末の失敗で漏れないようにする)。
+ */
+export async function runTurnCleanup(
+  abortTyping: () => void,
+  steps: Array<() => Promise<void>>,
+): Promise<void> {
+  abortTyping();
+  for (const step of steps) {
+    try {
+      await step();
+    } catch (error: unknown) {
+      log.warn("turn cleanup step failed:", getErrorMessage(error));
+    }
+  }
 }

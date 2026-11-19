@@ -110,7 +110,7 @@ export interface ConversationDeps {
   /** `query()` の env へ追加で注入する環境変数。 */
   env?: Record<string, string>;
   /** ツール承認コールバックの生成。`localId` は承認の送り先の識別子。 */
-  createCanUseTool: (localId: string) => CanUseTool;
+  createCanUseTool: (localId: string, signal: AbortSignal) => CanUseTool;
   selfMentionLimiter: Pick<
     SelfMentionRateLimiter,
     "tryConsume" | "isExhausted"
@@ -201,15 +201,16 @@ export class Conversation {
         templateVars,
       );
 
+      const signal = AbortSignal.timeout(claudeConfig.timeout);
       const stream = askClaude(prompt, {
         sessionId,
         config: claudeConfig,
         env: this.deps.env,
-        signal: AbortSignal.timeout(claudeConfig.timeout),
+        signal,
         appendSystemPrompt,
         model,
         effort,
-        canUseTool: this.deps.createCanUseTool(localId),
+        canUseTool: this.deps.createCanUseTool(localId, signal),
         queryFn: this.deps.queryFn,
       });
 

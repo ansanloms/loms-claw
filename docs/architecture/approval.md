@@ -66,8 +66,8 @@ Discord のボタン承認が発火するのは、上の表のとおり SDK 上�
      - `approve:{requestId}` (Allow, Success)
      - `always:{requestId}:{toolName}` (Allow Always, Primary)
      - `deny:{requestId}` (Deny, Danger)
-   - 本文: 1 行目に `Tool: {toolName}` (太字 + インラインコード)、`toolInput.description` があればその値、続けて `toolInput` の 2 スペース JSON ダンプを json コードフェンスで囲んだもの。ダンプは 1500 文字を超える場合 1497 文字 + `...` に切り詰める
-4. `pending` に登録し Promise を返す。`handleButton()` が解決するか、`INTERACTION_TIMEOUT_MS` (`client/discord/approval/constants.ts`、5 分) 経過で `{ decision: "deny", reason: "Timed out" }` に解決する。タイムアウト時に投稿メッセージは編集しない。
+   - 本文: 1 行目に `Tool: {toolName}` (太字 + インラインコード)、`toolInput.description` があればその値 (300 文字で切り詰め)、続けて `toolInput` の 2 スペース JSON ダンプを json コードフェンスで囲んだもの。ダンプは 1500 文字を超える場合 1497 文字 + `...` に切り詰める。組み立てた本文全体も 2000 文字 (`DISCORD_MESSAGE_LIMIT`) で切り詰める。投稿 (`channel.send`) が失敗したら `pending` を作らず `{ decision: "deny", reason: "Failed to post approval request" }` を返す
+4. `pending` に登録し Promise を返す。`handleButton()` が解決するか、`INTERACTION_TIMEOUT_MS` (`client/discord/approval/constants.ts`、5 分) 経過で `{ decision: "deny", reason: "Timed out" }` に解決する。タイムアウト時は投稿メッセージを `\n**→ Timed out**` に編集してボタンを外す (編集失敗は WARN ログ)。`signal` (ターンの中断シグナル) が abort された場合は、送信前なら投稿せず、待機中なら `pending` を消して `\n**→ Aborted**` に編集し、`{ decision: "deny", reason: "Aborted" }` に解決する。abort 後のボタン押下は「期限切れか処理済み」の応答になる。結果の追記は `appendStatus()` が元本文を `2000 - suffix.length` で切ってから suffix を足すので、末尾の `**→ ...**` は切り落とされない。
 
 ### `handleButton(interaction)`
 
@@ -111,7 +111,7 @@ Discord のボタン承認が発火するのは、上の表のとおり SDK 上�
    - select の選択肢は各 option (value は index 文字列、label/description は 100 文字で切り詰め) に加え、`Other (自由入力)` を自動で末尾に足す。値は `OTHER_VALUE` (`__other__`) とする
    - `multiSelect` の質問は `maxValues = options.length + 1`、それ以外は 1
    - 回答済みの質問の select は disabled にし、placeholder に回答を表示する
-3. `INTERACTION_TIMEOUT_MS` (`client/discord/approval/constants.ts`、5 分) でタイムアウト。メッセージを `\n**→ Timed out**` に編集し `{ kind: "denied", reason: "Timed out" }`。
+3. `INTERACTION_TIMEOUT_MS` (`client/discord/approval/constants.ts`、5 分) でタイムアウト。メッセージを `\n**→ Timed out**` に編集し `{ kind: "denied", reason: "Timed out" }`。`signal` が abort された場合も同様に `\n**→ Aborted**` に編集し `{ kind: "denied", reason: "Aborted" }` (送信前に abort 済みなら投稿しない)。
 
 ### インタラクション
 
@@ -164,3 +164,9 @@ cron で `channelId` 未指定のジョブでは、`createCanUseTool()` に渡�
 | `core/approval-settings.test.ts`           | `addToSettingsAllowList` (新規作成・マージ・重複排除) と `isInAllowList` (存在・不在・JSON 不正)                                                                                                                                                                                       |
 
 `ApprovalManager` はチャンネル解決 (`client.channels.fetch()` → 送信) を `ApprovalChannelResolver` (`fetchSendable()`) に切り出してあり、コンストラクタの `options.channelResolver` で差し替えられる (既定は `client` から作った discord.js 実装)。`options.timeoutMs` で `INTERACTION_TIMEOUT_MS` (既定値は変えない) をテスト用に短縮できる。一方 `handleButton()` の引数型は discord.js の `ButtonInteraction` のまま (`QuestionManager.handleButton()` への委譲が同じ型を要求するため、`ApprovalManager` 側だけを緩めると型が合わない)。テストでは `handleButton` が実際に触るプロパティ (`customId`/`message.content`/`update`/`reply`) だけを持つ fake オブジェクトを `as unknown as ButtonInteraction` でキャストして渡す (`client/discord/message.test.ts` の fake チャンネルと同じ手法)。`QuestionManager` のインタラクション処理自体は引き続き単体テストの対象外。
+
+## ターンの中断と承認待ち
+
+承認・質問の待ちは `claude.timeout` (ターン全体のタイムアウト) に含まれる。`core/conversation.ts` と `cron/executor.ts` はターンの `AbortSignal.timeout(timeout)` を `askClaude` と `createCanUseTool(…, signal)` の両方へ渡す。`createCanUseTool()` は SDK が `canUseTool` の第 3 引数で渡す `options.signal` とターンの signal を `AbortSignal.any` で合成し、`requestApproval()`/`requestAnswers()` に渡す。どちらかが abort されると承認・質問は打ち切られ、メッセージは `Aborted` に編集される。
+
+進捗メッセージ (`createProgressReporter`) の初回送信が失敗しても `report()` は reject せず、間引き (3 秒) は保ったまま、次の間引き間隔を過ぎた report で再送する。ターン終了時の後始末は `runTurnCleanup()` が typing の停止を最初に行い、各 step の失敗を WARN ログにして残りを続行する。

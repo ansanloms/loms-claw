@@ -1,10 +1,12 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
+import type { Client } from "discord.js";
 import {
   formatAnswer,
   OTHER_VALUE,
   parseQuestions,
   type Question,
+  QuestionManager,
   resolveSelectedLabels,
   truncate,
 } from "./question.ts";
@@ -169,5 +171,43 @@ describe("truncate", () => {
   test("上限超過は省略記号付きで切り詰めること", () => {
     assert.deepStrictEqual(truncate("abcdef", 4), "abc…");
     assert.deepStrictEqual(truncate("abcdef", 4).length, 4);
+  });
+});
+
+describe("QuestionManager.requestAnswers", () => {
+  test("send の待機中に abort されたら Aborted へ編集して denied を返すこと", async () => {
+    const controller = new AbortController();
+    const edits: { content: string; components: [] }[] = [];
+    const client = {
+      channels: {
+        fetch: () =>
+          Promise.resolve({
+            isTextBased: () => true,
+            send: (payload: { content: string }) => {
+              controller.abort();
+              return Promise.resolve({
+                content: payload.content,
+                edit: (edit: { content: string; components: [] }) => {
+                  edits.push(edit);
+                  return Promise.resolve();
+                },
+              });
+            },
+          }),
+      },
+    } as unknown as Client;
+    const questions = parseQuestions(validInput());
+    assert.ok(questions);
+
+    const result = await new QuestionManager(client).requestAnswers(
+      questions,
+      "ch-1",
+      controller.signal,
+    );
+
+    assert.deepStrictEqual(result, { kind: "denied", reason: "Aborted" });
+    await new Promise((r) => setTimeout(r, 10));
+    assert.deepStrictEqual(edits.length, 1);
+    assert.ok(edits[0].content.endsWith("\n**→ Aborted**"));
   });
 });

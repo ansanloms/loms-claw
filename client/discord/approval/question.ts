@@ -183,6 +183,14 @@ export function truncate(text: string, max: number): string {
 }
 
 /**
+ * 本文の末尾に結果 (`**→ ...**` 等) を足す。足した後に Discord の上限を
+ * 超えないよう、元本文を切ってから suffix を足す (suffix は切り落とさない)。
+ */
+export function appendStatus(content: string, suffix: string): string {
+  return `${truncate(content, DISCORD_MESSAGE_LIMIT - suffix.length)}${suffix}`;
+}
+
+/**
  * 収集中の質問セットの状態。
  */
 interface PendingQuestions {
@@ -193,6 +201,8 @@ interface PendingQuestions {
   pendingOther: Map<number, string[]>;
   resolve: (result: QuestionResult) => void;
   timeout: ReturnType<typeof setTimeout>;
+  /** abort listener の解除。解決時に呼ぶ。 */
+  cleanup: () => void;
 }
 
 /**
@@ -213,12 +223,19 @@ export class QuestionManager {
   /**
    * 質問を Discord に送信し、全質問への回答が揃うまで待つ。
    *
-   * Cancel ボタン押下・タイムアウト・チャンネル解決失敗は `denied` を返す。
+   * Cancel ボタン押下・タイムアウト・abort・チャンネル解決失敗は `denied` を返す。
+   *
+   * @param signal - ターンの中断シグナル。abort されたら質問を打ち切る。
    */
   async requestAnswers(
     questions: Question[],
     channelId?: string,
+    signal?: AbortSignal,
   ): Promise<QuestionResult> {
+    if (signal?.aborted) {
+      return { kind: "denied", reason: "Aborted" };
+    }
+
     if (!channelId) {
       log.warn("no channel set for questions, denying");
       return { kind: "denied", reason: "No channel to ask the user" };
@@ -228,6 +245,9 @@ export class QuestionManager {
     if (!channel?.isTextBased()) {
       log.warn("question channel not found:", channelId);
       return { kind: "denied", reason: "Channel not found" };
+    }
+    if (signal?.aborted) {
+      return { kind: "denied", reason: "Aborted" };
     }
 
     const requestId = crypto.randomUUID().slice(0, 8);
@@ -249,24 +269,43 @@ export class QuestionManager {
       `${questions.length} question(s)`,
     );
 
+    const editStatus = (suffix: string, label: string) => {
+      message
+        .edit({
+          content: appendStatus(message.content, suffix),
+          components: [],
+        })
+        .catch((error: unknown) => {
+          log.warn(`failed to edit ${label} message:`, getErrorMessage(error));
+        });
+    };
+
+    // send の待機中に abort されると listener は発火しないので、ここで確かめる。
+    if (signal?.aborted) {
+      log.warn("questions aborted:", requestId);
+      editStatus("\n**→ Aborted**", "aborted");
+      return { kind: "denied", reason: "Aborted" };
+    }
+
     return new Promise<QuestionResult>((resolve) => {
+      const onAbort = () => {
+        const pending = this.pending.get(requestId);
+        if (!pending) {
+          return;
+        }
+        clearTimeout(pending.timeout);
+        this.pending.delete(requestId);
+        log.warn("questions aborted:", requestId);
+        editStatus("\n**→ Aborted**", "aborted");
+        resolve({ kind: "denied", reason: "Aborted" });
+      };
+      const cleanup = () => signal?.removeEventListener("abort", onAbort);
+
       const timeout = setTimeout(() => {
         this.pending.delete(requestId);
+        cleanup();
         log.warn("questions timed out:", requestId);
-        message
-          .edit({
-            content: truncate(
-              `${message.content}\n**→ Timed out**`,
-              DISCORD_MESSAGE_LIMIT,
-            ),
-            components: [],
-          })
-          .catch((error: unknown) => {
-            log.warn(
-              "failed to edit timed out message:",
-              getErrorMessage(error),
-            );
-          });
+        editStatus("\n**→ Timed out**", "timed out");
         resolve({ kind: "denied", reason: "Timed out" });
       }, INTERACTION_TIMEOUT_MS);
 
@@ -276,7 +315,9 @@ export class QuestionManager {
         pendingOther: new Map(),
         resolve,
         timeout,
+        cleanup,
       });
+      signal?.addEventListener("abort", onAbort, { once: true });
     });
   }
 
@@ -380,11 +421,12 @@ export class QuestionManager {
     }
 
     clearTimeout(pending.timeout);
+    pending.cleanup();
     this.pending.delete(requestId);
     pending.resolve({ kind: "denied", reason: "Cancelled by user" });
 
     await interaction.update({
-      content: `${interaction.message.content}\n**→ Cancelled**`,
+      content: appendStatus(interaction.message.content, "\n**→ Cancelled**"),
       components: [],
     });
 
@@ -414,6 +456,7 @@ export class QuestionManager {
     }
 
     clearTimeout(pending.timeout);
+    pending.cleanup();
     this.pending.delete(requestId);
 
     const answers: Record<string, string> = {};

@@ -197,6 +197,7 @@ function createConversation(overrides: DepsOverrides = {}) {
   const savedSessions: Array<[StoreScope, string]> = [];
   const resolveCalls: Array<[string, StoreScope, Record<string, string>?]> = [];
   const canUseToolIds: string[] = [];
+  const canUseToolSignals: AbortSignal[] = [];
   const deps: ConversationDeps = {
     store: {
       getSession: () => Promise.resolve(overrides.sessionId),
@@ -216,8 +217,9 @@ function createConversation(overrides: DepsOverrides = {}) {
     },
     claudeConfig: baseConfig,
     env: overrides.env,
-    createCanUseTool: (id) => {
+    createCanUseTool: (id, signal) => {
       canUseToolIds.push(id);
+      canUseToolSignals.push(signal);
       return (() =>
         Promise.resolve({
           behavior: "allow",
@@ -235,6 +237,7 @@ function createConversation(overrides: DepsOverrides = {}) {
     savedSessions,
     resolveCalls,
     canUseToolIds,
+    canUseToolSignals,
   };
 }
 
@@ -533,13 +536,14 @@ describe("Conversation", () => {
 
   test("submit: 加工後のプロンプトとシステムプロンプト・env・設定が query に渡ること", async () => {
     let captured: Parameters<QueryFn>[0] | undefined;
-    const { conversation, resolveCalls, canUseToolIds } = createConversation({
-      sessionId: "prev-sess",
-      env: { DISCORD_BOT_TOKEN: "tok" },
-      queryFn: mockQueryFn([resultEvent("answer")], (p) => {
-        captured = p;
-      }),
-    });
+    const { conversation, resolveCalls, canUseToolIds, canUseToolSignals } =
+      createConversation({
+        sessionId: "prev-sess",
+        env: { DISCORD_BOT_TOKEN: "tok" },
+        queryFn: mockQueryFn([resultEvent("answer")], (p) => {
+          captured = p;
+        }),
+      });
     const { output } = createOutput({
       preparePrompt: (p) => Promise.resolve(`${p} + image`),
     });
@@ -560,6 +564,10 @@ describe("Conversation", () => {
       ["chat", { channelId: "ch-1" }, { "discord.guild.id": "g-1" }],
     ]);
     assert.deepStrictEqual(canUseToolIds, ["ch-1"]);
+    assert.ok(
+      canUseToolSignals[0] instanceof AbortSignal,
+      "ターンの signal が createCanUseTool に渡ること",
+    );
   });
 
   test("submit: 自己メンション起動では注記がプロンプト先頭に付くこと", async () => {

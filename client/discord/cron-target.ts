@@ -51,8 +51,11 @@ export function createDiscordCronPorts(deps: DiscordCronPortsDeps): CronPorts {
       };
     },
 
-    createCanUseTool(channelId: string | undefined): CanUseTool {
-      return createCanUseTool(approvalManager, channelId);
+    createCanUseTool(
+      channelId: string | undefined,
+      signal: AbortSignal,
+    ): CanUseTool {
+      return createCanUseTool(approvalManager, channelId, signal);
     },
   };
 }

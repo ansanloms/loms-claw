@@ -57,7 +57,10 @@ export interface CronPorts {
   /** システムプロンプトのテンプレート変数 (ギルドレベルのみ)。 */
   guildTemplateVars(): Record<string, string>;
   /** ツール承認コールバックを生成する。`channelId` 省略時は承認先が無い。 */
-  createCanUseTool(channelId: string | undefined): CanUseTool;
+  createCanUseTool(
+    channelId: string | undefined,
+    signal: AbortSignal,
+  ): CanUseTool;
 }
 
 /** {@link CronExecutor} のコンストラクタ引数。 */
@@ -344,6 +347,7 @@ export class CronExecutor {
       ...(job.maxTurns !== undefined ? { maxTurns: job.maxTurns } : {}),
     };
     const timeout = job.timeout ?? this.config.timeout;
+    const signal = AbortSignal.timeout(timeout);
 
     // runOneShot() は target の有無に関わらず結果テキストを評価する。
     // result が無い/エラーなら target が無くても throw され、catch で
@@ -357,11 +361,11 @@ export class CronExecutor {
         ? (newSessionId) =>
             this.store.setSession({ channelId: sessionKey }, newSessionId)
         : undefined,
-      signal: AbortSignal.timeout(timeout),
+      signal,
       appendSystemPrompt,
       model,
       effort,
-      canUseTool: this.ports.createCanUseTool(job.channelId),
+      canUseTool: this.ports.createCanUseTool(job.channelId, signal),
       onNonSuccess: (event) =>
         log.warn(
           `cron job "${job.name}" non-success subtype "${event.subtype}":`,
