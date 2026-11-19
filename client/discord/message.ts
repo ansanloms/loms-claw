@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import { dirname } from "@std/path/dirname";
 import { join } from "@std/path/join";
 import type { Attachment, GuildTextBasedChannel } from "discord.js";
-import { createLogger } from "../logger.ts";
+import { createLogger } from "../../logger.ts";
 
 const log = createLogger("message");
 

@@ -50,11 +50,11 @@ export interface ClaudeCallOptions {
   /** ツール承認コールバック。省略時は SDK の既定 (default permission mode)。 */
   canUseTool?: CanUseTool;
   /**
-   * Discord bot トークン。指定すると `query()` の env に `DISCORD_BOT_TOKEN`
-   * として注入する。discord skill の curl がこの env からトークンを取る
-   * (skill 側は config.json を直読みしない)。
+   * `query()` の env へ追加で注入する環境変数。`envSnapshot()` の上に重ねる。
+   * 呼び出し側が skill 等へ渡す値 (例: Discord client が `DISCORD_BOT_TOKEN`) を
+   * 供給するために使う。
    */
-  discordToken?: string;
+  env?: Record<string, string>;
 }
 
 /**
@@ -131,7 +131,7 @@ export function requireResultText(
  * 非 success な `subtype` なら `options.onNonSuccess` でログし、
  * `options.setSession` があればセッションを保存する (`event.session_id` を渡す)。
  *
- * chat (bot/mod.ts) のストリーミングループ内での result 処理と、
+ * chat (core/conversation.ts) のストリーミングループ内での result 処理と、
  * cron ({@link drainResultEvent} 経由) の両方から呼ばれる。
  */
 export async function handleResultEvent(
@@ -157,7 +157,7 @@ export async function handleResultEvent(
  * (見つからなければ `undefined`)。
  *
  * cron (ストリーミング表示を行わない呼び出し元) がこの関数でストリーム全体を
- * 走査する。chat (bot/mod.ts) は text_delta 等も同じループで扱うため、
+ * 走査する。chat (core/conversation.ts) は text_delta 等も同じループで扱うため、
  * `result` イベントの捕捉は自前のループ内で {@link handleResultEvent} を直接
  * 呼ぶ形で行い、この関数は使わない。
  */
@@ -267,11 +267,12 @@ export function buildQueryOptions(
     includePartialMessages: true,
     // process.env を明示的に渡す。SDK は env を指定すると process.env を継承しない
     // ため、CLAUDE_CONFIG_DIR 等 (SDK 同梱バイナリが読む) を失わないよう spread する。
-    // discord skill は curl の Authorization ヘッダに ${DISCORD_BOT_TOKEN} を使うため、
-    // トークンが渡されていれば query() の env に注入する (skill 外から供給する)。
+    // 呼び出し側が渡した追加の環境変数 (opts.env) は process.env の上に重ねる。
+    // 例: discord skill は curl の Authorization ヘッダに ${DISCORD_BOT_TOKEN} を
+    // 使うため、Discord client がトークンをここから供給する。
     env: {
       ...envSnapshot(),
-      ...(opts.discordToken ? { DISCORD_BOT_TOKEN: opts.discordToken } : {}),
+      ...opts.env,
     },
     systemPrompt: {
       type: "preset",

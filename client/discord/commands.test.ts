@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { Store, type StoreScope } from "../store/mod.ts";
+import { Store, type StoreScope } from "../../store/mod.ts";
 import { handleSettingsSet, handleSettingsUnset } from "./commands.ts";
 
 /**

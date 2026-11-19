@@ -206,16 +206,16 @@ describe("buildQueryOptions", () => {
     assert.deepStrictEqual(typeof opts.canUseTool, "function");
   });
 
-  test("discordToken 指定時に env へ DISCORD_BOT_TOKEN が注入されること", () => {
+  test("env 指定時に query() の env へ注入されること", () => {
     const opts = buildQueryOptions(
       baseConfig,
-      { discordToken: "bot-token-xyz" },
+      { env: { DISCORD_BOT_TOKEN: "bot-token-xyz" } },
       ac,
     );
     assert.deepStrictEqual(opts.env?.DISCORD_BOT_TOKEN, "bot-token-xyz");
   });
 
-  test("discordToken 未指定時は env に DISCORD_BOT_TOKEN を含まないこと", () => {
+  test("env 未指定時は env に DISCORD_BOT_TOKEN を含まないこと", () => {
     const opts = buildQueryOptions(baseConfig, {}, ac);
     assert.deepStrictEqual(opts.env?.DISCORD_BOT_TOKEN, undefined);
   });

@@ -226,7 +226,7 @@ function buttonCustomIds(
  * `ApprovalManager.handleButton()` は discord.js の `ButtonInteraction` を
  * 要求する。委譲先の `QuestionManager.handleButton()` も同じ型を要求するため、
  * `ApprovalManager` 側の型だけを緩めても discord.js への依存を外しきれない
- * (このテストでは既存コード (`bot/message.test.ts`) と同じ `as unknown as X`
+ * (このテストでは既存コード (`client/discord/message.test.ts`) と同じ `as unknown as X`
  * のキャストで最小 fake を渡す)。
  */
 function fakeButtonInteraction(customId: string): {

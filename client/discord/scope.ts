@@ -1,11 +1,11 @@
 /**
  * Discord のチャンネル / スレッドから {@link StoreScope} を組み立てる。
  *
- * `bot/mod.ts` (message.channel から) と `bot/commands.ts`
+ * `client/discord/mod.ts` (message.channel から) と `client/discord/commands.ts`
  * (interaction.channel から) の両方が同じ形を組んでいたため、ここに集約する。
  */
 
-import type { StoreScope } from "../store/mod.ts";
+import type { StoreScope } from "../../store/mod.ts";
 
 /**
  * {@link scopeFromChannel} が要求する最小のチャンネル形。

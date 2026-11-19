@@ -15,7 +15,7 @@ export interface HealthRouteContext {
   /**
    * healthy かどうかを判定する。
    *
-   * `bot/mod.ts` は Discord Gateway の全シャードの status が Ready のときのみ
+   * `client/discord/mod.ts` は Discord Gateway の全シャードの status が Ready のときのみ
    * true を返す (discord.js の `Client#isReady()` は一度 Ready になった後の
    * 切断を検知できないため使わない)。
    */

@@ -1,18 +1,18 @@
 /**
  * `messageCreate` の分岐判定 (認可 → 自己メンション判定 (+ レート制限) →
- * スコープ抽出 → active 上書き取得 → 反応判定) を `bot/mod.ts` から切り出したもの。
+ * スコープ抽出 → active 上書き取得 → 反応判定) を `client/discord/mod.ts` から切り出したもの。
  *
- * discord.js の `Message` / `Client` に直接触れず、呼び出し側 (`bot/mod.ts`)
+ * discord.js の `Message` / `Client` に直接触れず、呼び出し側 (`client/discord/mod.ts`)
  * が取り出した最小の値 (`IncomingMessageInput`) と、ストア読み取り・メンション判定・
  * レート制限といった副作用を持つ処理を関数として注入する (`IncomingMessageDeps`)。
- * ログ出力・キュー投入・Claude 呼び出しは従来どおり `bot/mod.ts` に残す。
+ * ログ出力は `client/discord/mod.ts` に、キュー投入・Claude 呼び出しは `core/conversation.ts` に置く。
  *
  * `isAuthorized` / `isAuthorizedSelfMessage` / `shouldRespond` / `scopeFromChannel`
  * の判定ロジック自体はここでは再実装せず、既存の純粋関数をそのまま呼ぶ。
  */
 
-import type { Config } from "../config.ts";
-import type { StoreScope } from "../store/mod.ts";
+import type { Config } from "../../config.ts";
+import type { StoreScope } from "../../store/mod.ts";
 import {
   isAuthorized,
   isAuthorizedSelfMessage,
@@ -97,7 +97,7 @@ export type IncomingDecision =
  * 反応判定の順に評価し、メッセージを処理すべきか判定する。
  *
  * 自己メッセージは `active` を適用しない (メンション必須、レート制限のみ)。
- * 人間のメッセージは `shouldRespond()` (`bot/guard.ts`) に従う。
+ * 人間のメッセージは `shouldRespond()` (`client/discord/guard.ts`) に従う。
  */
 export async function resolveIncomingMessage(
   input: IncomingMessageInput,

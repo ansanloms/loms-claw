@@ -1,6 +1,6 @@
 # ライフサイクル (起動 / 終了・設定・ロガー)
 
-プロセスの起動から終了までの流れと、その前提になる設定ファイルの読み込み (`config.ts`) とロガー (`logger.ts`) の仕様をまとめる。エントリポイントは `main.ts` で、`loadConfig()` → `initLogger()` → SQLite ストアの open → シグナルハンドラ登録 → `DiscordBot.start()` のリトライ、の順に進む。`DiscordBot` (`bot/mod.ts`) は discord.js の `ClientReady` を受けてからスラッシュコマンド登録・cron 初期化・内部 HTTP サーバー起動を行い、`shutdown()` で逆順に畳む。
+プロセスの起動から終了までの流れと、その前提になる設定ファイルの読み込み (`config.ts`) とロガー (`logger.ts`) の仕様をまとめる。エントリポイントは `main.ts` で、`loadConfig()` → `initLogger()` → SQLite ストアの open → シグナルハンドラ登録 → `DiscordBot.start()` のリトライ、の順に進む。`DiscordBot` (`client/discord/mod.ts`) は discord.js の `ClientReady` を受けてからスラッシュコマンド登録・cron 初期化・内部 HTTP サーバー起動を行い、`shutdown()` で逆順に畳む。
 
 関連: [README](README.md)/[message-flow](message-flow.md)/[claude-integration](claude-integration.md)/[store-and-settings](store-and-settings.md)/[approval](approval.md)/[cron](cron.md)/[internal-api](internal-api.md)/[deployment](deployment.md)
 
@@ -12,7 +12,7 @@ sequenceDiagram
     participant C as config.ts
     participant L as logger.ts
     participant DB as node:sqlite / Store
-    participant B as DiscordBot (bot/mod.ts)
+    participant B as DiscordBot (client/discord/mod.ts)
     participant D as discord.js Client
     participant X as CronExecutor
     participant A as api/server.ts
@@ -49,18 +49,18 @@ sequenceDiagram
 
 DB の open/close は `main.ts` が対で所有する。`openStoreDatabase()` で開き、`onSignal` が `bot.shutdown()` の成否に関わらず `finally` で `store.close()` を呼ぶ。`DiscordBot.shutdown()` は Store に触れない。
 
-## `DiscordBot` の組み立て (`bot/mod.ts` コンストラクタ)
+## `DiscordBot` の組み立て (`client/discord/mod.ts` コンストラクタ)
 
 `new DiscordBot(config, store)` で次を組み立てる。
 
-| メンバ               | 内容                                                                                                                                                                                                                                                                   |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `selfMentionLimiter` | `new SelfMentionRateLimiter(SELF_MENTION_RATE_LIMIT_MAX_COUNT, SELF_MENTION_RATE_LIMIT_WINDOW_MINUTES)` (`bot/ratelimit.ts`、6 回 / 10 分)                                                                                                                             |
-| `systemPrompts`      | `new SystemPromptStore(join(config.claude.cwd, ".claude", "system-prompt"))` (`claude/system-prompt.ts`)                                                                                                                                                               |
-| `client`             | discord.js `Client`。intents は `Guilds` / `GuildMessages` / `MessageContent` / `GuildMembers`。`partials` は指定しない。`allowedMentions: { parse: [], users: [config.discord.userId] }` で、この Client 経由の送信では認可ユーザー以外へのメンション解決を無効化する |
-| `approvalManager`    | `new ApprovalManager(this.client, join(config.claude.cwd, ".claude", "settings.json"))` (`approval/manager.ts`)。内部で `QuestionManager` も生成する                                                                                                                   |
-| `chatQueue`          | `new ScopeQueue()` (`bot/queue.ts`)。フィールド初期化子で生成                                                                                                                                                                                                          |
-| イベント登録         | `Events.MessageCreate` → `onMessage()`、`Events.InteractionCreate` → `onInteraction()`                                                                                                                                                                                 |
+| メンバ               | 内容                                                                                                                                                                                                                                                                                                         |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `selfMentionLimiter` | `new SelfMentionRateLimiter(SELF_MENTION_RATE_LIMIT_MAX_COUNT, SELF_MENTION_RATE_LIMIT_WINDOW_MINUTES)` (`core/ratelimit.ts`、6 回 / 10 分)                                                                                                                                                                  |
+| `systemPrompts`      | `new SystemPromptStore(join(config.claude.cwd, ".claude", "system-prompt"))` (`claude/system-prompt.ts`)                                                                                                                                                                                                     |
+| `client`             | discord.js `Client`。intents は `Guilds` / `GuildMessages` / `MessageContent` / `GuildMembers`。`partials` は指定しない。`allowedMentions: { parse: [], users: [config.discord.userId] }` で、この Client 経由の送信では認可ユーザー以外へのメンション解決を無効化する                                       |
+| `approvalManager`    | `new ApprovalManager(this.client, join(config.claude.cwd, ".claude", "settings.json"))` (`client/discord/approval/manager.ts`)。内部で `QuestionManager` も生成する                                                                                                                                          |
+| `conversation`       | `new Conversation({ store, systemPrompts, claudeConfig: config.claude, env: { DISCORD_BOT_TOKEN: config.discord.token }, createCanUseTool, selfMentionLimiter })` (`core/conversation.ts`)。会話の中核で、内部に `ScopeQueue` (`core/queue.ts`) を持つ。`createCanUseTool` は `ApprovalManager` へ橋渡しする |
+| イベント登録         | `Events.MessageCreate` → `onMessage()`、`Events.InteractionCreate` → `onInteraction()`                                                                                                                                                                                                                       |
 
 `apiServer` と `cronExecutor` はコンストラクタでは `null` で、`start()` の `ClientReady` ハンドラ内で生成する。
 
@@ -71,8 +71,8 @@ DB の open/close は `main.ts` が対で所有する。`openStoreDatabase()` �
 1. `await this.systemPrompts.load()`: `{cwd}/.claude/system-prompt/` 配下の `DEFAULT.md`/`CHAT.md`/`CRON.md` とスコープ別ファイルを読み込みキャッシュする。ディレクトリが無ければスキップする。内容は [claude-integration](claude-integration.md) を参照。
 2. `this.client.once(Events.ClientReady, ...)` を `login()` より前に登録する。理由: コード中のコメントによると、discord.js は gateway の READY を受けた時点で `ClientReady` を emit し、それは `login()` の解決前になり得るため、`login()` 後に `once()` を登録すると発火済みイベントを取りこぼし、次の初期化が実行されなくなる。
 3. `ClientReady` ハンドラ内の処理 (この順):
-   1. `registerCommands()`: `REST` に token をセットし、`Routes.applicationGuildCommands(client.user.id, config.discord.guildId)` へ `[command.toJSON()]` (`bot/commands.ts` の `command`) を `PUT` する。ギルドスコープのコマンド登録で、グローバルコマンドは登録しない。
-   2. `new CronExecutor(client, config.claude, config.discord.guildId, config.discord.token, store, config.claude.defaults, approvalManager, systemPrompts)` (`cron/executor.ts`)。
+   1. `registerCommands()`: `REST` に token をセットし、`Routes.applicationGuildCommands(client.user.id, config.discord.guildId)` へ `[command.toJSON()]` (`client/discord/commands.ts` の `command`) を `PUT` する。ギルドスコープのコマンド登録で、グローバルコマンドは登録しない。
+   2. `new CronExecutor({ ports: createDiscordCronPorts({ client, guildId, approvalManager }), config: config.claude, env: { DISCORD_BOT_TOKEN }, store, defaults: config.claude.defaults, systemPrompts })` (`cron/executor.ts`、`ports` は `client/discord/cron-target.ts`)。
    3. `loadCronJobsFromDir(config.claude.cwd)` (`cron/loader.ts`) で `{cwd}/cron/*.md` を読み、`cronExecutor.start(jobs)` でスケジューラを開始する。`cron/` が無ければ空配列で開始する。
    4. `reloadJobs` (再読込 → `cronExecutor.reload()`) を定義し、`cronExecutor.setOnceCallback()` に once ジョブ実行後の処理 (`{cwd}/cron/{name}.md` を `rm()` → `reloadJobs()`) を登録する。削除失敗はログのみで、reload は行う。
    5. `runJobByName` (`findJob()` → `runJob()`、未登録なら throw) を定義する。
@@ -161,13 +161,13 @@ schema はトップレベル・`discord`・`claude`・`claude.defaults`・`log` 
 
 cwd 基準で解決されるもの:
 
-| 項目                         | パス                                                              | 参照元                                                      |
-| ---------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------- |
-| 設定ファイル (既定)          | `./data/config.json` (`LOMS_CLAW_CONFIG` 未設定時)                | `config.ts` `loadConfig()`                                  |
-| SQLite                       | `storePath` が相対なら cwd 基準 (既定 `.claude/loms-claw.sqlite`) | `main.ts` `openStoreDatabase()`                             |
-| システムプロンプト           | `{cwd}/.claude/system-prompt/`                                    | `bot/mod.ts` コンストラクタ → `SystemPromptStore`           |
-| ツール許可リスト             | `{cwd}/.claude/settings.json`                                     | `bot/mod.ts` コンストラクタ → `ApprovalManager`             |
-| cron ジョブ定義              | `{cwd}/cron/*.md`                                                 | `cron/loader.ts` `loadCronJobsFromDir()`、once コールバック |
-| `query()` の作業ディレクトリ | `{cwd}`                                                           | `claude/mod.ts` `buildQueryOptions()` (`cwd: config.cwd`)   |
+| 項目                         | パス                                                              | 参照元                                                       |
+| ---------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------ |
+| 設定ファイル (既定)          | `./data/config.json` (`LOMS_CLAW_CONFIG` 未設定時)                | `config.ts` `loadConfig()`                                   |
+| SQLite                       | `storePath` が相対なら cwd 基準 (既定 `.claude/loms-claw.sqlite`) | `main.ts` `openStoreDatabase()`                              |
+| システムプロンプト           | `{cwd}/.claude/system-prompt/`                                    | `client/discord/mod.ts` コンストラクタ → `SystemPromptStore` |
+| ツール許可リスト             | `{cwd}/.claude/settings.json`                                     | `client/discord/mod.ts` コンストラクタ → `ApprovalManager`   |
+| cron ジョブ定義              | `{cwd}/cron/*.md`                                                 | `cron/loader.ts` `loadCronJobsFromDir()`、once コールバック  |
+| `query()` の作業ディレクトリ | `{cwd}`                                                           | `claude/mod.ts` `buildQueryOptions()` (`cwd: config.cwd`)    |
 
 Docker/compose/devcontainer/`data/` の構成と環境変数 (`CLAUDE_CONFIG_DIR`/`LOMS_CLAW_CONFIG`/`TZ`) は [deployment](deployment.md) を参照。

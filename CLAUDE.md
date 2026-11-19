@@ -8,8 +8,13 @@ Discord + Claude Agent SDK のパーソナル AI エージェント。単一ギ�
 
 規約上の根拠・引用・経緯は [docs/terms-of-service.md](docs/terms-of-service.md) にまとめている。実装時に守る不変条件は次の 2 点。
 
-- `bot/guard.ts` の `isAuthorized()` による単一ギルド ID・単一ユーザー ID（サブスクリプション購入者本人）との完全一致要求を崩さない。他のユーザーがアクセスできない状態を維持する。bot 自身の投稿による起動（「AI to AI 自己メンション」）は `isAuthorizedSelfMessage()` で別途判定するが、同一ギルド内の自 bot の投稿に限られ、第三者のリクエストが流入する経路にはならない。
+- `client/discord/guard.ts` の `isAuthorized()` による単一ギルド ID・単一ユーザー ID（サブスクリプション購入者本人）との完全一致要求を崩さない。他のユーザーがアクセスできない状態を維持する。bot 自身の投稿による起動（「AI to AI 自己メンション」）は `isAuthorizedSelfMessage()` で別途判定するが、同一ギルド内の自 bot の投稿に限られ、第三者のリクエストが流入する経路にはならない。
 - cron による自動実行の頻度・規模を「個人の通常利用（ordinary, individual usage）」の範囲に保つ。
+
+## 依存の向き
+
+- 依存は `client/` → `core/` の一方向。`client/` を import してよいのは `client/` 自身とエントリポイント `main.ts` だけで、`core/`・`cron/`・`api/` 等は import しない。discord.js も `client/discord/` 以外（`main.ts` を含む）は import しない（`.oxlintrc.json` の `no-restricted-imports` が `npm run lint` で検査する）。
+- Discord に触れる必要がある中核側の処理は、中核が IF を定義して client が実装する。会話の 1 ターンの出力先は `core/conversation.ts` の `TurnOutput`、cron の送信先等は `cron/executor.ts` の `CronPorts`。汎用の client API は用意しない（[docs/architecture/message-flow.md](docs/architecture/message-flow.md)、[docs/architecture/cron.md](docs/architecture/cron.md)）。
 
 ## 技術スタック
 
@@ -40,17 +45,17 @@ Discord + Claude Agent SDK のパーソナル AI エージェント。単一ギ�
 
 ディレクトリの対応は次のとおり。詳細なファイル構成表は [docs/architecture/README.md](docs/architecture/README.md) にある。
 
-| ディレクトリ / ファイル                                             | 役割                                                                                             |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `main.ts`, `config.ts`, `config.schema.*`, `logger.ts`, `errors.ts` | エントリポイント、設定、ロガー、エラー整形                                                       |
-| `bot/`                                                              | Discord 入出力（`DiscordBot`、認可、キュー、レートリミット、メッセージ整形、スラッシュコマンド） |
-| `claude/`                                                           | Agent SDK 連携（`askClaude()`、システムプロンプト、テンプレート変数）                            |
-| `store/`                                                            | SQLite（`node:sqlite`）によるスコープ設定の永続化                                                |
-| `approval/`                                                         | ツール承認・`AskUserQuestion`・allowlist                                                         |
-| `api/`                                                              | 内部 HTTP API（cron / logs / settings）と生成物 `internal-schemas.ts`                            |
-| `cron/`                                                             | 定期実行（ローダ・スケジューラ・実行器）                                                         |
-| `docs/api/`                                                         | 内部 HTTP API の OpenAPI（独自の `package.json` を持つ Node プロジェクト）                       |
-| `data/`                                                             | 実行時データ（`config.json` / `home/` / `workspace/`）。追跡対象は一部のみ                       |
+| ディレクトリ / ファイル                                             | 役割                                                                                                                                            |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `main.ts`, `config.ts`, `config.schema.*`, `logger.ts`, `errors.ts` | エントリポイント、設定、ロガー、エラー整形                                                                                                      |
+| `client/discord/`                                                   | Discord アダプタ（`DiscordBot`、認可、メッセージ整形、スラッシュコマンド、ツール承認 UI、cron の送信先）。discord.js に依存してよいのはここだけ |
+| `claude/`                                                           | Agent SDK 連携（`askClaude()`、システムプロンプト、テンプレート変数）                                                                           |
+| `store/`                                                            | SQLite（`node:sqlite`）によるスコープ設定の永続化                                                                                               |
+| `core/`                                                             | 会話の中核（`Conversation`、直列キュー、レートリミット、フラッシュ分割、承認 allowlist）。discord.js・`client/` に依存しない                    |
+| `api/`                                                              | 内部 HTTP API（cron / logs / settings）と生成物 `internal-schemas.ts`                                                                           |
+| `cron/`                                                             | 定期実行（ローダ・スケジューラ・実行器）                                                                                                        |
+| `docs/api/`                                                         | 内部 HTTP API の OpenAPI（独自の `package.json` を持つ Node プロジェクト）                                                                      |
+| `data/`                                                             | 実行時データ（`config.json` / `home/` / `workspace/`）。追跡対象は一部のみ                                                                      |
 
 ## 開発コマンド
 
@@ -92,7 +97,7 @@ docker compose logs -f               # ログ確認
 
 - ワークスペースの `.claude/settings.json` の `permissions.allow` に `AskUserQuestion` を入れない。理由: SDK が `canUseTool` を呼ばず素通しし、回答が空のまま解決される（[docs/architecture/approval.md](docs/architecture/approval.md)）。
 - cron 用システムプロンプト（`CRON.md`）ではチャンネル/ユーザー固有のテンプレート変数を使わない。理由: cron ではギルド変数しか渡されず、プレースホルダーのまま残る（[docs/architecture/claude-integration.md](docs/architecture/claude-integration.md)）。
-- 日時は `Date` ではなく Temporal を使う（`cron/match.ts`、`bot/ratelimit.ts`、`logger.ts` と同じ流儀）。Node にはグローバルの `Temporal` が無いため、`import { Temporal } from "@js-temporal/polyfill"` を各ファイルで書く。
+- 日時は `Date` ではなく Temporal を使う（`cron/match.ts`、`core/ratelimit.ts`、`logger.ts` と同じ流儀）。Node にはグローバルの `Temporal` が無いため、`import { Temporal } from "@js-temporal/polyfill"` を各ファイルで書く。
 - テストコード以外で `oxlint-disable-next-line` や `any` を使わない。型の絞り込みは type guard で行う。
 - Node の型除去で落ちる構文（parameter property、`enum`、`namespace`、角括弧アサーション `<T>expr`）を使わない。`tsc` の `erasableSyntaxOnly` が検出する。
 - 相対 import には `.ts` 拡張子を付ける（Node は拡張子無しの相対 import を解決しない）。
@@ -100,11 +105,12 @@ docker compose logs -f               # ログ確認
 
 ## テスト方針
 
+- `Conversation` は fake の `TurnOutput` と `queryFn` のモックでテストする（`core/conversation.test.ts`）。`CronExecutor` は fake の `CronPorts` でテストする
 - 純粋関数（`isAuthorized`, `shouldRespond`, `splitMessage`, `buildQueryOptions`, `normalizeEffort` 等）は単体テストでカバー
 - `askClaude()` は `queryFn` の DI でモック（`AsyncGenerator<SDKMessage>` を返す）を注入してテスト
-- discord.js 依存コード（`bot/mod.ts`, `approval/manager.ts`）はモック化コストが高いため、ロジックを外部関数に抽出してテストする方針
+- discord.js 依存コード（`client/discord/mod.ts`, `client/discord/approval/manager.ts`）はモック化コストが高いため、ロジックを外部関数に抽出してテストする方針
 - 実際の `query()` 実行（SDK 同梱 CLI の spawn）はインテグレーションテスト領域
-- `bot/message.ts` の `downloadImageAttachments`/`resizeImageIfNeeded`（ffprobe/ffmpeg の spawn を伴う）もインテグレーションテスト領域とし、単体テストの対象外とする
+- `client/discord/message.ts` の `downloadImageAttachments`/`resizeImageIfNeeded`（ffprobe/ffmpeg の spawn を伴う）もインテグレーションテスト領域とし、単体テストの対象外とする
 - テスト実行: `npm test`（カバレッジレポート付き）
 
 ### テスト命名規約

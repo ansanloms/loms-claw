@@ -27,10 +27,10 @@ import {
   TextInputBuilder,
   TextInputStyle,
 } from "discord.js";
-import { DISCORD_MESSAGE_LIMIT } from "../bot/message.ts";
-import { getErrorMessage } from "../errors.ts";
-import { isRecord } from "../guards.ts";
-import { createLogger } from "../logger.ts";
+import { DISCORD_MESSAGE_LIMIT } from "../message.ts";
+import { getErrorMessage } from "../../../errors.ts";
+import { isRecord } from "../../../guards.ts";
+import { createLogger } from "../../../logger.ts";
 import { INTERACTION_TIMEOUT_MS } from "./constants.ts";
 
 const log = createLogger("question");

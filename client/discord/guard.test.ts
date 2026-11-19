@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import type { Config } from "../config.ts";
+import type { Config } from "../../config.ts";
 import {
   isAuthorized,
   isAuthorizedSelfMessage,

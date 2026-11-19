@@ -104,4 +104,26 @@ describe("ScopeQueue", () => {
     const queue = new ScopeQueue();
     assert.deepStrictEqual(queue.isBusy("nope"), false);
   });
+
+  test("後続が積まれている間は先行タスクが終わっても key が busy のままであること", async () => {
+    const queue = new ScopeQueue();
+    const gate1 = deferred();
+    const gate2 = deferred();
+
+    const p1 = queue.enqueue("ch", () => gate1.promise);
+    const p2 = queue.enqueue("ch", () => gate2.promise);
+
+    gate1.resolve();
+    await p1;
+    // 先行チェーンの後始末が走る分、macrotask を 1 つ待つ。
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.deepStrictEqual(queue.isBusy("ch"), true);
+
+    gate2.resolve();
+    await p2;
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.deepStrictEqual(queue.isBusy("ch"), false);
+  });
 });

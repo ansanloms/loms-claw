@@ -5,7 +5,12 @@ import assert from "node:assert/strict";
 import type { QueryFn } from "../claude/mod.ts";
 import type { SystemPromptStore } from "../claude/system-prompt.ts";
 import { Store } from "../store/mod.ts";
-import type { CommandResult, RunCommandFn } from "./executor.ts";
+import type {
+  CommandResult,
+  CronExecutorOptions,
+  CronPorts,
+  RunCommandFn,
+} from "./executor.ts";
 import { CronExecutor } from "./executor.ts";
 import type { CronCommandJob, CronJobDef } from "./types.ts";
 
@@ -25,29 +30,6 @@ async function withStore(
   }
 }
 
-/** 最小限のモック Client。 */
-function createMockClient(
-  channel: { send(content: string): Promise<void> } | null = null,
-) {
-  return {
-    channels: {
-      fetch(_id: string) {
-        if (!channel) {
-          return Promise.resolve(null);
-        }
-        return Promise.resolve(channel);
-      },
-    },
-    guilds: {
-      cache: {
-        get(_id: string) {
-          return { name: "test-guild" };
-        },
-      },
-    },
-  };
-}
-
 /** 送信されたメッセージを記録するモックチャンネル。 */
 function createMockChannel() {
   const sent: string[] = [];
@@ -63,24 +45,40 @@ function createMockChannel() {
 }
 
 /**
- * 最小限のモック ApprovalManager。
+ * 最小限のモック CronPorts。
  *
- * requestApproval が呼ばれた際の channelId 引数を calls に記録する。
- * デフォルトでは allow を返す。
+ * `channel` が null のときは `resolveTarget()` が「見つからない」エラーで
+ * reject する。`createCanUseTool()` が呼ばれた際の channelId 引数と、返された
+ * コールバックが実際に呼ばれた際の channelId を `approvalCalls` に記録する
+ * (コールバックは常に allow を返す)。
  */
-function createMockApprovalManager() {
-  const calls: { channelId: string | undefined }[] = [];
-  const manager = {
-    requestApproval(
-      _toolName: string,
-      _toolInput: Record<string, unknown>,
-      channelId: string | undefined,
-    ) {
-      calls.push({ channelId });
-      return Promise.resolve({ decision: "allow" as const });
+function createMockPorts(
+  channel: { send(content: string): Promise<void> } | null = null,
+): CronPorts & { approvalCalls: { channelId: string | undefined }[] } {
+  const approvalCalls: { channelId: string | undefined }[] = [];
+  return {
+    approvalCalls,
+    resolveTarget(channelId: string) {
+      if (!channel) {
+        return Promise.reject(
+          new Error(`channel ${channelId} not found or not a text channel`),
+        );
+      }
+      return Promise.resolve(channel);
+    },
+    guildTemplateVars() {
+      return {
+        "discord.guild.id": "guild-1",
+        "discord.guild.name": "test-guild",
+      };
+    },
+    createCanUseTool(channelId: string | undefined) {
+      return () => {
+        approvalCalls.push({ channelId });
+        return Promise.resolve({ behavior: "allow", updatedInput: {} });
+      };
     },
   };
-  return { manager, calls };
 }
 
 /** 最小限のモック SystemPromptStore。 */
@@ -213,28 +211,37 @@ const TEST_CONFIG = {
   defaults: {},
 };
 
+/** `CronExecutor` を生成する。引数で上書きしない項目はテスト用の既定値を使う。 */
+function createExecutor(
+  overrides: Partial<CronExecutorOptions> & {
+    ports: CronPorts;
+    store: Store;
+  },
+): CronExecutor {
+  return new CronExecutor({
+    config: TEST_CONFIG,
+    env: { DISCORD_BOT_TOKEN: "test-token" },
+    defaults: {},
+    systemPrompts: createMockSystemPromptStore(),
+    queryFn: mockQueryFn([]),
+    ...overrides,
+  });
+}
+
 describe("CronExecutor", () => {
   test("重複実行がスキップされること", () =>
     withStore(async (store) => {
       const { channel, sent } = createMockChannel();
-      const client = createMockClient(channel);
-      const { manager } = createMockApprovalManager();
-      const systemPrompts = createMockSystemPromptStore();
+      const ports = createMockPorts(channel);
 
       const { promise: gate, resolve: resolveGate } =
         Promise.withResolvers<void>();
       const resultText = "first-run-result";
 
-      const executor = new CronExecutor(
-        client as never,
-        TEST_CONFIG,
-        "guild-1",
-        "test-token",
+      const executor = createExecutor({
+        ports,
         store,
-        {},
-        manager as never,
-        systemPrompts,
-        mockQueryFn(
+        queryFn: mockQueryFn(
           [
             {
               type: "result",
@@ -246,7 +253,7 @@ describe("CronExecutor", () => {
           ],
           gate,
         ),
-      );
+      });
 
       const job: CronJobDef = {
         kind: "prompt",
@@ -292,21 +299,13 @@ describe("CronExecutor", () => {
 
   test("チャンネルが見つからない場合にエラー処理されること", () =>
     withStore(async (store) => {
-      const client = createMockClient(null);
-      const { manager } = createMockApprovalManager();
-      const systemPrompts = createMockSystemPromptStore();
+      const ports = createMockPorts(null);
 
-      const executor = new CronExecutor(
-        client as never,
-        TEST_CONFIG,
-        "guild-1",
-        "test-token",
+      const executor = createExecutor({
+        ports,
         store,
-        {},
-        manager as never,
-        systemPrompts,
-        mockQueryFn([]),
-      );
+        queryFn: mockQueryFn([]),
+      });
 
       const job: CronJobDef = {
         kind: "prompt",
@@ -325,21 +324,13 @@ describe("CronExecutor", () => {
   test("start/stop でスケジューラが制御されること", () =>
     withStore((store) => {
       const { channel } = createMockChannel();
-      const client = createMockClient(channel);
-      const { manager } = createMockApprovalManager();
-      const systemPrompts = createMockSystemPromptStore();
+      const ports = createMockPorts(channel);
 
-      const executor = new CronExecutor(
-        client as never,
-        TEST_CONFIG,
-        "guild-1",
-        "test-token",
+      const executor = createExecutor({
+        ports,
         store,
-        {},
-        manager as never,
-        systemPrompts,
-        mockQueryFn([]),
-      );
+        queryFn: mockQueryFn([]),
+      });
 
       const jobs: CronJobDef[] = [
         {
@@ -358,21 +349,13 @@ describe("CronExecutor", () => {
   test("reload でジョブが差し替えられること", () =>
     withStore((store) => {
       const { channel } = createMockChannel();
-      const client = createMockClient(channel);
-      const { manager } = createMockApprovalManager();
-      const systemPrompts = createMockSystemPromptStore();
+      const ports = createMockPorts(channel);
 
-      const executor = new CronExecutor(
-        client as never,
-        TEST_CONFIG,
-        "guild-1",
-        "test-token",
+      const executor = createExecutor({
+        ports,
         store,
-        {},
-        manager as never,
-        systemPrompts,
-        mockQueryFn([]),
-      );
+        queryFn: mockQueryFn([]),
+      });
 
       executor.start([
         {
@@ -408,21 +391,13 @@ describe("CronExecutor", () => {
 
   test("resumeSession: true のジョブ実行後、session_id が cron:{name} スコープに保存されること", () =>
     withStore(async (store) => {
-      const client = createMockClient(null);
-      const { manager } = createMockApprovalManager();
-      const systemPrompts = createMockSystemPromptStore();
+      const ports = createMockPorts(null);
 
-      const executor = new CronExecutor(
-        client as never,
-        TEST_CONFIG,
-        "guild-1",
-        "test-token",
+      const executor = createExecutor({
+        ports,
         store,
-        {},
-        manager as never,
-        systemPrompts,
-        successQueryFn("result", "session-xyz"),
-      );
+        queryFn: successQueryFn("result", "session-xyz"),
+      });
 
       const job: CronJobDef = {
         kind: "prompt",
@@ -441,21 +416,13 @@ describe("CronExecutor", () => {
 
   test("resumeSession: false のジョブ実行後は session が保存されないこと", () =>
     withStore(async (store) => {
-      const client = createMockClient(null);
-      const { manager } = createMockApprovalManager();
-      const systemPrompts = createMockSystemPromptStore();
+      const ports = createMockPorts(null);
 
-      const executor = new CronExecutor(
-        client as never,
-        TEST_CONFIG,
-        "guild-1",
-        "test-token",
+      const executor = createExecutor({
+        ports,
         store,
-        {},
-        manager as never,
-        systemPrompts,
-        successQueryFn("result", "session-xyz"),
-      );
+        queryFn: successQueryFn("result", "session-xyz"),
+      });
 
       const job: CronJobDef = {
         kind: "prompt",
@@ -474,21 +441,13 @@ describe("CronExecutor", () => {
 
   test("once: true のジョブ実行後にコールバックが呼ばれること", () =>
     withStore(async (store) => {
-      const client = createMockClient(null);
-      const { manager } = createMockApprovalManager();
-      const systemPrompts = createMockSystemPromptStore();
+      const ports = createMockPorts(null);
 
-      const executor = new CronExecutor(
-        client as never,
-        TEST_CONFIG,
-        "guild-1",
-        "test-token",
+      const executor = createExecutor({
+        ports,
         store,
-        {},
-        manager as never,
-        systemPrompts,
-        successQueryFn(),
-      );
+        queryFn: successQueryFn(),
+      });
 
       const calledWith: string[] = [];
       executor.setOnceCallback((name: string) => {
@@ -510,21 +469,13 @@ describe("CronExecutor", () => {
 
   test("once: false のジョブではコールバックが呼ばれないこと", () =>
     withStore(async (store) => {
-      const client = createMockClient(null);
-      const { manager } = createMockApprovalManager();
-      const systemPrompts = createMockSystemPromptStore();
+      const ports = createMockPorts(null);
 
-      const executor = new CronExecutor(
-        client as never,
-        TEST_CONFIG,
-        "guild-1",
-        "test-token",
+      const executor = createExecutor({
+        ports,
         store,
-        {},
-        manager as never,
-        systemPrompts,
-        successQueryFn(),
-      );
+        queryFn: successQueryFn(),
+      });
 
       const calledWith: string[] = [];
       executor.setOnceCallback((name: string) => {
@@ -547,21 +498,13 @@ describe("CronExecutor", () => {
   test("findJob / listJobs でジョブが取得できること", () =>
     withStore((store) => {
       const { channel } = createMockChannel();
-      const client = createMockClient(channel);
-      const { manager } = createMockApprovalManager();
-      const systemPrompts = createMockSystemPromptStore();
+      const ports = createMockPorts(channel);
 
-      const executor = new CronExecutor(
-        client as never,
-        TEST_CONFIG,
-        "guild-1",
-        "test-token",
+      const executor = createExecutor({
+        ports,
         store,
-        {},
-        manager as never,
-        systemPrompts,
-        mockQueryFn([]),
-      );
+        queryFn: mockQueryFn([]),
+      });
 
       const jobs: CronJobDef[] = [
         {
@@ -594,21 +537,13 @@ describe("CronExecutor", () => {
 
   test("once: true でコールバック未設定の場合にサイレントスキップされること", () =>
     withStore(async (store) => {
-      const client = createMockClient(null);
-      const { manager } = createMockApprovalManager();
-      const systemPrompts = createMockSystemPromptStore();
+      const ports = createMockPorts(null);
 
-      const executor = new CronExecutor(
-        client as never,
-        TEST_CONFIG,
-        "guild-1",
-        "test-token",
+      const executor = createExecutor({
+        ports,
         store,
-        {},
-        manager as never,
-        systemPrompts,
-        successQueryFn(),
-      );
+        queryFn: successQueryFn(),
+      });
 
       // setOnceCallback を呼ばない
       const job: CronJobDef = {
@@ -628,21 +563,13 @@ describe("CronExecutor", () => {
 
   test("once ジョブ実行後に running がコールバック完了後にクリアされること", () =>
     withStore(async (store) => {
-      const client = createMockClient(null);
-      const { manager } = createMockApprovalManager();
-      const systemPrompts = createMockSystemPromptStore();
+      const ports = createMockPorts(null);
 
-      const executor = new CronExecutor(
-        client as never,
-        TEST_CONFIG,
-        "guild-1",
-        "test-token",
+      const executor = createExecutor({
+        ports,
         store,
-        {},
-        manager as never,
-        systemPrompts,
-        successQueryFn(),
-      );
+        queryFn: successQueryFn(),
+      });
 
       let runningDuringCallback = false;
       executor.setOnceCallback((name: string) => {
@@ -670,21 +597,13 @@ describe("CronExecutor", () => {
   test("cron ジョブの承認リクエストが job.channelId 宛に送られること", () =>
     withStore(async (store) => {
       const { channel } = createMockChannel();
-      const client = createMockClient(channel);
-      const { manager, calls } = createMockApprovalManager();
-      const systemPrompts = createMockSystemPromptStore();
+      const ports = createMockPorts(channel);
 
-      const executor = new CronExecutor(
-        client as never,
-        TEST_CONFIG,
-        "guild-1",
-        "test-token",
+      const executor = createExecutor({
+        ports,
         store,
-        {},
-        manager as never,
-        systemPrompts,
-        canUseToolQueryFn(),
-      );
+        queryFn: canUseToolQueryFn(),
+      });
 
       const job: CronJobDef = {
         kind: "prompt",
@@ -696,26 +615,20 @@ describe("CronExecutor", () => {
 
       await executor.runJob(job);
 
-      assert.deepStrictEqual(calls, [{ channelId: "ch-approval" }]);
+      assert.deepStrictEqual(ports.approvalCalls, [
+        { channelId: "ch-approval" },
+      ]);
     }));
 
   test("channelId の無いジョブでは undefined が渡ること", () =>
     withStore(async (store) => {
-      const client = createMockClient(null);
-      const { manager, calls } = createMockApprovalManager();
-      const systemPrompts = createMockSystemPromptStore();
+      const ports = createMockPorts(null);
 
-      const executor = new CronExecutor(
-        client as never,
-        TEST_CONFIG,
-        "guild-1",
-        "test-token",
+      const executor = createExecutor({
+        ports,
         store,
-        {},
-        manager as never,
-        systemPrompts,
-        canUseToolQueryFn(),
-      );
+        queryFn: canUseToolQueryFn(),
+      });
 
       const job: CronJobDef = {
         kind: "prompt",
@@ -726,33 +639,20 @@ describe("CronExecutor", () => {
 
       await executor.runJob(job);
 
-      assert.deepStrictEqual(calls, [{ channelId: undefined }]);
+      assert.deepStrictEqual(ports.approvalCalls, [{ channelId: undefined }]);
     }));
 
   test("command job: exit 0 + stdout ありで channelId に投稿されること", () =>
     withStore(async (store) => {
       const { channel, sent } = createMockChannel();
-      const client = createMockClient(channel);
-      const { manager } = createMockApprovalManager();
-      const systemPrompts = createMockSystemPromptStore();
+      const ports = createMockPorts(channel);
       const { fn } = mockRunCommandFn({
         code: 0,
         stdout: "command result",
         stderr: "",
       });
 
-      const executor = new CronExecutor(
-        client as never,
-        TEST_CONFIG,
-        "guild-1",
-        "test-token",
-        store,
-        {},
-        manager as never,
-        systemPrompts,
-        undefined,
-        fn,
-      );
+      const executor = createExecutor({ ports, store, runCommandFn: fn });
 
       const job: CronCommandJob = {
         kind: "command",
@@ -770,23 +670,10 @@ describe("CronExecutor", () => {
   test("command job: stdout が空なら投稿されないこと", () =>
     withStore(async (store) => {
       const { channel, sent } = createMockChannel();
-      const client = createMockClient(channel);
-      const { manager } = createMockApprovalManager();
-      const systemPrompts = createMockSystemPromptStore();
+      const ports = createMockPorts(channel);
       const { fn } = mockRunCommandFn({ code: 0, stdout: "", stderr: "" });
 
-      const executor = new CronExecutor(
-        client as never,
-        TEST_CONFIG,
-        "guild-1",
-        "test-token",
-        store,
-        {},
-        manager as never,
-        systemPrompts,
-        undefined,
-        fn,
-      );
+      const executor = createExecutor({ ports, store, runCommandFn: fn });
 
       const job: CronCommandJob = {
         kind: "command",
@@ -803,27 +690,14 @@ describe("CronExecutor", () => {
 
   test("command job: channelId 無しなら投稿されず runCommandFn は呼ばれること", () =>
     withStore(async (store) => {
-      const client = createMockClient(null);
-      const { manager } = createMockApprovalManager();
-      const systemPrompts = createMockSystemPromptStore();
+      const ports = createMockPorts(null);
       const { fn, calls } = mockRunCommandFn({
         code: 0,
         stdout: "command result",
         stderr: "",
       });
 
-      const executor = new CronExecutor(
-        client as never,
-        TEST_CONFIG,
-        "guild-1",
-        "test-token",
-        store,
-        {},
-        manager as never,
-        systemPrompts,
-        undefined,
-        fn,
-      );
+      const executor = createExecutor({ ports, store, runCommandFn: fn });
 
       const job: CronCommandJob = {
         kind: "command",
@@ -840,27 +714,14 @@ describe("CronExecutor", () => {
   test("command job: 非 0 終了でエラー通知が送られ、runJob 自体は throw しないこと", () =>
     withStore(async (store) => {
       const { channel, sent } = createMockChannel();
-      const client = createMockClient(channel);
-      const { manager } = createMockApprovalManager();
-      const systemPrompts = createMockSystemPromptStore();
+      const ports = createMockPorts(channel);
       const { fn } = mockRunCommandFn({
         code: 1,
         stdout: "",
         stderr: "boom",
       });
 
-      const executor = new CronExecutor(
-        client as never,
-        TEST_CONFIG,
-        "guild-1",
-        "test-token",
-        store,
-        {},
-        manager as never,
-        systemPrompts,
-        undefined,
-        fn,
-      );
+      const executor = createExecutor({ ports, store, runCommandFn: fn });
 
       const job: CronCommandJob = {
         kind: "command",
@@ -882,27 +743,14 @@ describe("CronExecutor", () => {
   test("command job: 非 0 終了時に stdout があっても通知文面に混ざらないこと", () =>
     withStore(async (store) => {
       const { channel, sent } = createMockChannel();
-      const client = createMockClient(channel);
-      const { manager } = createMockApprovalManager();
-      const systemPrompts = createMockSystemPromptStore();
+      const ports = createMockPorts(channel);
       const { fn } = mockRunCommandFn({
         code: 1,
         stdout: "leaked stdout content",
         stderr: "boom",
       });
 
-      const executor = new CronExecutor(
-        client as never,
-        TEST_CONFIG,
-        "guild-1",
-        "test-token",
-        store,
-        {},
-        manager as never,
-        systemPrompts,
-        undefined,
-        fn,
-      );
+      const executor = createExecutor({ ports, store, runCommandFn: fn });
 
       const job: CronCommandJob = {
         kind: "command",
@@ -924,23 +772,10 @@ describe("CronExecutor", () => {
 
   test("command job: once: true で onceCallback がジョブ名で呼ばれること", () =>
     withStore(async (store) => {
-      const client = createMockClient(null);
-      const { manager } = createMockApprovalManager();
-      const systemPrompts = createMockSystemPromptStore();
+      const ports = createMockPorts(null);
       const { fn } = mockRunCommandFn({ code: 0, stdout: "", stderr: "" });
 
-      const executor = new CronExecutor(
-        client as never,
-        TEST_CONFIG,
-        "guild-1",
-        "test-token",
-        store,
-        {},
-        manager as never,
-        systemPrompts,
-        undefined,
-        fn,
-      );
+      const executor = createExecutor({ ports, store, runCommandFn: fn });
 
       const calledWith: string[] = [];
       executor.setOnceCallback((name: string) => {
@@ -964,26 +799,13 @@ describe("CronExecutor", () => {
   test("command job: signal の abort を待ってから返すモックが timeout 1ms で timeout エラーとして通知されること", () =>
     withStore(async (store) => {
       const { channel, sent } = createMockChannel();
-      const client = createMockClient(channel);
-      const { manager } = createMockApprovalManager();
-      const systemPrompts = createMockSystemPromptStore();
+      const ports = createMockPorts(channel);
       const { fn } = mockRunCommandFn(
         { code: 0, stdout: "should not be posted", stderr: "" },
         { waitForAbort: true },
       );
 
-      const executor = new CronExecutor(
-        client as never,
-        TEST_CONFIG,
-        "guild-1",
-        "test-token",
-        store,
-        {},
-        manager as never,
-        systemPrompts,
-        undefined,
-        fn,
-      );
+      const executor = createExecutor({ ports, store, runCommandFn: fn });
 
       const job: CronCommandJob = {
         kind: "command",
@@ -1006,26 +828,13 @@ describe("CronExecutor", () => {
   test("command job: signal の abort を待って reject するモックが timeout 1ms で timeout エラーとして通知されること", () =>
     withStore(async (store) => {
       const { channel, sent } = createMockChannel();
-      const client = createMockClient(channel);
-      const { manager } = createMockApprovalManager();
-      const systemPrompts = createMockSystemPromptStore();
+      const ports = createMockPorts(channel);
       const { fn } = mockRunCommandFn(
         { code: 0, stdout: "should not be posted", stderr: "" },
         { rejectOnAbort: true },
       );
 
-      const executor = new CronExecutor(
-        client as never,
-        TEST_CONFIG,
-        "guild-1",
-        "test-token",
-        store,
-        {},
-        manager as never,
-        systemPrompts,
-        undefined,
-        fn,
-      );
+      const executor = createExecutor({ ports, store, runCommandFn: fn });
 
       const job: CronCommandJob = {
         kind: "command",
@@ -1048,26 +857,13 @@ describe("CronExecutor", () => {
   test("command job: abort していない reject はそのままのメッセージで通知されること", () =>
     withStore(async (store) => {
       const { channel, sent } = createMockChannel();
-      const client = createMockClient(channel);
-      const { manager } = createMockApprovalManager();
-      const systemPrompts = createMockSystemPromptStore();
+      const ports = createMockPorts(channel);
       const { fn } = mockRunCommandFn(
         { code: 0, stdout: "", stderr: "" },
         { rejectWith: new Error("spawn failed") },
       );
 
-      const executor = new CronExecutor(
-        client as never,
-        TEST_CONFIG,
-        "guild-1",
-        "test-token",
-        store,
-        {},
-        manager as never,
-        systemPrompts,
-        undefined,
-        fn,
-      );
+      const executor = createExecutor({ ports, store, runCommandFn: fn });
 
       const job: CronCommandJob = {
         kind: "command",
@@ -1086,27 +882,14 @@ describe("CronExecutor", () => {
 
   test("command job: cwd に config.cwd が渡ること", () =>
     withStore(async (store) => {
-      const client = createMockClient(null);
-      const { manager } = createMockApprovalManager();
-      const systemPrompts = createMockSystemPromptStore();
+      const ports = createMockPorts(null);
       const { fn, calls } = mockRunCommandFn({
         code: 0,
         stdout: "",
         stderr: "",
       });
 
-      const executor = new CronExecutor(
-        client as never,
-        TEST_CONFIG,
-        "guild-1",
-        "test-token",
-        store,
-        {},
-        manager as never,
-        systemPrompts,
-        undefined,
-        fn,
-      );
+      const executor = createExecutor({ ports, store, runCommandFn: fn });
 
       const job: CronCommandJob = {
         kind: "command",
@@ -1120,12 +903,10 @@ describe("CronExecutor", () => {
       assert.deepStrictEqual(calls, [{ command: "pwd", cwd: TEST_CONFIG.cwd }]);
     }));
 
-  test("command job: 2000 文字超の stdout が分割投稿されること", () =>
+  test("command job: 2000 文字超の stdout が全文のまま 1 回 target に渡されること", () =>
     withStore(async (store) => {
       const { channel, sent } = createMockChannel();
-      const client = createMockClient(channel);
-      const { manager } = createMockApprovalManager();
-      const systemPrompts = createMockSystemPromptStore();
+      const ports = createMockPorts(channel);
       const longOutput = "a".repeat(2500);
       const { fn } = mockRunCommandFn({
         code: 0,
@@ -1133,18 +914,7 @@ describe("CronExecutor", () => {
         stderr: "",
       });
 
-      const executor = new CronExecutor(
-        client as never,
-        TEST_CONFIG,
-        "guild-1",
-        "test-token",
-        store,
-        {},
-        manager as never,
-        systemPrompts,
-        undefined,
-        fn,
-      );
+      const executor = createExecutor({ ports, store, runCommandFn: fn });
 
       const job: CronCommandJob = {
         kind: "command",
@@ -1156,16 +926,14 @@ describe("CronExecutor", () => {
 
       await executor.runJob(job);
 
-      assert.deepStrictEqual(sent.length > 1, true);
-      assert.deepStrictEqual(sent.join(""), longOutput);
+      // メッセージ長に合わせた分割は port 実装 (client) の責務。
+      assert.deepStrictEqual(sent, [longOutput]);
     }));
 
   test("command job: 4000 文字超の stdout が切り詰められ注記が付くこと", () =>
     withStore(async (store) => {
       const { channel, sent } = createMockChannel();
-      const client = createMockClient(channel);
-      const { manager } = createMockApprovalManager();
-      const systemPrompts = createMockSystemPromptStore();
+      const ports = createMockPorts(channel);
       const overLimitOutput = "b".repeat(4500);
       const { fn } = mockRunCommandFn({
         code: 0,
@@ -1173,18 +941,7 @@ describe("CronExecutor", () => {
         stderr: "",
       });
 
-      const executor = new CronExecutor(
-        client as never,
-        TEST_CONFIG,
-        "guild-1",
-        "test-token",
-        store,
-        {},
-        manager as never,
-        systemPrompts,
-        undefined,
-        fn,
-      );
+      const executor = createExecutor({ ports, store, runCommandFn: fn });
 
       const job: CronCommandJob = {
         kind: "command",
@@ -1208,9 +965,7 @@ describe("CronExecutor", () => {
   test("command job: 4000 文字ちょうどの stdout は切り詰められないこと", () =>
     withStore(async (store) => {
       const { channel, sent } = createMockChannel();
-      const client = createMockClient(channel);
-      const { manager } = createMockApprovalManager();
-      const systemPrompts = createMockSystemPromptStore();
+      const ports = createMockPorts(channel);
       const exactOutput = "c".repeat(4000);
       const { fn } = mockRunCommandFn({
         code: 0,
@@ -1218,18 +973,7 @@ describe("CronExecutor", () => {
         stderr: "",
       });
 
-      const executor = new CronExecutor(
-        client as never,
-        TEST_CONFIG,
-        "guild-1",
-        "test-token",
-        store,
-        {},
-        manager as never,
-        systemPrompts,
-        undefined,
-        fn,
-      );
+      const executor = createExecutor({ ports, store, runCommandFn: fn });
 
       const job: CronCommandJob = {
         kind: "command",

@@ -4,7 +4,7 @@
  * discord.js に依存しない純粋関数として実装し、単体テスト可能にする。
  */
 
-import type { Config } from "../config.ts";
+import type { Config } from "../../config.ts";
 
 /**
  * メッセージの送信者が操作を許可されているか判定する。

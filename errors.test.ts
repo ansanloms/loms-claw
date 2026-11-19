@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { getErrorMessage, summarizeErrorForDiscord } from "./errors.ts";
+import { getErrorMessage, summarizeError } from "./errors.ts";
 
 describe("getErrorMessage", () => {
   test("Error インスタンスの message を返すこと", () => {
@@ -13,9 +13,9 @@ describe("getErrorMessage", () => {
   });
 });
 
-describe("summarizeErrorForDiscord", () => {
+describe("summarizeError", () => {
   test("単一行の短いメッセージがそのまま含まれること", () => {
-    const result = summarizeErrorForDiscord(new Error("boom"));
+    const result = summarizeError(new Error("boom"));
     assert.deepStrictEqual(
       result,
       "処理に失敗した。詳細はログ (`GET /logs`) を参照\nboom",
@@ -23,7 +23,7 @@ describe("summarizeErrorForDiscord", () => {
   });
 
   test("複数行メッセージは先頭 1 行だけが使われること", () => {
-    const result = summarizeErrorForDiscord(
+    const result = summarizeError(
       new Error("first line\nsecond line\nthird line"),
     );
     assert.deepStrictEqual(
@@ -34,14 +34,14 @@ describe("summarizeErrorForDiscord", () => {
 
   test("200 文字を超える先頭行は 200 文字に切られること", () => {
     const longLine = "a".repeat(250);
-    const result = summarizeErrorForDiscord(new Error(longLine));
+    const result = summarizeError(new Error(longLine));
     const [, summarizedLine] = result.split("\n");
     assert.deepStrictEqual(summarizedLine.length, 200);
     assert.deepStrictEqual(summarizedLine, "a".repeat(200));
   });
 
   test("Error 以外の値でも要約されること", () => {
-    const result = summarizeErrorForDiscord("plain error value");
+    const result = summarizeError("plain error value");
     assert.deepStrictEqual(
       result,
       "処理に失敗した。詳細はログ (`GET /logs`) を参照\nplain error value",

@@ -1,6 +1,6 @@
 # ツール承認 (canUseTool / AskUserQuestion / allowlist)
 
-Claude Agent SDK がツールを使う前に呼ぶ `canUseTool` コールバックを in-process で実装し、Discord のボタン/select menu/Modal でユーザーの承認・回答を集める仕組み。`approval/manager.ts` の `ApprovalManager` と `createCanUseTool()`、`approval/question.ts` の `QuestionManager`、`approval/settings.ts` の allowlist 読み書きで構成される。承認 UI の送信先チャンネルは呼び出し側 (`bot/mod.ts`/`cron/executor.ts`) がターンごとに決める。
+Claude Agent SDK がツールを使う前に呼ぶ `canUseTool` コールバックを in-process で実装し、Discord のボタン/select menu/Modal でユーザーの承認・回答を集める仕組み。`client/discord/approval/manager.ts` の `ApprovalManager` と `createCanUseTool()`、`client/discord/approval/question.ts` の `QuestionManager`、`core/approval-settings.ts` の allowlist 読み書きで構成される。承認 UI の送信先チャンネルは呼び出し側 (`client/discord/mod.ts`/`cron/executor.ts`) がターンごとに決める。
 
 関連: [README](README.md)/[message-flow](message-flow.md)/[claude-integration](claude-integration.md)/[cron](cron.md)/[deployment](deployment.md)
 
@@ -35,15 +35,15 @@ sequenceDiagram
 | SDK 側 allowlist            | `.claude/settings.json` の `permissions.allow` (SDK が読む)  | `claude/mod.ts` の `buildQueryOptions()` が `settingSources: ["user", "project"]` を指定するため SDK 自身が読む。載っているツールは `canUseTool` を呼ばずに通す |
 | アプリ側 allowlist 事前判定 | `ApprovalManager.requestApproval()` 冒頭の `isInAllowList()` | 同じファイルを読み、載っていれば Discord に聞かず即 allow (`reason: "Already Allowed"`) を返す                                                                  |
 
-どちらも同一ファイルを参照する。`Allow Always` で追記されたツールは、以降の `requestApproval()` がファイルを読み直すためアプリ側の事前判定で即 allow になり、次回の `query()` からは SDK 側で事前許可される (`approval/settings.ts` の doc コメント)。
+どちらも同一ファイルを参照する。`Allow Always` で追記されたツールは、以降の `requestApproval()` がファイルを読み直すためアプリ側の事前判定で即 allow になり、次回の `query()` からは SDK 側で事前許可される (`core/approval-settings.ts` の doc コメント)。
 
-`.claude/settings.json` のパスは `bot/mod.ts` の `DiscordBot` コンストラクタで `join(config.claude.cwd, ".claude", "settings.json")` として `ApprovalManager` に渡される。`config.claude.cwd` は `config.ts` の `loadConfig()` が `process.cwd()` を注入する値で、本番 (Docker) ではワークスペースの `/data/workspace` になる (host では `data/workspace/.claude/settings.json`)。中身の allowlist は運用依存のためここでは列挙しない。配置は [deployment](deployment.md) を参照。
+`.claude/settings.json` のパスは `client/discord/mod.ts` の `DiscordBot` コンストラクタで `join(config.claude.cwd, ".claude", "settings.json")` として `ApprovalManager` に渡される。`config.claude.cwd` は `config.ts` の `loadConfig()` が `process.cwd()` を注入する値で、本番 (Docker) ではワークスペースの `/data/workspace` になる (host では `data/workspace/.claude/settings.json`)。中身の allowlist は運用依存のためここでは列挙しない。配置は [deployment](deployment.md) を参照。
 
 Discord のボタン承認が発火するのは、上の表のとおり SDK 上の既定 (allow に無いツール) が呼ばれたときに限る。ワークスペースの `settings.json` の `permissions.allow` では組み込みツール群と一部の MCP ツールを事前許可している。一覧は `data/workspace/.claude/settings.json` を正とする。
 
 旧名 (現行 MCP に存在しない `gcal_*`/`gmail_*` の 4 件) の削除は行ったが、有効な許可範囲は変えていない。allowlist は現状維持 (縮小しない) と 2026-08-23 に判断した (#120)。
 
-## ApprovalManager (`approval/manager.ts`)
+## ApprovalManager (`client/discord/approval/manager.ts`)
 
 ### 状態
 
@@ -67,11 +67,11 @@ Discord のボタン承認が発火するのは、上の表のとおり SDK 上�
      - `always:{requestId}:{toolName}` (Allow Always, Primary)
      - `deny:{requestId}` (Deny, Danger)
    - 本文: 1 行目に `Tool: {toolName}` (太字 + インラインコード)、`toolInput.description` があればその値、続けて `toolInput` の 2 スペース JSON ダンプを json コードフェンスで囲んだもの。ダンプは 1500 文字を超える場合 1497 文字 + `...` に切り詰める
-4. `pending` に登録し Promise を返す。`handleButton()` が解決するか、`INTERACTION_TIMEOUT_MS` (`approval/constants.ts`、5 分) 経過で `{ decision: "deny", reason: "Timed out" }` に解決する。タイムアウト時に投稿メッセージは編集しない。
+4. `pending` に登録し Promise を返す。`handleButton()` が解決するか、`INTERACTION_TIMEOUT_MS` (`client/discord/approval/constants.ts`、5 分) 経過で `{ decision: "deny", reason: "Timed out" }` に解決する。タイムアウト時に投稿メッセージは編集しない。
 
 ### `handleButton(interaction)`
 
-`bot/mod.ts` の `onInteraction()` から `interaction.isButton()` のとき呼ばれる (振り分けは [message-flow](message-flow.md))。
+`client/discord/mod.ts` の `onInteraction()` から `interaction.isButton()` のとき呼ばれる (振り分けは [message-flow](message-flow.md))。
 
 1. まず `QuestionManager.handleButton()` に渡し、質問側の Cancel ボタン (`question-cancel:{requestId}`) なら終了。
 2. `customId` を `:` で分割し、`approve`/`always`/`deny` 以外、または `requestId` 欠落なら `false` を返す。
@@ -81,15 +81,15 @@ Discord のボタン承認が発火するのは、上の表のとおり SDK 上�
 6. `approve`/`always` → `decision: "allow"`、`deny` → `decision: "deny"`。`reason` はラベル (`Allowed`/`Always Allowed`/`Denied`)。
 7. 元メッセージを `interaction.update()` で `\n**→ {ラベル}**` を追記しボタンを外す。
 
-### `isInAllowList(settingsPath, toolName)` (`approval/settings.ts`)
+### `isInAllowList(settingsPath, toolName)` (`core/approval-settings.ts`)
 
 ファイルを読んで `permissions.allow` 配列に `toolName` が含まれるかを判定する。ファイル不在・JSON 不正は false として扱う。
 
-### `addToSettingsAllowList(settingsPath, toolName)` (`approval/settings.ts`)
+### `addToSettingsAllowList(settingsPath, toolName)` (`core/approval-settings.ts`)
 
 ファイルが無ければ空オブジェクトから作る (NotFound 以外の読み込みエラーは throw)。JSON 不正なら WARN ログを出して上書きする。`permissions`/`permissions.allow` が無ければ作り、既存フィールドは保持してマージする。重複なら追加しない。親ディレクトリを `mkdir -p` 相当で作り、`JSON.stringify(settings, null, 2) + "\n"` で書き出す。
 
-## QuestionManager (`approval/question.ts`)
+## QuestionManager (`client/discord/approval/question.ts`)
 
 `AskUserQuestion` は承認ではなく回答収集のツールなので、ボタン承認とは別の UI (string select + Cancel ボタン + Other 用 Modal) を使う。`ApprovalManager.requestAnswers()` は呼び出し元から必須で受け取った `channelId` をそのまま `QuestionManager` に委譲する。
 
@@ -111,7 +111,7 @@ Discord のボタン承認が発火するのは、上の表のとおり SDK 上�
    - select の選択肢は各 option (value は index 文字列、label/description は 100 文字で切り詰め) に加え、`Other (自由入力)` を自動で末尾に足す。値は `OTHER_VALUE` (`__other__`) とする
    - `multiSelect` の質問は `maxValues = options.length + 1`、それ以外は 1
    - 回答済みの質問の select は disabled にし、placeholder に回答を表示する
-3. `INTERACTION_TIMEOUT_MS` (`approval/constants.ts`、5 分) でタイムアウト。メッセージを `\n**→ Timed out**` に編集し `{ kind: "denied", reason: "Timed out" }`。
+3. `INTERACTION_TIMEOUT_MS` (`client/discord/approval/constants.ts`、5 分) でタイムアウト。メッセージを `\n**→ Timed out**` に編集し `{ kind: "denied", reason: "Timed out" }`。
 
 ### インタラクション
 
@@ -139,28 +139,28 @@ SDK の `CanUseTool` を返す。`ApprovalResult`/`QuestionResult` を SDK の `
 
 ### `permissions.allow` に `AskUserQuestion` を入れない
 
-`AskUserQuestion` が SDK 側 allowlist に載っていると、SDK が `canUseTool` を呼ばずに素通しするため `QuestionManager` に到達せず、回答が空のまま解決される。このツールは allowlist に入れないこと (`approval/manager.ts` の `createCanUseTool` の doc コメントに同じ注意がある)。
+`AskUserQuestion` が SDK 側 allowlist に載っていると、SDK が `canUseTool` を呼ばずに素通しするため `QuestionManager` に到達せず、回答が空のまま解決される。このツールは allowlist に入れないこと (`client/discord/approval/manager.ts` の `createCanUseTool` の doc コメントに同じ注意がある)。
 
 ## 呼び出し側
 
-| 経路                    | 場所                                | `createCanUseTool()` の `channelId`                                                              |
-| ----------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------ |
-| チャット                | `bot/mod.ts` `DiscordBot.onMessage` | `localId` (スレッド内ならスレッド ID、そうでなければチャンネル ID)。承認 UI は発話スコープに出る |
-| cron                    | `cron/executor.ts` `CronExecutor`   | `job.channelId` (未指定なら `undefined`)                                                         |
-| AI to AI 自己メンション | チャットと同じ経路                  | 同上。承認 UI は自己起動されたスコープに出る                                                     |
+| 経路                    | 場所                                                                                                                    | `createCanUseTool()` の `channelId`                                                              |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| チャット                | `core/conversation.ts` `Conversation` (`createCanUseTool(localId)` は `client/discord/mod.ts` の `DiscordBot` が橋渡し) | `localId` (スレッド内ならスレッド ID、そうでなければチャンネル ID)。承認 UI は発話スコープに出る |
+| cron                    | `cron/executor.ts` `CronExecutor` (`CronPorts.createCanUseTool()` を `client/discord/cron-target.ts` が実装)            | `job.channelId` (未指定なら `undefined`)                                                         |
+| AI to AI 自己メンション | チャットと同じ経路                                                                                                      | 同上。承認 UI は自己起動されたスコープに出る                                                     |
 
 cron で `channelId` 未指定のジョブでは、`createCanUseTool()` に渡る `channelId` が `undefined` になり、`requestApproval()`/`requestAnswers()` はその場で `"No approval channel"`/`"No channel to ask the user"` を返して deny する。ターン間で共有される状態は無いため、他ターンの設定へフォールバックすることもない。
 
 自己メンション起動ターンでは承認ボタン・質問は通常どおりそのスコープに投稿される。承認・質問メッセージの本文はユーザーメンションを含まないため本人宛てのピングは無く、本人が見ていなければ 5 分の timeout で deny になり、依頼元には通知されない。
 
-`InteractionCreate` からの振り分け (`isButton()` → `handleButton`、`isStringSelectMenu()` → `handleSelect`、`isModalSubmit()` → `handleModal`、それ以外はスラッシュコマンド) と各ハンドラのエラー時の ephemeral 応答は `bot/mod.ts` の `onInteraction()` にあり、[message-flow](message-flow.md) で扱う。`canUseTool` を `query()` の options に載せる箇所は [claude-integration](claude-integration.md) を参照。
+`InteractionCreate` からの振り分け (`isButton()` → `handleButton`、`isStringSelectMenu()` → `handleSelect`、`isModalSubmit()` → `handleModal`、それ以外はスラッシュコマンド) と各ハンドラのエラー時の ephemeral 応答は `client/discord/mod.ts` の `onInteraction()` にあり、[message-flow](message-flow.md) で扱う。`canUseTool` を `query()` の options に載せる箇所は [claude-integration](claude-integration.md) を参照。
 
 ## テスト
 
-| ファイル                    | 対象                                                                                                                                                                                                                                                                                   |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `approval/manager.test.ts`  | `createCanUseTool()` の変換表 (fake `ApprovalManager` で allow / deny / AskUserQuestion の各分岐を検証)。加えて `ApprovalManager` 本体の `requestApproval()` → `handleButton()` (承認 / 拒否 / タイムアウト / channelId 未指定) を、`ApprovalChannelResolver` を fake に差し替えて検証 |
-| `approval/question.test.ts` | 純粋関数 `parseQuestions` / `resolveSelectedLabels` / `formatAnswer` / `truncate`                                                                                                                                                                                                      |
-| `approval/settings.test.ts` | `addToSettingsAllowList` (新規作成・マージ・重複排除) と `isInAllowList` (存在・不在・JSON 不正)                                                                                                                                                                                       |
+| ファイル                                   | 対象                                                                                                                                                                                                                                                                                   |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `client/discord/approval/manager.test.ts`  | `createCanUseTool()` の変換表 (fake `ApprovalManager` で allow / deny / AskUserQuestion の各分岐を検証)。加えて `ApprovalManager` 本体の `requestApproval()` → `handleButton()` (承認 / 拒否 / タイムアウト / channelId 未指定) を、`ApprovalChannelResolver` を fake に差し替えて検証 |
+| `client/discord/approval/question.test.ts` | 純粋関数 `parseQuestions` / `resolveSelectedLabels` / `formatAnswer` / `truncate`                                                                                                                                                                                                      |
+| `core/approval-settings.test.ts`           | `addToSettingsAllowList` (新規作成・マージ・重複排除) と `isInAllowList` (存在・不在・JSON 不正)                                                                                                                                                                                       |
 
-`ApprovalManager` はチャンネル解決 (`client.channels.fetch()` → 送信) を `ApprovalChannelResolver` (`fetchSendable()`) に切り出してあり、コンストラクタの `options.channelResolver` で差し替えられる (既定は `client` から作った discord.js 実装)。`options.timeoutMs` で `INTERACTION_TIMEOUT_MS` (既定値は変えない) をテスト用に短縮できる。一方 `handleButton()` の引数型は discord.js の `ButtonInteraction` のまま (`QuestionManager.handleButton()` への委譲が同じ型を要求するため、`ApprovalManager` 側だけを緩めると型が合わない)。テストでは `handleButton` が実際に触るプロパティ (`customId`/`message.content`/`update`/`reply`) だけを持つ fake オブジェクトを `as unknown as ButtonInteraction` でキャストして渡す (`bot/message.test.ts` の fake チャンネルと同じ手法)。`QuestionManager` のインタラクション処理自体は引き続き単体テストの対象外。
+`ApprovalManager` はチャンネル解決 (`client.channels.fetch()` → 送信) を `ApprovalChannelResolver` (`fetchSendable()`) に切り出してあり、コンストラクタの `options.channelResolver` で差し替えられる (既定は `client` から作った discord.js 実装)。`options.timeoutMs` で `INTERACTION_TIMEOUT_MS` (既定値は変えない) をテスト用に短縮できる。一方 `handleButton()` の引数型は discord.js の `ButtonInteraction` のまま (`QuestionManager.handleButton()` への委譲が同じ型を要求するため、`ApprovalManager` 側だけを緩めると型が合わない)。テストでは `handleButton` が実際に触るプロパティ (`customId`/`message.content`/`update`/`reply`) だけを持つ fake オブジェクトを `as unknown as ButtonInteraction` でキャストして渡す (`client/discord/message.test.ts` の fake チャンネルと同じ手法)。`QuestionManager` のインタラクション処理自体は引き続き単体テストの対象外。
