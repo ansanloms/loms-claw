@@ -8,7 +8,7 @@ import { mkdir } from "node:fs/promises";
 import type { DatabaseSync } from "node:sqlite";
 import { dirname } from "@std/path/dirname";
 import { DiscordBot } from "./client/discord/mod.ts";
-import { loadConfig } from "./config.ts";
+import { type Config, loadConfig } from "./config.ts";
 import { createLogger, initLogger } from "./logger.ts";
 import { openStoreDatabase, Store } from "./store/mod.ts";
 
@@ -23,8 +23,16 @@ process.on("uncaughtException", (err) => {
   log.error("uncaught exception:", err);
 });
 
-const config = loadConfig();
-initLogger(config.log);
+// 設定の読み込み失敗はリトライしても回復しないため、ログを出して終了コード 1 で終わる。
+// uncaughtException ハンドラがあると例外だけでは終了しないので明示的に exit する。
+let config: Config;
+try {
+  config = loadConfig();
+  initLogger(config.log);
+} catch (e: unknown) {
+  log.error("failed to load config:", e);
+  process.exit(1);
+}
 
 // 永続化ストア (SQLite) を初期化する。
 // 親ディレクトリが存在しない可能性があるため事前に mkdir。
