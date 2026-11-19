@@ -48,7 +48,7 @@ interface StoreScope {
 
 `api/routes/settings.ts` (`GET`/`PATCH`/`DELETE /settings/{id}`) は `client/discord/scope.ts` を使わず、`resolveParentId` で親を引いて別途スコープを組む (詳細は後述の `resolveScope()`)。親が取れないスレッドの扱いは bot 側 (`{ channelId: id, threadId: id }`) と API 側 (`{ channelId: id }`) で異なる。これは既存挙動で、統一は別 issue とする。
 
-`setSession`/`applyPatch`/`clearScope` による書き込みは常に leaf id (`threadId ?? channelId`) に対して行われる。スレッド内で `/claw settings set` を叩いても親チャンネルのキーには触れない。
+`setSession`/`replaceSession`/`applyPatch`/`clearScope` による書き込みは常に leaf id (`threadId ?? channelId`) に対して行われる。スレッド内で `/claw settings set` を叩いても親チャンネルのキーには触れない。
 
 ## 解決順
 
@@ -117,9 +117,13 @@ interface SettingsPatch {
 
 ### 個別 setter
 
-`setSession` のみが個別 setter として残る。`core/conversation.ts` (chat) と `cron/executor.ts` (cron の `resumeSession: true`) が `result` イベント受信時に `event.session_id` を保存する (ジェネレータが非ゼロ終了で throw してもセッションが残るよう、result を受け取った時点で即座に書く)。
+`setSession` と `replaceSession` が個別 setter として残る。`cron/executor.ts` (cron の `resumeSession: true`) は `setSession`、`core/conversation.ts` (chat) は `replaceSession` で `result` イベント受信時に `event.session_id` を保存する (ジェネレータが非ゼロ終了で throw してもセッションが残るよう、result を受け取った時点で即座に書く)。
 
-model/effort/showThinking/active に対する個別の setter/deleter は無く、書き込みは `setSession`/`applyPatch`/`clearScope` の 3 つに集約されている。読み取り側の thread → channel → (defaults) 解決も 4 つの getter (`getModel`/`getEffort`/`getShowThinking`/`getActive`) が共通の private ヘルパ (`resolveScoped()`) を呼ぶ形にまとまっている。
+`replaceSession(scope, expected, next, generation): boolean` は条件付きの書き込み。現在のリセット世代が `generation` と違えば何も書かず false を返す。一致したときは SQL 1 文で原子的に行う。`expected` があれば `UPDATE ... WHERE id = ? AND field = 'session' AND value = expected`、`expected` が undefined なら `INSERT ... ON CONFLICT DO NOTHING` (行が無いときだけ書く)。変更行があれば true。chat はターン開始時に読んだ session を `expected` にし、実行中に `/claw settings unset session`・`PATCH`/`DELETE /settings` でリセットされていたら書き戻さない (リセット側はキューを通らず即時に書くため)。
+
+リセット世代は leaf id ごとの整数で、`Store` がメモリ上の `Map<string, number>` に持つ (未登録は 0、永続化しない)。`applyPatch` で `session: null` を適用したときと `clearScope` で 1 増える。`getSessionGeneration(scope)` で読み、chat がターン開始時に `getSession` と同じ箇所で読んで `replaceSession` へ渡す。用途は、session 無しで始まったターンの途中のリセットの検知である。この場合は行が無いままで、値の比較 (`expected` が undefined なら行が無いときだけ INSERT) ではリセットと区別できない。ターンは再起動をまたがないので、再起動で世代が消えても問題ない。
+
+model/effort/showThinking/active に対する個別の setter/deleter は無く、書き込みは `setSession`/`replaceSession`/`applyPatch`/`clearScope` の 4 つに集約されている。読み取り側の thread → channel → (defaults) 解決も 4 つの getter (`getModel`/`getEffort`/`getShowThinking`/`getActive`) が共通の private ヘルパ (`resolveScoped()`) を呼ぶ形にまとまっている。
 
 ## Discord スラッシュコマンド `/claw settings`
 

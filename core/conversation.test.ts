@@ -186,6 +186,8 @@ function createOutput(options: FakeOutputOptions = {}) {
 
 interface DepsOverrides {
   queryFn?: QueryFn;
+  /** ストアのセッションを外部から差し替え・観測するための共有セル。 */
+  sessionCell?: { value: string | undefined; generation?: number };
   showThinking?: boolean;
   sessionId?: string;
   tryConsume?: () => boolean;
@@ -198,12 +200,18 @@ function createConversation(overrides: DepsOverrides = {}) {
   const resolveCalls: Array<[string, StoreScope, Record<string, string>?]> = [];
   const canUseToolIds: string[] = [];
   const canUseToolSignals: AbortSignal[] = [];
+  const cell = overrides.sessionCell ?? { value: overrides.sessionId };
   const deps: ConversationDeps = {
     store: {
-      getSession: () => Promise.resolve(overrides.sessionId),
-      setSession: (scope, id) => {
-        savedSessions.push([scope, id]);
-        return Promise.resolve();
+      getSession: () => Promise.resolve(cell.value),
+      getSessionGeneration: () => cell.generation ?? 0,
+      replaceSession: (scope, expected, next, generation) => {
+        if ((cell.generation ?? 0) !== generation || cell.value !== expected) {
+          return false;
+        }
+        cell.value = next;
+        savedSessions.push([scope, next]);
+        return true;
       },
       getModel: () => Promise.resolve("opus"),
       getEffort: () => Promise.resolve("high"),
@@ -410,6 +418,90 @@ describe("Conversation", () => {
     await conversation.submit(createInput(), output);
 
     assert.deepStrictEqual(savedSessions, [[{ channelId: "ch-1" }, "sess-42"]]);
+  });
+
+  test("submit: ターン実行中にセッションがリセットされたら result で書き戻さないこと", async () => {
+    const sessionCell: { value: string | undefined } = { value: "sess-old" };
+    const { conversation, savedSessions } = createConversation({
+      sessionCell,
+      queryFn: steppedQueryFn([
+        textDelta("途中"),
+        () => {
+          sessionCell.value = undefined;
+        },
+        resultEvent("answer", "sess-new"),
+      ]),
+    });
+    const { output } = createOutput();
+
+    await conversation.submit(createInput(), output);
+
+    assert.deepStrictEqual(sessionCell.value, undefined);
+    assert.deepStrictEqual(savedSessions, []);
+  });
+
+  test("submit: セッション無しで始まったターンの途中のリセットを result で打ち消さないこと", async () => {
+    const sessionCell: { value: string | undefined; generation?: number } = {
+      value: undefined,
+      generation: 0,
+    };
+    const { conversation, savedSessions } = createConversation({
+      sessionCell,
+      queryFn: steppedQueryFn([
+        textDelta("途中"),
+        () => {
+          // リセット: 行は無いまま世代だけ進む。
+          sessionCell.generation = 1;
+        },
+        resultEvent("answer", "sess-new"),
+      ]),
+    });
+    const { output } = createOutput();
+
+    await conversation.submit(createInput(), output);
+
+    assert.deepStrictEqual(sessionCell.value, undefined);
+    assert.deepStrictEqual(savedSessions, []);
+  });
+
+  test("submit: 最初の result で保存した後のリセットを 2 回目の result で打ち消さないこと", async () => {
+    const sessionCell: { value: string | undefined; generation?: number } = {
+      value: undefined,
+      generation: 0,
+    };
+    const { conversation } = createConversation({
+      sessionCell,
+      queryFn: steppedQueryFn([
+        resultEvent("a", "sess-1"),
+        () => {
+          sessionCell.value = undefined;
+          sessionCell.generation = 1;
+        },
+        resultEvent("b", "sess-2"),
+      ]),
+    });
+    const { output } = createOutput();
+
+    await conversation.submit(createInput(), output);
+
+    assert.deepStrictEqual(sessionCell.value, undefined);
+  });
+
+  test("submit: 同一ターン内の複数の result で続けて保存されること", async () => {
+    const sessionCell: { value: string | undefined } = { value: undefined };
+    const { conversation, savedSessions } = createConversation({
+      sessionCell,
+      queryFn: mockQueryFn([
+        resultEvent("a", "sess-1"),
+        resultEvent("b", "sess-2"),
+      ]),
+    });
+    const { output } = createOutput();
+
+    await conversation.submit(createInput(), output);
+
+    assert.deepStrictEqual(sessionCell.value, "sess-2");
+    assert.deepStrictEqual(savedSessions.length, 2);
   });
 
   test("submit: tool_progress が reportProgress へ渡されること", async () => {

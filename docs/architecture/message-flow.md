@@ -65,7 +65,7 @@ sequenceDiagram
     loop SDKMessage
         C-->>K: stream_event / assistant / result / tool_progress
         C-->>A: canUseTool → 承認ボタン / 質問
-        K->>S: setSession (result 受信時)
+        K->>S: replaceSession (result 受信時、条件付き)
         K->>B: sendReply / sendThinking / reportProgress
         B->>D: 本文 / thinking / 進捗を逐次投稿
     end
@@ -152,19 +152,19 @@ bot 側でメッセージをスレッドへ自動分離する機能は実装し�
 
 `for await` で `SDKMessage` を 1 件ずつ見る。各イベントは次の順で 1 つの分岐にだけ入る。
 
-| 優先 | 条件                                                                                                      | 処理                                                                                                                                                                                          |
-| ---- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | `extractTopLevelTextDelta(event)` が文字列 (`stream_event` かつ `parent_tool_use_id` 無しの `text_delta`) | 未送出の thinking があれば強制 flush。`textBuffer` に追記し、800 文字以上なら境界 flush                                                                                                       |
-| 2    | `showThinking` かつ `extractTopLevelThinkingDelta(event)` が文字列 (`thinking_delta`)                     | `thinkingBuffer` に追記し、1500 文字以上なら境界 flush                                                                                                                                        |
-| 3    | `event.type === "assistant"` かつ `parent_tool_use_id` 無し                                               | thinking → text の順に強制 flush (assistant ターン 1 件ごとに別投稿へ区切る)                                                                                                                  |
-| 4    | `event.type === "result"`                                                                                 | `resultEvent` に保持し `handleResultEvent()` (`claude/mod.ts`) を呼ぶ。`subtype !== "success"` なら WARN (イベント全体を JSON で記録)。`store.setSession(scope, event.session_id)` を即時保存 |
-| 5    | `event.type === "tool_progress"`                                                                          | `output.reportProgress(tool_name, elapsed_time_seconds)`                                                                                                                                      |
+| 優先 | 条件                                                                                                      | 処理                                                                                                                                                                                                                         |
+| ---- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | `extractTopLevelTextDelta(event)` が文字列 (`stream_event` かつ `parent_tool_use_id` 無しの `text_delta`) | 未送出の thinking があれば強制 flush。`textBuffer` に追記し、800 文字以上なら境界 flush                                                                                                                                      |
+| 2    | `showThinking` かつ `extractTopLevelThinkingDelta(event)` が文字列 (`thinking_delta`)                     | `thinkingBuffer` に追記し、1500 文字以上なら境界 flush                                                                                                                                                                       |
+| 3    | `event.type === "assistant"` かつ `parent_tool_use_id` 無し                                               | thinking → text の順に強制 flush (assistant ターン 1 件ごとに別投稿へ区切る)                                                                                                                                                 |
+| 4    | `event.type === "result"`                                                                                 | `resultEvent` に保持し `handleResultEvent()` (`claude/mod.ts`) を呼ぶ。`subtype !== "success"` なら WARN (イベント全体を JSON で記録)。`store.replaceSession(scope, expectedSession, event.session_id)` で条件付きに即時保存 |
+| 5    | `event.type === "tool_progress"`                                                                          | `output.reportProgress(tool_name, elapsed_time_seconds)`                                                                                                                                                                     |
 
 - flush は回答なら `output.sendReply()`、thinking なら `output.sendThinking()` を呼ぶ。
 - `system`/`user`/サブエージェント由来 (`parent_tool_use_id` 有り) のイベントは扱わない。
 - 境界 flush: バッファ内で最後の `。` または改行までを送り、残りを保持する (`core/flush.ts` の `splitAtBoundary()`)。境界が無い場合は何もしないが、閾値の 2 倍以上に達したら全量を強制 flush する (コードブロック・英語・URL が続くケース対策)。
 - `showThinking` が false のときは thinking を抽出しない。thinking が流れるかは model/effort 依存。
-- `result` 受信時に session を即保存する。理由: その後ジェネレータが throw しても session を残すため。`askClaude()` 側で「resume 先が無い」エラー時に新規セッションで 1 回やり直す挙動は [claude-integration](claude-integration.md) を参照。
+- `result` 受信時に session を即保存する。理由: その後ジェネレータが throw しても session を残すため。書き込みは、ターン開始時に読んだリセット世代が現在と同じで、かつ開始時の session (`expectedSession`) が現在値と一致するときだけ行う (一致しなければ INFO ログのみで書かない)。理由: `/claw settings unset session` や `/settings` のリセットはキューを通らず実行中ターンの途中で走るため、無条件に書くとリセットを打ち消す。session 無しで始まったターンは行が無いままなので値の比較では検知できず、世代で検知する。成功したら `expectedSession` を更新するので同一ターン内の複数 result も保存される。`askClaude()` 側で「resume 先が無い」エラー時に新規セッションで 1 回やり直す挙動は [claude-integration](claude-integration.md) を参照。
 
 ### 11. ループ後
 
