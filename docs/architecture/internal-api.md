@@ -143,6 +143,15 @@ flowchart LR
 
 - `npm run` (docs/api 側): `lint` は `lint:check` (tsc)/`lint:oxc` (oxlint + oxfmt)/`lint:textlint`/`lint:redocly` の一括、`fix` は `sort` → `fix:textlint` → `fix:oxc` → `lint`、`build` は `dist/` のクリア → YAML bundle → `build.ts`、`dev`/`start` は `http-server` で `./`/`./dist` を配信する。
 
+## 版の管理
+
+- 内部 API の版の正本は `docs/api/api.yaml` の `info.version` である。ルートの `package.json` の `version` やコード内の定数には版を持たない。2 箇所に持つとずれるためである。
+- 値は semver で書く。0.x の間は、壊す変更で minor を、それ以外の変更で patch を上げる。
+- 上げるのは、`docs/api/` の YAML を変える PR の中である。
+- リポジトリの release とタグは `info.version` と同じ文字列で切る (接頭辞 `v` を付けない)。`info.version` を上げた PR が main に入った後に `gh release create` で作る。タグは `info.version` から導く従属値で、アプリ本体に別の版は持たない。
+- この値を読むものは無い。`docs/api/bin/emit-server-schemas.ts` は `components.schemas` だけを抽出するので、生成物 `api/internal-schemas.ts` にも実行時コードにも版は現れない。上げ忘れを検査する仕組みも無い。
+- パスに版 (`/v1` 等) は入れていない。壊す変更の手順と、client 向け API・SSE のイベントの版の扱いは未決で、[#276](https://github.com/ansanloms/loms-claw/issues/276) で決める。
+
 ## テスト
 
 `api/routes/cron.test.ts`/`api/routes/health.test.ts`/`api/routes/logs.test.ts`/`api/routes/settings.test.ts`/`api/routes/sessions.test.ts` は `serve()` を起動せず、`new Hono()` に `createCronRoutes()`/`createHealthRoutes()`/`createLogsRoutes()`/`createSessionsRoutes()`/`createSettingsRoutes()` をマウントして `app.request()` で直接リクエストを投げる形式。cron 側はコンテキスト関数をクロージャで差し替え、settings 側は `new DatabaseSync(":memory:")` の `Store` を使う。
