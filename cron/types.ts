@@ -62,6 +62,6 @@ export type CronJobDef = CronPromptJob | CronCommandJob;
  *
  * - `succeeded`: ジョブが最後まで実行された。
  * - `failed`: 実行中に例外が起きた。
- * - `skipped`: 同名ジョブが実行中のため実行しなかった。
+ * - `skipped`: 同名ジョブが実行中、または終了処理中 (`stop()` 済み) のため実行しなかった。
  */
 export type CronRunResult = "succeeded" | "failed" | "skipped";

@@ -16,7 +16,7 @@ properties:
     description: >-
       ジョブの実行結果。succeeded はジョブが最後まで実行された、
       failed は実行中に例外が起きた、
-      skipped は同名ジョブが実行中のため実行しなかった。
+      skipped は同名ジョブが実行中、または終了処理中のため実行しなかった。
     enum:
       - succeeded
       - failed

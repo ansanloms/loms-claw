@@ -107,6 +107,10 @@ export const runShellCommand: RunCommandFn = async (
   command,
   { cwd, signal },
 ) => {
+  // 既に abort 済みなら spawn せずに reject する (副作用を起こさない)。
+  if (signal.aborted) {
+    throw new Error("command timed out");
+  }
   const child = spawn("sh", ["-c", command], {
     cwd,
     stdio: ["inherit", "pipe", "pipe"],
@@ -145,11 +149,7 @@ export const runShellCommand: RunCommandFn = async (
     rejectOnAbort(new Error("command timed out"));
   };
 
-  if (signal.aborted) {
-    handleAbort();
-  } else {
-    signal.addEventListener("abort", handleAbort);
-  }
+  signal.addEventListener("abort", handleAbort);
 
   try {
     return await Promise.race([finished, abortedPromise]);
@@ -167,6 +167,8 @@ export class CronExecutor {
   /** 実行中のジョブ名を追跡し、同一ジョブの並行実行を防止する。 */
   private running = new Set<string>();
   private scheduler: CronScheduler;
+  /** 終了 (`stop()`) で実行中のジョブを中断するための controller。 */
+  private readonly shutdownController = new AbortController();
   private onceCallback?: (jobName: string) => Promise<void>;
   private readonly ports: CronPorts;
   private readonly config: ClaudeConfig;
@@ -239,10 +241,13 @@ export class CronExecutor {
   }
 
   /**
-   * スケジューラを停止する。
+   * スケジューラを停止し、実行中のジョブを中断する。
+   *
+   * 中断されたジョブの完了は待たない。停止後の `runJob()` は `"skipped"` を返す。
    */
   stop(): void {
     this.scheduler.stop();
+    this.shutdownController.abort();
     log.info("cron executor stopped");
   }
 
@@ -256,6 +261,10 @@ export class CronExecutor {
    * ({@link runCommandJob}) に処理を振り分ける。
    */
   async runJob(job: CronJobDef): Promise<CronRunResult> {
+    if (this.shutdownController.signal.aborted) {
+      log.info(`cron job "${job.name}" skipped (shutting down)`);
+      return "skipped";
+    }
     if (this.running.has(job.name)) {
       log.warn(`cron job "${job.name}" is already running, skipping`);
       return "skipped";
@@ -267,11 +276,16 @@ export class CronExecutor {
     // channelId 指定時は送信先を事前取得（catch 内でもエラー通知に使う）
     let target: CronTarget | undefined;
     let result: CronRunResult = "succeeded";
+    // 終了による中断で失敗したか (once ジョブのファイルを残す判定に使う)。
+    let abortedByShutdown = false;
 
     try {
       if (job.channelId) {
         target = await this.ports.resolveTarget(job.channelId);
       }
+      // 待機の間に stop() が入っていたら、コマンドや query を始めない。
+      // catch が終了による中断として扱う。
+      this.shutdownController.signal.throwIfAborted();
 
       if (job.kind === "command") {
         await this.runCommandJob(job, target);
@@ -281,6 +295,13 @@ export class CronExecutor {
 
       log.info(`cron job "${job.name}" completed`);
     } catch (error: unknown) {
+      if (this.shutdownController.signal.aborted) {
+        // 終了による中断は失敗の通知を投稿しない。
+        abortedByShutdown = true;
+        log.info(`cron job "${job.name}" aborted by shutdown:`, error);
+        result = "failed";
+        return result;
+      }
       // logger は Error の stack を自動で展開する。全文はここに残す。
       log.error(`cron job "${job.name}" failed:`, error);
       result = "failed";
@@ -294,7 +315,11 @@ export class CronExecutor {
         }
       }
     } finally {
-      if (job.once && this.onceCallback) {
+      if (job.once && abortedByShutdown) {
+        log.warn(
+          `once cron job "${job.name}" was aborted by shutdown, keeping its file`,
+        );
+      } else if (job.once && this.onceCallback) {
         try {
           await this.onceCallback(job.name);
         } catch (e) {
@@ -335,6 +360,8 @@ export class CronExecutor {
         ? this.store.getEffort({ channelId: job.channelId })
         : Promise.resolve(undefined),
     ]);
+    // ストア読み取りの待機の間に stop() が入っていたら query を始めない。
+    this.shutdownController.signal.throwIfAborted();
 
     // 解決順: frontmatter > channel 設定 > defaults
     const model = job.model ?? channelModel ?? this.defaults.model;
@@ -354,7 +381,10 @@ export class CronExecutor {
       ...(job.maxTurns !== undefined ? { maxTurns: job.maxTurns } : {}),
     };
     const timeout = job.timeout ?? this.config.timeout;
-    const signal = AbortSignal.timeout(timeout);
+    const signal = AbortSignal.any([
+      AbortSignal.timeout(timeout),
+      this.shutdownController.signal,
+    ]);
 
     // runOneShot() は target の有無に関わらず結果テキストを評価する。
     // result が無い/エラーなら target が無くても throw され、catch で
@@ -413,7 +443,10 @@ export class CronExecutor {
     target: CronTarget | undefined,
   ): Promise<void> {
     const timeout = job.timeout ?? this.config.timeout;
-    const signal = AbortSignal.timeout(timeout);
+    const signal = AbortSignal.any([
+      AbortSignal.timeout(timeout),
+      this.shutdownController.signal,
+    ]);
 
     let result: CommandResult;
     try {
@@ -425,13 +458,22 @@ export class CronExecutor {
       // 本番の runShellCommand は abort 時に素の "command timed out" で
       // reject するため、ここで signal.aborted を見て文書化された
       // メッセージへ載せ替える。abort によらない reject はそのまま投げ直す。
+      if (this.shutdownController.signal.aborted) {
+        throw new Error("command aborted by shutdown", { cause: error });
+      }
       if (signal.aborted) {
         throw new Error(`command timed out after ${timeout}ms`);
       }
       throw error;
     }
 
-    if (signal.aborted) {
+    if (this.shutdownController.signal.aborted) {
+      // 終了と同時に正常終了したコマンドは完了として扱う。
+      // 0 以外 (abort による kill 等) は終了による中断。
+      if (result.code !== 0) {
+        throw new Error("command aborted by shutdown");
+      }
+    } else if (signal.aborted) {
       throw new Error(`command timed out after ${timeout}ms`);
     }
 
