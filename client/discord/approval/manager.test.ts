@@ -15,6 +15,7 @@ import {
   ApprovalManager as ApprovalManagerClass,
   type ApprovalResult,
   createCanUseTool,
+  escapeLineStart,
   STATUS_RESERVE,
   STATUS_SUFFIX,
 } from "./manager.ts";
@@ -718,8 +719,93 @@ describe("ApprovalManager", () => {
       "ch-1",
     );
 
-    // 開きと閉じの 2 つだけが 3 連バッククォートであること。
-    assert.deepStrictEqual(sent[0].content.match(/```/g)?.length, 2);
+    // 開きと閉じの 2 つだけが、エスケープされていない 3 連バッククォートであること。
+    assert.deepStrictEqual(sent[0].content.match(/(?<!\\)```/g)?.length, 2);
+  });
+
+  test("description に改行や行頭の # > があってもヘッダが 2 行で終わり、続きが json コードフェンスであること", async () => {
+    const { resolver, sent } = fakeChannelResolver(new Set(["ch-1"]));
+    const manager = new ApprovalManagerClass(
+      fakeClient(),
+      "/tmp/loms-claw-test-nonexistent/settings.json",
+      { channelResolver: resolver, timeoutMs: 10 },
+    );
+
+    await manager.requestApproval(
+      "Bash",
+      { command: "ls", description: "# 見出し\n> 引用\r\n- リスト" },
+      "ch-1",
+    );
+
+    const lines = sent[0].content.split("\n");
+    assert.deepStrictEqual(lines[0], "**Tool: `Bash`**");
+    assert.ok(lines[2].startsWith("```json"), "3 行目が json フェンスの開始");
+    assert.ok(lines[1].startsWith("\\"), "2 行目が行頭の記号をエスケープする");
+  });
+
+  test("description の行頭の記号がエスケープされ、通常の description は変わらないこと", async () => {
+    const cases: [string, string][] = [
+      ["# 見出し", "\\# 見出し"],
+      ["> 引用", "\\> 引用"],
+      [">>> 引用", "\\>>> 引用"],
+      ["- 項目", "\\- 項目"],
+      ["-# 小さい", "\\-# 小さい"],
+      ["1. 項目", "1\\. 項目"],
+      ["  # 先頭に空白", "\\# 先頭に空白"],
+      ["List files", "List files"],
+      ["2 つのファイルを消す", "2 つのファイルを消す"],
+      ["v1.2 に上げる", "v1.2 に上げる"],
+      ["1.5 倍", "1\\.5 倍"],
+    ];
+    for (const [input, expected] of cases) {
+      const { resolver, sent } = fakeChannelResolver(new Set(["ch-1"]));
+      const manager = new ApprovalManagerClass(
+        fakeClient(),
+        "/tmp/loms-claw-test-nonexistent/settings.json",
+        { channelResolver: resolver, timeoutMs: 10 },
+      );
+      await manager.requestApproval(
+        "Bash",
+        { command: "ls", description: input },
+        "ch-1",
+      );
+      assert.deepStrictEqual(sent[0].content.split("\n")[1], expected, input);
+    }
+  });
+
+  test("空白だけの description ではヘッダがツール名の行だけになること", async () => {
+    const { resolver, sent } = fakeChannelResolver(new Set(["ch-1"]));
+    const manager = new ApprovalManagerClass(
+      fakeClient(),
+      "/tmp/loms-claw-test-nonexistent/settings.json",
+      { channelResolver: resolver, timeoutMs: 10 },
+    );
+    await manager.requestApproval(
+      "Bash",
+      { command: "ls", description: "   " },
+      "ch-1",
+    );
+    const lines = sent[0].content.split("\n");
+    assert.deepStrictEqual(lines[0], "**Tool: `Bash`**");
+    assert.ok(lines[1].startsWith("```json"));
+  });
+
+  test("description の ** と単独のバッククォートがエスケープされて出ること", async () => {
+    const { resolver, sent } = fakeChannelResolver(new Set(["ch-1"]));
+    const manager = new ApprovalManagerClass(
+      fakeClient(),
+      "/tmp/loms-claw-test-nonexistent/settings.json",
+      { channelResolver: resolver, timeoutMs: 10 },
+    );
+
+    await manager.requestApproval(
+      "Bash",
+      { command: "ls", description: "**bold** and `code`" },
+      "ch-1",
+    );
+
+    const line = sent[0].content.split("\n")[1];
+    assert.deepStrictEqual(line, "\\*\\*bold\\*\\* and \\`code\\`");
   });
 
   test("ツール名に改行やタブがあってもヘッダが 1 行でインラインコードが閉じたままで、保存されるツール名は元のままであること", async () => {
@@ -828,5 +914,21 @@ describe("ApprovalManager", () => {
       assert.deepStrictEqual(appendStatus(content, suffix), content + suffix);
       assert.ok((content + suffix).length <= 2000);
     }
+  });
+});
+
+describe("escapeLineStart", () => {
+  test("行頭の # > - と番号付きリストの . がエスケープされ、先頭の空白が除かれること", () => {
+    assert.deepStrictEqual(escapeLineStart("# a"), "\\# a");
+    assert.deepStrictEqual(escapeLineStart(">>> a"), "\\>>> a");
+    assert.deepStrictEqual(escapeLineStart("-# a"), "\\-# a");
+    assert.deepStrictEqual(escapeLineStart("12. a"), "12\\. a");
+    assert.deepStrictEqual(escapeLineStart("  # a"), "\\# a");
+  });
+
+  test("行頭の記号でない文字列は変わらず、空白だけなら空文字になること", () => {
+    assert.deepStrictEqual(escapeLineStart("List a # b"), "List a # b");
+    assert.deepStrictEqual(escapeLineStart("v1.2"), "v1.2");
+    assert.deepStrictEqual(escapeLineStart("   "), "");
   });
 });

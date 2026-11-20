@@ -28,6 +28,7 @@ import { DISCORD_MESSAGE_LIMIT } from "../message.ts";
 import { INTERACTION_TIMEOUT_MS } from "./constants.ts";
 import {
   appendStatus,
+  formatSummaryPart,
   neutralizeBackticks,
   parseQuestions,
   type Question,
@@ -42,6 +43,17 @@ import {
 } from "../../../core/approval-settings.ts";
 
 const log = createLogger("approval");
+
+/**
+ * 行頭に置かれると見出し・引用・リストになる記号をバックスラッシュでエスケープする。
+ * 先頭の空白は除く。`*`・`_`・バッククォートは `formatSummaryPart` がエスケープ済みなので対象にしない。
+ */
+export function escapeLineStart(text: string): string {
+  return text
+    .trimStart()
+    .replace(/^([#>-])/, "\\$1")
+    .replace(/^(\d+)\./, "$1\\.");
+}
 
 /**
  * 本文の末尾に足す結果表示 (suffix)。文言はここに集め、余白 (`STATUS_RESERVE`) はその最長から導く。
@@ -227,7 +239,7 @@ export class ApprovalManager {
 
     const description =
       typeof toolInput.description === "string"
-        ? truncate(neutralizeBackticks(toolInput.description), 300)
+        ? escapeLineStart(formatSummaryPart(toolInput.description, 300))
         : "";
     // インラインコードを閉じさせないよう、ヘッダの表示だけ制御文字・U+2028・U+2029 を空白に、バッククォートを `'` にする。
     // 置き換えた後は単独のバッククォートが残らないので neutralizeBackticks は要らない。
