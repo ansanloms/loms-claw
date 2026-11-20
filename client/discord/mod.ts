@@ -448,6 +448,7 @@ export class DiscordBot {
       isSelfMessage,
       authorId: message.author.id,
       authorDisplayName: message.author.displayName,
+      memberDisplayName: message.member?.displayName,
       authorizedUserId: this.config.discord.userId,
       lookupDisplayName: (userId) =>
         message.guild?.members.cache.get(userId)?.displayName ??
@@ -470,7 +471,6 @@ export class DiscordBot {
         channel,
         isSelfMessage,
         hasAttachments,
-        getBotUserId: () => this.client.user?.id,
       }),
     );
   }

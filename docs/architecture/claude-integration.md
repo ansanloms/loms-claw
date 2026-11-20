@@ -105,15 +105,15 @@ cron は中核の `runOneShot()` (`core/conversation.ts`) が `drainResultEvent(
 
 `claude/template.ts` の `replaceTemplateVariables(template, vars)` は正規表現 `/\{\{([\w.]+)\}\}/g` で `{{key}}` を `vars[key]` に置換する。`vars` に無いキーはプレースホルダーのまま残る。
 
-| 変数                       | chat での値 (`client/discord/mod.ts` が組み立てて中核へ渡す)                         | cron での値 (`CronPorts.guildTemplateVars()`)        |
-| -------------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------- |
-| `{{discord.guild.id}}`     | `config.discord.guildId`                                                             | `config.discord.guildId`                             |
-| `{{discord.guild.name}}`   | `message.guild?.name ?? ""`                                                          | `client.guilds.cache` から引いた名前 (無ければ `""`) |
-| `{{discord.channel.id}}`   | `localId` = `threadId ?? channelId` (発話があった場所)                               | 渡さない                                             |
-| `{{discord.channel.name}}` | 発話があったチャンネル / スレッドの `name` (無ければ `""`)                           | 渡さない                                             |
-| `{{discord.channel.type}}` | `"thread"` / `"text"`                                                                | 渡さない                                             |
-| `{{discord.user.id}}`      | 発話者 ID。AI to AI 自己メンション起動時は `config.discord.userId` (認可ユーザー)    | 渡さない                                             |
-| `{{discord.user.name}}`    | 発話者の `displayName`。自己メンション起動時は認可ユーザーの表示名 (取れなければ ID) | 渡さない                                             |
+| 変数                       | chat での値 (`client/discord/mod.ts` が組み立てて中核へ渡す)                                                                                        | cron での値 (`CronPorts.guildTemplateVars()`)        |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `{{discord.guild.id}}`     | `config.discord.guildId`                                                                                                                            | `config.discord.guildId`                             |
+| `{{discord.guild.name}}`   | `message.guild?.name ?? ""`                                                                                                                         | `client.guilds.cache` から引いた名前 (無ければ `""`) |
+| `{{discord.channel.id}}`   | `localId` = `threadId ?? channelId` (発話があった場所)                                                                                              | 渡さない                                             |
+| `{{discord.channel.name}}` | 発話があったチャンネル / スレッドの `name` (無ければ `""`)                                                                                          | 渡さない                                             |
+| `{{discord.channel.type}}` | `"thread"` / `"text"`                                                                                                                               | 渡さない                                             |
+| `{{discord.user.id}}`      | 発話者 ID。AI to AI 自己メンション起動時は `config.discord.userId` (認可ユーザー)                                                                   | 渡さない                                             |
+| `{{discord.user.name}}`    | 発話者の表示名 (`message.member?.displayName`、無ければ `message.author.displayName`)。自己メンション起動時は認可ユーザーの表示名 (取れなければ ID) | 渡さない                                             |
 
 注意点:
 

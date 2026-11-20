@@ -111,13 +111,13 @@ bot 側でメッセージをスレッドへ自動分離する機能は実装し�
 
 `DiscordBot.onMessage` はここまでで確定した値から次を組み立てて `Conversation.submit()` に渡す (以降は特記が無い限り中核 `core/conversation.ts` の処理)。
 
-- 発話者 (`resolveSpeaker()`、`client/discord/turn-output.ts`): 人間なら `message.author.id`/`message.author.displayName`。自己メッセージなら `config.discord.userId` と、その表示名 (guild member cache → users cache → ID の順で解決)。
+- 発話者 (`resolveSpeaker()`、`client/discord/turn-output.ts`): 人間なら `message.author.id` と、`message.member?.displayName` (ギルドのニックネーム優先。キャッシュに無ければ `message.author.displayName`)。自己メッセージなら `config.discord.userId` と、その表示名 (guild member cache → users cache → ID の順で解決)。
 - テンプレート変数 (`buildTemplateVars()`) `discord.guild.id / discord.guild.name / discord.channel.id (= localId) / discord.channel.name / discord.channel.type ("thread" | "text") / discord.user.id / discord.user.name`。いずれも cache の同期参照で、キュー投入前に算出する。
 - `TurnOutput` (`createTurnOutput()`、`client/discord/turn-output.ts`)。応答は `mention = isSelfMessage ? "" : "<@authorId> "` を付け、`splitMessage(text, DISCORD_MESSAGE_LIMIT - mention.length)` で分割してから各チャンク先頭に付与して `channel.send()` する (`sendReply`)。`sendThinking` は各行の先頭に `>` と半角スペース (Discord の引用記法) を付け、`splitMessage()` の既定上限で分割し、メンション無しで送る。
 
 ### 6. スコープ単位の直列化 (`ScopeQueue`)
 
-`submit()` は `chatQueue.isBusy(localId)` を見てから `chatQueue.enqueue(localId, turn)` に積む (`core/queue.ts`)。同一 key のターンは投入順に 1 件ずつ実行され、別 key は並行に走る。前のターンが失敗しても後続は実行される。busy だった場合は `output.onQueued()` を呼び (Discord 側はメッセージへ ⏳ リアクションを付ける。fire-and-forget)、自分のターン開始時 (`onTurnStart`) に bot 自身のリアクションを外す。`isBusy` 判定と `enqueue` の間に await を挟まないことで連投時の順序を保つ (`onQueued()` を同期にしているのはこのため)。これにより同一セッションへの並行 `query()` と session ID の競合を防ぐ。
+`submit()` は `chatQueue.isBusy(localId)` を見てから `chatQueue.enqueue(localId, turn)` に積む (`core/queue.ts`)。同一 key のターンは投入順に 1 件ずつ実行され、別 key は並行に走る。前のターンが失敗しても後続は実行される。busy だった場合は `output.onQueued()` を呼び (Discord 側はメッセージへ ⏳ リアクションを付ける。`react()` は待たず、その Promise を保持する)、react の失敗は警告ログに残す。自分のターン開始時 (`onTurnStart`) は react の完了を待たず、Promise が解決したら戻り値の `MessageReaction` から `users.remove()` (引数なし = bot 自身) で外す (`reactions.cache` は引かない。react が滞ってもターンの開始は止まらず、外すのは解決後になる)。`isBusy` 判定と `enqueue` の間に await を挟まないことで連投時の順序を保つ (`onQueued()` を同期にしているのはこのため)。これにより同一セッションへの並行 `query()` と session ID の競合を防ぐ。
 
 以降はキュー内のターンとして実行される。
 

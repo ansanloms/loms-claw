@@ -67,6 +67,39 @@ describe("resolveSpeaker", () => {
   });
 });
 
+describe("resolveSpeaker: 表示名", () => {
+  const base = {
+    authorId: "user-2",
+    authorDisplayName: "Bob (global)",
+    authorizedUserId: "user-1",
+    lookupDisplayName: () => undefined,
+  };
+
+  test("人間のメッセージでは memberDisplayName があればそれを使うこと", () => {
+    const speaker = resolveSpeaker({
+      ...base,
+      isSelfMessage: false,
+      memberDisplayName: "Bob (nick)",
+    });
+    assert.deepStrictEqual(speaker, { id: "user-2", name: "Bob (nick)" });
+  });
+
+  test("人間のメッセージでは memberDisplayName が無ければグローバル名を使うこと", () => {
+    const speaker = resolveSpeaker({ ...base, isSelfMessage: false });
+    assert.deepStrictEqual(speaker, { id: "user-2", name: "Bob (global)" });
+  });
+
+  test("自己メッセージでは memberDisplayName を無視すること", () => {
+    const speaker = resolveSpeaker({
+      ...base,
+      isSelfMessage: true,
+      memberDisplayName: "Bot (nick)",
+      lookupDisplayName: () => "Alice",
+    });
+    assert.deepStrictEqual(speaker, { id: "user-1", name: "Alice" });
+  });
+});
+
 describe("buildTemplateVars", () => {
   test("発話者・チャンネル・ギルドの変数が組み立てられること", () => {
     const vars = buildTemplateVars({
@@ -109,7 +142,6 @@ describe("createTurnOutput", () => {
       channel,
       isSelfMessage: true,
       hasAttachments: false,
-      getBotUserId: () => "bot-1",
     });
 
     await output.sendReply("hello");
@@ -124,7 +156,6 @@ describe("createTurnOutput", () => {
       channel,
       isSelfMessage: false,
       hasAttachments: false,
-      getBotUserId: () => "bot-1",
     });
 
     await output.sendReply("a".repeat(DISCORD_MESSAGE_LIMIT * 2 + 10));
@@ -143,7 +174,6 @@ describe("createTurnOutput", () => {
       channel,
       isSelfMessage: false,
       hasAttachments: false,
-      getBotUserId: () => "bot-1",
     });
 
     await output.sendThinking("line1\nline2\n\nline4");
@@ -162,7 +192,6 @@ describe("createTurnOutput", () => {
       channel: self.channel,
       isSelfMessage: true,
       hasAttachments: false,
-      getBotUserId: () => "bot-1",
     }).notifyError(error);
     const human = fakeChannel();
     await createTurnOutput({
@@ -170,34 +199,37 @@ describe("createTurnOutput", () => {
       channel: human.channel,
       isSelfMessage: false,
       hasAttachments: false,
-      getBotUserId: () => "bot-1",
     }).notifyError(error);
 
     assert.deepStrictEqual(self.sent, [summarizeError(error)]);
     assert.deepStrictEqual(human.sent, [`<@user-2> ${summarizeError(error)}`]);
   });
 
+  /** 保留中の Promise 連鎖 (⏳ の除去) が済むまでイベントループを回す。 */
+  async function settle(): Promise<void> {
+    for (let i = 0; i < 5; i++) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+  }
+
+  /** react の戻り値 (MessageReaction) から users.remove を記録するフェイク。 */
+  function fakeReaction(removed: string[]) {
+    return {
+      users: {
+        remove: (id?: string) => {
+          removed.push(id ?? "self");
+          return Promise.resolve();
+        },
+      },
+    };
+  }
+
   test("onTurnStart: onQueued を経たターンだけ bot の ⏳ リアクションを外すこと", async () => {
     for (const queued of [true, false]) {
       const removed: string[] = [];
       const message = {
         author: { id: "user-2" },
-        react: () => Promise.resolve(),
-        reactions: {
-          cache: new Map([
-            [
-              "⏳",
-              {
-                users: {
-                  remove: (id: string) => {
-                    removed.push(id);
-                    return Promise.resolve();
-                  },
-                },
-              },
-            ],
-          ]),
-        },
+        react: () => Promise.resolve(fakeReaction(removed)),
       } as unknown as TurnMessage;
       const { channel } = fakeChannel();
       const output = createTurnOutput({
@@ -205,7 +237,6 @@ describe("createTurnOutput", () => {
         channel,
         isSelfMessage: false,
         hasAttachments: false,
-        getBotUserId: () => "bot-1",
       });
 
       if (queued) {
@@ -213,31 +244,20 @@ describe("createTurnOutput", () => {
       }
       await output.onTurnStart();
       await output.onTurnEnd();
+      await settle();
 
-      assert.deepStrictEqual(removed, queued ? ["bot-1"] : []);
+      assert.deepStrictEqual(removed, queued ? ["self"] : []);
     }
   });
 
-  test("onTurnStart: bot の user id は呼び出し時点で読まれること", async () => {
-    let botId: string | undefined = undefined;
+  test("onTurnStart: react が失敗したら外そうとしないこと", async () => {
     const removed: string[] = [];
+    let reacted = 0;
     const message = {
       author: { id: "user-2" },
-      react: () => Promise.resolve(),
-      reactions: {
-        cache: new Map([
-          [
-            "⏳",
-            {
-              users: {
-                remove: (id: string) => {
-                  removed.push(id);
-                  return Promise.resolve();
-                },
-              },
-            },
-          ],
-        ]),
+      react: () => {
+        reacted++;
+        return Promise.reject(new Error("react failed"));
       },
     } as unknown as TurnMessage;
     const { channel } = fakeChannel();
@@ -246,15 +266,44 @@ describe("createTurnOutput", () => {
       channel,
       isSelfMessage: false,
       hasAttachments: false,
-      getBotUserId: () => botId,
     });
 
     output.onQueued();
-    botId = "bot-late";
     await output.onTurnStart();
     await output.onTurnEnd();
+    await settle();
 
-    assert.deepStrictEqual(removed, ["bot-late"]);
+    assert.deepStrictEqual(reacted, 1);
+    assert.deepStrictEqual(removed, []);
+  });
+
+  test("onTurnStart: react が解決しなくてもすぐ戻り、後から解決したら ⏳ を外すこと", async () => {
+    const removed: string[] = [];
+    let resolveReact: (reaction: unknown) => void = () => {};
+    const message = {
+      author: { id: "user-2" },
+      react: () =>
+        new Promise((resolve) => {
+          resolveReact = resolve;
+        }),
+    } as unknown as TurnMessage;
+    const { channel } = fakeChannel();
+    const output = createTurnOutput({
+      message,
+      channel,
+      isSelfMessage: false,
+      hasAttachments: false,
+    });
+
+    output.onQueued();
+    await output.onTurnStart();
+    assert.deepStrictEqual(removed, []);
+
+    resolveReact(fakeReaction(removed));
+    await settle();
+    await output.onTurnEnd();
+
+    assert.deepStrictEqual(removed, ["self"]);
   });
 
   test("preparePrompt: 画像のみのメッセージでは既定文言に画像参照を付けること", async () => {
@@ -268,7 +317,6 @@ describe("createTurnOutput", () => {
       channel,
       isSelfMessage: false,
       hasAttachments: true,
-      getBotUserId: () => "bot-1",
       deps: {
         downloadImages: () => Promise.resolve(images),
         cleanupImages: () => Promise.resolve(),
@@ -291,7 +339,6 @@ describe("createTurnOutput", () => {
       channel,
       isSelfMessage: false,
       hasAttachments: false,
-      getBotUserId: () => "bot-1",
       deps: {
         downloadImages: () => Promise.reject(new Error("呼ばれないこと")),
         cleanupImages: () => Promise.reject(new Error("呼ばれないこと")),
@@ -322,7 +369,6 @@ describe("createTurnOutput", () => {
       channel,
       isSelfMessage: false,
       hasAttachments: true,
-      getBotUserId: () => "bot-1",
       deps: {
         downloadImages: () => Promise.resolve(images),
         cleanupImages: (imgs) => {
