@@ -32,7 +32,10 @@ flowchart LR
 - 引数 `options` は `ClaudeCallOptions` (`sessionId`/`appendSystemPrompt`/`model`/`effort`/`canUseTool`/`env`) に `config: ClaudeConfig`、`signal?: AbortSignal`、`queryFn?: QueryFn` を加えたもの。
 - `signal` は内部で生成した `AbortController` に橋渡しされる (既に aborted なら即 abort、そうでなければ `abort` イベントで abort)。`askClaude()` 自身はタイムアウトを持たず、呼び出し側が `AbortSignal.timeout(...)` を渡す (chat は `AbortSignal.any([AbortSignal.timeout(config.claude.timeout), Conversation の終了用 signal])`、cron は frontmatter の `timeout` があればそれ、無ければ `config.claude.timeout`)。
 - `queryFn` は `typeof query` の DI。省略時は SDK の `query`。テストではモックの `AsyncGenerator<SDKMessage>` を返す関数を注入する。
-- セッション不在時の再試行: 最初の試行が何も yield せずに失敗し、エラーメッセージが `isSessionNotFoundError()` (`"No conversation found with session ID"` を含む) に一致し、`sessionId` が指定されていた場合に限り、`resume` を外して 1 回だけやり直す。既に 1 件でも yield 済みなら再試行しない。理由: 下流の二重出力を防ぐ。新しい `session_id` は消費側が `result` イベントから保存し直す。
+- セッション不在時の再試行: `sessionId` が指定されていて、まだ再試行していない場合に限り、`resume` を外して 1 回だけやり直す。経路は 2 つある。新しい `session_id` は消費側が `result` イベントから保存し直す。
+  - 例外の経路: 最初の試行が何も yield せずに失敗し、エラーメッセージが `isSessionNotFoundError()` (`"No conversation found with session ID"` を含む) に一致する場合。
+  - エラーの result の経路: SDK は例外の前に、`is_error: true` かつ `errors` に同じ文言を含む `error_during_execution` の result を流す (`isSessionNotFoundResult()`)。それまでに yield したイベントが `system` だけ (0 件を含む) なら、その result を呼び出し側へ流さずに SDK のストリームを閉じ、後続の例外を待たずにやり直す。やり直した 2 回目が同じ result なら、通常どおり流す。
+  - どちらも、既に `system` 以外を yield 済みなら再試行しない。理由: 下流の二重出力を防ぐ。通知は WARN ログのみで、Discord には出さない。
 - それ以外の失敗: 受信したイベント種別の列 (`events received (N): ...`、0 件なら `query died before any output`) と最後のイベント (JSON を 2000 文字に切り詰め) を ERROR ログに残し、`claude query failed: <reason>` で rethrow する。
 
 ## buildQueryOptions()

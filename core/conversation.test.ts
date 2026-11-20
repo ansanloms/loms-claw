@@ -422,6 +422,51 @@ describe("Conversation", () => {
     assert.deepStrictEqual(savedSessions, [[{ channelId: "ch-1" }, "sess-42"]]);
   });
 
+  test("submit: 保存済みのセッションが無い場合、新しいセッションでやり直して成功しストアが更新されること", async () => {
+    const sessionCell: { value: string | undefined } = { value: "sess-stale" };
+    let calls = 0;
+    const staleResult = {
+      type: "result",
+      subtype: "error_during_execution",
+      duration_ms: 0,
+      duration_api_ms: 0,
+      is_error: true,
+      num_turns: 0,
+      stop_reason: null,
+      session_id: "sess-stale",
+      total_cost_usd: 0,
+      permission_denials: [],
+      errors: ["No conversation found with session ID: sess-stale"],
+    } as unknown as SDKMessage;
+    const { conversation, savedSessions } = createConversation({
+      sessionCell,
+      queryFn: () => {
+        const call = calls++;
+        async function* gen(): AsyncGenerator<SDKMessage> {
+          if (call === 0) {
+            yield staleResult;
+            throw new Error(
+              "Claude Code returned an error result: No conversation found with session ID: sess-stale",
+            );
+          }
+          yield resultEvent("answer", "sess-fresh");
+        }
+        return gen() as unknown as ReturnType<QueryFn>;
+      },
+    });
+    const { output, replies, errors } = createOutput();
+
+    await conversation.submit(createInput(), output);
+
+    assert.deepStrictEqual(calls, 2);
+    assert.deepStrictEqual(errors, []);
+    assert.deepStrictEqual(replies, ["answer"]);
+    assert.deepStrictEqual(sessionCell.value, "sess-fresh");
+    assert.deepStrictEqual(savedSessions, [
+      [{ channelId: "ch-1" }, "sess-fresh"],
+    ]);
+  });
+
   test("submit: ターン実行中にセッションがリセットされたら result で書き戻さないこと", async () => {
     const sessionCell: { value: string | undefined } = { value: "sess-old" };
     const { conversation, savedSessions } = createConversation({

@@ -72,6 +72,25 @@ export function isSessionNotFoundError(message: string): boolean {
 }
 
 /**
+ * メッセージが「resume 先のセッションが存在しない」ことを示す result か判定する。
+ *
+ * SDK は例外を投げる前に、`is_error: true` かつ `errors` に
+ * `No conversation found with session ID: <uuid>` を持つ
+ * `error_during_execution` の result を流す。その result の判定に使う。
+ */
+export function isSessionNotFoundResult(message: SDKMessage): boolean {
+  if (message.type !== "result" || !message.is_error) {
+    return false;
+  }
+  if (!("errors" in message) || !Array.isArray(message.errors)) {
+    return false;
+  }
+  return message.errors.some(
+    (e: unknown) => typeof e === "string" && isSessionNotFoundError(e),
+  );
+}
+
+/**
  * effort 値を検証し、SDK 対応の値のみ返す。
  *
  * 非対応の値は警告ログを出して `undefined` を返す。
@@ -351,15 +370,37 @@ export async function* askClaude(
     const eventTypes: string[] = [];
     let lastEvent: SDKMessage | undefined;
     let caught: unknown;
+    let sessionLost = false;
 
     try {
       for await (const message of queryFn({ prompt, options: queryOptions })) {
+        // SDK はセッション不在のとき、例外の前にエラーの result を流す。
+        // 呼び出し側へ流す前に捕まえ、ストリームを閉じて例外を待たずにやり直す。
+        // 条件を満たさなければ、通常どおり流す。
+        if (
+          sessionId !== undefined &&
+          !retriedWithoutSession &&
+          eventTypes.every((t) => t === "system") &&
+          isSessionNotFoundResult(message)
+        ) {
+          sessionLost = true;
+          break;
+        }
         eventTypes.push(message.type);
         lastEvent = message;
         yield message;
       }
     } catch (error: unknown) {
       caught = error;
+    }
+
+    if (sessionLost && sessionId !== undefined) {
+      log.warn(
+        `session ${sessionId} not found (error result), retrying with a new session`,
+      );
+      sessionId = undefined;
+      retriedWithoutSession = true;
+      continue;
     }
 
     if (caught === undefined) {

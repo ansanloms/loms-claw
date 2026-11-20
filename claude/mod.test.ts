@@ -15,6 +15,7 @@ import {
   extractTopLevelThinkingDelta,
   handleResultEvent,
   isSessionNotFoundError,
+  isSessionNotFoundResult,
   normalizeEffort,
   type QueryFn,
   requireResultText,
@@ -105,6 +106,45 @@ function resultMessage(sessionId: string): SDKMessage {
     session_id: sessionId,
     is_error: false,
   } as SDKMessage;
+}
+
+/**
+ * 本番のログで観測した、セッション不在のエラーの result。
+ * SDK はこの result の後に例外を投げる。
+ */
+function sessionNotFoundResult(
+  sessionId = "stale-session",
+  errors: string[] = [`No conversation found with session ID: ${sessionId}`],
+): SDKMessage {
+  return {
+    type: "result",
+    subtype: "error_during_execution",
+    duration_ms: 0,
+    duration_api_ms: 0,
+    is_error: true,
+    num_turns: 0,
+    stop_reason: null,
+    session_id: sessionId,
+    total_cost_usd: 0,
+    usage: {},
+    modelUsage: {},
+    permission_denials: [],
+    errors,
+  } as unknown as SDKMessage;
+}
+
+const initEvent = {
+  type: "system",
+  subtype: "init",
+  session_id: "stale-session",
+} as unknown as SDKMessage;
+
+async function collect(gen: AsyncGenerator<SDKMessage>): Promise<SDKMessage[]> {
+  const collected: SDKMessage[] = [];
+  for await (const event of gen) {
+    collected.push(event);
+  }
+  return collected;
 }
 
 describe("normalizeEffort", () => {
@@ -398,6 +438,198 @@ describe("askClaude", () => {
     // yield 済みのイベントは消費側に届いた上で throw、再試行はしない
     assert.deepStrictEqual(collected.length, 1);
     assert.deepStrictEqual(calls, 1);
+  });
+
+  test("エラーの result の後に例外が続く場合も、新規セッションでやり直し result を流さないこと", async () => {
+    const resumes: Array<string | undefined> = [];
+    const queryFn = sequencedQueryFn(
+      [
+        { messages: [sessionNotFoundResult()], throw: SESSION_NOT_FOUND },
+        { messages: [resultMessage("new-session")] },
+      ],
+      (resume) => resumes.push(resume),
+    );
+
+    const collected = await collect(
+      askClaude("hello", {
+        config: baseConfig,
+        sessionId: "stale-session",
+        queryFn,
+      }),
+    );
+
+    assert.deepStrictEqual(resumes, ["stale-session", undefined]);
+    assert.deepStrictEqual(collected.length, 1);
+    assert.deepStrictEqual(
+      (collected[0] as SDKResultMessage).session_id,
+      "new-session",
+    );
+  });
+
+  test("エラーの result を流して終わる場合 (例外なし) もやり直すこと", async () => {
+    const resumes: Array<string | undefined> = [];
+    const queryFn = sequencedQueryFn(
+      [
+        { messages: [sessionNotFoundResult()] },
+        { messages: [resultMessage("new-session")] },
+      ],
+      (resume) => resumes.push(resume),
+    );
+
+    const collected = await collect(
+      askClaude("hello", {
+        config: baseConfig,
+        sessionId: "stale-session",
+        queryFn,
+      }),
+    );
+
+    assert.deepStrictEqual(resumes, ["stale-session", undefined]);
+    assert.deepStrictEqual(collected.length, 1);
+    assert.deepStrictEqual(
+      (collected[0] as SDKResultMessage).session_id,
+      "new-session",
+    );
+  });
+
+  test("system の init の後にエラーの result が届いてもやり直すこと", async () => {
+    const resumes: Array<string | undefined> = [];
+    const queryFn = sequencedQueryFn(
+      [
+        {
+          messages: [initEvent, sessionNotFoundResult()],
+          throw: SESSION_NOT_FOUND,
+        },
+        { messages: [resultMessage("new-session")] },
+      ],
+      (resume) => resumes.push(resume),
+    );
+
+    const collected = await collect(
+      askClaude("hello", {
+        config: baseConfig,
+        sessionId: "stale-session",
+        queryFn,
+      }),
+    );
+
+    assert.deepStrictEqual(resumes, ["stale-session", undefined]);
+    // 1 回目の init は流れ、エラーの result は流れない
+    assert.deepStrictEqual(
+      collected.map((e) => e.type),
+      ["system", "result"],
+    );
+    assert.deepStrictEqual(
+      (collected[1] as SDKResultMessage).session_id,
+      "new-session",
+    );
+  });
+
+  test("やり直した 2 回目も同じエラーの result なら流し、やり直しは 1 回限りであること", async () => {
+    let calls = 0;
+    const queryFn = sequencedQueryFn(
+      [
+        { messages: [sessionNotFoundResult()], throw: SESSION_NOT_FOUND },
+        { messages: [sessionNotFoundResult()], throw: SESSION_NOT_FOUND },
+      ],
+      () => calls++,
+    );
+
+    const collected: SDKMessage[] = [];
+    await assert.rejects(
+      async () => {
+        for await (const event of askClaude("hello", {
+          config: baseConfig,
+          sessionId: "stale-session",
+          queryFn,
+        })) {
+          collected.push(event);
+        }
+      },
+      errorWith(Error, "claude query failed:"),
+    );
+    assert.deepStrictEqual(calls, 2);
+    assert.deepStrictEqual(collected.length, 1);
+    assert.deepStrictEqual(collected[0].type, "result");
+  });
+
+  test("sessionId 未指定ではエラーの result でもやり直さないこと", async () => {
+    let calls = 0;
+    const queryFn = sequencedQueryFn(
+      [{ messages: [sessionNotFoundResult()] }],
+      () => calls++,
+    );
+
+    const collected = await collect(
+      askClaude("hello", { config: baseConfig, queryFn }),
+    );
+    assert.deepStrictEqual(calls, 1);
+    assert.deepStrictEqual(collected.length, 1);
+  });
+
+  test("errors が別の内容のエラーの result ではやり直さないこと", async () => {
+    let calls = 0;
+    const queryFn = sequencedQueryFn(
+      [{ messages: [sessionNotFoundResult("stale-session", ["boom"])] }],
+      () => calls++,
+    );
+
+    const collected = await collect(
+      askClaude("hello", {
+        config: baseConfig,
+        sessionId: "stale-session",
+        queryFn,
+      }),
+    );
+    assert.deepStrictEqual(calls, 1);
+    assert.deepStrictEqual(collected.length, 1);
+  });
+
+  test("assistant のイベントの後に届いたエラーの result ではやり直さないこと", async () => {
+    let calls = 0;
+    const queryFn = sequencedQueryFn(
+      [
+        {
+          messages: [
+            initEvent,
+            { type: "assistant", message: {} } as unknown as SDKMessage,
+            sessionNotFoundResult(),
+          ],
+        },
+      ],
+      () => calls++,
+    );
+
+    const collected = await collect(
+      askClaude("hello", {
+        config: baseConfig,
+        sessionId: "stale-session",
+        queryFn,
+      }),
+    );
+    assert.deepStrictEqual(calls, 1);
+    assert.deepStrictEqual(
+      collected.map((e) => e.type),
+      ["system", "assistant", "result"],
+    );
+  });
+});
+
+describe("isSessionNotFoundResult", () => {
+  test("セッション不在のエラーの result を検出すること", () => {
+    assert.deepStrictEqual(
+      isSessionNotFoundResult(sessionNotFoundResult()),
+      true,
+    );
+  });
+
+  test("成功の result・別のエラー・result 以外は検出しないこと", () => {
+    assert.deepStrictEqual(isSessionNotFoundResult(resultMessage("s")), false);
+    assert.deepStrictEqual(
+      isSessionNotFoundResult(sessionNotFoundResult("s", ["boom"])),
+      false,
+    );
+    assert.deepStrictEqual(isSessionNotFoundResult(initEvent), false);
   });
 });
 
