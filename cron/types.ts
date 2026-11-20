@@ -10,7 +10,7 @@
 interface CronJobBase {
   /** ジョブ名（一意）。ファイル名そのもの（例: "news-tech.md", "token-check.yaml"）。 */
   name: string;
-  /** cron 式（5フィールド、TZ 環境変数依存）。 */
+  /** cron 式（5 フィールド。croner で解釈し、日と曜日の両方を指定した場合は AND。TZ 環境変数依存）。 */
   schedule: string;
   /** 結果の自動投稿先と承認ボタン送信先のチャンネル ID（省略可）。 */
   channelId?: string;

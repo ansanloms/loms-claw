@@ -85,6 +85,21 @@ describe("validateCronJob", () => {
     assert.deepStrictEqual(job.channelId, undefined);
   });
 
+  test("不正な cron 式が弾かれること", () => {
+    for (const bad of [
+      "9, * * * *",
+      "-5 * * * *",
+      "/15 * * * *",
+      "1-3-5 * * * *",
+      "1e1 * * * *",
+    ]) {
+      assert.throws(
+        () => validateCronJob({ schedule: bad }, "prompt", "test.md"),
+        errorWith(Error, "invalid cron expression"),
+      );
+    }
+  });
+
   test("schedule が欠けている場合はエラーになること", () => {
     assert.throws(
       () => validateCronJob({}, "prompt", "test.md"),

@@ -2,7 +2,8 @@
  * cron ジョブのカスタムスケジューラ。
  *
  * 60 秒間隔のインターバルで全ジョブの cron 式を評価し、
- * マッチするジョブのコールバックを実行する。
+ * マッチするジョブのコールバックを実行する。tick が遅れた場合は、
+ * 前回の tick の次の分から現在の分まで（上限 60 分）を遡って評価する。
  *
  * ジョブの追加・削除・スケジュール変更をホットリロードでサポートする
  * (Claude Code 組み込みの CronCreate 等とは無関係)。
@@ -22,6 +23,11 @@ const log = createLogger("cron-scheduler");
  * tick 間隔（ミリ秒）。
  */
 const TICK_INTERVAL_MS = 60_000;
+
+/**
+ * tick が遅れたときに遡って評価する分数の上限。
+ */
+const MAX_CATCH_UP_MINUTES = 60;
 
 /**
  * cron ジョブのスケジューラ。
@@ -114,6 +120,9 @@ export class CronScheduler {
   /**
    * tick 処理。全ジョブの cron 式を評価し、マッチするものを実行する。
    *
+   * 前回の tick から複数分空いた場合は、間の分（現在の分を含め最大 60 分）も評価する。
+   * ジョブは 1 tick につき最大 1 回だけ起動する。初回の tick は現在の分だけを評価する。
+   *
    * テスト用に `now` パラメータを受け付ける。
    */
   tick(now?: Temporal.ZonedDateTime): void {
@@ -124,11 +133,25 @@ export class CronScheduler {
     if (minuteKey === this.lastTickMinute) {
       return;
     }
+
+    // 評価する最初の分。初回と時計の巻き戻りは現在の分だけを見る。
+    const fromKey =
+      this.lastTickMinute === -1 || minuteKey < this.lastTickMinute
+        ? minuteKey
+        : Math.max(
+            this.lastTickMinute + 1,
+            minuteKey - MAX_CATCH_UP_MINUTES + 1,
+          );
     this.lastTickMinute = minuteKey;
+
+    const targets: Temporal.ZonedDateTime[] = [];
+    for (let key = fromKey; key <= minuteKey; key++) {
+      targets.push(zdt.subtract({ minutes: minuteKey - key }));
+    }
 
     for (const job of this.jobs.values()) {
       try {
-        if (matchesCron(job.schedule, zdt)) {
+        if (targets.some((target) => matchesCron(job.schedule, target))) {
           log.info(`triggering cron job: ${job.name}`);
           this.callback(job);
         }

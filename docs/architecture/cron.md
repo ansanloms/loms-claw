@@ -11,9 +11,9 @@
 | ファイル                        | シンボル                                      | 役割                                                                                                                              |
 | ------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | `cron/types.ts`                 | `CronJobDef`                                  | ジョブ定義の型 (`kind` で判別する `CronPromptJob` / `CronCommandJob` の union)。loader の出力、scheduler / executor の入力        |
-| `cron/match.ts`                 | `parseCronExpression()` / `matchesCron()`     | 5 フィールド cron 式のパースとローカルタイムでのマッチ判定                                                                        |
+| `cron/match.ts`                 | `parseCronExpression()` / `matchesCron()`     | 5 フィールド cron 式の検証 (`parseCronExpression()`) とタイムゾーン指定でのマッチ判定 (`matchesCron()`)。実体は croner            |
 | `cron/loader.ts`                | `loadCronJobsFromDir()` / `validateCronJob()` | `cron/` 走査、フロントマター抽出、JSON Schema 検証                                                                                |
-| `cron/scheduler.ts`             | `CronScheduler`                               | 60 秒 tick で全ジョブを評価し、マッチしたジョブのコールバックを呼ぶ                                                               |
+| `cron/scheduler.ts`             | `CronScheduler`                               | 60 秒 tick で全ジョブを評価し (遅れた tick は直近 60 分まで遡って評価)、マッチしたジョブのコールバックを呼ぶ                      |
 | `cron/executor.ts`              | `CronExecutor`                                | scheduler を保持し、ジョブ 1 件の実行 (`runOneShot()` → `CronPorts` 経由の送信) を担う。`CronPorts` / `CronTarget` の型定義もここ |
 | `client/discord/cron-target.ts` | `createDiscordCronPorts()`                    | `CronPorts` の Discord 実装 (チャンネル解決 + 分割送信、ギルド変数、承認コールバック)                                             |
 | `client/discord/mod.ts`         | `DiscordBot.start()`                          | `ClientReady` で executor を生成・起動し、reload / run / list を API へ配線する                                                   |
@@ -23,7 +23,7 @@
 
 ```mermaid
 flowchart LR
-  T[CronScheduler.tick<br/>60 秒ごと] --> M{matchesCron?}
+  T[CronScheduler.tick<br/>60 秒ごと<br/>遅れた分は最大 60 分遡る] --> M{matchesCron?}
   M -- no --> T
   M -- yes --> R[CronExecutor.runJob]
   R --> G{running に<br/>同名あり?}
@@ -62,16 +62,16 @@ channelId: "{channelId}"
 
 `cron/loader.ts` の `frontMatterSchema` (JSON Schema、`@cfworker/json-schema` で検証) が受け付けるキーは次のとおり。
 
-| フィールド      | 必須 | 型                          | 既定                     | 説明                                                                                                               |
-| --------------- | ---- | --------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| `schedule`      | yes  | string (1 文字以上)         | —                        | 5 フィールド cron 式。構造検証通過後に `parseCronExpression()` で構文を別途検証する。評価は TZ 依存 (後述)         |
-| `channelId`     | no   | string \| number            | —                        | 結果の投稿先、かつ承認ボタン / `AskUserQuestion` の送信先。`String()` で文字列化して保持。省略時は結果を投稿しない |
-| `resumeSession` | no   | boolean                     | `false`                  | `true` のときだけ前回セッションを resume する                                                                      |
-| `maxTurns`      | no   | integer (1 以上)            | `config.claude.maxTurns` | `ClaudeConfig.maxTurns` のオーバーライド                                                                           |
-| `timeout`       | no   | integer (ms, 1..2147483647) | `config.claude.timeout`  | `askClaude()` に渡す `AbortSignal.timeout()` のミリ秒                                                              |
-| `once`          | no   | boolean                     | `false`                  | `true` なら 1 回実行後 (成否を問わず) にジョブファイルを削除して reload する                                       |
-| `model`         | no   | string                      | —                        | モデル alias / full name のオーバーライド                                                                          |
-| `effort`        | no   | string (enum)               | —                        | `claude/mod.ts` の `EFFORT_LEVELS` (`low` / `medium` / `high` / `xhigh` / `max`) のいずれか                        |
+| フィールド      | 必須 | 型                          | 既定                     | 説明                                                                                                                             |
+| --------------- | ---- | --------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `schedule`      | yes  | string (1 文字以上)         | —                        | 5 フィールド cron 式 (croner の構文、後述)。構造検証通過後に `parseCronExpression()` で構文を別途検証する。評価は TZ 依存 (後述) |
+| `channelId`     | no   | string \| number            | —                        | 結果の投稿先、かつ承認ボタン / `AskUserQuestion` の送信先。`String()` で文字列化して保持。省略時は結果を投稿しない               |
+| `resumeSession` | no   | boolean                     | `false`                  | `true` のときだけ前回セッションを resume する                                                                                    |
+| `maxTurns`      | no   | integer (1 以上)            | `config.claude.maxTurns` | `ClaudeConfig.maxTurns` のオーバーライド                                                                                         |
+| `timeout`       | no   | integer (ms, 1..2147483647) | `config.claude.timeout`  | `askClaude()` に渡す `AbortSignal.timeout()` のミリ秒                                                                            |
+| `once`          | no   | boolean                     | `false`                  | `true` なら 1 回実行後 (成否を問わず) にジョブファイルを削除して reload する                                                     |
+| `model`         | no   | string                      | —                        | モデル alias / full name のオーバーライド                                                                                        |
+| `effort`        | no   | string (enum)               | —                        | `claude/mod.ts` の `EFFORT_LEVELS` (`low` / `medium` / `high` / `xhigh` / `max`) のいずれか                                      |
 
 - `additionalProperties: false` のため、上記以外のキー (typo 等) は検証エラーになる。ファイル単位の失敗として扱われるため、当該ジョブだけが loader (下記) でスキップされ、他のジョブの読み込みは続く。
 - 本文が空 (trim 後に空文字) のファイルは検証エラーになる。エラーメッセージは `prompt body is empty` である。
@@ -118,19 +118,21 @@ command: "cron/scripts/check.sh"
 
 ## match (`cron/match.ts`)
 
-標準 5 フィールド (分 時 日 月 曜日) の cron 式を扱う。
+パースと一致判定は [croner](https://github.com/Hexagon/croner) に委ねる。5 フィールド (分 時 日 月 曜日) の cron 式を扱う。
 
-- 各フィールドは `*`、`N`、`N-M`、`X/step` (`X` は `*`/`N`/`N-M`)、およびそれらのカンマ区切りリストをサポートする。`N/step` は `N` からそのフィールドの最大値まで `step` 刻み。
-- 有効範囲は分 0-59、時 0-23、日 1-31、月 1-12、曜日 0-7。曜日の 7 は 0 (日曜) に正規化される。範囲外の値、`start > end` の範囲、1 未満または非整数の step は構文エラーとして throw する。
-- `parseCronExpression()` の結果はモジュールレベルの `Map` にキャッシュされる。理由: 同じ式を毎分評価するため。
-- `matchesCron(expression, now?)` は `now` 省略時に `Temporal.Now.zonedDateTimeISO()` を使い、システムのタイムゾーン (コンテナでは compose が渡す `TZ`) で評価する。Temporal の `dayOfWeek` (1=月 .. 7=日) は `% 7` で 0=日 .. 6=土に変換して比較する。
+- `new Cron(expression, { mode: "5-part", domAndDow: true, timezone })` を使う。`mode: "5-part"` で 5 フィールド以外 (秒・年を足した 6・7 フィールド) は構文エラーになる。`domAndDow: true` で日と曜日を両方指定した場合は AND で評価する (croner の既定は OR)。
+- 構文は croner のもの。`*`、`N`、`N-M`、`*/step`、`N-M/step`、カンマ区切りのリストに加え、月名・曜日名 (`JAN`、`MON`)、`L`/`W`/`#`/`?`、ニックネーム (`@daily`、`@hourly` 等) も通る。曜日は 0 も 7 も日曜。`N/step` (数値始まりのステップ) と、フィールドの最大値を超えるステップ (分の `*/90` 等) は構文エラーになる。
+- `parseCronExpression(expression)` は構文検証だけを行い、戻り値は無い (`void`)。不正なら throw する。croner は `:` を含む文字列を ISO 日時の 1 回きりの予定として受理し `mode` を素通りするため、croner に渡す前に空白区切り 5 フィールドであること (ニックネームを除く) を確かめる。また `nextRun()` が `null` の式 (`0 9 31 2 *` 等、永遠に来ない式) も throw する。loader がジョブ読み込み時に呼ぶ。
+- `matchesCron(expression, now?)` は `now` 省略時に `Temporal.Now.zonedDateTimeISO()` を使い、`now.timeZoneId` (システムのタイムゾーン。コンテナでは compose が渡す `TZ`) で評価する。`now` は分の先頭に切り捨ててから croner の `match()` に渡す。croner の 5-part は秒を 0 に固定するため、秒が 0 でない時刻で不一致になるのを避ける。
+- `Cron` インスタンスは式とタイムゾーンの組でモジュールレベルの `Map` にキャッシュする。理由: 同じ式を毎分評価するため。callback なしで生成するのでタイマーは張られない。
 
 ## scheduler (`cron/scheduler.ts`)
 
 `CronScheduler` はコンストラクタでコールバック `(job: CronJobDef) => void` を受け取り、`setInterval` ベースで動く。
 
 - `TICK_INTERVAL_MS = 60_000`。`start()` は現在時刻から次の分境界までの残り ms を `setTimeout` で待ってから最初の `tick()` を実行し、その後 `setInterval` で 60 秒ごとに `tick()` を回す。既に開始済みなら何もしない。
-- `tick(now?)` は `epochMilliseconds / TICK_INTERVAL_MS` の floor を分キーとして `lastTickMinute` と比較し、同一分なら何もしない (二重発火ガード)。その後、登録済みの全ジョブについて `matchesCron(job.schedule, zdt)` を評価し、マッチしたジョブごとにコールバックを呼ぶ。
+- `tick(now?)` は `epochMilliseconds / TICK_INTERVAL_MS` の floor を分キーとして `lastTickMinute` と比較し、同一分なら何もしない (二重発火ガード)。その後、登録済みの全ジョブについて `matchesCron(job.schedule, ...)` を評価し、マッチしたジョブごとにコールバックを呼ぶ。
+- 追いつき走査: `lastTickMinute` がある場合は、その次の分から現在の分まで (`MAX_CATCH_UP_MINUTES = 60` が上限) を走査し、いずれかの分に一致したジョブを 1 tick につき 1 回だけ起動する。初回の tick (`lastTickMinute` 無し。`stop()` でも戻る) は現在の分だけを見る。上限を超えた遅延 (長時間のスリープ等) では直近 60 分だけを遡り、それより前の分は起動しない。
 - ジョブ 1 件の評価で例外が出ても `try / catch` で ERROR ログに落とし、他のジョブの評価を続ける (ジョブ単位のエラー隔離)。コールバックは戻り値を待たずに呼ぶため、executor の非同期処理は tick をブロックしない。
 - `replaceAll(jobs)` は内部の `Map<name, CronJobDef>` を丸ごと差し替える。タイマーは維持されるため、実行中のスケジューラに対するホットスワップになる。`stop()` はアライン用 `setTimeout` と `setInterval` を両方止め、`lastTickMinute` をリセットする。
 - `getJob(name)`/`getAllJobs()`/`size` を公開し、executor の `findJob()`/`listJobs()` がこれを使う。
