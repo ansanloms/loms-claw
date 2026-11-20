@@ -139,6 +139,19 @@ describe("createSessionsRoutes", () => {
     assert.deepStrictEqual(res.status, 429);
   });
 
+  test("POST: 終了処理中 (unavailable) なら 503 を返すこと", async () => {
+    const { app } = createApp("unavailable");
+
+    const res = await post(app, "/sessions/10000000000000000/messages", {
+      prompt: "a",
+    });
+
+    assert.deepStrictEqual(res.status, 503);
+    assert.deepStrictEqual(await res.json(), {
+      error: "sessions not available (shutting down)",
+    });
+  });
+
   test("POST: コンテキスト未注入なら両ルートとも 503 を返すこと", async () => {
     const app = new Hono();
     app.route("/sessions", createSessionsRoutes());

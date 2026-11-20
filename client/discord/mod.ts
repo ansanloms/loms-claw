@@ -265,6 +265,7 @@ export class DiscordBot {
               userId: this.config.discord.userId,
               conversation: this.conversation,
               limiter: this.sessionRequestLimiter,
+              isClosed: () => this.closed,
             }),
         };
         const healthCtx: HealthRouteContext = {
@@ -327,6 +328,8 @@ export class DiscordBot {
     this.closed = true;
     this.client.off(Events.MessageCreate, this.onMessageCreate);
     this.client.off(Events.InteractionCreate, this.onInteractionCreate);
+    // 実行中・キュー待ちのターンを中断する (完了は待たない)。
+    this.conversation.shutdown();
     this.cronExecutor?.stop();
 
     if (this.apiServer) {

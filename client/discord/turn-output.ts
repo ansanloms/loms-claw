@@ -132,6 +132,20 @@ export function createTurnOutput(args: TurnOutputArgs): TurnOutput {
   // onQueued で付けた ⏳ の react の結果 (失敗は undefined)。onTurnStart が待って外す。
   let queuedReaction: Promise<MessageReaction | undefined> | undefined;
 
+  // ⏳ を外す。onTurnStart と onTurnEnd (ターンが始まらずに終わった場合) で共有し、
+  // 一度外したら保持を捨てて二重に外さない。react の完了は待たない (滞ってもターンを
+  // 止めない)。remove() の引数を省くと discord.js は client.user を使う。
+  // reactions.cache は引かない。
+  const removeQueuedReaction = (): void => {
+    const pending = queuedReaction;
+    queuedReaction = undefined;
+    void pending?.then((reaction) =>
+      reaction?.users.remove().catch((e) => {
+        log.warn("⏳ リアクションを外せなかった:", e);
+      }),
+    );
+  };
+
   // 応答は発言者宛にする: 分割後のすべての投稿の先頭にメンションを付ける。
   // メンション分を引いた上限で分割してから各チャンク先頭に付与することで、
   // どのチャンクでも上限ぎりぎりでメンション分が溢れない（2000 字超過しない）。
@@ -163,14 +177,8 @@ export function createTurnOutput(args: TurnOutputArgs): TurnOutput {
     },
 
     onTurnStart: async () => {
-      // 自分のターンが始まったら待機マーカー (⏳) を外す。react の完了は待たず
-      // (滞ってもターンを止めない)、解決したら戻り値から外す。remove() の引数を
-      // 省くと discord.js は client.user を使う。reactions.cache は引かない。
-      void queuedReaction?.then((reaction) =>
-        reaction?.users.remove().catch((e) => {
-          log.warn("⏳ リアクションを外せなかった:", e);
-        }),
-      );
+      // 自分のターンが始まったら待機マーカー (⏳) を外す。
+      removeQueuedReaction();
 
       // typing インジケーター開始
       keepTyping(channel, typingController.signal);
@@ -216,6 +224,9 @@ export function createTurnOutput(args: TurnOutputArgs): TurnOutput {
     notifyError: (error) => sendChunks(summarizeError(error)),
 
     onTurnEnd: async () => {
+      // onTurnStart が呼ばれずに終わったターン (shutdown で飛ばされたキュー待ち等) の
+      // ⏳ をここで外す。onTurnStart を経ていれば保持は空なので何もしない。
+      removeQueuedReaction();
       await runTurnCleanup(
         () => typingController.abort(),
         [

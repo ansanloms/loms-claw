@@ -42,6 +42,8 @@ export interface SessionRequestDeps {
   conversation: Pick<Conversation, "submit">;
   /** セッション間の依頼のレート制限 (自己メンションとは別枠)。受付時に消費する。 */
   limiter: Pick<SelfMentionRateLimiter, "tryConsume">;
+  /** bot が終了処理に入っているか。入っていれば依頼を受け付けない。 */
+  isClosed: () => boolean;
 }
 
 /**
@@ -113,6 +115,7 @@ function canBotSend(channel: GuildTextBasedChannel): boolean {
 /**
  * 依頼を対象スコープのキューに積む。ターンの完了は待たない。
  *
+ * - 終了処理中なら `unavailable` (宛先の検証・枠の消費より前に判定する)。
  * - 対象が設定のギルドの送信可能なテキスト系でなければ `not-found`。
  * - 依頼用のレート枠をここで消費し、尽きていれば `rate-limited`。受け付けた (`accepted`)
  *   依頼は、ターンとしてキューに積まれて実行を始める。
@@ -124,9 +127,16 @@ export async function submitSessionRequest(
   source: string | undefined,
   deps: SessionRequestDeps,
 ): Promise<SessionSubmitResult> {
+  if (deps.isClosed()) {
+    return "unavailable";
+  }
   const channel = await resolveTargetChannel(target, deps);
   if (!channel) {
     return "not-found";
+  }
+  // 宛先の取得中に終了処理が始まった場合も、枠を消費せずに断る。
+  if (deps.isClosed()) {
+    return "unavailable";
   }
   if (!deps.limiter.tryConsume()) {
     return "rate-limited";

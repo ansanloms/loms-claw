@@ -289,6 +289,33 @@ describe("createTurnOutput", () => {
     }
   });
 
+  test("onTurnEnd: onQueued の後 onTurnStart を経ずに終わったターンでも ⏳ を外し、onTurnStart を経たターンでは二重に外さないこと", async () => {
+    for (const started of [false, true]) {
+      const removed: string[] = [];
+      const message = {
+        author: { id: "user-2" },
+        react: () => Promise.resolve(fakeReaction(removed)),
+      } as unknown as TurnMessage;
+      const { channel } = fakeChannel();
+      const output = createTurnOutput({
+        message,
+        channel,
+        isSelfMessage: false,
+        hasAttachments: false,
+      });
+
+      output.onQueued();
+      if (started) {
+        await output.onTurnStart();
+        await settle();
+      }
+      await output.onTurnEnd();
+      await settle();
+
+      assert.deepStrictEqual(removed, ["self"], `started=${started}`);
+    }
+  });
+
   test("onTurnStart: react が失敗したら外そうとしないこと", async () => {
     const removed: string[] = [];
     let reacted = 0;
