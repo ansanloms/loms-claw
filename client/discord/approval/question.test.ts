@@ -8,6 +8,8 @@ import {
   type Question,
   QuestionManager,
   resolveSelectedLabels,
+  formatSummaryPart,
+  replaceControlChars,
   truncate,
 } from "./question.ts";
 
@@ -370,14 +372,77 @@ describe("QuestionManager 回答済みの表示", () => {
     assert.deepStrictEqual(content.match(/\*\*H\*\*: y{10}/g)?.length, 4);
   });
 
-  test("回答に 3 連のバッククォートがあっても、表示に 3 連のバッククォートが残らないこと", async () => {
+  test("回答に 3 連のバッククォートがあっても、エスケープされて素のコードフェンスが残らないこと", async () => {
     const content = await answerAll(makeQuestions(2), "body", [
       "a ``` b ````` c",
       "```",
     ]);
 
     assert.ok(content.includes("**→ 回答済み**"));
-    assert.ok(!content.includes("```"));
+    // バッククォートはすべて直前にバックスラッシュが付いていること (escapeMarkdown 単体は 4 連以上に素のバッククォートを残す)。
+    assert.ok(!/(?<!\\)`/.test(content));
+  });
+
+  test("回答と header に ** ・単独のバッククォート・_ があっても、要約の形が崩れずエスケープされて出ること", async () => {
+    const content = await answerAll(makeQuestions(1, "h_1"), "body", [
+      "a**b `c _d",
+    ]);
+
+    assert.ok(content.endsWith("**h\\_1**: a\\*\\*b \\`c \\_d"));
+  });
+
+  test("回答に改行があっても、要約が 1 質問 1 行のままであること", async () => {
+    const content = await answerAll(makeQuestions(2, "H\nI"), "body", [
+      "- a\r\n> b\n# c",
+      "x",
+    ]);
+
+    const summary = content.split("**→ 回答済み**\n")[1];
+    assert.deepStrictEqual(summary.split("\n"), [
+      "**H I**: - a > b # c",
+      "**H I**: x",
+    ]);
+  });
+
+  test("回答に単独の CR・U+2028・U+2029・タブがあっても、要約が 1 質問 1 行のままであること", async () => {
+    const content = await answerAll(makeQuestions(2, "H\u2028I"), "body", [
+      "a\rb\u2028c\u2029d\te",
+      "x",
+    ]);
+
+    const summary = content.split("**→ 回答済み**\n")[1];
+    assert.deepStrictEqual(summary.split(/[\r\u2028\u2029]|\n/), [
+      "**H I**: a b c d e",
+      "**H I**: x",
+    ]);
+  });
+
+  test("上限で切った末尾に、エスケープ用のバックスラッシュだけが残らないこと", async () => {
+    // 回答は 1 文字ごとに "\\*" の 2 文字になるので、199 文字目 (先頭 + 偶数) の境界でバックスラッシュだけが残りうる。
+    const content = await answerAll(makeQuestions(1), "body", [
+      "*".repeat(300),
+    ]);
+
+    const answer = content.split("**H**: ")[1];
+    assert.ok(answer.endsWith("…"));
+    assert.ok(answer.length <= 200);
+    const trailing = answer.slice(0, -1).match(/\\+$/)?.[0].length ?? 0;
+    assert.deepStrictEqual(trailing % 2, 0);
+    assert.deepStrictEqual(formatSummaryPart("*".repeat(300), 200), answer);
+  });
+
+  test("最大長の header・回答を 4 問分エスケープしても、2000 文字以内で → 回答済み が残ること", async () => {
+    // すべてエスケープで 2 倍になる文字。header・回答とも上限で切られる。
+    const content = await answerAll(
+      makeQuestions(4, "`".repeat(300)),
+      "x".repeat(1990),
+      ["_".repeat(500), "_".repeat(500), "_".repeat(500), "_".repeat(500)],
+    );
+
+    assert.ok(content.length <= 2000);
+    assert.ok(content.includes("**→ 回答済み**"));
+    const summary = content.split("**→ 回答済み**\n")[1];
+    assert.deepStrictEqual(summary.split("\n").length, 4);
   });
 
   test("header が 500 文字でも回答の先頭が残ること", async () => {
@@ -387,5 +452,22 @@ describe("QuestionManager 回答済みの表示", () => {
 
     assert.ok(content.includes("**→ 回答済み**"));
     assert.ok(content.includes("ANSWER-START"));
+  });
+});
+
+describe("replaceControlChars", () => {
+  test("制御文字・U+2028・U+2029 を空白 1 つにすること", () => {
+    assert.deepStrictEqual(
+      replaceControlChars("a\0b\tc\nd\re\u007ff\u2028g\u2029h"),
+      "a b c d e f g h",
+    );
+  });
+
+  test("CRLF は空白 1 つにすること", () => {
+    assert.deepStrictEqual(replaceControlChars("a\r\nb"), "a b");
+  });
+
+  test("通常の文字・バッククォートはそのまま返すこと", () => {
+    assert.deepStrictEqual(replaceControlChars("a `b` 日本語"), "a `b` 日本語");
   });
 });

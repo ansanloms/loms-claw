@@ -722,6 +722,35 @@ describe("ApprovalManager", () => {
     assert.deepStrictEqual(sent[0].content.match(/```/g)?.length, 2);
   });
 
+  test("ツール名に改行やタブがあってもヘッダが 1 行でインラインコードが閉じたままで、保存されるツール名は元のままであること", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "loms-claw-approval-"));
+    try {
+      const settingsPath = join(dir, "settings.json");
+      const { resolver, sent } = fakeChannelResolver(new Set(["ch-1"]));
+      const manager = new ApprovalManagerClass(fakeClient(), settingsPath, {
+        channelResolver: resolver,
+      });
+      const toolName = "mcp\na\tb\r\u007fc`d";
+
+      const pending = manager.requestApproval(toolName, {}, "ch-1");
+      await waitFor(() => sent.length === 1);
+
+      const header = sent[0].content.split("\n")[0];
+      assert.deepStrictEqual(header, "**Tool: `mcp a b  c'd`**");
+
+      const { interaction } = fakeButtonInteraction(
+        buttonCustomIds(sent[0].components)[1],
+      );
+      assert.deepStrictEqual(await manager.handleButton(interaction), true);
+      await pending;
+
+      const saved = JSON.parse(await readFile(settingsPath, "utf8"));
+      assert.deepStrictEqual(saved.permissions.allow, [toolName]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   test("ツール名に単独のバッククォートがあってもヘッダのインラインコードが閉じたままで、保存されるツール名は元のままであること", async () => {
     const dir = await mkdtemp(join(tmpdir(), "loms-claw-approval-"));
     try {
