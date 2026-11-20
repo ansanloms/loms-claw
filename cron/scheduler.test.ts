@@ -53,7 +53,9 @@ describe("CronScheduler", () => {
 
   test("tick でマッチするジョブのコールバックが呼ばれること", () => {
     const triggered: string[] = [];
-    const scheduler = new CronScheduler((job) => triggered.push(job.name));
+    const scheduler = new CronScheduler((job) => {
+      triggered.push(job.name);
+    });
 
     scheduler.replaceAll([
       makeJob("always", "* * * * *"),
@@ -67,7 +69,9 @@ describe("CronScheduler", () => {
 
   test("tick でマッチしないジョブのコールバックは呼ばれないこと", () => {
     const triggered: string[] = [];
-    const scheduler = new CronScheduler((job) => triggered.push(job.name));
+    const scheduler = new CronScheduler((job) => {
+      triggered.push(job.name);
+    });
 
     scheduler.replaceAll([makeJob("nine-only", "0 9 * * *")]);
 
@@ -78,7 +82,9 @@ describe("CronScheduler", () => {
 
   test("同一分の二重発火が防止されること", () => {
     const triggered: string[] = [];
-    const scheduler = new CronScheduler((job) => triggered.push(job.name));
+    const scheduler = new CronScheduler((job) => {
+      triggered.push(job.name);
+    });
 
     scheduler.replaceAll([makeJob("always", "* * * * *")]);
 
@@ -90,7 +96,9 @@ describe("CronScheduler", () => {
 
   test("異なる分では正常に発火すること", () => {
     const triggered: string[] = [];
-    const scheduler = new CronScheduler((job) => triggered.push(job.name));
+    const scheduler = new CronScheduler((job) => {
+      triggered.push(job.name);
+    });
 
     scheduler.replaceAll([makeJob("always", "* * * * *")]);
 
@@ -101,7 +109,9 @@ describe("CronScheduler", () => {
 
   test("tick を 2 分飛ばしても間の分に一致するジョブが起動すること", () => {
     const triggered: string[] = [];
-    const scheduler = new CronScheduler((job) => triggered.push(job.name));
+    const scheduler = new CronScheduler((job) => {
+      triggered.push(job.name);
+    });
     scheduler.replaceAll([makeJob("nine-oh-one", "1 9 * * *")]);
 
     scheduler.tick(zdt(2026, 3, 31, 9, 0));
@@ -112,7 +122,9 @@ describe("CronScheduler", () => {
 
   test("複数の分に一致しても 1 tick につき 1 回だけ起動すること", () => {
     const triggered: string[] = [];
-    const scheduler = new CronScheduler((job) => triggered.push(job.name));
+    const scheduler = new CronScheduler((job) => {
+      triggered.push(job.name);
+    });
     scheduler.replaceAll([makeJob("always", "* * * * *")]);
 
     scheduler.tick(zdt(2026, 3, 31, 9, 0));
@@ -122,7 +134,9 @@ describe("CronScheduler", () => {
 
   test("61 分以上飛んだら直近 60 分だけを遡ること", () => {
     const triggered: string[] = [];
-    const scheduler = new CronScheduler((job) => triggered.push(job.name));
+    const scheduler = new CronScheduler((job) => {
+      triggered.push(job.name);
+    });
     scheduler.replaceAll([
       makeJob("too-old", "0 9 * * *"),
       makeJob("edge", "1 10 * * *"),
@@ -137,7 +151,9 @@ describe("CronScheduler", () => {
 
   test("初回の tick は現在の分だけを評価すること", () => {
     const triggered: string[] = [];
-    const scheduler = new CronScheduler((job) => triggered.push(job.name));
+    const scheduler = new CronScheduler((job) => {
+      triggered.push(job.name);
+    });
     scheduler.replaceAll([makeJob("past", "0 9 * * *")]);
 
     scheduler.tick(zdt(2026, 3, 31, 9, 30));
@@ -159,7 +175,9 @@ describe("CronScheduler", () => {
 
   test("replaceAll 後の tick で新しいジョブが評価されること", () => {
     const triggered: string[] = [];
-    const scheduler = new CronScheduler((job) => triggered.push(job.name));
+    const scheduler = new CronScheduler((job) => {
+      triggered.push(job.name);
+    });
 
     scheduler.replaceAll([makeJob("old", "0 9 * * *")]);
     scheduler.tick(zdt(2026, 3, 31, 9, 0));
@@ -173,7 +191,9 @@ describe("CronScheduler", () => {
 
   test("不正な cron 式のジョブがあっても他のジョブは実行されること", () => {
     const triggered: string[] = [];
-    const scheduler = new CronScheduler((job) => triggered.push(job.name));
+    const scheduler = new CronScheduler((job) => {
+      triggered.push(job.name);
+    });
 
     scheduler.replaceAll([
       {
@@ -188,5 +208,34 @@ describe("CronScheduler", () => {
 
     scheduler.tick(zdt(2026, 3, 31, 9, 0));
     assert.deepStrictEqual(triggered, ["good"]);
+  });
+
+  test("コールバックが reject を返しても tick が throw せず、他のジョブが評価されること", async () => {
+    const triggered: string[] = [];
+    const scheduler = new CronScheduler((job) => {
+      triggered.push(job.name);
+      return job.name === "bad"
+        ? Promise.reject(new Error("boom"))
+        : Promise.resolve();
+    });
+
+    scheduler.replaceAll([
+      makeJob("bad", "* * * * *"),
+      makeJob("good", "* * * * *"),
+    ]);
+
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      scheduler.tick(zdt(2026, 3, 31, 9, 0));
+      // 未処理の rejection は macrotask の境目で通知されるので、2 周待つ
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
+    assert.deepStrictEqual(triggered, ["bad", "good"]);
+    assert.deepStrictEqual(unhandled, []);
   });
 });
