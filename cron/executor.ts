@@ -314,12 +314,19 @@ export class CronExecutor {
     target: CronTarget | undefined,
   ): Promise<void> {
     const sessionKey = `cron:${job.name}`;
+    const sessionScope = { channelId: sessionKey };
+
+    // リセット世代は getSession と組で使う (世代が違えば書き戻さない)。
+    // core/conversation.ts と同じく、getSession の await より前に同期で読む。
+    const sessionGeneration = job.resumeSession
+      ? this.store.getSessionGeneration(sessionScope)
+      : 0;
 
     // session / model / effort は独立したストア読みなので並列で取得する。
     // (cron はスレッドを持たないので channel スコープのみ)
     const [sessionId, channelModel, channelEffort] = await Promise.all([
       job.resumeSession
-        ? this.store.getSession({ channelId: sessionKey })
+        ? this.store.getSession(sessionScope)
         : Promise.resolve(undefined),
       job.channelId
         ? this.store.getModel({ channelId: job.channelId })
@@ -352,14 +359,30 @@ export class CronExecutor {
     // runOneShot() は target の有無に関わらず結果テキストを評価する。
     // result が無い/エラーなら target が無くても throw され、catch で
     // ログされる (取得済みならエラー通知も行われる)。
+    let expectedSession = sessionId;
     const text = await runOneShot({
       prompt: job.prompt,
       config: jobConfig,
       env: this.env,
       sessionId,
       setSession: job.resumeSession
-        ? (newSessionId) =>
-            this.store.setSession({ channelId: sessionKey }, newSessionId)
+        ? (newSessionId) => {
+            if (
+              this.store.replaceSession(
+                sessionScope,
+                expectedSession,
+                newSessionId,
+                sessionGeneration,
+              )
+            ) {
+              expectedSession = newSessionId;
+            } else {
+              log.info(
+                `session write-back skipped (changed during run): ${sessionKey}`,
+              );
+            }
+            return Promise.resolve();
+          }
         : undefined,
       signal,
       appendSystemPrompt,

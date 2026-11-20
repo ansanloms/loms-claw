@@ -128,12 +128,12 @@ command: "cron/scripts/check.sh"
 
 ## scheduler (`cron/scheduler.ts`)
 
-`CronScheduler` はコンストラクタでコールバック `(job: CronJobDef) => void` を受け取り、`setInterval` ベースで動く。
+`CronScheduler` はコンストラクタでコールバック `(job: CronJobDef) => void | Promise<unknown>` を受け取り、`setInterval` ベースで動く。
 
 - `TICK_INTERVAL_MS = 60_000`。`start()` は現在時刻から次の分境界までの残り ms を `setTimeout` で待ってから最初の `tick()` を実行し、その後 `setInterval` で 60 秒ごとに `tick()` を回す。既に開始済みなら何もしない。
 - `tick(now?)` は `epochMilliseconds / TICK_INTERVAL_MS` の floor を分キーとして `lastTickMinute` と比較し、同一分なら何もしない (二重発火ガード)。その後、登録済みの全ジョブについて `matchesCron(job.schedule, ...)` を評価し、マッチしたジョブごとにコールバックを呼ぶ。
 - 追いつき走査: `lastTickMinute` がある場合は、その次の分から現在の分まで (`MAX_CATCH_UP_MINUTES = 60` が上限) を走査し、いずれかの分に一致したジョブを 1 tick につき 1 回だけ起動する。初回の tick (`lastTickMinute` 無し。`stop()` でも戻る) は現在の分だけを見る。上限を超えた遅延 (長時間のスリープ等) では直近 60 分だけを遡り、それより前の分は起動しない。
-- ジョブ 1 件の評価で例外が出ても `try / catch` で ERROR ログに落とし、他のジョブの評価を続ける (ジョブ単位のエラー隔離)。コールバックは戻り値を待たずに呼ぶため、executor の非同期処理は tick をブロックしない。
+- ジョブ 1 件の評価で例外が出ても `try / catch` で ERROR ログに落とし、他のジョブの評価を続ける (ジョブ単位のエラー隔離)。コールバックは戻り値を待たずに呼ぶため、executor の非同期処理は tick をブロックしない。コールバックが Promise を返したときは `Promise.resolve(callback(job)).catch(...)` で reject を ERROR ログに落とし、結果は捨てる (定期実行の成否は `runJob` 自身がログと通知に出す)。
 - `replaceAll(jobs)` は内部の `Map<name, CronJobDef>` を丸ごと差し替える。タイマーは維持されるため、実行中のスケジューラに対するホットスワップになる。`stop()` はアライン用 `setTimeout` と `setInterval` を両方止め、`lastTickMinute` をリセットする。
 - `getJob(name)`/`getAllJobs()`/`size` を公開し、executor の `findJob()`/`listJobs()` がこれを使う。
 
@@ -178,7 +178,7 @@ Discord 実装 (`client/discord/cron-target.ts` の `createDiscordCronPorts({ cl
    - 詳細は [claude-integration](claude-integration.md)。
 3. 設定の組み立て: `jobConfig` は `ClaudeConfig` を spread でコピーし、`job.maxTurns` が指定されていれば `maxTurns` だけ上書きする。`timeout = job.timeout ?? config.timeout`。
 4. `runOneShot({ prompt: job.prompt, config: jobConfig, env, sessionId, setSession, signal: AbortSignal.timeout(timeout), appendSystemPrompt, model, effort, canUseTool: ports.createCanUseTool(job.channelId), onNonSuccess, queryFn })` (`core/conversation.ts`) を呼ぶ。`ScopeQueue` は通さない (cron ジョブは scope 単位の直列化の対象外。挙動は従来どおり)。`canUseTool` に渡す `channelId` は `job.channelId` で、省略時は `undefined` となり `ApprovalManager` は自動 deny する (共有状態へのフォールバックは無い)。承認フローは [approval](approval.md)。
-5. ストリーム消費: `runOneShot()` が内部で `askClaude()` を呼び、`drainResultEvent(stream, { onNonSuccess, setSession })` (`claude/mod.ts`) で `for await` を回し、`event.type === "result"` イベントごとに `handleResultEvent()` (非 success なら `onNonSuccess` で WARN ログ、`setSession` があれば `event.session_id` で呼ぶ) を呼び、最後の `result` イベントを返す。`text_delta`/`thinking_delta`/`tool_progress` は読まない (ストリーミング投稿・進捗表示・thinking 表示は無い)。`resumeSession` が true なら `setSession` (実行器が渡す) から `store.setSession({ channelId: "cron:{name}" }, newSessionId)` で保存する。`onNonSuccess` の WARN ログ文言 (`cron job "{name}" non-success subtype ...`) は実行器が組み立てて渡す。
+5. ストリーム消費: `runOneShot()` が内部で `askClaude()` を呼び、`drainResultEvent(stream, { onNonSuccess, setSession })` (`claude/mod.ts`) で `for await` を回し、`event.type === "result"` イベントごとに `handleResultEvent()` (非 success なら `onNonSuccess` で WARN ログ、`setSession` があれば `event.session_id` で呼ぶ) を呼び、最後の `result` イベントを返す。`text_delta`/`thinking_delta`/`tool_progress` は読まない (ストリーミング投稿・進捗表示・thinking 表示は無い)。`resumeSession` が true なら `setSession` (実行器が渡す) から `store.replaceSession({ channelId: "cron:{name}" }, expected, newSessionId, generation)` で保存する。`generation` は `getSession` の await より前に同期で読んだリセット世代、`expected` は読んだ session (書けたら新しい値に更新)。実行中に `DELETE /settings/cron:<name>` や `PATCH` (`session: null`) でリセットされていたら書かず、INFO ログを残す (chat と同じ形。共通化はしていない)。`onNonSuccess` の WARN ログ文言 (`cron job "{name}" non-success subtype ...`) は実行器が組み立てて渡す。
 6. `runOneShot()` は最後に `requireResultText(resultEvent)` (`claude/mod.ts`) で本文を取り出して返す。`result` 無しで終わっていたら `claude stream ended without result event` を throw する (`target` の有無に関わらず、`runOneShot()` が常に評価するため必ず throw される)。取り出せたら `target` があるときだけ `target.send(text)` する (分割は `CronPorts` 実装側。`channelId` 省略時は投稿しない。プロンプト側で Discord REST API を叩く設計にする)。
 
 `askClaude()`/`drainResultEvent()`/`requireResultText()` は chat と共通の部品で、`runOneShot()` はそれらを束ねただけで cron 固有の分岐は持たない ([claude-integration](claude-integration.md))。

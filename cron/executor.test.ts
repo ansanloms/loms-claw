@@ -596,6 +596,124 @@ describe("CronExecutor", () => {
       );
     }));
 
+  for (const [label, reset] of [
+    [
+      "applyPatch(session: null)",
+      (store: Store) =>
+        store.applyPatch({ channelId: "cron:reset-job" }, { session: null }),
+    ],
+    [
+      "clearScope",
+      (store: Store) => store.clearScope({ channelId: "cron:reset-job" }),
+    ],
+  ] as const) {
+    test(`resumeSession: true のジョブ実行中に ${label} でリセットされても、結果の受信後にセッションが復活しないこと`, () =>
+      withStore(async (store) => {
+        await store.setSession({ channelId: "cron:reset-job" }, "old-session");
+        const { promise: gate, resolve: resolveGate } =
+          Promise.withResolvers<void>();
+        const executor = createExecutor({
+          ports: createMockPorts(null),
+          store,
+          queryFn: mockQueryFn(
+            [
+              {
+                type: "result",
+                subtype: "success",
+                result: "r",
+                session_id: "new-session",
+                is_error: false,
+              },
+            ],
+            gate,
+          ),
+        });
+        const running = executor.runJob({
+          kind: "prompt",
+          name: "reset-job",
+          schedule: "0 0 * * *",
+          prompt: "hello",
+          resumeSession: true,
+        });
+        await reset(store);
+        resolveGate();
+        assert.deepStrictEqual(await running, "succeeded");
+        assert.deepStrictEqual(
+          await store.getSession({ channelId: "cron:reset-job" }),
+          undefined,
+        );
+      }));
+  }
+
+  for (const [label, reset] of [
+    [
+      "applyPatch(session: null)",
+      (store: Store) =>
+        store.applyPatch({ channelId: "cron:fresh-job" }, { session: null }),
+    ],
+    [
+      "clearScope",
+      (store: Store) => store.clearScope({ channelId: "cron:fresh-job" }),
+    ],
+  ] as const) {
+    test(`セッション無しで始まった resumeSession: true の実行中に ${label} でリセットされても、結果の受信後にセッションが作られないこと`, () =>
+      withStore(async (store) => {
+        const { promise: gate, resolve: resolveGate } =
+          Promise.withResolvers<void>();
+        const executor = createExecutor({
+          ports: createMockPorts(null),
+          store,
+          queryFn: mockQueryFn(
+            [
+              {
+                type: "result",
+                subtype: "success",
+                result: "r",
+                session_id: "new-session",
+                is_error: false,
+              },
+            ],
+            gate,
+          ),
+        });
+        const running = executor.runJob({
+          kind: "prompt",
+          name: "fresh-job",
+          schedule: "0 0 * * *",
+          prompt: "hello",
+          resumeSession: true,
+        });
+        await reset(store);
+        resolveGate();
+        assert.deepStrictEqual(await running, "succeeded");
+        assert.deepStrictEqual(
+          await store.getSession({ channelId: "cron:fresh-job" }),
+          undefined,
+        );
+      }));
+  }
+
+  test("resumeSession: true で既存セッションがあれば、再開して新しい session_id に更新されること", () =>
+    withStore(async (store) => {
+      await store.setSession({ channelId: "cron:upd-job" }, "old-session");
+      const executor = createExecutor({
+        ports: createMockPorts(null),
+        store,
+        queryFn: successQueryFn("result", "new-session"),
+      });
+      await executor.runJob({
+        kind: "prompt",
+        name: "upd-job",
+        schedule: "0 0 * * *",
+        prompt: "hello",
+        resumeSession: true,
+      });
+      assert.deepStrictEqual(
+        await store.getSession({ channelId: "cron:upd-job" }),
+        "new-session",
+      );
+    }));
+
   test("resumeSession: false のジョブ実行後は session が保存されないこと", () =>
     withStore(async (store) => {
       const ports = createMockPorts(null);

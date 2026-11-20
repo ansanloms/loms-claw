@@ -117,13 +117,13 @@ interface SettingsPatch {
 
 ### 個別 setter
 
-`setSession` と `replaceSession` が個別 setter として残る。`cron/executor.ts` (cron の `resumeSession: true`) は `setSession`、`core/conversation.ts` (chat) は `replaceSession` で `result` イベント受信時に `event.session_id` を保存する (ジェネレータが非ゼロ終了で throw してもセッションが残るよう、result を受け取った時点で即座に書く)。
+本番の session 書き込みは `replaceSession` が担う。`setSession` は無条件の setter としてメソッドが残るが、本番では呼ばれず、テストの準備 (セッションの仕込み) 用である。`cron/executor.ts` (cron の `resumeSession: true`) と `core/conversation.ts` (chat) はどちらも `replaceSession` で `result` イベント受信時に `event.session_id` を保存する (ジェネレータが非ゼロ終了で throw してもセッションが残るよう、result を受け取った時点で即座に書く)。
 
-`replaceSession(scope, expected, next, generation): boolean` は条件付きの書き込み。現在のリセット世代が `generation` と違えば何も書かず false を返す。一致したときは SQL 1 文で原子的に行う。`expected` があれば `UPDATE ... WHERE id = ? AND field = 'session' AND value = expected`、`expected` が undefined なら `INSERT ... ON CONFLICT DO NOTHING` (行が無いときだけ書く)。変更行があれば true。chat はターン開始時に読んだ session を `expected` にし、実行中に `/claw settings unset session`・`PATCH`/`DELETE /settings` でリセットされていたら書き戻さない (リセット側はキューを通らず即時に書くため)。
+`replaceSession(scope, expected, next, generation): boolean` は条件付きの書き込み。現在のリセット世代が `generation` と違えば何も書かず false を返す。一致したときは SQL 1 文で原子的に行う。`expected` があれば `UPDATE ... WHERE id = ? AND field = 'session' AND value = expected`、`expected` が undefined なら `INSERT ... ON CONFLICT DO NOTHING` (行が無いときだけ書く)。変更行があれば true。chat と cron は実行開始時に読んだ session を `expected` にし、実行中に `/claw settings unset session`・`PATCH`/`DELETE /settings` でリセットされていたら書き戻さない (リセット側はキューを通らず即時に書くため)。
 
-リセット世代は leaf id ごとの整数で、`Store` がメモリ上の `Map<string, number>` に持つ (未登録は 0、永続化しない)。`applyPatch` で `session: null` を適用したときと `clearScope` で 1 増える。`getSessionGeneration(scope)` で読み、chat がターン開始時に `getSession` と同じ箇所で読んで `replaceSession` へ渡す。用途は、session 無しで始まったターンの途中のリセットの検知である。この場合は行が無いままで、値の比較 (`expected` が undefined なら行が無いときだけ INSERT) ではリセットと区別できない。ターンは再起動をまたがないので、再起動で世代が消えても問題ない。
+リセット世代は leaf id ごとの整数で、`Store` がメモリ上の `Map<string, number>` に持つ (未登録は 0、永続化しない)。`applyPatch` で `session: null` を適用したときと `clearScope` で 1 増える。`getSessionGeneration(scope)` で読み、chat と cron が実行開始時に `getSession` と同じ箇所で読んで `replaceSession` へ渡す。用途は、session 無しで始まったターンの途中のリセットの検知である。この場合は行が無いままで、値の比較 (`expected` が undefined なら行が無いときだけ INSERT) ではリセットと区別できない。ターンは再起動をまたがないので、再起動で世代が消えても問題ない。
 
-model/effort/showThinking/active に対する個別の setter/deleter は無く、書き込みは `setSession`/`replaceSession`/`applyPatch`/`clearScope` の 4 つに集約されている。読み取り側の thread → channel → (defaults) 解決も 4 つの getter (`getModel`/`getEffort`/`getShowThinking`/`getActive`) が共通の private ヘルパ (`resolveScoped()`) を呼ぶ形にまとまっている。
+model/effort/showThinking/active に対する個別の setter/deleter は無く、本番の書き込みは `replaceSession`/`applyPatch`/`clearScope` の 3 つに集約されている (`setSession` はテストの準備用)。読み取り側の thread → channel → (defaults) 解決も 4 つの getter (`getModel`/`getEffort`/`getShowThinking`/`getActive`) が共通の private ヘルパ (`resolveScoped()`) を呼ぶ形にまとまっている。
 
 ## Discord スラッシュコマンド `/claw settings`
 
@@ -170,7 +170,7 @@ model/effort/showThinking/active に対する個別の setter/deleter は無く�
 
 `cron/executor.ts` の実行時:
 
-- session: `resumeSession: true` のジョブだけが `{ channelId: "cron:{name}" }` で `getSession()`/`setSession()` する。`false` (既定) なら読みも書きもしない。
+- session: `resumeSession: true` のジョブだけが `{ channelId: "cron:{name}" }` で `getSession()`/`replaceSession()` する (実行開始時に世代と session を読み、実行中にリセットされていたら書き戻さない。書き込みの形は chat と同じ)。`false` (既定) なら読みも書きもしない。
 - model/effort: frontmatter (`job.model`/`job.effort`) → `getModel({ channelId: job.channelId })`/`getEffort({ channelId: job.channelId })` (ジョブに `channelId` がある場合のみ。Store 内で channel → defaults へフォールバック) → executor の defaults。`cron:{name}` スコープの model/effort は読まない。
 - showThinking/active は cron では参照しない。
 

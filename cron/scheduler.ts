@@ -40,9 +40,9 @@ export class CronScheduler {
   private timerId: ReturnType<typeof setInterval> | null = null;
   private alignTimerId: ReturnType<typeof setTimeout> | null = null;
   private lastTickMinute = -1;
-  private callback: (job: CronJobDef) => void;
+  private callback: (job: CronJobDef) => void | Promise<unknown>;
 
-  constructor(callback: (job: CronJobDef) => void) {
+  constructor(callback: (job: CronJobDef) => void | Promise<unknown>) {
     this.callback = callback;
   }
 
@@ -153,7 +153,10 @@ export class CronScheduler {
       try {
         if (targets.some((target) => matchesCron(job.schedule, target))) {
           log.info(`triggering cron job: ${job.name}`);
-          this.callback(job);
+          // 結果は捨てる (成否は runJob 自身がログと通知に出す)。reject だけ拾う。
+          Promise.resolve(this.callback(job)).catch((e: unknown) => {
+            log.error(`cron callback error for "${job.name}":`, e);
+          });
         }
       } catch (e) {
         log.error(`cron match error for "${job.name}":`, getErrorMessage(e));
