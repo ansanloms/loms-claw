@@ -1,0 +1,11 @@
+type: object
+description: 承認への答え。
+additionalProperties: false
+required:
+  - decision
+properties:
+  decision:
+    $ref: ./EnumApprovalDecision.yaml
+  reason:
+    type: string
+    description: 理由。拒否したときに Claude へ伝える。

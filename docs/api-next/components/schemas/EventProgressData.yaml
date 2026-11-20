@@ -1,0 +1,20 @@
+type: object
+description: ツール実行の進捗。
+required:
+  - scopeId
+  - turnId
+  - toolName
+  - elapsedSeconds
+properties:
+  scopeId:
+    type: string
+    description: bot が割り当てるスコープ ID。不透明な文字列として扱う。
+  turnId:
+    type: string
+    description: ターン ID。
+  toolName:
+    type: string
+    description: 実行中のツール名。
+  elapsedSeconds:
+    type: number
+    description: ツールの実行開始からの経過秒数。

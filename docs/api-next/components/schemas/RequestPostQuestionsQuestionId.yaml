@@ -1,0 +1,32 @@
+description: 質問への答え。kind で形が変わる。
+oneOf:
+  - type: object
+    description: 回答する。
+    additionalProperties: false
+    required:
+      - kind
+      - answers
+    properties:
+      kind:
+        type: string
+        const: answered
+        description: 回答であることを表す。
+      answers:
+        type: object
+        description: 質問文から回答文字列への対応。保留中の全質問に 1 件ずつ答える。multiSelect の質問は選んだ値を `, ` で連結する。キーが保留中の質問の質問文と一致しない、または回答の無い質問があるときは 400 を返す。
+        additionalProperties:
+          type: string
+        minProperties: 1
+  - type: object
+    description: 回答を拒否する。
+    additionalProperties: false
+    required:
+      - kind
+    properties:
+      kind:
+        type: string
+        const: denied
+        description: 拒否であることを表す。
+      reason:
+        type: string
+        description: 理由。Claude へ伝える。

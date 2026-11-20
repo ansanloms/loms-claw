@@ -1,0 +1,8 @@
+type: object
+description: エラー応答。
+required:
+  - error
+properties:
+  error:
+    type: string
+    description: エラーメッセージ。

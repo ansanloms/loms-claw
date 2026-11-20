@@ -1,0 +1,5 @@
+name: news.md
+kind: prompt
+schedule: 0 9 * * *
+channelId: "1234567890123456789"
+once: false

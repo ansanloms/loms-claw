@@ -1,0 +1,10 @@
+type: object
+description: 保留中の承認の一覧。
+required:
+  - approvals
+properties:
+  approvals:
+    type: array
+    description: 承認。要求した順。
+    items:
+      $ref: ./Approval.yaml

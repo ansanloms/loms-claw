@@ -1,0 +1,210 @@
+description: SSE の 1 イベント。event の値で data の形が決まる。イベントは追加のみで進化する。client は未知の event を受け取っても検証エラーにせず無視する。この oneOf は現時点で定義済みのイベントの一覧である。
+oneOf:
+  - type: object
+    description: 同じスコープで実行中のターンがあり、このターンが待機に入った。
+    required:
+      - event
+      - data
+    properties:
+      event:
+        type: string
+        const: turn.queued
+        description: イベント種別。
+      data:
+        type: string
+        description: イベントの本体。JSON 文字列である。
+        contentMediaType: application/json
+        contentSchema:
+          $ref: ./EventTurnQueuedData.yaml
+  - type: object
+    description: ターンが始まった。
+    required:
+      - event
+      - data
+    properties:
+      event:
+        type: string
+        const: turn.started
+        description: イベント種別。
+      data:
+        type: string
+        description: イベントの本体。JSON 文字列である。
+        contentMediaType: application/json
+        contentSchema:
+          $ref: ./EventTurnStartedData.yaml
+  - type: object
+    description: Claude の回答テキスト。分割や宛先の前置は client が行う。
+    required:
+      - event
+      - data
+    properties:
+      event:
+        type: string
+        const: reply
+        description: イベント種別。
+      data:
+        type: string
+        description: イベントの本体。JSON 文字列である。
+        contentMediaType: application/json
+        contentSchema:
+          $ref: ./EventReplyData.yaml
+  - type: object
+    description: Claude の推論 (thinking) のテキスト。
+    required:
+      - event
+      - data
+    properties:
+      event:
+        type: string
+        const: thinking
+        description: イベント種別。
+      data:
+        type: string
+        description: イベントの本体。JSON 文字列である。
+        contentMediaType: application/json
+        contentSchema:
+          $ref: ./EventThinkingData.yaml
+  - type: object
+    description: ツール実行の進捗。
+    required:
+      - event
+      - data
+    properties:
+      event:
+        type: string
+        const: progress
+        description: イベント種別。
+      data:
+        type: string
+        description: イベントの本体。JSON 文字列である。
+        contentMediaType: application/json
+        contentSchema:
+          $ref: ./EventProgressData.yaml
+  - type: object
+    description: ターンの失敗。
+    required:
+      - event
+      - data
+    properties:
+      event:
+        type: string
+        const: error
+        description: イベント種別。
+      data:
+        type: string
+        description: イベントの本体。JSON 文字列である。
+        contentMediaType: application/json
+        contentSchema:
+          $ref: ./EventErrorData.yaml
+  - type: object
+    description: ターンが終わった。成否に関わらず最後に 1 回届く。
+    required:
+      - event
+      - data
+    properties:
+      event:
+        type: string
+        const: turn.ended
+        description: イベント種別。
+      data:
+        type: string
+        description: イベントの本体。JSON 文字列である。
+        contentMediaType: application/json
+        contentSchema:
+          $ref: ./EventTurnEndedData.yaml
+  - type: object
+    description: cron ジョブの結果または標準出力。
+    required:
+      - event
+      - data
+    properties:
+      event:
+        type: string
+        const: cron.output
+        description: イベント種別。
+      data:
+        type: string
+        description: イベントの本体。JSON 文字列である。
+        contentMediaType: application/json
+        contentSchema:
+          $ref: ./EventCronOutputData.yaml
+  - type: object
+    description: cron ジョブの失敗。
+    required:
+      - event
+      - data
+    properties:
+      event:
+        type: string
+        const: cron.error
+        description: イベント種別。
+      data:
+        type: string
+        description: イベントの本体。JSON 文字列である。
+        contentMediaType: application/json
+        contentSchema:
+          $ref: ./EventCronErrorData.yaml
+  - type: object
+    description: ツール承認の要求。data は Approval と同じ。
+    required:
+      - event
+      - data
+    properties:
+      event:
+        type: string
+        const: approval.requested
+        description: イベント種別。
+      data:
+        type: string
+        description: イベントの本体。JSON 文字列である。
+        contentMediaType: application/json
+        contentSchema:
+          $ref: ./Approval.yaml
+  - type: object
+    description: ツール承認の解決。
+    required:
+      - event
+      - data
+    properties:
+      event:
+        type: string
+        const: approval.resolved
+        description: イベント種別。
+      data:
+        type: string
+        description: イベントの本体。JSON 文字列である。
+        contentMediaType: application/json
+        contentSchema:
+          $ref: ./EventApprovalResolvedData.yaml
+  - type: object
+    description: 質問の要求。data は PendingQuestion と同じ。
+    required:
+      - event
+      - data
+    properties:
+      event:
+        type: string
+        const: question.requested
+        description: イベント種別。
+      data:
+        type: string
+        description: イベントの本体。JSON 文字列である。
+        contentMediaType: application/json
+        contentSchema:
+          $ref: ./PendingQuestion.yaml
+  - type: object
+    description: 質問の解決。
+    required:
+      - event
+      - data
+    properties:
+      event:
+        type: string
+        const: question.resolved
+        description: イベント種別。
+      data:
+        type: string
+        description: イベントの本体。JSON 文字列である。
+        contentMediaType: application/json
+        contentSchema:
+          $ref: ./EventQuestionResolvedData.yaml

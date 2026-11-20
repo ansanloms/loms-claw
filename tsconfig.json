@@ -19,5 +19,12 @@
     "noImplicitOverride": true
   },
   "include": ["**/*.ts"],
-  "exclude": ["data", "docs/api", "coverage", "node_modules", ".claude"]
+  "exclude": [
+    "data",
+    "docs/api",
+    "docs/api-next",
+    "coverage",
+    "node_modules",
+    ".claude"
+  ]
 }

@@ -42,6 +42,7 @@ Discord + Claude Agent SDK のパーソナル AI エージェント。単一ギ�
 | [docs/architecture/constants.md](docs/architecture/constants.md)                   | ハードコード定数の分類表、設定化しない方針                                                       |
 | [docs/terms-of-service.md](docs/terms-of-service.md)                               | 利用規約上の根拠・引用・経緯                                                                     |
 | [docs/api/README.md](docs/api/README.md)                                           | 内部 HTTP API の OpenAPI 定義（接続条件・エラー応答の形）                                        |
+| [docs/api-next/README.md](docs/api-next/README.md)                                 | 次期 REST / SSE I/F の OpenAPI 3.2 定義（未実装の設計。決定事項・認証の境界・SSE の規約）        |
 | [data/workspace/CLAUDE.md](data/workspace/CLAUDE.md)                               | ワークスペースで動く Claude（bot の中の Claude）に向けた指示書                                   |
 
 ディレクトリの対応は次のとおり。詳細なファイル構成表は [docs/architecture/README.md](docs/architecture/README.md) にある。
@@ -56,6 +57,7 @@ Discord + Claude Agent SDK のパーソナル AI エージェント。単一ギ�
 | `api/`                                                              | 内部 HTTP API（cron / logs / settings）と生成物 `internal-schemas.ts`                                                                           |
 | `cron/`                                                             | 定期実行（ローダ・スケジューラ・実行器）                                                                                                        |
 | `docs/api/`                                                         | 内部 HTTP API の OpenAPI（独自の `package.json` を持つ Node プロジェクト）                                                                      |
+| `docs/api-next/`                                                    | 次期 REST / SSE I/F の OpenAPI 3.2（未実装の設計。独自の `package.json` を持つ Node プロジェクト。`docs/api` を置き換えるまで並走）             |
 | `data/`                                                             | 実行時データ（`config.json` / `home/` / `workspace/`）。追跡対象は一部のみ                                                                      |
 
 ## 開発コマンド

@@ -1,0 +1,7 @@
+type: string
+description: 承認の結果。EnumApprovalDecision の値に加え、時間切れの expired を取る。
+enum:
+  - allow
+  - allowAlways
+  - deny
+  - expired

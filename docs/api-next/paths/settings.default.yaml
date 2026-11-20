@@ -1,0 +1,28 @@
+get:
+  operationId: getSettingsDefault
+  summary: グローバルデフォルト設定の取得。
+  tags:
+    - settings
+  description:
+    $ref: ./descriptions/getSettingsDefault.md
+  responses:
+    200:
+      description: 処理成功時。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/DefaultSettings.yaml
+          examples:
+            succeeded:
+              value:
+                $ref: ../examples/DefaultSettings/default.yaml
+    401:
+      description: token が無い、または誤っている場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            unauthorized:
+              value:
+                $ref: ../examples/ResponseError/default.yaml

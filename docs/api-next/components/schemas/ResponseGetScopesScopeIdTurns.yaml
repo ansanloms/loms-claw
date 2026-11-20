@@ -1,0 +1,10 @@
+type: object
+description: 実行中と待機中のターンの一覧。実行中が先頭で、続けて待機中をキューの順に並べる。ターンが無ければ空配列。
+required:
+  - turns
+properties:
+  turns:
+    type: array
+    description: ターン。
+    items:
+      $ref: ./Turn.yaml

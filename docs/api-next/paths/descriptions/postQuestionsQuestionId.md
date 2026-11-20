@@ -1,0 +1,1 @@
+保留中の質問に答える。kind が answered なら answers を、denied なら reason を渡す。answers のキーが保留中の質問の質問文と一致しない、または回答の無い質問があるときは 400 を返す。解決の結果は question.resolved で配られる。agent の token で呼ぶと 403 を返す。

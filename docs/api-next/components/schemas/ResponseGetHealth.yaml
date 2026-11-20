@@ -1,0 +1,11 @@
+type: object
+description: healthcheck の結果。
+required:
+  - status
+properties:
+  status:
+    type: string
+    description: healthy なら ok、そうでなければ unavailable。
+    enum:
+      - ok
+      - unavailable

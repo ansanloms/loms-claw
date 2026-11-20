@@ -1,0 +1,38 @@
+get:
+  operationId: getHealth
+  summary: healthcheck。
+  tags:
+    - health
+  description:
+    $ref: ./descriptions/getHealth.md
+  responses:
+    200:
+      description: healthy な場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseGetHealth.yaml
+          examples:
+            ok:
+              value:
+                $ref: ../examples/ResponseGetHealth/ok.yaml
+    401:
+      description: token が無い、または誤っている場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            unauthorized:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+    503:
+      description: unhealthy な場合 (Discord Gateway が未接続等)。エラー応答の形は例外で、error ではなく status を返す。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseGetHealth.yaml
+          examples:
+            unavailable:
+              value:
+                $ref: ../examples/ResponseGetHealth/unavailable.yaml

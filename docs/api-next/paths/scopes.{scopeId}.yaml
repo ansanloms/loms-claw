@@ -1,0 +1,95 @@
+parameters:
+  - in: path
+    name: scopeId
+    required: true
+    description: bot が割り当てるスコープ ID。不透明な文字列として扱う。
+    schema:
+      type: string
+    example: "1234567890123456789"
+put:
+  operationId: putScopesScopeId
+  summary: スコープの登録・更新。
+  tags:
+    - scopes
+  description:
+    $ref: ./descriptions/putScopesScopeId.md
+  requestBody:
+    required: true
+    description: 親スコープ。
+    content:
+      application/json:
+        schema:
+          $ref: ../components/schemas/RequestPutScopesScopeId.yaml
+        examples:
+          normal:
+            value:
+              $ref: ../examples/RequestPutScopesScopeId/default.yaml
+  responses:
+    200:
+      description: 登録・更新したスコープ。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Scope.yaml
+          examples:
+            succeeded:
+              value:
+                $ref: ../examples/Scope/default.yaml
+    400:
+      description: JSON が不正、スキーマに適合しない、または parentId が自分自身、循環する親、未登録の親を指す場合。親を持つスコープを登録するときは、親を先に登録する。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            badRequest:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+    401:
+      description: token が無い、または誤っている場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            unauthorized:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+get:
+  operationId: getScopesScopeId
+  summary: スコープの取得。
+  tags:
+    - scopes
+  description:
+    $ref: ./descriptions/getScopesScopeId.md
+  responses:
+    200:
+      description: 処理成功時。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Scope.yaml
+          examples:
+            succeeded:
+              value:
+                $ref: ../examples/Scope/default.yaml
+    401:
+      description: token が無い、または誤っている場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            unauthorized:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+    404:
+      description: スコープが登録されていない場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            notFound:
+              value:
+                $ref: ../examples/ResponseError/default.yaml

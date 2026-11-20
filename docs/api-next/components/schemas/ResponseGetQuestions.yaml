@@ -1,0 +1,10 @@
+type: object
+description: 保留中の質問の一覧。
+required:
+  - questions
+properties:
+  questions:
+    type: array
+    description: 質問。要求した順。
+    items:
+      $ref: ./PendingQuestion.yaml

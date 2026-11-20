@@ -152,6 +152,16 @@ flowchart LR
 - この値を読むものは無い。`docs/api/bin/emit-server-schemas.ts` は `components.schemas` だけを抽出するので、生成物 `api/internal-schemas.ts` にも実行時コードにも版は現れない。上げ忘れを検査する仕組みも無い。
 - パスに版 (`/v1` 等) は入れていない。壊す変更の手順と、client 向け API・SSE のイベントの版の扱いは未決で、[#276](https://github.com/ansanloms/loms-claw/issues/276) で決める。
 
+## docs/api-next の位置付け
+
+`docs/api-next/` は、本体を常駐させ Discord・CLI・スマホ等を周辺の client にする構成 ([#278](https://github.com/ansanloms/loms-claw/issues/278)) に向けた、次期 I/F の OpenAPI 3.2 定義である。client から本体へは REST、本体から client へは SSE で渡す。
+
+- 未実装の設計であり、`api/`・`core/`・`client/` のコードは変わっていない。現行の正本は引き続き `docs/api/` で、`api/internal-schemas.ts` の生成パイプライン (`npm run generate`) には `docs/api-next/` をつないでいない。
+- [ansanloms/openapi-template](https://github.com/ansanloms/openapi-template) の `78e2fe1` から作った独立した npm パッケージで、`package.json`/`package-lock.json` を持つ。ルートの `.oxlintrc.json`/`.oxfmtrc.json`/`tsconfig.json` の対象外で、ルートの lint/check/test には含まれない。CI は `docs-api-next` ジョブが `npm ci` → `npm run lint` → `npm test` を実行し、`.github/dependabot.yml` に `/docs/api-next` の別エントリを持つ。
+- テンプレートは OAS 3.2.1 に対応しており、SSE を `itemSchema` で書く。`docs/api` の Stoplight Elements は `itemSchema` を描画しないため、`docs/api` を 3.2 へ上げず、別のディレクトリで並走させる。
+- 版は `info.version: 0.2.0` で、`docs/api` を置き換えるまで release とタグを切らない。
+- 決定事項 (スコープ ID の扱い・承認台帳の中核への移動・認証・SSE の規約等) と、token を利用者用と agent 用の 2 種類に分けた理由は [docs/api-next/README.md](../api-next/README.md) が正。
+
 ## テスト
 
 `api/routes/cron.test.ts`/`api/routes/health.test.ts`/`api/routes/logs.test.ts`/`api/routes/settings.test.ts`/`api/routes/sessions.test.ts` は `serve()` を起動せず、`new Hono()` に `createCronRoutes()`/`createHealthRoutes()`/`createLogsRoutes()`/`createSessionsRoutes()`/`createSettingsRoutes()` をマウントして `app.request()` で直接リクエストを投げる形式。cron 側はコンテキスト関数をクロージャで差し替え、settings 側は `new DatabaseSync(":memory:")` の `Store` を使う。

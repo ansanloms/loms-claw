@@ -1,0 +1,97 @@
+get:
+  operationId: getPermissionsAllow
+  summary: 常時許可の取得。
+  tags:
+    - permissions
+  description:
+    $ref: ./descriptions/getPermissionsAllow.md
+  responses:
+    200:
+      description: 処理成功時。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseGetPermissionsAllow.yaml
+          examples:
+            succeeded:
+              value:
+                $ref: ../examples/ResponseGetPermissionsAllow/default.yaml
+    401:
+      description: token が無い、または誤っている場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            unauthorized:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+    403:
+      description: agent の token で呼んだ場合。承認系は利用者の token だけが呼べる。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            forbidden:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+put:
+  operationId: putPermissionsAllow
+  summary: 常時許可の置き換え。
+  tags:
+    - permissions
+  description:
+    $ref: ./descriptions/putPermissionsAllow.md
+  requestBody:
+    required: true
+    description: 新しい常時許可の一覧。
+    content:
+      application/json:
+        schema:
+          $ref: ../components/schemas/RequestPutPermissionsAllow.yaml
+        examples:
+          normal:
+            value:
+              $ref: ../examples/RequestPutPermissionsAllow/default.yaml
+  responses:
+    200:
+      description: 処理成功時。置き換え後の一覧を返す。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponsePutPermissionsAllow.yaml
+          examples:
+            succeeded:
+              value:
+                $ref: ../examples/ResponsePutPermissionsAllow/default.yaml
+    400:
+      description: JSON が不正、スキーマに適合しない、または AskUserQuestion を含む場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            badRequest:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+    401:
+      description: token が無い、または誤っている場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            unauthorized:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+    403:
+      description: agent の token で呼んだ場合。承認系は利用者の token だけが呼べる。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            forbidden:
+              value:
+                $ref: ../examples/ResponseError/default.yaml

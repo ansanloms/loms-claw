@@ -1,0 +1,18 @@
+type: object
+description: ターン。依頼 1 件の処理の単位。
+required:
+  - id
+  - scopeId
+  - status
+properties:
+  id:
+    type: string
+    description: ターン ID。
+  scopeId:
+    type: string
+    description: bot が割り当てるスコープ ID。不透明な文字列として扱う。
+  status:
+    $ref: ./EnumTurnStatus.yaml
+  source:
+    type: string
+    description: 依頼元の識別子。依頼の `source` をそのまま返す。省略された依頼では省かれる。

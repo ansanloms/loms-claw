@@ -1,0 +1,23 @@
+telemetry: off
+extends:
+  - recommended-strict
+
+apis:
+  loms-claw:
+    root: ./api.yaml
+plugins:
+  - "@ansanloms/redocly-plugins"
+rules:
+  info-license: off
+  no-invalid-media-type-examples: off
+  operation-2xx-response: off
+  operation-4xx-response: off
+  ansanloms/operation-id-naming: error
+  ansanloms/description-file-naming: error
+  ansanloms/examples-layout: error
+  ansanloms/no-unreferenced-files:
+    severity: error
+    # examples は対象にしない。example の value 内の $ref は参照として辿られず、誤検出になるため。
+    dirs: [paths, components]
+preprocessors:
+  ansanloms/inline-examples: on

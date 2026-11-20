@@ -1,0 +1,1 @@
+ターンの経過、cron の出力、承認と質問の要求と解決を Server-Sent Events で配信する。scopeId で絞らなければ、全スコープのイベントと cron のイベントを 1 接続で受ける。切断中のイベントは再送しない。再接続したら `GET /approvals`、`GET /questions`、`GET /scopes/{scopeId}/turns` で状態を取り直す。イベントは追加のみで進化させる。client は未知の event と未知のフィールドを無視する。thinking は本体が常に流し、見せるかどうかは client が決める。scopeId に未登録のスコープを指定すると 404 を返す。scopeId を省いた要求では 404 は起きない。

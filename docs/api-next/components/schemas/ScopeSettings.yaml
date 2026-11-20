@@ -1,0 +1,11 @@
+type: object
+description: スコープの解決済み設定。model と effort は自身、親、デフォルトの順にフォールバックして解決し、値の出所を source で返す。session は親子で独立しており、フォールバックしない。
+properties:
+  session:
+    type: string
+    description: セッション ID。未設定の場合はフィールドごと省略される。
+    example: 550e8400-e29b-41d4-a716-446655440000
+  model:
+    $ref: ./SettingEntry.yaml
+  effort:
+    $ref: ./SettingEntry.yaml

@@ -1,0 +1,16 @@
+type: object
+description: Claude の推論 (thinking) のテキスト。本体は常に流し、見せるかどうかは client が決める。
+required:
+  - scopeId
+  - turnId
+  - text
+properties:
+  scopeId:
+    type: string
+    description: bot が割り当てるスコープ ID。不透明な文字列として扱う。
+  turnId:
+    type: string
+    description: ターン ID。
+  text:
+    type: string
+    description: 推論のテキスト。

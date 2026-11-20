@@ -1,0 +1,15 @@
+type: object
+description: ツール承認の解決。
+required:
+  - scopeId
+  - approvalId
+  - decision
+properties:
+  scopeId:
+    type: string
+    description: bot が割り当てるスコープ ID。不透明な文字列として扱う。
+  approvalId:
+    type: string
+    description: 承認 ID。
+  decision:
+    $ref: ./EnumApprovalOutcome.yaml

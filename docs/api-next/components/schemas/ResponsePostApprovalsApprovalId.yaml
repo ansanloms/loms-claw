@@ -1,0 +1,9 @@
+type: object
+description: 承認への答えの受付結果。
+required:
+  - ok
+properties:
+  ok:
+    type: boolean
+    description: 答えを受け付けたか。常に true を返す。
+    example: true

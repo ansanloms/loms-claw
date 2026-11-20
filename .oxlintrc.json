@@ -79,6 +79,7 @@
   "ignorePatterns": [
     "data/",
     "docs/api/",
+    "docs/api-next/",
     "coverage/",
     "api/internal-schemas.ts",
     ".claude/"

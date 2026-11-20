@@ -1,0 +1,4 @@
+type: array
+description: ログエントリ一覧。時系列順。
+items:
+  $ref: ./LogEntry.yaml

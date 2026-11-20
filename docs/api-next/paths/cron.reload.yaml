@@ -1,0 +1,38 @@
+post:
+  operationId: postCronReload
+  summary: cron 定義の再読み込み。
+  tags:
+    - cron
+  description:
+    $ref: ./descriptions/postCronReload.md
+  responses:
+    200:
+      description: 処理成功時。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponsePostCronReload.yaml
+          examples:
+            succeeded:
+              value:
+                $ref: ../examples/ResponsePostCronReload/default.yaml
+    401:
+      description: token が無い、または誤っている場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            unauthorized:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+    503:
+      description: cron 再読み込み機能が無効な場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            unavailable:
+              value:
+                $ref: ../examples/ResponseError/default.yaml

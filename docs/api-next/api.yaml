@@ -1,0 +1,178 @@
+openapi: 3.2.1
+info:
+  version: 0.2.0
+  title: loms-claw API
+  description:
+    $ref: ./README.md
+servers:
+  - url: http://127.0.0.1:3000
+    description: ローカルの API サーバ (apiPort 既定値 3000)。
+tags:
+  - name: approvals
+    description: ツール承認の一覧取得と回答。
+  - name: cron
+    description: cron ジョブの一覧取得・手動実行・再読み込み。
+  - name: events
+    description: SSE によるイベントの購読。
+  - name: health
+    description: healthcheck。
+  - name: logs
+    description: メモリ上のリングバッファからのログ取得。
+  - name: permissions
+    description: ツールの常時許可の取得と置き換え。
+  - name: questions
+    description: 質問 (AskUserQuestion) の一覧取得と回答。
+  - name: scopes
+    description: スコープの登録と取得。
+  - name: settings
+    description: スコープ単位の設定の取得・更新・削除と、グローバルデフォルトの取得。
+  - name: turns
+    description: ターンの開始・取得・中止。
+paths:
+  /approvals:
+    $ref: ./paths/approvals.yaml
+  /approvals/{approvalId}:
+    $ref: ./paths/approvals.{approvalId}.yaml
+  /cron:
+    $ref: ./paths/cron.yaml
+  /cron/reload:
+    $ref: ./paths/cron.reload.yaml
+  /cron/run:
+    $ref: ./paths/cron.run.yaml
+  /events:
+    $ref: ./paths/events.yaml
+  /health:
+    $ref: ./paths/health.yaml
+  /logs:
+    $ref: ./paths/logs.yaml
+  /permissions/allow:
+    $ref: ./paths/permissions.allow.yaml
+  /questions:
+    $ref: ./paths/questions.yaml
+  /questions/{questionId}:
+    $ref: ./paths/questions.{questionId}.yaml
+  /scopes/{scopeId}:
+    $ref: ./paths/scopes.{scopeId}.yaml
+  /scopes/{scopeId}/messages:
+    $ref: ./paths/scopes.{scopeId}.messages.yaml
+  /scopes/{scopeId}/settings:
+    $ref: ./paths/scopes.{scopeId}.settings.yaml
+  /scopes/{scopeId}/turns:
+    $ref: ./paths/scopes.{scopeId}.turns.yaml
+  /scopes/{scopeId}/turns/{turnId}:
+    $ref: ./paths/scopes.{scopeId}.turns.{turnId}.yaml
+  /settings/default:
+    $ref: ./paths/settings.default.yaml
+components:
+  schemas:
+    Approval:
+      $ref: ./components/schemas/Approval.yaml
+    CronJob:
+      $ref: ./components/schemas/CronJob.yaml
+    DefaultSettings:
+      $ref: ./components/schemas/DefaultSettings.yaml
+    EventApprovalResolvedData:
+      $ref: ./components/schemas/EventApprovalResolvedData.yaml
+    EventCronErrorData:
+      $ref: ./components/schemas/EventCronErrorData.yaml
+    EventCronOutputData:
+      $ref: ./components/schemas/EventCronOutputData.yaml
+    EventErrorData:
+      $ref: ./components/schemas/EventErrorData.yaml
+    EventProgressData:
+      $ref: ./components/schemas/EventProgressData.yaml
+    EventQuestionResolvedData:
+      $ref: ./components/schemas/EventQuestionResolvedData.yaml
+    EventReplyData:
+      $ref: ./components/schemas/EventReplyData.yaml
+    EventThinkingData:
+      $ref: ./components/schemas/EventThinkingData.yaml
+    EventTurnEndedData:
+      $ref: ./components/schemas/EventTurnEndedData.yaml
+    EventTurnQueuedData:
+      $ref: ./components/schemas/EventTurnQueuedData.yaml
+    EventTurnStartedData:
+      $ref: ./components/schemas/EventTurnStartedData.yaml
+    LogEntry:
+      $ref: ./components/schemas/LogEntry.yaml
+    PendingQuestion:
+      $ref: ./components/schemas/PendingQuestion.yaml
+    Question:
+      $ref: ./components/schemas/Question.yaml
+    QuestionOption:
+      $ref: ./components/schemas/QuestionOption.yaml
+    Scope:
+      $ref: ./components/schemas/Scope.yaml
+    ScopeSettings:
+      $ref: ./components/schemas/ScopeSettings.yaml
+    SettingEntry:
+      $ref: ./components/schemas/SettingEntry.yaml
+    Turn:
+      $ref: ./components/schemas/Turn.yaml
+    EnumApprovalDecision:
+      $ref: ./components/schemas/EnumApprovalDecision.yaml
+    EnumApprovalOutcome:
+      $ref: ./components/schemas/EnumApprovalOutcome.yaml
+    EnumQuestionOutcome:
+      $ref: ./components/schemas/EnumQuestionOutcome.yaml
+    EnumSettingSource:
+      $ref: ./components/schemas/EnumSettingSource.yaml
+    EnumTurnResult:
+      $ref: ./components/schemas/EnumTurnResult.yaml
+    EnumTurnStatus:
+      $ref: ./components/schemas/EnumTurnStatus.yaml
+    RequestPatchScopesScopeIdSettings:
+      $ref: ./components/schemas/RequestPatchScopesScopeIdSettings.yaml
+    RequestPostApprovalsApprovalId:
+      $ref: ./components/schemas/RequestPostApprovalsApprovalId.yaml
+    RequestPostCronRun:
+      $ref: ./components/schemas/RequestPostCronRun.yaml
+    RequestPostQuestionsQuestionId:
+      $ref: ./components/schemas/RequestPostQuestionsQuestionId.yaml
+    RequestPostScopesScopeIdMessages:
+      $ref: ./components/schemas/RequestPostScopesScopeIdMessages.yaml
+    RequestPutPermissionsAllow:
+      $ref: ./components/schemas/RequestPutPermissionsAllow.yaml
+    RequestPutScopesScopeId:
+      $ref: ./components/schemas/RequestPutScopesScopeId.yaml
+    ResponseDeleteScopesScopeIdSettings:
+      $ref: ./components/schemas/ResponseDeleteScopesScopeIdSettings.yaml
+    ResponseDeleteScopesScopeIdTurnsTurnId:
+      $ref: ./components/schemas/ResponseDeleteScopesScopeIdTurnsTurnId.yaml
+    ResponseError:
+      $ref: ./components/schemas/ResponseError.yaml
+    ResponseGetApprovals:
+      $ref: ./components/schemas/ResponseGetApprovals.yaml
+    ResponseGetCron:
+      $ref: ./components/schemas/ResponseGetCron.yaml
+    ResponseGetEvents:
+      $ref: ./components/schemas/ResponseGetEvents.yaml
+    ResponseGetHealth:
+      $ref: ./components/schemas/ResponseGetHealth.yaml
+    ResponseGetLogs:
+      $ref: ./components/schemas/ResponseGetLogs.yaml
+    ResponseGetPermissionsAllow:
+      $ref: ./components/schemas/ResponseGetPermissionsAllow.yaml
+    ResponseGetQuestions:
+      $ref: ./components/schemas/ResponseGetQuestions.yaml
+    ResponseGetScopesScopeIdTurns:
+      $ref: ./components/schemas/ResponseGetScopesScopeIdTurns.yaml
+    ResponsePostApprovalsApprovalId:
+      $ref: ./components/schemas/ResponsePostApprovalsApprovalId.yaml
+    ResponsePostCronReload:
+      $ref: ./components/schemas/ResponsePostCronReload.yaml
+    ResponsePostCronRun:
+      $ref: ./components/schemas/ResponsePostCronRun.yaml
+    ResponsePostQuestionsQuestionId:
+      $ref: ./components/schemas/ResponsePostQuestionsQuestionId.yaml
+    ResponsePostScopesScopeIdMessages:
+      $ref: ./components/schemas/ResponsePostScopesScopeIdMessages.yaml
+    ResponsePutPermissionsAllow:
+      $ref: ./components/schemas/ResponsePutPermissionsAllow.yaml
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Bearer token。token は 2 種類ある。利用者の token は全 operation を呼べる。agent の token はワークスペースの Claude に渡すもので、承認系 (/approvals、/approvals/{approvalId}、/questions、/questions/{questionId}、/permissions/allow の全メソッド) を呼ぶと 403 を返す。
+security:
+  - bearerAuth: []

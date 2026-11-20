@@ -1,0 +1,38 @@
+get:
+  operationId: getApprovals
+  summary: 保留中の承認の一覧。
+  tags:
+    - approvals
+  description:
+    $ref: ./descriptions/getApprovals.md
+  responses:
+    200:
+      description: 処理成功時。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseGetApprovals.yaml
+          examples:
+            succeeded:
+              value:
+                $ref: ../examples/ResponseGetApprovals/default.yaml
+    401:
+      description: token が無い、または誤っている場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            unauthorized:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+    403:
+      description: agent の token で呼んだ場合。承認系は利用者の token だけが呼べる。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            forbidden:
+              value:
+                $ref: ../examples/ResponseError/default.yaml

@@ -35,6 +35,23 @@ updates:
           - "minor"
           - "patch"
 
+  # docs/api-next も独自の package.json / package-lock.json を持つ独立した npm
+  # パッケージで、docs/api と同じ理由でエントリを分ける。
+  - package-ecosystem: "npm"
+    directory: "/docs/api-next"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "07:00"
+      timezone: "Asia/Tokyo"
+    commit-message:
+      prefix: "build"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
   - package-ecosystem: "docker"
     directory: "/"
     schedule:

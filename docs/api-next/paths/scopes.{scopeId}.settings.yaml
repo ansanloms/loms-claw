@@ -1,0 +1,143 @@
+parameters:
+  - in: path
+    name: scopeId
+    required: true
+    description: bot が割り当てるスコープ ID。不透明な文字列として扱う。
+    schema:
+      type: string
+    example: "1234567890123456789"
+get:
+  operationId: getScopesScopeIdSettings
+  summary: スコープ設定の取得。
+  tags:
+    - settings
+  description:
+    $ref: ./descriptions/getScopesScopeIdSettings.md
+  responses:
+    200:
+      description: 処理成功時。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ScopeSettings.yaml
+          examples:
+            succeeded:
+              value:
+                $ref: ../examples/ScopeSettings/default.yaml
+    401:
+      description: token が無い、または誤っている場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            unauthorized:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+    404:
+      description: スコープが登録されていない場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            notFound:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+patch:
+  operationId: patchScopesScopeIdSettings
+  summary: スコープ設定の部分更新。
+  tags:
+    - settings
+  description:
+    $ref: ./descriptions/patchScopesScopeIdSettings.md
+  requestBody:
+    required: true
+    description: 更新内容。
+    content:
+      application/json:
+        schema:
+          $ref: ../components/schemas/RequestPatchScopesScopeIdSettings.yaml
+        examples:
+          normal:
+            value:
+              $ref: ../examples/RequestPatchScopesScopeIdSettings/default.yaml
+  responses:
+    200:
+      description: 処理成功時。更新後にサーバが解決した設定を返す。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ScopeSettings.yaml
+          examples:
+            succeeded:
+              value:
+                $ref: ../examples/ScopeSettings/default.yaml
+    400:
+      description: リクエストボディがスキーマに適合しない場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            badRequest:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+    401:
+      description: token が無い、または誤っている場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            unauthorized:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+    404:
+      description: スコープが登録されていない場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            notFound:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+delete:
+  operationId: deleteScopesScopeIdSettings
+  summary: スコープ設定の削除。
+  tags:
+    - settings
+  description:
+    $ref: ./descriptions/deleteScopesScopeIdSettings.md
+  responses:
+    200:
+      description: 処理成功時。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseDeleteScopesScopeIdSettings.yaml
+          examples:
+            succeeded:
+              value:
+                $ref: ../examples/ResponseDeleteScopesScopeIdSettings/default.yaml
+    401:
+      description: token が無い、または誤っている場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            unauthorized:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+    404:
+      description: スコープが登録されていない場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            notFound:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
