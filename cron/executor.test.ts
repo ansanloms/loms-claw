@@ -1,3 +1,6 @@
+import { access, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, test } from "node:test";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
@@ -11,7 +14,7 @@ import type {
   CronPorts,
   RunCommandFn,
 } from "./executor.ts";
-import { CronExecutor } from "./executor.ts";
+import { CronExecutor, runShellCommand } from "./executor.ts";
 import type { CronCommandJob, CronJobDef } from "./types.ts";
 
 /**
@@ -54,10 +57,15 @@ function createMockChannel() {
  */
 function createMockPorts(
   channel: { send(content: string): Promise<void> } | null = null,
-): CronPorts & { approvalCalls: { channelId: string | undefined }[] } {
+): CronPorts & {
+  approvalCalls: { channelId: string | undefined }[];
+  signals: AbortSignal[];
+} {
   const approvalCalls: { channelId: string | undefined }[] = [];
+  const signals: AbortSignal[] = [];
   return {
     approvalCalls,
+    signals,
     resolveTarget(channelId: string) {
       if (!channel) {
         return Promise.reject(
@@ -72,7 +80,8 @@ function createMockPorts(
         "discord.guild.name": "test-guild",
       };
     },
-    createCanUseTool(channelId: string | undefined, _signal: AbortSignal) {
+    createCanUseTool(channelId: string | undefined, signal: AbortSignal) {
+      signals.push(signal);
       return () => {
         approvalCalls.push({ channelId });
         return Promise.resolve({ behavior: "allow", updatedInput: {} });
@@ -1101,7 +1110,7 @@ describe("CronExecutor", () => {
       const { channel, sent } = createMockChannel();
       const ports = createMockPorts(channel);
       const { fn } = mockRunCommandFn(
-        { code: 0, stdout: "should not be posted", stderr: "" },
+        { code: -1, stdout: "should not be posted", stderr: "" },
         { waitForAbort: true },
       );
 
@@ -1436,4 +1445,353 @@ describe("CronExecutor", () => {
       assert.deepStrictEqual(sent.length, 1);
       assert.deepStrictEqual(sent[0].startsWith("[cron: notify-job] "), true);
     }));
+});
+
+/** `options.abortController` の abort を待って reject する mock queryFn。 */
+function abortAwareQueryFn(started: { resolve: () => void }): QueryFn {
+  return (params: Parameters<QueryFn>[0]) => {
+    async function* gen(): AsyncGenerator<SDKMessage> {
+      const signal = params.options?.abortController?.signal;
+      started.resolve();
+      await new Promise<void>((_resolve, reject) => {
+        if (!signal || signal.aborted) {
+          reject(new Error("aborted"));
+          return;
+        }
+        signal.addEventListener("abort", () => reject(new Error("aborted")));
+      });
+      yield* [];
+    }
+    return gen() as unknown as ReturnType<QueryFn>;
+  };
+}
+
+describe("CronExecutor: 終了時の中断", () => {
+  test("実行中の command ジョブが stop() で中断され、失敗通知が投稿されず failed を返すこと", () =>
+    withStore(async (store) => {
+      const { channel, sent } = createMockChannel();
+      const ports = createMockPorts(channel);
+      const { fn } = mockRunCommandFn(
+        { code: -1, stdout: "should not be posted", stderr: "" },
+        { waitForAbort: true },
+      );
+      const executor = createExecutor({ ports, store, runCommandFn: fn });
+      const job: CronCommandJob = {
+        kind: "command",
+        name: "shutdown-command",
+        schedule: "0 0 * * *",
+        command: "sleep 10",
+        channelId: "ch-cmd",
+      };
+
+      const running = executor.runJob(job);
+      await new Promise((r) => setImmediate(r));
+      executor.stop();
+
+      assert.deepStrictEqual(await running, "failed");
+      assert.deepStrictEqual(sent, []);
+      assert.deepStrictEqual(executor.isRunning(job.name), false);
+    }));
+
+  test("実行中の prompt ジョブが stop() で中断され、失敗通知が投稿されず failed を返すこと", () =>
+    withStore(async (store) => {
+      const { channel, sent } = createMockChannel();
+      const ports = createMockPorts(channel);
+      let markStarted!: () => void;
+      const startedPromise = new Promise<void>((r) => {
+        markStarted = r;
+      });
+      const executor = createExecutor({
+        ports,
+        store,
+        queryFn: abortAwareQueryFn({ resolve: markStarted }),
+      });
+      const job: CronJobDef = {
+        kind: "prompt",
+        name: "shutdown-prompt",
+        schedule: "0 0 * * *",
+        prompt: "hello",
+        channelId: "ch-prompt",
+      };
+
+      const running = executor.runJob(job);
+      await startedPromise;
+      executor.stop();
+
+      assert.deepStrictEqual(await running, "failed");
+      assert.deepStrictEqual(sent, []);
+      assert.deepStrictEqual(executor.isRunning(job.name), false);
+    }));
+
+  test("stop() の後の runJob が skipped を返し、ジョブを実行しないこと", () =>
+    withStore(async (store) => {
+      const ports = createMockPorts(null);
+      const { fn, calls } = mockRunCommandFn({
+        code: 0,
+        stdout: "",
+        stderr: "",
+      });
+      const executor = createExecutor({ ports, store, runCommandFn: fn });
+      executor.stop();
+
+      const result = await executor.runJob({
+        kind: "command",
+        name: "after-stop",
+        schedule: "0 0 * * *",
+        command: "true",
+      });
+
+      assert.deepStrictEqual(result, "skipped");
+      assert.deepStrictEqual(calls, []);
+      assert.deepStrictEqual(executor.isRunning("after-stop"), false);
+    }));
+
+  test("once ジョブが stop() で中断されたとき onceCallback が呼ばれないこと", () =>
+    withStore(async (store) => {
+      const ports = createMockPorts(null);
+      const { fn } = mockRunCommandFn(
+        { code: -1, stdout: "", stderr: "" },
+        { waitForAbort: true },
+      );
+      const executor = createExecutor({ ports, store, runCommandFn: fn });
+      const calledWith: string[] = [];
+      executor.setOnceCallback((name: string) => {
+        calledWith.push(name);
+        return Promise.resolve();
+      });
+
+      const running = executor.runJob({
+        kind: "command",
+        name: "once-shutdown",
+        schedule: "0 0 * * *",
+        command: "sleep 10",
+        once: true,
+      });
+      await new Promise((r) => setImmediate(r));
+      executor.stop();
+
+      assert.deepStrictEqual(await running, "failed");
+      assert.deepStrictEqual(calledWith, []);
+    }));
+
+  test("once ジョブが通常の失敗をしたときは onceCallback が呼ばれること", () =>
+    withStore(async (store) => {
+      const ports = createMockPorts(null);
+      const { fn } = mockRunCommandFn(
+        { code: 0, stdout: "", stderr: "" },
+        { rejectWith: new Error("boom") },
+      );
+      const executor = createExecutor({ ports, store, runCommandFn: fn });
+      const calledWith: string[] = [];
+      executor.setOnceCallback((name: string) => {
+        calledWith.push(name);
+        return Promise.resolve();
+      });
+
+      const result = await executor.runJob({
+        kind: "command",
+        name: "once-fail",
+        schedule: "0 0 * * *",
+        command: "false",
+        once: true,
+      });
+
+      assert.deepStrictEqual(result, "failed");
+      assert.deepStrictEqual(calledWith, ["once-fail"]);
+    }));
+
+  test("rejectOnAbort の command ジョブが stop() で中断されたとき、通知が投稿されず timeout 文言にならないこと", () =>
+    withStore(async (store) => {
+      const { channel, sent } = createMockChannel();
+      const ports = createMockPorts(channel);
+      const { fn } = mockRunCommandFn(
+        { code: 0, stdout: "", stderr: "" },
+        { rejectOnAbort: true },
+      );
+      const executor = createExecutor({ ports, store, runCommandFn: fn });
+      const logged: string[] = [];
+      const original = console.error;
+      const originalLog = console.log;
+      const capture = (...args: unknown[]) => {
+        logged.push(args.map((a) => String(a)).join(" "));
+      };
+      console.error = capture;
+      console.log = capture;
+      try {
+        const running = executor.runJob({
+          kind: "command",
+          name: "reject-shutdown",
+          schedule: "0 0 * * *",
+          command: "sleep 10",
+          channelId: "ch-cmd",
+        });
+        await new Promise((r) => setImmediate(r));
+        executor.stop();
+
+        assert.deepStrictEqual(await running, "failed");
+      } finally {
+        console.error = original;
+        console.log = originalLog;
+      }
+      assert.deepStrictEqual(sent, []);
+      assert.deepStrictEqual(
+        logged.some((l) => l.includes("command timed out after")),
+        false,
+      );
+    }));
+
+  test("resolveTarget の待機中に stop() が入ったとき、コマンドも query も始めず通知も onceCallback も無いこと", () =>
+    withStore(async (store) => {
+      for (const kind of ["command", "prompt"] as const) {
+        const { channel, sent } = createMockChannel();
+        const base = createMockPorts(channel);
+        let release!: () => void;
+        const gate = new Promise<void>((r) => {
+          release = r;
+        });
+        const ports: CronPorts = {
+          ...base,
+          resolveTarget: async (channelId) => {
+            await gate;
+            return base.resolveTarget(channelId);
+          },
+        };
+        const { fn, calls } = mockRunCommandFn({
+          code: 0,
+          stdout: "out",
+          stderr: "",
+        });
+        let queryCalls = 0;
+        const executor = createExecutor({
+          ports,
+          store,
+          runCommandFn: fn,
+          queryFn: (params) => {
+            queryCalls++;
+            return successQueryFn()(params);
+          },
+        });
+        const calledWith: string[] = [];
+        executor.setOnceCallback((name: string) => {
+          calledWith.push(name);
+          return Promise.resolve();
+        });
+        const job: CronJobDef =
+          kind === "command"
+            ? {
+                kind,
+                name: "wait-target-cmd",
+                schedule: "0 0 * * *",
+                command: "echo hi",
+                channelId: "ch",
+                once: true,
+              }
+            : {
+                kind,
+                name: "wait-target-prompt",
+                schedule: "0 0 * * *",
+                prompt: "hello",
+                channelId: "ch",
+                once: true,
+              };
+
+        const running = executor.runJob(job);
+        await new Promise((r) => setImmediate(r));
+        executor.stop();
+        release();
+
+        assert.deepStrictEqual(await running, "failed", kind);
+        assert.deepStrictEqual(calls, [], kind);
+        assert.deepStrictEqual(queryCalls, 0, kind);
+        assert.deepStrictEqual(sent, [], kind);
+        assert.deepStrictEqual(calledWith, [], kind);
+      }
+    }));
+
+  test("終了コード 0 で resolve する直前に stop() が入ったとき、succeeded で出力が投稿され onceCallback が呼ばれること", () =>
+    withStore(async (store) => {
+      const { channel, sent } = createMockChannel();
+      const ports = createMockPorts(channel);
+      let finish!: () => void;
+      const gate = new Promise<void>((r) => {
+        finish = r;
+      });
+      const fn: RunCommandFn = async () => {
+        await gate;
+        return { code: 0, stdout: "done\n", stderr: "" };
+      };
+      const executor = createExecutor({ ports, store, runCommandFn: fn });
+      const calledWith: string[] = [];
+      executor.setOnceCallback((name: string) => {
+        calledWith.push(name);
+        return Promise.resolve();
+      });
+
+      const running = executor.runJob({
+        kind: "command",
+        name: "complete-at-stop",
+        schedule: "0 0 * * *",
+        command: "echo done",
+        channelId: "ch",
+        once: true,
+      });
+      await new Promise((r) => setImmediate(r));
+      executor.stop();
+      finish();
+
+      assert.deepStrictEqual(await running, "succeeded");
+      assert.deepStrictEqual(sent, ["done"]);
+      assert.deepStrictEqual(calledWith, ["complete-at-stop"]);
+    }));
+
+  test("stop() で createCanUseTool に渡された signal が aborted になること", () =>
+    withStore(async (store) => {
+      const ports = createMockPorts(null);
+      let markStarted!: () => void;
+      const startedPromise = new Promise<void>((r) => {
+        markStarted = r;
+      });
+      const executor = createExecutor({
+        ports,
+        store,
+        queryFn: abortAwareQueryFn({ resolve: markStarted }),
+      });
+
+      const running = executor.runJob({
+        kind: "prompt",
+        name: "signal-record",
+        schedule: "0 0 * * *",
+        prompt: "hello",
+      });
+      await startedPromise;
+      assert.deepStrictEqual(ports.signals.length, 1);
+      assert.deepStrictEqual(ports.signals[0].aborted, false);
+      executor.stop();
+
+      assert.deepStrictEqual(ports.signals[0].aborted, true);
+      await running;
+    }));
+});
+
+describe("runShellCommand", () => {
+  test("既に aborted の signal ではコマンドを実行せずに reject すること", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "loms-claw-test-"));
+    try {
+      const controller = new AbortController();
+      controller.abort();
+
+      await assert.rejects(
+        runShellCommand("touch created.txt", {
+          cwd: dir,
+          signal: controller.signal,
+        }),
+        { message: "command timed out" },
+      );
+      // spawn されていれば touch が走る猶予を与えてから確認する。
+      await new Promise((r) => setTimeout(r, 200));
+      await assert.rejects(access(join(dir, "created.txt")));
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });

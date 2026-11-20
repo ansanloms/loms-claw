@@ -26,7 +26,9 @@ flowchart LR
   T[CronScheduler.tick<br/>60 秒ごと<br/>遅れた分は最大 60 分遡る] --> M{matchesCron?}
   M -- no --> T
   M -- yes --> R[CronExecutor.runJob]
-  R --> G{running に<br/>同名あり?}
+  R --> X{stop 済み?}
+  X -- yes --> S0[skip]
+  X -- no --> G{running に<br/>同名あり?}
   G -- yes --> S[skip]
   G -- no --> K{job.kind}
   K -- prompt --> A[askClaude]
@@ -35,8 +37,10 @@ flowchart LR
   C --> E2[stdout / stderr]
   E --> D[channelId 指定時<br/>splitMessage → channel.send]
   E2 --> D
-  E --> O[once なら<br/>onceCallback]
+  E --> O{終了による中断?}
   E2 --> O
+  O -- no --> OC[once なら<br/>onceCallback]
+  O -- yes --> OK[once のファイルを残す<br/>通知しない]
 ```
 
 ## ジョブファイル
@@ -69,7 +73,7 @@ channelId: "{channelId}"
 | `resumeSession` | no   | boolean                     | `false`                  | `true` のときだけ前回セッションを resume する                                                                                    |
 | `maxTurns`      | no   | integer (1 以上)            | `config.claude.maxTurns` | `ClaudeConfig.maxTurns` のオーバーライド                                                                                         |
 | `timeout`       | no   | integer (ms, 1..2147483647) | `config.claude.timeout`  | `askClaude()` に渡す `AbortSignal.timeout()` のミリ秒                                                                            |
-| `once`          | no   | boolean                     | `false`                  | `true` なら 1 回実行後 (成否を問わず) にジョブファイルを削除して reload する                                                     |
+| `once`          | no   | boolean                     | `false`                  | `true` なら 1 回実行後 (成否を問わず) にジョブファイルを削除して reload する。終了 (`stop()`) による中断のときだけ削除せず残す   |
 | `model`         | no   | string                      | —                        | モデル alias / full name のオーバーライド                                                                                        |
 | `effort`        | no   | string (enum)               | —                        | `claude/mod.ts` の `EFFORT_LEVELS` (`low` / `medium` / `high` / `xhigh` / `max`) のいずれか                                      |
 
@@ -151,21 +155,25 @@ interface CronTarget {
 interface CronPorts {
   resolveTarget(channelId: string): Promise<CronTarget>; // 見つからない・送信不可なら throw
   guildTemplateVars(): Record<string, string>; // discord.guild.id / discord.guild.name
-  createCanUseTool(channelId: string | undefined): CanUseTool;
+  createCanUseTool(
+    channelId: string | undefined,
+    signal: AbortSignal,
+  ): CanUseTool;
 }
 ```
 
-Discord 実装 (`client/discord/cron-target.ts` の `createDiscordCronPorts({ client, guildId, approvalManager })`) は、`resolveTarget()` で `client.channels.fetch()` し、`send` を持たなければ `channel {id} not found or not a text channel` を throw する。`CronTarget.send()` は `splitMessage()` で 2000 文字に分割して `channel.send()` する。`start(jobs)` は `replaceAll` → `scheduler.start()`、`reload(jobs)` は `replaceAll` のみ (実行中のジョブはそのまま完了し、次の tick から新定義が効く)、`stop()` は `scheduler.stop()`。`isRunning(name)` は並行実行ガード (`running: Set<string>`) の状態を読む公開メソッドで、テストから使う。
+Discord 実装 (`client/discord/cron-target.ts` の `createDiscordCronPorts({ client, guildId, approvalManager })`) は、`resolveTarget()` で `client.channels.fetch()` し、`send` を持たなければ `channel {id} not found or not a text channel` を throw する。`CronTarget.send()` は `splitMessage()` で 2000 文字に分割して `channel.send()` する。`start(jobs)` は `replaceAll` → `scheduler.start()`、`reload(jobs)` は `replaceAll` のみ (実行中のジョブはそのまま完了し、次の tick から新定義が効く)、`stop()` は `scheduler.stop()` の後に終了用の `AbortController` を abort する (実行中のジョブを中断する。中断したジョブの完了は待たない)。`isRunning(name)` は並行実行ガード (`running: Set<string>`) の状態を読む公開メソッドで、テストから使う。
 
 `runJob(job)` が 1 件の実行本体で、スケジューラのコールバックと `POST /cron/run` の両方から呼ばれる。共通処理の後、`job.kind` で `runPromptJob()`/`runCommandJob()` (どちらも private) に分岐する。
 
+0. 終了済みガード: `stop()` 済み (終了用の signal が aborted) なら INFO ログを出して `"skipped"` を返す (`running` には足さない)。スケジューラ経由と `POST /cron/run` の両方がここで止まる。
 1. 並行実行ガード: `running: Set<string>` に同名ジョブがあれば WARN ログを出して return する。無ければ追加する。このガードはジョブ名単位であり、別名ジョブは同一 tick で同時に起動する。
    - news-* 6 本は 8:00 に揃えて同時起動させている。2026-08-23 に 10 分刻みへ分散したが、分散前 (2026-08-23 以前) の同時起動でも負荷集中は見られなかったため、2026-08-29 に 8:00 へ戻した。
    - 負荷集中が問題になる場合はジョブ定義側で `schedule` をずらす。
-2. 送信先の事前取得: `job.channelId` があれば `ports.resolveTarget(job.channelId)` を await する (解決できなければ throw)。理由: 後段の catch でエラー通知先として使う。prompt / command 両方で共通。
+2. 送信先の事前取得: `job.channelId` があれば `ports.resolveTarget(job.channelId)` を await する (解決できなければ throw)。理由: 後段の catch でエラー通知先として使う。prompt / command 両方で共通。待機の後に終了用の signal を確かめ、aborted ならコマンドも query も始めず、終了による中断として 4 へ進む (`runPromptJob()` もストア読み取りの待機の後に同じ確認をする)。
 3. `job.kind === "command"` なら `runCommandJob(job, target)`、それ以外 (`"prompt"`) なら `runPromptJob(job, target)` を await する。
-4. catch: ERROR ログ (`cron job "{name}" failed:`、全文) を出す。`target` が取得済みなら `target.send()` で `[cron: {name}]` + `summarizeError(error)` (`errors.ts`、定型文 + エラーメッセージの先頭 1 行を要約したもの) を送る。通知自体の失敗は握りつぶす。
-5. finally: `job.once` かつ `onceCallback` が設定されていれば `onceCallback(job.name)` を await する (失敗はログのみ)。最後に `running` から削除する。
+4. catch: 終了用の signal が aborted (終了による中断) なら、INFO ログ (`cron job "{name}" aborted by shutdown:`) にエラーを残し、失敗の通知は投稿せず、戻り値は `"failed"` とする。それ以外は ERROR ログ (`cron job "{name}" failed:`、全文) を出す。`target` が取得済みなら `target.send()` で `[cron: {name}]` + `summarizeError(error)` (`errors.ts`、定型文 + エラーメッセージの先頭 1 行を要約したもの) を送る。通知自体の失敗は握りつぶす。
+5. finally: `job.once` かつ `onceCallback` が設定されていれば `onceCallback(job.name)` を await する (失敗はログのみ)。ただし終了による中断で失敗した once ジョブは `onceCallback` を呼ばず (ジョブファイルを残す。ファイルは次の起動で読み込まれ、次にスケジュールが合う分に実行される。同じ分のうちに再起動すれば新しいスケジューラの最初の tick で実行され、日付指定の式なら次に合うのは翌年になりうる)、WARN ログに残したことを出す。最後に `running` から削除する。
 
 ### `runPromptJob()`
 
@@ -176,8 +184,8 @@ Discord 実装 (`client/discord/cron-target.ts` の `createDiscordCronPorts({ cl
 2. システムプロンプト: `systemPrompts.resolve("cron", { channelId: job.channelId ?? "" }, templateVars)`。context が `"cron"` なので `DEFAULT.md` + `CRON.md` に加え、`job.channelId` と同名の `{channelId}.md` があればそれも結合される (スレッドは無いので thread フォールバックは起きない)。
    - `templateVars` は `ports.guildTemplateVars()` で、ギルドレベルのみ (`discord.guild.id`/`discord.guild.name`)。チャンネル/ユーザー変数は展開されずプレースホルダのまま残る。
    - 詳細は [claude-integration](claude-integration.md)。
-3. 設定の組み立て: `jobConfig` は `ClaudeConfig` を spread でコピーし、`job.maxTurns` が指定されていれば `maxTurns` だけ上書きする。`timeout = job.timeout ?? config.timeout`。
-4. `runOneShot({ prompt: job.prompt, config: jobConfig, env, sessionId, setSession, signal: AbortSignal.timeout(timeout), appendSystemPrompt, model, effort, canUseTool: ports.createCanUseTool(job.channelId), onNonSuccess, queryFn })` (`core/conversation.ts`) を呼ぶ。`ScopeQueue` は通さない (cron ジョブは scope 単位の直列化の対象外。挙動は従来どおり)。`canUseTool` に渡す `channelId` は `job.channelId` で、省略時は `undefined` となり `ApprovalManager` は自動 deny する (共有状態へのフォールバックは無い)。承認フローは [approval](approval.md)。
+3. 設定の組み立て: `jobConfig` は `ClaudeConfig` を spread でコピーし、`job.maxTurns` が指定されていれば `maxTurns` だけ上書きする。`timeout = job.timeout ?? config.timeout`。`signal` は `AbortSignal.any([AbortSignal.timeout(timeout), 終了用の signal])` で、`runOneShot()` と `createCanUseTool()` の両方に渡す (承認待ちも打ち切られる)。
+4. `runOneShot({ prompt: job.prompt, config: jobConfig, env, sessionId, setSession, signal, appendSystemPrompt, model, effort, canUseTool: ports.createCanUseTool(job.channelId, signal), onNonSuccess, queryFn })` (`core/conversation.ts`) を呼ぶ。`ScopeQueue` は通さない (cron ジョブは scope 単位の直列化の対象外。挙動は従来どおり)。`canUseTool` に渡す `channelId` は `job.channelId` で、省略時は `undefined` となり `ApprovalManager` は自動 deny する (共有状態へのフォールバックは無い)。承認フローは [approval](approval.md)。
 5. ストリーム消費: `runOneShot()` が内部で `askClaude()` を呼び、`drainResultEvent(stream, { onNonSuccess, setSession })` (`claude/mod.ts`) で `for await` を回し、`event.type === "result"` イベントごとに `handleResultEvent()` (非 success なら `onNonSuccess` で WARN ログ、`setSession` があれば `event.session_id` で呼ぶ) を呼び、最後の `result` イベントを返す。`text_delta`/`thinking_delta`/`tool_progress` は読まない (ストリーミング投稿・進捗表示・thinking 表示は無い)。`resumeSession` が true なら `setSession` (実行器が渡す) から `store.replaceSession({ channelId: "cron:{name}" }, expected, newSessionId, generation)` で保存する。`generation` は `getSession` の await より前に同期で読んだリセット世代、`expected` は読んだ session (書けたら新しい値に更新)。実行中に `DELETE /settings/cron:<name>` や `PATCH` (`session: null`) でリセットされていたら書かず、INFO ログを残す (chat と同じ形。共通化はしていない)。`onNonSuccess` の WARN ログ文言 (`cron job "{name}" non-success subtype ...`) は実行器が組み立てて渡す。
 6. `runOneShot()` は最後に `requireResultText(resultEvent)` (`claude/mod.ts`) で本文を取り出して返す。`result` 無しで終わっていたら `claude stream ended without result event` を throw する (`target` の有無に関わらず、`runOneShot()` が常に評価するため必ず throw される)。取り出せたら `target` があるときだけ `target.send(text)` する (分割は `CronPorts` 実装側。`channelId` 省略時は投稿しない。プロンプト側で Discord REST API を叩く設計にする)。
 
@@ -187,9 +195,9 @@ Discord 実装 (`client/discord/cron-target.ts` の `createDiscordCronPorts({ cl
 
 ストア (session / model / effort)・システムプロンプト・承認には触れない。
 
-1. `timeout = job.timeout ?? config.timeout`、`signal = AbortSignal.timeout(timeout)`。
-2. `runCommandFn(job.command, { cwd: config.cwd, signal })` を try/catch で囲んで await する。既定実装 `runShellCommand` は `node:child_process` の `spawn("sh", ["-c", command], { cwd, stdio: ["inherit", "pipe", "pipe"] })` で起動し、stdout / stderr の `data` を集めて `close` イベントで解決する Promise と「`signal` の abort で reject する Promise」を `Promise.race` する。`close` の終了コードが `null` (シグナル終了) のときは `-1` を返す。`signal` の abort は `sh` に SIGTERM を送るだけで、`sh` が起動した子プロセスは残りうる (孫プロセスが stdout/stderr の pipe を握ったままだと出力の読み取りが返らない)。長時間動く子プロセスを起動するスクリプトは、自前で `trap` 等の後始末をすること。abort 時は `child.kill("SIGTERM")` を呼んで素の `Error("command timed out")` で reject する。`signal` は `spawn` には渡さず、自前の abort ハンドラで扱う。`stdout`/`stderr` は集めたバッファを文字列化して返す。
-3. `runCommandFn` が reject した場合、`signal.aborted` なら (`runShellCommand` の素のメッセージを) `command timed out after {timeout}ms` で throw し直す。`signal.aborted` でなければ元のエラーをそのまま throw する。resolve した場合も `signal.aborted` なら (モックが resolve で abort を模す経路向けに) 同じく `command timed out after {timeout}ms` を throw する。reject / resolve のどちらの経路でも、abort 時は文書化された `command timed out after {timeout}ms` が client (Discord) とログに出る。
+1. `timeout = job.timeout ?? config.timeout`、`signal = AbortSignal.any([AbortSignal.timeout(timeout), 終了用の signal])`。
+2. `runCommandFn(job.command, { cwd: config.cwd, signal })` を try/catch で囲んで await する。既定実装 `runShellCommand` は、`signal` が既に aborted なら spawn せずに素の `Error("command timed out")` で reject し、そうでなければ `node:child_process` の `spawn("sh", ["-c", command], { cwd, stdio: ["inherit", "pipe", "pipe"] })` で起動し、stdout / stderr の `data` を集めて `close` イベントで解決する Promise と「`signal` の abort で reject する Promise」を `Promise.race` する。`close` の終了コードが `null` (シグナル終了) のときは `-1` を返す。`signal` の abort は `sh` に SIGTERM を送るだけで、`sh` が起動した子プロセスは残りうる (孫プロセスが stdout/stderr の pipe を握ったままだと出力の読み取りが返らない)。長時間動く子プロセスを起動するスクリプトは、自前で `trap` 等の後始末をすること。abort 時は `child.kill("SIGTERM")` を呼んで素の `Error("command timed out")` で reject する。`signal` は `spawn` には渡さず、自前の abort ハンドラで扱う。`stdout`/`stderr` は集めたバッファを文字列化して返す。
+3. 終了用の signal が aborted のとき、reject なら `command aborted by shutdown` を throw する (タイムアウトの文言にしない)。resolve なら終了コードで分け、0 は完了として 4 以降へ進み (終了と同時に正常終了したコマンドの出力は投稿する)、0 以外は `command aborted by shutdown` を throw する。それ以外で `runCommandFn` が reject した場合、`signal.aborted` なら (`runShellCommand` の素のメッセージを) `command timed out after {timeout}ms` で throw し直す。`signal.aborted` でなければ元のエラーをそのまま throw する。resolve した場合も (終了用の signal が aborted でなく) `signal.aborted` なら (モックが resolve で abort を模す経路向けに) 同じく `command timed out after {timeout}ms` を throw する。reject / resolve のどちらの経路でも、abort 時は文書化された `command timed out after {timeout}ms` が client (Discord) とログに出る。
 4. `result.code !== 0` なら、`result.stdout` が空でなければ ERROR ログ (`cron job "{name}" stdout:` + 全文) を出したうえで、`command exited with code {code}: {stderr の先頭行}\n{stderr 全文}` を throw する (先頭行が `summarizeError()` 経由で Discord の要約に、全文が ERROR ログに載る)。
 5. `result.stderr` が空でなければ (成功時でも) WARN ログに出す。
 6. `result.stdout.trim()` (以下 `output`) が `MAX_COMMAND_OUTPUT_CHARS` (`4000`) を超える場合、先頭 4000 文字に切り詰めて末尾に `\n... (truncated, {元の文字数} chars)` を付ける (ログには全量を出すが、client へは切り詰め後を投稿する)。`output` が空でなく `target` があれば `target.send(output)` する (分割は `CronPorts` 実装側)。空、または `target` が無ければ投稿しない。
@@ -233,7 +241,7 @@ command ジョブ (`runCommandJob()`) はこの表のいずれにも触れない
 | `POST /cron/run`    | `{ name: string }` | `{ ok: true, name, result }`。`name` 不正は 400、未登録は 404 (`job not found: ...`)    |
 | `POST /cron/reload` | —                  | `{ ok: true }` (ファイル単位の読み込み失敗があっても 200)                               |
 
-`POST /cron/run` は `runJob()` の完了まで await するため、レスポンスはジョブの実行が終わってから返る。`runJob()` は結果を `CronRunResult` (`succeeded`/`failed`/`skipped`) で返し、レスポンスの `result` に載る。実行中の同名ジョブがあればガードにより skip され (`skipped`)、ジョブ内で例外が起きれば `failed` になるが、どちらも HTTP は 200 のままで 500 にはならない (500 はルート内の想定外の例外のみ)。
+`POST /cron/run` は `runJob()` の完了まで await するため、レスポンスはジョブの実行が終わってから返る。`runJob()` は結果を `CronRunResult` (`succeeded`/`failed`/`skipped`) で返し、レスポンスの `result` に載る。実行中の同名ジョブがある場合と終了処理中 (`stop()` 済み) は、ガードにより skip され (`skipped`)、ジョブ内で例外が起きれば `failed` になるが、どちらも HTTP は 200 のままで 500 にはならない (500 はルート内の想定外の例外のみ)。
 
 ## 利用規約との関係
 
