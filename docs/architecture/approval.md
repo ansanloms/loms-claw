@@ -60,13 +60,13 @@ Discord のボタン承認が発火するのは、上の表のとおり SDK 上�
 ### `requestApproval(toolName, toolInput, channelId)`
 
 1. `isInAllowList(settingsPath, toolName)` が true なら即 `{ decision: "allow", reason: "Already Allowed" }`。
-2. チャンネル解決: 引数 `channelId` が無ければ `{ decision: "deny", reason: "No approval channel" }`。`channelResolver.fetchSendable(channelId)` が `null` を返す (取得できない、またはテキストチャンネルでない) 場合は `{ decision: "deny", reason: "Channel not found" }`。
+2. チャンネル解決: 引数 `channelId` が無ければ `{ decision: "deny", reason: "No approval channel" }`。`channelResolver.fetchSendable(channelId)` が `null` を返す (取得できない、またはテキストチャンネルでない) 場合は `{ decision: "deny", reason: "Channel not found" }`。reject した (REST の失敗等) 場合は、`channelId` 付きの WARN ログを出して `{ decision: "deny", reason: "Failed to resolve channel" }`。
 3. 以下を投稿する。
    - ボタン 3 種:
      - `approve:{requestId}` (Allow, Success)
-     - `always:{requestId}:{toolName}` (Allow Always, Primary)
+     - `always:{requestId}` (Allow Always, Primary。ツール名は customId に載せず、`pending` が `toolName` として持つ。customId の 100 文字上限と、ツール名中の `:` の影響を受けない)
      - `deny:{requestId}` (Deny, Danger)
-   - 本文: 1 行目に `Tool: {toolName}` (太字 + インラインコード)、`toolInput.description` があればその値 (300 文字で切り詰め)、続けて `toolInput` の 2 スペース JSON ダンプを json コードフェンスで囲んだもの。ダンプは 1500 文字を超える場合 1497 文字 + `...` に切り詰める。組み立てた本文全体も 2000 文字 (`DISCORD_MESSAGE_LIMIT`) で切り詰める。投稿 (`channel.send`) が失敗したら `pending` を作らず `{ decision: "deny", reason: "Failed to post approval request" }` を返す
+   - 本文: 1 行目に `Tool: {toolName}` (太字 + インラインコード)、`toolInput.description` があればその値 (300 文字で切り詰め)、続けて `toolInput` の 2 スペース JSON ダンプを json コードフェンスで囲んだもの。ツール名・`description`・入力の連続するバッククォートは (切り詰めより前に)、隣り合う間にゼロ幅スペース (U+200B) を挟んで無害化し、フェンスが早く閉じないようにする。ダンプは `truncate()` で 1500 文字 (本文の予算が小さければそれ) に切り詰める。`truncate()` は切れ目が上位サロゲートの直後なら、それを落として末尾に `…` を付けるので、絵文字が壊れた形で残らない (ヘッダと `appendStatus` にも同じく効く)。本文全体は切り詰めず、ヘッダの長さと結果表示の余白 (`STATUS_RESERVE`) を引いたダンプ側の予算で収める。結果表示の文言は `manager.ts` の `STATUS_SUFFIX` に集め、`STATUS_RESERVE` はその最長の長さから導く (数値を手で持たない)。`question.ts` の suffix は `appendStatus` が本文側を切って必ず収めるので、余白は承認メッセージの本文を切らないためのもの。全体は 2000 文字 (`DISCORD_MESSAGE_LIMIT`) に収まる。投稿 (`channel.send`) が失敗したら `pending` を作らず `{ decision: "deny", reason: "Failed to post approval request" }` を返す
 4. `pending` に登録し Promise を返す。`handleButton()` が解決するか、`INTERACTION_TIMEOUT_MS` (`client/discord/approval/constants.ts`、5 分) 経過で `{ decision: "deny", reason: "Timed out" }` に解決する。タイムアウト時は投稿メッセージを `\n**→ Timed out**` に編集してボタンを外す (編集失敗は WARN ログ)。`signal` (ターンの中断シグナル) が abort された場合は、送信前なら投稿せず、待機中なら `pending` を消して `\n**→ Aborted**` に編集し、`{ decision: "deny", reason: "Aborted" }` に解決する。abort 後のボタン押下は「期限切れか処理済み」の応答になる。結果の追記は `appendStatus()` が元本文を `2000 - suffix.length` で切ってから suffix を足すので、末尾の `**→ ...**` は切り落とされない。
 
 ### `handleButton(interaction)`
@@ -77,9 +77,9 @@ Discord のボタン承認が発火するのは、上の表のとおり SDK 上�
 2. `customId` を `:` で分割し、`approve`/`always`/`deny` 以外、または `requestId` 欠落なら `false` を返す。
 3. `pending` に無い (期限切れ・処理済み) なら ephemeral で「この承認リクエストは期限切れか、既に処理済みです。」と返す。
 4. timeout を解除し `pending` から削除する。
-5. `always` なら `customId` 第 3 要素のツール名で `addToSettingsAllowList(settingsPath, toolName)` を呼ぶ。失敗しても WARN ログのみで承認自体は続行する。
-6. `approve`/`always` → `decision: "allow"`、`deny` → `decision: "deny"`。`reason` はラベル (`Allowed`/`Always Allowed`/`Denied`)。
-7. 元メッセージを `interaction.update()` で `\n**→ {ラベル}**` を追記しボタンを外す。
+5. `always` なら `pending` が持つツール名で `addToSettingsAllowList(settingsPath, toolName)` を呼ぶ。失敗しても WARN ログを出し、承認自体は続行する。ただし結果表示は `Always Allowed` ではなく `Allowed (settings.json への保存に失敗)` にし、`reason` も `Allowed (not persisted)` にする。
+6. `approve`/`always` → `decision: "allow"`、`deny` → `decision: "deny"`。`reason` はラベル (`Allowed`/`Always Allowed`/`Denied`。Allow Always の保存失敗時は `Allowed (not persisted)`)。
+7. 元メッセージを `interaction.update()` で `\n**→ {ラベル}**` (保存失敗時は上記の文言) を追記しボタンを外す。
 
 ### `isInAllowList(settingsPath, toolName)` (`core/approval-settings.ts`)
 
@@ -108,7 +108,7 @@ Discord のボタン承認が発火するのは、上の表のとおり SDK 上�
 
 ### `requestAnswers(questions, channelId?)`
 
-1. `channelId` 無し → `{ kind: "denied", reason: "No channel to ask the user" }`。取得不可・非テキスト → `{ kind: "denied", reason: "Channel not found" }`。
+1. `channelId` 無し → `{ kind: "denied", reason: "No channel to ask the user" }`。取得不可・非テキスト → `{ kind: "denied", reason: "Channel not found" }`。`channels.fetch` の reject → `{ kind: "denied", reason: "Failed to resolve channel" }` (`channelId` 付きの WARN ログ)。質問メッセージの送信 (`send`) の reject → `{ kind: "denied", reason: "Failed to post questions" }`。
 2. 本文 `**Claude からの質問**` + 各質問の `**{n}. {header}** — {question}` (2000 文字で切り詰め) と、質問ごとの string select (`question:{requestId}:{index}`) + 末尾に Cancel ボタン (`question-cancel:{requestId}`) を投稿する。
    - select の選択肢は各 option (value は index 文字列、label/description は 100 文字で切り詰め) に加え、`Other (自由入力)` を自動で末尾に足す。値は `OTHER_VALUE` (`__other__`) とする
    - `multiSelect` の質問は `maxValues = options.length + 1`、それ以外は 1
@@ -159,11 +159,11 @@ cron で `channelId` 未指定のジョブでは、`createCanUseTool()` に渡�
 
 ## テスト
 
-| ファイル                                   | 対象                                                                                                                                                                                                                                                                                   |
-| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `client/discord/approval/manager.test.ts`  | `createCanUseTool()` の変換表 (fake `ApprovalManager` で allow / deny / AskUserQuestion の各分岐を検証)。加えて `ApprovalManager` 本体の `requestApproval()` → `handleButton()` (承認 / 拒否 / タイムアウト / channelId 未指定) を、`ApprovalChannelResolver` を fake に差し替えて検証 |
-| `client/discord/approval/question.test.ts` | 純粋関数 `parseQuestions` / `resolveSelectedLabels` / `formatAnswer` / `truncate`                                                                                                                                                                                                      |
-| `core/approval-settings.test.ts`           | `addToSettingsAllowList` (新規作成・マージ・重複排除・形の検査 (非オブジェクト・非配列・非文字列要素は throw、null は作り直し)) と `isInAllowList` (存在・不在・JSON 不正)                                                                                                             |
+| ファイル                                   | 対象                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `client/discord/approval/manager.test.ts`  | `createCanUseTool()` の変換表 (fake `ApprovalManager` で allow / deny / AskUserQuestion の各分岐を検証)。加えて `ApprovalManager` 本体の `requestApproval()` → `handleButton()` (承認 / 拒否 / タイムアウト / channelId 未指定 / チャンネル解決の reject / 長いツール名・`:` 入りツール名の Allow Always / 絵文字とバッククォートでの本文の健全性 / 保存失敗時の結果表示) を、`ApprovalChannelResolver` を fake に差し替えて検証 |
+| `client/discord/approval/question.test.ts` | 純粋関数 `parseQuestions` / `resolveSelectedLabels` / `formatAnswer` / `truncate` (サロゲート)、`QuestionManager.requestAnswers` の送信前後の失敗と abort                                                                                                                                                                                                                                                                        |
+| `core/approval-settings.test.ts`           | `addToSettingsAllowList` (新規作成・マージ・重複排除・形の検査 (非オブジェクト・非配列・非文字列要素は throw、null は作り直し)) と `isInAllowList` (存在・不在・JSON 不正)                                                                                                                                                                                                                                                       |
 
 `ApprovalManager` はチャンネル解決 (`client.channels.fetch()` → 送信) を `ApprovalChannelResolver` (`fetchSendable()`) に切り出してあり、コンストラクタの `options.channelResolver` で差し替えられる (既定は `client` から作った discord.js 実装)。`options.timeoutMs` で `INTERACTION_TIMEOUT_MS` (既定値は変えない) をテスト用に短縮できる。一方 `handleButton()` の引数型は discord.js の `ButtonInteraction` のまま (`QuestionManager.handleButton()` への委譲が同じ型を要求するため、`ApprovalManager` 側だけを緩めると型が合わない)。テストでは `handleButton` が実際に触るプロパティ (`customId`/`message.content`/`update`/`reply`) だけを持つ fake オブジェクトを `as unknown as ButtonInteraction` でキャストして渡す (`client/discord/message.test.ts` の fake チャンネルと同じ手法)。`QuestionManager` のインタラクション処理自体は引き続き単体テストの対象外。
 
@@ -171,4 +171,4 @@ cron で `channelId` 未指定のジョブでは、`createCanUseTool()` に渡�
 
 承認・質問の待ちは `claude.timeout` (ターン全体のタイムアウト) に含まれる。`core/conversation.ts` と `cron/executor.ts` はターンの `AbortSignal.timeout(timeout)` を `askClaude` と `createCanUseTool(…, signal)` の両方へ渡す。`createCanUseTool()` は SDK が `canUseTool` の第 3 引数で渡す `options.signal` とターンの signal を `AbortSignal.any` で合成し、`requestApproval()`/`requestAnswers()` に渡す。どちらかが abort されると承認・質問は打ち切られ、メッセージは `Aborted` に編集される。
 
-進捗メッセージ (`createProgressReporter`) の初回送信が失敗しても `report()` は reject せず、間引き (3 秒) は保ったまま、次の間引き間隔を過ぎた report で再送する。ターン終了時の後始末は `runTurnCleanup()` が typing の停止を最初に行い、各 step の失敗を WARN ログにして残りを続行する。
+進捗メッセージ (`createProgressReporter`) の初回送信が失敗しても `report()` は reject せず、間引き (3 秒) は保ったまま、次の間引き間隔を過ぎた report で再送する。`cleanup()` は `cleaned` フラグを立てる。初回 `send` の待機中 (`sending`) は、間引きを超えた次の `report()` でも二重に送らない。待機中に捨てた `report()` は間引きの時刻を進めない。待機中に `cleanup()` が走った場合、後から届いたメッセージは保持せずその場で削除する。`cleanup()` 後の `report()` は何もしない。ターン終了時の後始末は `runTurnCleanup()` が typing の停止を最初に行い、各 step の失敗を WARN ログにして残りを続行する。

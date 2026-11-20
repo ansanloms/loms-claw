@@ -179,7 +179,13 @@ export function truncate(text: string, max: number): string {
   if (text.length <= max) {
     return text;
   }
-  return `${text.slice(0, max - 1)}…`;
+  let head = text.slice(0, Math.max(0, max - 1));
+  // 切れ目が上位サロゲートの直後なら、対の下位サロゲートが無いので落とす。
+  const last = head.charCodeAt(head.length - 1);
+  if (last >= 0xd800 && last <= 0xdbff) {
+    head = head.slice(0, -1);
+  }
+  return `${head}…`;
 }
 
 /**
@@ -241,7 +247,17 @@ export class QuestionManager {
       return { kind: "denied", reason: "No channel to ask the user" };
     }
 
-    const channel = await this.client.channels.fetch(channelId);
+    let channel: Awaited<ReturnType<Client["channels"]["fetch"]>>;
+    try {
+      channel = await this.client.channels.fetch(channelId);
+    } catch (error: unknown) {
+      log.warn(
+        "failed to resolve question channel:",
+        channelId,
+        getErrorMessage(error),
+      );
+      return { kind: "denied", reason: "Failed to resolve channel" };
+    }
     if (!channel?.isTextBased()) {
       log.warn("question channel not found:", channelId);
       return { kind: "denied", reason: "Channel not found" };
@@ -258,10 +274,16 @@ export class QuestionManager {
     ];
     const content = truncate(contentLines.join("\n"), DISCORD_MESSAGE_LIMIT);
 
-    const message = await (channel as GuildTextBasedChannel).send({
-      content,
-      components: this.buildComponents(requestId, questions, new Map()),
-    });
+    let message: Awaited<ReturnType<GuildTextBasedChannel["send"]>>;
+    try {
+      message = await (channel as GuildTextBasedChannel).send({
+        content,
+        components: this.buildComponents(requestId, questions, new Map()),
+      });
+    } catch (error: unknown) {
+      log.warn("failed to post questions:", getErrorMessage(error));
+      return { kind: "denied", reason: "Failed to post questions" };
+    }
 
     log.info(
       "questions requested:",

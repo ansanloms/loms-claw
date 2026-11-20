@@ -127,7 +127,7 @@ bot 側でメッセージをスレッドへ自動分離する機能は実装し�
 
 - 待機していたなら ⏳ リアクションを外す。
 - `keepTyping(channel, signal)`: 初回 `sendTyping()` の後、10 秒間隔で送り続け、`AbortSignal` で停止する。
-- `createProgressReporter(channel)`: `tool_progress` 用。最初の `report()` で 1 件投稿し、以降は同じメッセージを `edit()` する。3 秒未満の呼び出しはスロットルで捨てる。`cleanup()` で削除する。
+- `createProgressReporter(channel)`: `tool_progress` 用。最初の `report()` で 1 件投稿し、以降は同じメッセージを `edit()` する。3 秒未満の呼び出しはスロットルで捨てる。`cleanup()` で削除する。初回投稿の待機中に `cleanup()` が走っても、後から届いたメッセージはその場で削除し、以後の `report()` は何もしない。
 
 ### 8. 画像添付とプロンプトの確定
 

@@ -42,9 +42,32 @@ import {
 const log = createLogger("approval");
 
 /**
- * 本文に残す結果表示 (`appendStatus` の最長 suffix `\n**→ Always Allowed**` 等) の余白。
+ * 本文の末尾に足す結果表示 (suffix)。文言はここに集め、余白 (`STATUS_RESERVE`) はその最長から導く。
  */
-const STATUS_RESERVE = 32;
+export const STATUS_SUFFIX = {
+  allowed: "\n**→ Allowed**",
+  alwaysAllowed: "\n**→ Always Allowed**",
+  /** Allow Always の保存に失敗したが、承認は通した。 */
+  notPersisted: "\n**→ Allowed (settings.json への保存に失敗)**",
+  denied: "\n**→ Denied**",
+  timedOut: "\n**→ Timed out**",
+  aborted: "\n**→ Aborted**",
+} as const;
+
+/**
+ * 本文に残す結果表示の余白。`STATUS_SUFFIX` の最長に合わせる。
+ */
+export const STATUS_RESERVE = Math.max(
+  ...Object.values(STATUS_SUFFIX).map((suffix) => suffix.length),
+);
+
+/**
+ * コードフェンス・インラインコードを壊さないよう、連続するバッククォートの間に
+ * ゼロ幅スペースを挟む。
+ */
+function neutralizeBackticks(text: string): string {
+  return text.replace(/(?<=`)(?=`)/g, "\u200b");
+}
 
 /**
  * 承認結果。
@@ -109,6 +132,8 @@ export class ApprovalManager {
       timeout: ReturnType<typeof setTimeout>;
       /** abort listener の解除。解決時に呼ぶ。 */
       cleanup: () => void;
+      /** Allow Always で allow list に足すツール名 (customId には載せない)。 */
+      toolName: string;
     }
   >();
   private questions: QuestionManager;
@@ -170,7 +195,17 @@ export class ApprovalManager {
       return { decision: "deny", reason: "Aborted" };
     }
 
-    const channel = await this.channelResolver.fetchSendable(channelId);
+    let channel: ApprovalSendableChannel | null;
+    try {
+      channel = await this.channelResolver.fetchSendable(channelId);
+    } catch (error: unknown) {
+      log.warn(
+        "failed to resolve approval channel:",
+        channelId,
+        getErrorMessage(error),
+      );
+      return { decision: "deny", reason: "Failed to resolve channel" };
+    }
     if (!channel) {
       log.warn("approval channel not found:", channelId);
       return { decision: "deny", reason: "Channel not found" };
@@ -187,7 +222,7 @@ export class ApprovalManager {
         .setLabel("Allow")
         .setStyle(ButtonStyle.Success),
       new ButtonBuilder()
-        .setCustomId(`always:${requestId}:${toolName}`)
+        .setCustomId(`always:${requestId}`)
         .setLabel("Allow Always")
         .setStyle(ButtonStyle.Primary),
       new ButtonBuilder()
@@ -198,10 +233,10 @@ export class ApprovalManager {
 
     const description =
       typeof toolInput.description === "string"
-        ? truncate(toolInput.description, 300)
+        ? truncate(neutralizeBackticks(toolInput.description), 300)
         : "";
     const header = [
-      `**Tool: \`${truncate(toolName, 100)}\`**`,
+      `**Tool: \`${truncate(neutralizeBackticks(toolName), 100)}\`**`,
       ...(description ? [description] : []),
     ].join("\n");
     // 閉じフェンスと結果表示 (appendStatus の最長 suffix) の分を空けて JSON ダンプを切る。
@@ -212,11 +247,9 @@ export class ApprovalManager {
         header.length -
         "\n```json\n\n```".length,
     );
-    const inputDump = JSON.stringify(toolInput, null, 2);
-    const truncated =
-      inputDump.length > Math.min(1500, dumpBudget)
-        ? `${inputDump.slice(0, Math.max(0, Math.min(1500, dumpBudget) - 3))}...`
-        : inputDump;
+    // 入力中の連続するバッククォートは、間にゼロ幅スペースを挟んでフェンスを閉じさせない。
+    const inputDump = neutralizeBackticks(JSON.stringify(toolInput, null, 2));
+    const truncated = truncate(inputDump, Math.min(1500, dumpBudget));
     const content = `${header}\n\`\`\`json\n${truncated}\n\`\`\``;
 
     let message: Awaited<ReturnType<ApprovalSendableChannel["send"]>>;
@@ -243,7 +276,7 @@ export class ApprovalManager {
     // send の待機中に abort されると listener は発火しないので、ここで確かめる。
     if (signal?.aborted) {
       log.warn("approval aborted:", requestId);
-      editStatus("\n**→ Aborted**", "aborted");
+      editStatus(STATUS_SUFFIX.aborted, "aborted");
       return { decision: "deny", reason: "Aborted" };
     }
 
@@ -256,7 +289,7 @@ export class ApprovalManager {
         clearTimeout(pending.timeout);
         this.pending.delete(requestId);
         log.warn("approval aborted:", requestId);
-        editStatus("\n**→ Aborted**", "aborted");
+        editStatus(STATUS_SUFFIX.aborted, "aborted");
         resolve({ decision: "deny", reason: "Aborted" });
       };
       const cleanup = () => signal?.removeEventListener("abort", onAbort);
@@ -265,11 +298,11 @@ export class ApprovalManager {
         this.pending.delete(requestId);
         cleanup();
         log.warn("approval timed out:", requestId);
-        editStatus("\n**→ Timed out**", "timed out");
+        editStatus(STATUS_SUFFIX.timedOut, "timed out");
         resolve({ decision: "deny", reason: "Timed out" });
       }, this.timeoutMs);
 
-      this.pending.set(requestId, { resolve, timeout, cleanup });
+      this.pending.set(requestId, { resolve, timeout, cleanup, toolName });
       signal?.addEventListener("abort", onAbort, { once: true });
     });
   }
@@ -336,29 +369,37 @@ export class ApprovalManager {
     pending.cleanup();
     this.pending.delete(requestId);
 
+    let saveFailed = false;
     if (action === "always") {
-      const alwaysToolName = parts[2];
-      if (alwaysToolName) {
-        try {
-          await addToSettingsAllowList(this.settingsPath, alwaysToolName);
-        } catch (error: unknown) {
-          const msg = getErrorMessage(error);
-          log.warn("failed to persist allow list:", msg);
-        }
+      try {
+        await addToSettingsAllowList(this.settingsPath, pending.toolName);
+      } catch (error: unknown) {
+        const msg = getErrorMessage(error);
+        log.warn("failed to persist allow list:", msg);
+        saveFailed = true;
       }
     }
 
     const approved = action === "approve" || action === "always";
     const label =
       action === "always" ? "Always Allowed" : approved ? "Allowed" : "Denied";
+    // 保存に失敗しても承認は通すが、SDK へ返す reason と表示で保存されていないことを示す。
+    const reason = saveFailed ? "Allowed (not persisted)" : label;
+    const suffix = saveFailed
+      ? STATUS_SUFFIX.notPersisted
+      : action === "always"
+        ? STATUS_SUFFIX.alwaysAllowed
+        : approved
+          ? STATUS_SUFFIX.allowed
+          : STATUS_SUFFIX.denied;
 
     pending.resolve({
       decision: approved ? "allow" : "deny",
-      reason: label,
+      reason,
     });
 
     await interaction.update({
-      content: appendStatus(interaction.message.content, `\n**→ ${label}**`),
+      content: appendStatus(interaction.message.content, suffix),
       components: [],
     });
 
