@@ -99,6 +99,51 @@ describe("CronScheduler", () => {
     assert.deepStrictEqual(triggered.length, 2);
   });
 
+  test("tick を 2 分飛ばしても間の分に一致するジョブが起動すること", () => {
+    const triggered: string[] = [];
+    const scheduler = new CronScheduler((job) => triggered.push(job.name));
+    scheduler.replaceAll([makeJob("nine-oh-one", "1 9 * * *")]);
+
+    scheduler.tick(zdt(2026, 3, 31, 9, 0));
+    assert.deepStrictEqual(triggered, []);
+    scheduler.tick(zdt(2026, 3, 31, 9, 2));
+    assert.deepStrictEqual(triggered, ["nine-oh-one"]);
+  });
+
+  test("複数の分に一致しても 1 tick につき 1 回だけ起動すること", () => {
+    const triggered: string[] = [];
+    const scheduler = new CronScheduler((job) => triggered.push(job.name));
+    scheduler.replaceAll([makeJob("always", "* * * * *")]);
+
+    scheduler.tick(zdt(2026, 3, 31, 9, 0));
+    scheduler.tick(zdt(2026, 3, 31, 9, 5));
+    assert.deepStrictEqual(triggered, ["always", "always"]);
+  });
+
+  test("61 分以上飛んだら直近 60 分だけを遡ること", () => {
+    const triggered: string[] = [];
+    const scheduler = new CronScheduler((job) => triggered.push(job.name));
+    scheduler.replaceAll([
+      makeJob("too-old", "0 9 * * *"),
+      makeJob("edge", "1 10 * * *"),
+      makeJob("recent", "30 10 * * *"),
+    ]);
+
+    scheduler.tick(zdt(2026, 3, 31, 8, 59));
+    // 11:00 の直近 60 分は 10:01〜11:00
+    scheduler.tick(zdt(2026, 3, 31, 11, 0));
+    assert.deepStrictEqual(triggered, ["edge", "recent"]);
+  });
+
+  test("初回の tick は現在の分だけを評価すること", () => {
+    const triggered: string[] = [];
+    const scheduler = new CronScheduler((job) => triggered.push(job.name));
+    scheduler.replaceAll([makeJob("past", "0 9 * * *")]);
+
+    scheduler.tick(zdt(2026, 3, 31, 9, 30));
+    assert.deepStrictEqual(triggered, []);
+  });
+
   test("start の二重呼び出しでタイマーが重複しないこと", () => {
     const scheduler = new CronScheduler(() => {});
     scheduler.start();

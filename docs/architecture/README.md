@@ -17,18 +17,19 @@ Discord の単一ギルド・単一ユーザ専用のパーソナル AI エー�
 
 `package.json` の `dependencies` から。
 
-| 技術                               | 用途                                                                                                                                       |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Node.js 26                         | ランタイム。TypeScript は型除去で直接実行する (`node main.ts`)                                                                             |
-| discord.js v14                     | Discord Gateway への接続、メッセージ受信、ボタン / select menu / Modal、スラッシュコマンド登録                                             |
-| `@anthropic-ai/claude-agent-sdk`   | `query()` による Claude 呼び出し。同梱の Claude Code バイナリを SDK が spawn する                                                          |
-| Hono (`hono`, `@hono/node-server`) | 内部 HTTP API (`127.0.0.1:{apiPort}`)                                                                                                      |
-| SQLite (`node:sqlite`)             | スコープ単位の設定・セッション ID の永続化 (`storePath`、`settings` テーブル)                                                              |
-| `@js-temporal/polyfill`            | `Temporal`。cron 式のローカルタイム評価 (`cron/match.ts`)、レートリミッタの時刻計算 (`core/ratelimit.ts`)。Node が組み込みで提供したら外す |
-| `@cfworker/json-schema`            | `config.json`・内部 API リクエストボディ・cron frontmatter の構造検証                                                                      |
-| `json-schema-to-ts`                | 内部 API の schema から TypeScript 型を導出 (`FromSchema`)                                                                                 |
-| `@std/front-matter`, `@std/yaml`   | cron ジョブファイルの YAML frontmatter 抽出とパース                                                                                        |
-| `@std/path`                        | パス操作                                                                                                                                   |
+| 技術                               | 用途                                                                                                                                                 |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Node.js 26                         | ランタイム。TypeScript は型除去で直接実行する (`node main.ts`)                                                                                       |
+| discord.js v14                     | Discord Gateway への接続、メッセージ受信、ボタン / select menu / Modal、スラッシュコマンド登録                                                       |
+| `@anthropic-ai/claude-agent-sdk`   | `query()` による Claude 呼び出し。同梱の Claude Code バイナリを SDK が spawn する                                                                    |
+| Hono (`hono`, `@hono/node-server`) | 内部 HTTP API (`127.0.0.1:{apiPort}`)                                                                                                                |
+| SQLite (`node:sqlite`)             | スコープ単位の設定・セッション ID の永続化 (`storePath`、`settings` テーブル)                                                                        |
+| `@js-temporal/polyfill`            | `Temporal`。cron のタイムゾーン付き時刻の受け渡し (`cron/match.ts`)、レートリミッタの時刻計算 (`core/ratelimit.ts`)。Node が組み込みで提供したら外す |
+| `croner`                           | cron 式のパースと一致判定 (`cron/match.ts`)                                                                                                          |
+| `@cfworker/json-schema`            | `config.json`・内部 API リクエストボディ・cron frontmatter の構造検証                                                                                |
+| `json-schema-to-ts`                | 内部 API の schema から TypeScript 型を導出 (`FromSchema`)                                                                                           |
+| `@std/front-matter`, `@std/yaml`   | cron ジョブファイルの YAML frontmatter 抽出とパース                                                                                                  |
+| `@std/path`                        | パス操作                                                                                                                                             |
 
 コンテナイメージ (`Dockerfile`) には `curl`/`jq` (Discord REST を叩く skill 用)、`ffmpeg` (添付画像のリサイズ、`client/discord/message.ts` の `resizeImageIfNeeded()`)、`git`/`bubblewrap`/`socat` が同梱される。
 
