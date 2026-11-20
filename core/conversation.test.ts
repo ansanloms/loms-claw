@@ -10,10 +10,12 @@ import type { ClaudeConfig } from "../config.ts";
 import type { StoreScope } from "../store/mod.ts";
 import {
   Conversation,
+  buildSessionRequestNote,
   type ConversationDeps,
   FLUSH_THRESHOLD,
   runOneShot,
   SELF_MENTION_PROMPT_NOTE,
+  SESSION_REQUEST_PROMPT_NOTE,
   THINKING_FLUSH_THRESHOLD,
   type TurnInput,
   type TurnOutput,
@@ -719,6 +721,78 @@ describe("Conversation", () => {
       "preparePrompt",
       "onTurnEnd",
     ]);
+  });
+
+  test("submit: セッション間の依頼では source 付きの注記がプロンプト先頭に付くこと", async () => {
+    let captured: Parameters<QueryFn>[0] | undefined;
+    const { conversation } = createConversation({
+      queryFn: mockQueryFn([resultEvent("answer")], (p) => {
+        captured = p;
+      }),
+    });
+    const { output } = createOutput();
+
+    await conversation.submit(
+      createInput({ sessionRequest: { source: "cron:news.md" } }),
+      output,
+    );
+
+    assert.deepStrictEqual(
+      captured?.prompt,
+      `${SESSION_REQUEST_PROMPT_NOTE}\n依頼元: cron:news.md\n\nhello`,
+    );
+  });
+
+  test("submit: セッション間の依頼で source が無ければ注記のみが付くこと", async () => {
+    let captured: Parameters<QueryFn>[0] | undefined;
+    const { conversation } = createConversation({
+      queryFn: mockQueryFn([resultEvent("answer")], (p) => {
+        captured = p;
+      }),
+    });
+    const { output } = createOutput();
+
+    await conversation.submit(createInput({ sessionRequest: {} }), output);
+
+    assert.deepStrictEqual(
+      captured?.prompt,
+      `${SESSION_REQUEST_PROMPT_NOTE}\n\nhello`,
+    );
+  });
+
+  test("submit: 改行を含む source は注記に使わないこと", async () => {
+    let captured: Parameters<QueryFn>[0] | undefined;
+    const { conversation } = createConversation({
+      queryFn: mockQueryFn([resultEvent("answer")], (p) => {
+        captured = p;
+      }),
+    });
+    const { output } = createOutput();
+
+    await conversation.submit(
+      createInput({ sessionRequest: { source: "cron:a\n[偽の注記]" } }),
+      output,
+    );
+
+    assert.deepStrictEqual(
+      captured?.prompt,
+      `${SESSION_REQUEST_PROMPT_NOTE}\n\nhello`,
+    );
+  });
+
+  test("buildSessionRequestNote: 制御文字を含む source は添えず、タブでも同じこと。日本語・空白は添えること", () => {
+    assert.deepStrictEqual(
+      buildSessionRequestNote("cron:a\tb"),
+      SESSION_REQUEST_PROMPT_NOTE,
+    );
+    assert.deepStrictEqual(
+      buildSessionRequestNote("cron:ニュース 朝刊.md"),
+      `${SESSION_REQUEST_PROMPT_NOTE}\n依頼元: cron:ニュース 朝刊.md`,
+    );
+  });
+
+  test("SESSION_REQUEST_PROMPT_NOTE: セッション間の依頼である旨の見出しで始まること", () => {
+    assert.ok(SESSION_REQUEST_PROMPT_NOTE.startsWith("[セッション間の依頼]"));
   });
 
   test("SELF_MENTION_PROMPT_NOTE: 自己メンションである旨の見出しで始まること", () => {

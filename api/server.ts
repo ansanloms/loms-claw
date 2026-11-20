@@ -2,7 +2,7 @@
  * 統合 HTTP サーバー。
  *
  * cron ジョブの一覧取得・手動実行・再読み込み、ログ取得、スコープ設定の
- * 取得・部分更新・削除を Hono アプリケーションとして単一の HTTP サーバーとして提供する。
+ * 取得・部分更新・削除、セッションへの依頼を Hono アプリケーションとして単一の HTTP サーバーとして提供する。
  *
  * ツール承認は SDK の `canUseTool` コールバックで in-process に処理するため、
  * HTTP エンドポイントは持たない。
@@ -18,6 +18,10 @@ import {
   type HealthRouteContext,
 } from "./routes/health.ts";
 import { createLogsRoutes } from "./routes/logs.ts";
+import {
+  createSessionsRoutes,
+  type SessionsRouteContext,
+} from "./routes/sessions.ts";
 import {
   createSettingsRoutes,
   type SettingsRouteContext,
@@ -35,12 +39,14 @@ const log = createLogger("api-server");
  * @param settingsCtx - settings ルートの依存関係コンテキスト。
  * @param healthCtx - health ルートの依存関係コンテキスト。
  * @param cronCtx - cron ルートの依存関係コンテキスト。
+ * @param sessionsCtx - sessions ルートの依存関係コンテキスト (未指定なら 503)。
  * @returns 組み立て済みの Hono アプリケーション。
  */
 export function createApp(
   settingsCtx: SettingsRouteContext,
   healthCtx: HealthRouteContext,
   cronCtx?: CronRouteContext,
+  sessionsCtx?: SessionsRouteContext,
 ): Hono {
   const app = new Hono();
 
@@ -59,6 +65,7 @@ export function createApp(
   app.route("/cron", createCronRoutes(cronCtx));
   app.route("/health", createHealthRoutes(healthCtx));
   app.route("/logs", createLogsRoutes());
+  app.route("/sessions", createSessionsRoutes(sessionsCtx));
   app.route("/settings", createSettingsRoutes(settingsCtx));
 
   // 未定義パスへのアクセス
@@ -81,6 +88,7 @@ export function createApp(
  * @param settingsCtx - settings ルートの依存関係コンテキスト。
  * @param healthCtx - health ルートの依存関係コンテキスト。
  * @param cronCtx - cron ルートの依存関係コンテキスト。
+ * @param sessionsCtx - sessions ルートの依存関係コンテキスト (未指定なら 503)。
  * @returns listening になった時点で resolve する Node の HTTP サーバー（close() で停止可能）。
  *   ポート使用中などで listen に失敗した場合は reject する。
  */
@@ -89,8 +97,9 @@ export function startApiServer(
   settingsCtx: SettingsRouteContext,
   healthCtx: HealthRouteContext,
   cronCtx?: CronRouteContext,
+  sessionsCtx?: SessionsRouteContext,
 ): Promise<ServerType> {
-  const app = createApp(settingsCtx, healthCtx, cronCtx);
+  const app = createApp(settingsCtx, healthCtx, cronCtx, sessionsCtx);
 
   return new Promise<ServerType>((resolve, reject) => {
     const server = serve({

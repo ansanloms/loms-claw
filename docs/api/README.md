@@ -2,7 +2,7 @@
 
 loms-claw が Bot プロセス内で起動する内部 HTTP API の定義。
 
-cron ジョブ・ログ取得・チャンネル設定の操作を単一ポートで提供する。Claude (Agent SDK) の Bash ツールから `curl` 経由で呼び出す用途を想定する。
+cron ジョブ・ログ取得・チャンネル設定の操作と、他のセッションへの依頼を単一ポートで提供する。Claude (Agent SDK) の Bash ツールから `curl` 経由で呼び出す用途を想定する。
 
 ## 接続
 
@@ -17,6 +17,10 @@ cron ジョブ・ログ取得・チャンネル設定の操作を単一ポート
 ## schema の additionalProperties 方針
 
 `components/schemas/*.yaml` の `additionalProperties: false` は、リクエストボディの schema と、それが `$ref` で参照する schema にのみ付ける。レスポンス専用の schema には付けない。理由: 将来のフィールド追加を許容するため。
+
+## セッションへの依頼
+
+`POST /sessions/{channelId}/messages` と `POST /sessions/{channelId}/{threadId}/messages` は、対象のチャンネル/スレッドのセッションへ依頼を渡す。依頼は対象スコープのキューに積まれ、処理の完了を待たずに 202 を返す。対象は設定のギルドに属するテキスト系のチャンネル/スレッドに限り、それ以外は 404 を返す。依頼用のレート制限 (bot 全体で直近 10 分に 6 回) を超えると 429 を返す。
 
 ## 補足
 

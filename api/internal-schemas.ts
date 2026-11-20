@@ -252,6 +252,29 @@ export const internalSchemas = {
       }
     }
   },
+  "RequestPostSessionMessage": {
+    "type": "object",
+    "description": "セッションへの依頼リクエスト。",
+    "additionalProperties": false,
+    "required": [
+      "prompt"
+    ],
+    "properties": {
+      "prompt": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "description": "対象のセッションへ渡す依頼の本文。空白以外を 1 文字以上含むこと。"
+      },
+      "source": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 100,
+        "pattern": "^[^\\x00-\\x1F\\x7F]+$",
+        "description": "依頼元の識別子 (例 cron:news.md)。指定すると、プロンプト先頭の注記に依頼元として入る。日本語や空白も使えるが、改行・タブなどの制御文字は使えない (改行による注記の偽装を防ぐため)。"
+      }
+    }
+  },
   "ResponseDeleteSettings": {
     "type": "object",
     "description": "スコープ設定の削除結果。",
@@ -357,6 +380,19 @@ export const internalSchemas = {
           "failed",
           "skipped"
         ]
+      }
+    }
+  },
+  "ResponsePostSessionMessage": {
+    "type": "object",
+    "description": "セッションへの依頼の受付結果。",
+    "required": [
+      "ok"
+    ],
+    "properties": {
+      "ok": {
+        "type": "boolean",
+        "description": "依頼をキューに積んだか (常に true。処理の完了は待たない)。"
       }
     }
   }

@@ -149,6 +149,45 @@ describe("createTurnOutput", () => {
     assert.deepStrictEqual(sent, ["hello"]);
   });
 
+  test("message 無しでは、返信にメンションが付かないこと", async () => {
+    const { channel, sent } = fakeChannel();
+    const output = createTurnOutput({
+      channel,
+      isSelfMessage: false,
+      hasAttachments: false,
+    });
+
+    await output.sendReply("hello");
+    await output.notifyError(new Error("boom"));
+
+    assert.deepStrictEqual(sent, ["hello", summarizeError(new Error("boom"))]);
+  });
+
+  test("message 無しでは、キュー待ちでも onQueued・onTurnStart がリアクションに触れず、添付も見ないこと", async () => {
+    const { channel } = fakeChannel();
+    let downloaded = 0;
+    const output = createTurnOutput({
+      channel,
+      isSelfMessage: false,
+      hasAttachments: true,
+      deps: {
+        downloadImages: () => {
+          downloaded += 1;
+          return Promise.resolve([]);
+        },
+        cleanupImages: () => Promise.resolve(),
+      },
+    });
+
+    output.onQueued();
+    await output.onTurnStart();
+    const prompt = await output.preparePrompt("hello");
+    await output.onTurnEnd();
+
+    assert.deepStrictEqual(prompt, "hello");
+    assert.deepStrictEqual(downloaded, 0);
+  });
+
   test("sendReply: 人間のメッセージでは各チャンクに投稿者宛のメンションが付き 2000 文字以内であること", async () => {
     const { channel, sent } = fakeChannel();
     const output = createTurnOutput({

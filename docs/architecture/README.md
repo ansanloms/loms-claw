@@ -93,6 +93,7 @@ graph TD
   incoming[client/discord/incoming.ts]
   message[client/discord/message.ts]
   turnoutput[client/discord/turn-output.ts]
+  sessionreq[client/discord/session-request.ts]
   conversation[core/conversation.ts]
   queue[core/queue.ts]
   ratelimit[core/ratelimit.ts]
@@ -112,6 +113,7 @@ graph TD
   rhealth[api/routes/health.ts]
   rlogs[api/routes/logs.ts]
   rsettings[api/routes/settings.ts]
+  rsessions[api/routes/sessions.ts]
   validate[api/validate.ts]
   ischemas[api/internal-schemas.ts]
   executor[cron/executor.ts]
@@ -141,12 +143,16 @@ graph TD
   botmod --> ratelimit
   botmod --> message
   botmod --> turnoutput
+  botmod --> sessionreq
+  sessionreq -.-> conversation
+  sessionreq --> turnoutput
   turnoutput -.-> conversation
   turnoutput --> message
   botmod --> crontarget
   botmod --> server
   botmod -.-> rcron
   botmod -.-> rsettings
+  botmod -.-> rsessions
   botmod -.-> rhealth
   botmod --> executor
   botmod --> loader
@@ -183,12 +189,15 @@ graph TD
   server --> rhealth
   server --> rlogs
   server --> rsettings
+  server --> rsessions
   rcron -.-> ctypes
   rcron -.-> ischemas
   rcron --> validate
   rsettings -.-> store
   rsettings -.-> ischemas
   rsettings --> validate
+  rsessions -.-> ischemas
+  rsessions --> validate
   validate --> ischemas
 
   executor --> conversation
@@ -218,13 +227,13 @@ graph TD
 
 ディレクトリをまたぐ辺は次に限られる。
 
-- `client/discord/*` → `core/*`: `DiscordBot` が `Conversation` を生成して `submit()` を呼び、`client/discord/turn-output.ts` の `createTurnOutput()` で組み立てた `TurnOutput` を渡す。`SelfMentionRateLimiter` と `core/approval-settings.ts` も core 側にある
+- `client/discord/*` → `core/*`: `DiscordBot` が `Conversation` を生成して `submit()` を呼び、`client/discord/turn-output.ts` の `createTurnOutput()` で組み立てた `TurnOutput` を渡す。`SelfMentionRateLimiter` (自己メンション用は `Conversation` が持ち、セッション間の依頼用は別インスタンスを `client/discord/mod.ts` が持つ) と `core/approval-settings.ts` も core 側にある。`client/discord/session-request.ts` の `submitSessionRequest()` は `Conversation` の `submit()` を呼ぶ。依頼用の `SelfMentionRateLimiter` は `client/discord/mod.ts` が生成して渡す
 - `core/conversation.ts` → `claude/mod.ts`, `claude/system-prompt.ts` (型), `store/mod.ts` (型), `config.ts` (型): 会話の 1 ターンで Claude を呼び、セッション・設定を扱うため
 - `cron/executor.ts` → `core/conversation.ts` (`runOneShot`), `claude/system-prompt.ts` (型), `store/mod.ts` (型): cron の prompt ジョブも中核の `runOneShot()` で Claude を呼ぶ (`ScopeQueue` は通さない)
 - `client/discord/cron-target.ts` → `cron/executor.ts` (型のみ): `CronPorts` を Discord で実装する
 - `cron/loader.ts` → `claude/mod.ts` (`EFFORT_LEVELS`): frontmatter の `effort` 検証に effort の定義を共有
 - `client/discord/commands.ts` → `cron/executor.ts` (型のみ)
-- `api/routes/*` → `store/mod.ts` (型), `cron/types.ts` (型): API は実体を `client/discord/mod.ts` から `CronRouteContext`/`SettingsRouteContext` として注入される
+- `api/routes/*` → `store/mod.ts` (型), `cron/types.ts` (型): API は実体を `client/discord/mod.ts` から `CronRouteContext`/`SettingsRouteContext`/`SessionsRouteContext` として注入される
 
 `TurnOutput` と `CronPorts` は「依存される側が口を定義し、client が実装する」形の境界である。`TurnOutput` は 1 ターンで外へ出る呼び出し (待機表示・typing・添付の取り込み・応答/thinking の送信・進捗・エラー通知・後始末) を中核の呼び出し順どおりに並べたライフサイクル付きメソッド群、`CronPorts` は cron が client に求める 3 操作 (送信先の解決・ギルド由来のテンプレート変数・承認コールバックの生成) である。汎用 client API は用意しない。詳細は [message-flow.md](message-flow.md) と [cron.md](cron.md)。
 
@@ -263,7 +272,7 @@ graph TD
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `core/conversation.ts`      | `Conversation`: scope 単位の直列キュー → セッション・設定の取得 → システムプロンプト解決 → `askClaude()` → ストリーム消費。出力先 IF `TurnOutput`、入力 `TurnInput`、cron 用の `runOneShot()` もここで定義 |
 | `core/queue.ts`             | `ScopeQueue`: scope 単位でターンを直列化                                                                                                                                                                   |
-| `core/ratelimit.ts`         | `SelfMentionRateLimiter`: 自己メンション応答のスライディングウィンドウレート制限 (bot 全体、Temporal ベース)                                                                                               |
+| `core/ratelimit.ts`         | `SelfMentionRateLimiter`: スライディングウィンドウレート制限 (bot 全体、Temporal ベース)。自己メンション応答用とセッション間の依頼用の 2 インスタンスで使う                                                |
 | `core/flush.ts`             | `splitAtBoundary()`: 文境界 (`。` / 改行) でのバッファ分割アルゴリズム。`Conversation` の回答・thinking のフラッシュが共有する純粋関数                                                                     |
 | `core/approval-settings.ts` | `isInAllowList()` / `addToSettingsAllowList()`: ワークスペースの `.claude/settings.json` の `permissions.allow` 読み書き                                                                                   |
 
@@ -278,6 +287,7 @@ graph TD
 | `client/discord/scope.ts`              | `scopeFromChannel()`: チャンネル / スレッドから `StoreScope` を組み立てる。`client/discord/mod.ts` と `client/discord/commands.ts` の両方から使う                                                                                                                                                                                  |
 | `client/discord/incoming.ts`           | `resolveIncomingMessage()`: `onMessage` の認可 → 自己メンション判定 (+ レート制限) → スコープ抽出 → active 上書き取得 → 反応判定を切り出した判定関数。discord.js には直接触れず、`client/discord/mod.ts` が最小の値と関数 (deps) を渡す                                                                                            |
 | `client/discord/turn-output.ts`        | `createTurnOutput()`: Discord 向けの `TurnOutput` 実装 (⏳・typing・画像添付・応答/thinking/エラー送信・進捗・後始末)。`resolveSpeaker()` (自己メンション起動時は発話者を `config.discord.userId` に差し替え) と `buildTemplateVars()` もここにある                                                                                |
+| `client/discord/session-request.ts`    | `submitSessionRequest()`: 内部 API の依頼を受け、対象のチャンネル / スレッドを検証して (設定のギルド・送信可能なテキスト系・スレッドの親の一致) `Conversation.submit()` へ投入する。応答は起点のメッセージ無しの `createTurnOutput()` で対象へ投稿する                                                                             |
 | `client/discord/interaction.ts`        | `dispatchInteraction()`: 全 interaction 種別を先頭で `isAuthorized()` に通し、拒否時は ephemeral で返す。通過したものを承認 UI / スラッシュコマンドへ振り分ける                                                                                                                                                                    |
 | `client/discord/cron-target.ts`        | `createDiscordCronPorts()`: `CronPorts` の Discord 実装 (チャンネル解決 + 2000 文字分割送信、ギルド由来のテンプレート変数、承認コールバック)                                                                                                                                                                                       |
 | `client/discord/approval/manager.ts`   | `ApprovalManager`: Discord ボタンによる承認 / 拒否。`createCanUseTool()` が SDK の `canUseTool` コールバックを生成                                                                                                                                                                                                                 |
@@ -300,15 +310,16 @@ graph TD
 
 ### `api/` — 内部 HTTP API
 
-| パス                      | 役割                                                                                                                                                                                             |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `api/server.ts`           | `createApp()`: Hono アプリ組み立て (cron / health / logs / settings ルートのマウント、共通エラーハンドラ)。`startApiServer()` はそれを `@hono/node-server` の `serve()` に渡すだけの薄いラッパー |
-| `api/routes/cron.ts`      | `GET /cron`, `POST /cron/run`, `POST /cron/reload`。`CronRouteContext` を受け取る                                                                                                                |
-| `api/routes/health.ts`    | `GET /health`。`HealthRouteContext { isReady }` を受け取り、healthy なら 200、そうでなければ 503 を返す                                                                                          |
-| `api/routes/logs.ts`      | `GET /logs`。`logger.ts` のリングバッファからフィルタ付きで取得                                                                                                                                  |
-| `api/routes/settings.ts`  | `GET /settings/default`, `GET` / `PATCH` / `DELETE /settings/:id`。`SettingsRouteContext` を受け取る                                                                                             |
-| `api/validate.ts`         | `matchesSchema()` / `schemaErrorOf()`: `internal-schemas.ts` を単一ソースに `@cfworker/json-schema` でリクエストボディを検証                                                                     |
-| `api/internal-schemas.ts` | `docs/api` の component schema から `npm run generate` で書き出す自動生成物。`tsconfig.json` では型検査に含まれるが、`.oxlintrc.json` / `.oxfmtrc.json` の対象外                                 |
+| パス                      | 役割                                                                                                                                                                                                          |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `api/server.ts`           | `createApp()`: Hono アプリ組み立て (cron / health / logs / sessions / settings ルートのマウント、共通エラーハンドラ)。`startApiServer()` はそれを `@hono/node-server` の `serve()` に渡すだけの薄いラッパー   |
+| `api/routes/cron.ts`      | `GET /cron`, `POST /cron/run`, `POST /cron/reload`。`CronRouteContext` を受け取る                                                                                                                             |
+| `api/routes/health.ts`    | `GET /health`。`HealthRouteContext { isReady }` を受け取り、healthy なら 200、そうでなければ 503 を返す                                                                                                       |
+| `api/routes/logs.ts`      | `GET /logs`。`logger.ts` のリングバッファからフィルタ付きで取得                                                                                                                                               |
+| `api/routes/sessions.ts`  | `POST /sessions/:channelId/messages`, `POST /sessions/:channelId/:threadId/messages`。`SessionsRouteContext { submitMessage }` を受け取り、結果 (`accepted`/`not-found`/`rate-limited`) を 202/404/429 に写す |
+| `api/routes/settings.ts`  | `GET /settings/default`, `GET` / `PATCH` / `DELETE /settings/:id`。`SettingsRouteContext` を受け取る                                                                                                          |
+| `api/validate.ts`         | `matchesSchema()` / `schemaErrorOf()`: `internal-schemas.ts` を単一ソースに `@cfworker/json-schema` でリクエストボディを検証                                                                                  |
+| `api/internal-schemas.ts` | `docs/api` の component schema から `npm run generate` で書き出す自動生成物。`tsconfig.json` では型検査に含まれるが、`.oxlintrc.json` / `.oxfmtrc.json` の対象外                                              |
 
 ### `cron/` — 定期実行
 
