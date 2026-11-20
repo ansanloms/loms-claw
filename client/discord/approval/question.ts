@@ -85,6 +85,21 @@ const MAX_QUESTIONS = 4;
 const MAX_OPTIONS = 24;
 
 /**
+ * 回答済みの要約の 1 行に載せる header の上限文字数。
+ */
+const MAX_SUMMARY_HEADER = 80;
+
+/**
+ * 回答済みの要約の 1 行に載せる回答の上限文字数。
+ */
+const MAX_SUMMARY_ANSWER = 200;
+
+/**
+ * 回答済みの表示に載せる要約全体の上限文字数。
+ */
+const MAX_SUMMARY = 1200;
+
+/**
  * `canUseTool` が受け取った AskUserQuestion の入力から質問一覧を取り出す。
  *
  * 構造が不正な場合 (questions が配列でない、件数が 0 または 5 以上、
@@ -186,6 +201,14 @@ export function truncate(text: string, max: number): string {
     head = head.slice(0, -1);
   }
   return `${head}…`;
+}
+
+/**
+ * コードフェンス・インラインコードを壊さないよう、連続するバッククォートの間に
+ * ゼロ幅スペースを挟む。
+ */
+export function neutralizeBackticks(text: string): string {
+  return text.replace(/(?<=`)(?=`)/g, "\u200b");
 }
 
 /**
@@ -487,13 +510,28 @@ export class QuestionManager {
     });
     pending.resolve({ kind: "answered", answers });
 
-    const summary = pending.questions
-      .map((q, i) => `**${q.header}**: ${pending.answers.get(i) ?? ""}`)
-      .join("\n");
+    // 要約には長さの上限が無いので、バッククォートを無害化して先に切ってから suffix として本文側を切る。
+    const summary = truncate(
+      pending.questions
+        .map((q, i) => {
+          // header と回答は別々に切る (header が長くても回答を残す)。
+          const header = truncate(
+            neutralizeBackticks(q.header),
+            MAX_SUMMARY_HEADER,
+          );
+          const answer = truncate(
+            neutralizeBackticks(pending.answers.get(i) ?? ""),
+            MAX_SUMMARY_ANSWER,
+          );
+          return `**${header}**: ${answer}`;
+        })
+        .join("\n"),
+      MAX_SUMMARY,
+    );
     await interaction.update({
-      content: truncate(
-        `${interaction.message.content}\n**→ 回答済み**\n${summary}`,
-        DISCORD_MESSAGE_LIMIT,
+      content: appendStatus(
+        interaction.message.content,
+        `\n**→ 回答済み**\n${summary}`,
       ),
       components: [],
     });

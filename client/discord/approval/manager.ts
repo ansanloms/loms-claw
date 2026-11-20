@@ -28,6 +28,7 @@ import { DISCORD_MESSAGE_LIMIT } from "../message.ts";
 import { INTERACTION_TIMEOUT_MS } from "./constants.ts";
 import {
   appendStatus,
+  neutralizeBackticks,
   parseQuestions,
   type Question,
   QuestionManager,
@@ -60,14 +61,6 @@ export const STATUS_SUFFIX = {
 export const STATUS_RESERVE = Math.max(
   ...Object.values(STATUS_SUFFIX).map((suffix) => suffix.length),
 );
-
-/**
- * コードフェンス・インラインコードを壊さないよう、連続するバッククォートの間に
- * ゼロ幅スペースを挟む。
- */
-function neutralizeBackticks(text: string): string {
-  return text.replace(/(?<=`)(?=`)/g, "\u200b");
-}
 
 /**
  * 承認結果。
@@ -235,8 +228,12 @@ export class ApprovalManager {
       typeof toolInput.description === "string"
         ? truncate(neutralizeBackticks(toolInput.description), 300)
         : "";
+    // インラインコードを閉じさせないよう、ヘッダの表示だけバッククォートを `'` にする。
+    // 置き換えた後は単独のバッククォートが残らないので neutralizeBackticks は要らない。
+    // allowlist に保存する toolName と customId は元のまま。
+    const displayToolName = toolName.replaceAll("`", "'");
     const header = [
-      `**Tool: \`${truncate(neutralizeBackticks(toolName), 100)}\`**`,
+      `**Tool: \`${truncate(displayToolName, 100)}\`**`,
       ...(description ? [description] : []),
     ].join("\n");
     // 閉じフェンスと結果表示 (appendStatus の最長 suffix) の分を空けて JSON ダンプを切る。
