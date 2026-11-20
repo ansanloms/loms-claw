@@ -172,6 +172,12 @@ describe("truncate", () => {
     assert.deepStrictEqual(truncate("abcdef", 4), "abc…");
     assert.deepStrictEqual(truncate("abcdef", 4).length, 4);
   });
+
+  test("切れ目がサロゲートペアの途中なら上位サロゲートを残さないこと", () => {
+    // "a" + 😀 (2 単位) + "b" を max=3 で切ると slice(0, 2) が上位サロゲートで終わる。
+    const result = truncate("a😀b", 3);
+    assert.deepStrictEqual(result, "a…");
+  });
 });
 
 describe("QuestionManager.requestAnswers", () => {
@@ -209,5 +215,47 @@ describe("QuestionManager.requestAnswers", () => {
     await new Promise((r) => setTimeout(r, 10));
     assert.deepStrictEqual(edits.length, 1);
     assert.ok(edits[0].content.endsWith("\n**→ Aborted**"));
+  });
+
+  test("channels.fetch が reject したら denied を返すこと", async () => {
+    const client = {
+      channels: { fetch: () => Promise.reject(new Error("fetch failed")) },
+    } as unknown as Client;
+    const questions = parseQuestions(validInput());
+    assert.ok(questions);
+
+    const result = await new QuestionManager(client).requestAnswers(
+      questions,
+      "ch-1",
+    );
+
+    assert.deepStrictEqual(result, {
+      kind: "denied",
+      reason: "Failed to resolve channel",
+    });
+  });
+
+  test("send が reject したら denied を返すこと", async () => {
+    const client = {
+      channels: {
+        fetch: () =>
+          Promise.resolve({
+            isTextBased: () => true,
+            send: () => Promise.reject(new Error("send failed")),
+          }),
+      },
+    } as unknown as Client;
+    const questions = parseQuestions(validInput());
+    assert.ok(questions);
+
+    const result = await new QuestionManager(client).requestAnswers(
+      questions,
+      "ch-1",
+    );
+
+    assert.deepStrictEqual(result, {
+      kind: "denied",
+      reason: "Failed to post questions",
+    });
   });
 });

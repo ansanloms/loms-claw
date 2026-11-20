@@ -362,9 +362,19 @@ export function createProgressReporter(
 } {
   let message: Awaited<ReturnType<GuildTextBasedChannel["send"]>> | null = null;
   let lastUpdate = 0;
+  let cleaned = false;
+  // 初回 send の待機中。間引きを超えて待たされても二重に send しない。
+  let sending = false;
 
   return {
     async report(toolName, elapsedSeconds) {
+      if (cleaned) {
+        return;
+      }
+      // 送信の待機中に捨てる report は、間引きの時刻を進めない。
+      if (sending) {
+        return;
+      }
       const now = nowMs();
       if (now - lastUpdate < PROGRESS_THROTTLE_MS) {
         return;
@@ -376,11 +386,20 @@ export function createProgressReporter(
       const text = `\`${toolName}\` 実行中... (${Math.round(elapsedSeconds)}s)`;
 
       if (!message) {
+        sending = true;
         try {
-          message = await channel.send(text);
+          const sent = await channel.send(text);
+          if (cleaned) {
+            // send の待機中に cleanup() が走った。保持せず消す。
+            await sent.delete().catch(() => {});
+          } else {
+            message = sent;
+          }
         } catch (error: unknown) {
           // 間引きは保ったまま、次の report で再送を試みる。report() は reject しない。
           log.warn("failed to send progress message:", getErrorMessage(error));
+        } finally {
+          sending = false;
         }
       } else {
         await message.edit(text).catch(() => {});
@@ -388,6 +407,7 @@ export function createProgressReporter(
     },
 
     async cleanup() {
+      cleaned = true;
       if (message) {
         await message.delete().catch(() => {});
         message = null;

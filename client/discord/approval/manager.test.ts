@@ -1,5 +1,8 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type {
   ActionRowBuilder,
   ButtonBuilder,
@@ -12,8 +15,10 @@ import {
   ApprovalManager as ApprovalManagerClass,
   type ApprovalResult,
   createCanUseTool,
+  STATUS_RESERVE,
+  STATUS_SUFFIX,
 } from "./manager.ts";
-import type { QuestionResult } from "./question.ts";
+import { appendStatus, type QuestionResult } from "./question.ts";
 
 /**
  * requestApproval / requestAnswers が固定の結果を返すモック ApprovalManager。
@@ -597,5 +602,172 @@ describe("ApprovalManager", () => {
     const content = sent[0].content;
     assert.ok(content.length <= 2000 - 20, "追記の余白を残して収まること");
     assert.ok(content.endsWith("\n```"), "閉じフェンスで終わること");
+  });
+
+  test("チャンネル解決が reject しても deny (Failed to resolve channel) を返すこと", async () => {
+    const resolver: ApprovalChannelResolver = {
+      fetchSendable: () => Promise.reject(new Error("fetch failed")),
+    };
+    const manager = new ApprovalManagerClass(
+      fakeClient(),
+      "/tmp/loms-claw-test-nonexistent/settings.json",
+      { channelResolver: resolver },
+    );
+
+    const result = await manager.requestApproval(
+      "Bash",
+      { command: "ls" },
+      "ch-1",
+    );
+
+    assert.deepStrictEqual(result, {
+      decision: "deny",
+      reason: "Failed to resolve channel",
+    });
+  });
+
+  for (const [label, toolName] of [
+    ["90 文字のツール名", "T".repeat(90)],
+    [": を含むツール名", "mcp:server:tool"],
+  ] as const) {
+    test(`${label}でも Allow Always が通り、customId が 100 文字以内であること`, async () => {
+      const dir = await mkdtemp(join(tmpdir(), "loms-claw-approval-"));
+      try {
+        const settingsPath = join(dir, "settings.json");
+        const { resolver, sent } = fakeChannelResolver(new Set(["ch-1"]));
+        const manager = new ApprovalManagerClass(fakeClient(), settingsPath, {
+          channelResolver: resolver,
+        });
+
+        const pending = manager.requestApproval(toolName, {}, "ch-1");
+        await waitFor(() => sent.length === 1);
+        const ids = buttonCustomIds(sent[0].components);
+        for (const id of ids) {
+          assert.ok(id.length <= 100);
+        }
+        const alwaysId = ids[1];
+        assert.ok(alwaysId.startsWith("always:"));
+
+        const { interaction } = fakeButtonInteraction(alwaysId);
+        assert.deepStrictEqual(await manager.handleButton(interaction), true);
+        const result = await pending;
+        assert.deepStrictEqual(result.reason, "Always Allowed");
+
+        const saved = JSON.parse(await readFile(settingsPath, "utf8"));
+        assert.deepStrictEqual(saved.permissions.allow, [toolName]);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+  }
+
+  test("絵文字が切れ目に来ても壊れたサロゲートが残らないこと", async () => {
+    const { resolver, sent } = fakeChannelResolver(new Set(["ch-1"]));
+    const manager = new ApprovalManagerClass(
+      fakeClient(),
+      "/tmp/loms-claw-test-nonexistent/settings.json",
+      { channelResolver: resolver, timeoutMs: 10 },
+    );
+
+    // 切れ目の位置がずれても、どこかで絵文字が境界に来る。
+    for (let pad = 0; pad < 2; pad++) {
+      await manager.requestApproval(
+        "Bash",
+        { command: "a".repeat(pad) + "😀".repeat(2000) },
+        "ch-1",
+      );
+    }
+
+    for (const { content } of sent) {
+      assert.ok(!/[\ud800-\udbff](?![\udc00-\udfff])/.test(content));
+      assert.ok(!/(?<![\ud800-\udbff])[\udc00-\udfff]/.test(content));
+    }
+  });
+
+  test("入力にバッククォートがあってもフェンスが閉じたままであること", async () => {
+    const { resolver, sent } = fakeChannelResolver(new Set(["ch-1"]));
+    const manager = new ApprovalManagerClass(
+      fakeClient(),
+      "/tmp/loms-claw-test-nonexistent/settings.json",
+      { channelResolver: resolver, timeoutMs: 10 },
+    );
+
+    await manager.requestApproval(
+      "Bash",
+      { command: "echo ```` ``` done" },
+      "ch-1",
+    );
+
+    const content = sent[0].content;
+    // 開きと閉じの 2 つだけが 3 連バッククォートであること。
+    assert.deepStrictEqual(content.match(/```/g)?.length, 2);
+    assert.ok(content.endsWith("\n```"));
+  });
+
+  test("description とツール名のバッククォートでもフェンスが壊れないこと", async () => {
+    const { resolver, sent } = fakeChannelResolver(new Set(["ch-1"]));
+    const manager = new ApprovalManagerClass(
+      fakeClient(),
+      "/tmp/loms-claw-test-nonexistent/settings.json",
+      { channelResolver: resolver, timeoutMs: 10 },
+    );
+
+    await manager.requestApproval(
+      "T```x",
+      { command: "ls", description: "run ```rm``` now" },
+      "ch-1",
+    );
+
+    // 開きと閉じの 2 つだけが 3 連バッククォートであること。
+    assert.deepStrictEqual(sent[0].content.match(/```/g)?.length, 2);
+  });
+
+  test("Allow Always の保存に失敗したら承認は通し、結果表示を保存失敗にすること", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "loms-claw-approval-"));
+    try {
+      const settingsPath = join(dir, "settings.json");
+      await writeFile(settingsPath, "{ not json");
+      const { resolver, sent } = fakeChannelResolver(new Set(["ch-1"]));
+      const manager = new ApprovalManagerClass(fakeClient(), settingsPath, {
+        channelResolver: resolver,
+      });
+
+      const pending = manager.requestApproval("Bash", {}, "ch-1");
+      await waitFor(() => sent.length === 1);
+      const { interaction, calls } = fakeButtonInteraction(
+        buttonCustomIds(sent[0].components)[1],
+      );
+      assert.deepStrictEqual(await manager.handleButton(interaction), true);
+
+      const result = await pending;
+      assert.deepStrictEqual(result.decision, "allow");
+      assert.deepStrictEqual(result.reason, "Allowed (not persisted)");
+      const update = calls.find((c) => c.method === "update");
+      assert.ok(update);
+      const content = (update.payload as { content: string }).content;
+      assert.ok(content.endsWith(STATUS_SUFFIX.notPersisted));
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("どの結果表示を足しても本文が切れず 2000 文字に収まること", async () => {
+    const { resolver, sent } = fakeChannelResolver(new Set(["ch-1"]));
+    const manager = new ApprovalManagerClass(
+      fakeClient(),
+      "/tmp/loms-claw-test-nonexistent/settings.json",
+      { channelResolver: resolver, timeoutMs: 10 },
+    );
+    await manager.requestApproval(
+      "Bash",
+      { command: "x".repeat(10000) },
+      "ch-1",
+    );
+    const content = sent[0].content;
+    for (const suffix of Object.values(STATUS_SUFFIX)) {
+      assert.ok(suffix.length <= STATUS_RESERVE);
+      assert.deepStrictEqual(appendStatus(content, suffix), content + suffix);
+      assert.ok((content + suffix).length <= 2000);
+    }
   });
 });

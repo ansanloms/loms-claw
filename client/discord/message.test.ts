@@ -135,7 +135,9 @@ describe("keepTyping", () => {
 });
 
 /** send/edit/delete を記録するフェイクチャンネルを生成する。 */
-function fakeProgressChannel(options: { failFirstSend?: boolean } = {}) {
+function fakeProgressChannel(
+  options: { failFirstSend?: boolean; delaySend?: boolean } = {},
+) {
   const calls: { method: string; text: string }[] = [];
   let failNextSend = options.failFirstSend ?? false;
   const fakeMessage = {
@@ -148,6 +150,7 @@ function fakeProgressChannel(options: { failFirstSend?: boolean } = {}) {
       return Promise.resolve(fakeMessage);
     },
   };
+  let releaseSend: () => void = () => {};
   const channel = {
     send: (text: string) => {
       if (failNextSend) {
@@ -155,11 +158,16 @@ function fakeProgressChannel(options: { failFirstSend?: boolean } = {}) {
         return Promise.reject(new Error("send failed"));
       }
       calls.push({ method: "send", text });
+      if (options.delaySend) {
+        return new Promise((resolve) => {
+          releaseSend = () => resolve(fakeMessage);
+        });
+      }
       return Promise.resolve(fakeMessage);
     },
   } as unknown as GuildTextBasedChannel;
 
-  return { channel, calls };
+  return { channel, calls, releaseSend: () => releaseSend() };
 }
 
 describe("createProgressReporter", () => {
@@ -245,6 +253,80 @@ describe("createProgressReporter", () => {
     assert.deepStrictEqual(calls[0].method, "send");
 
     await cleanup();
+  });
+
+  test("初回 send の待機中に cleanup しても、後から届いたメッセージが削除されること", async () => {
+    const { channel, calls, releaseSend } = fakeProgressChannel({
+      delaySend: true,
+    });
+    const { report, cleanup } = createProgressReporter(channel);
+
+    const reporting = report("Bash", 1);
+    await cleanup();
+    releaseSend();
+    await reporting;
+
+    assert.deepStrictEqual(
+      calls.map((c) => c.method),
+      ["send", "delete"],
+    );
+  });
+
+  test("初回 send の待機中は、間引きを超えた次の report でも二重に send しないこと", async () => {
+    const { channel, calls, releaseSend } = fakeProgressChannel({
+      delaySend: true,
+    });
+    let fakeNow = 10000;
+    const { report, cleanup } = createProgressReporter(channel, () => fakeNow);
+
+    const first = report("Bash", 1);
+    fakeNow += 4000;
+    await report("Bash", 5);
+    releaseSend();
+    await first;
+
+    assert.deepStrictEqual(
+      calls.map((c) => c.method),
+      ["send"],
+    );
+
+    await cleanup();
+  });
+
+  test("送信の待機中に捨てた report は間引きの時刻を進めないこと", async () => {
+    const { channel, calls, releaseSend } = fakeProgressChannel({
+      delaySend: true,
+    });
+    let fakeNow = 10000;
+    const { report, cleanup } = createProgressReporter(channel, () => fakeNow);
+
+    const first = report("Bash", 1);
+    // 待機中に間引きの内側で届いた report は捨てられる。
+    fakeNow += 2500;
+    await report("Bash", 2);
+    releaseSend();
+    await first;
+
+    // 最初の report から 3 秒を超えたので、次は edit される (捨てた report に引きずられない)。
+    fakeNow += 1000;
+    await report("Bash", 3);
+
+    assert.deepStrictEqual(
+      calls.map((c) => c.method),
+      ["send", "edit"],
+    );
+
+    await cleanup();
+  });
+
+  test("cleanup 後の report は何もしないこと", async () => {
+    const { channel, calls } = fakeProgressChannel();
+    const { report, cleanup } = createProgressReporter(channel);
+
+    await cleanup();
+    await report("Bash", 1);
+
+    assert.deepStrictEqual(calls.length, 0);
   });
 });
 
