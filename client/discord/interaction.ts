@@ -44,6 +44,10 @@ export interface InteractionDeps {
  * button / select メニュー / Modal 送信 / スラッシュコマンドの 4 ハンドラが同形の
  * `try { handler } catch { log.error; if (!replied && !deferred) reply(ephemeral) }`
  * を持っていたため、ここに集約する。ログ文言・エラー返信文言は呼び出し側から渡す。
+ *
+ * 未返信なら `reply()`、返信済みまたは defer 済みなら `followUp()` で、いずれも
+ * ephemeral のエラー文言を返す (`followUp()` は未返信では throw する)。
+ * 送信の失敗は握る。
  */
 async function runInteraction(
   interaction: RepliableInteraction,
@@ -56,14 +60,17 @@ async function runInteraction(
   } catch (error: unknown) {
     const msg = getErrorMessage(error);
     log.error(`${label} interaction error:`, msg);
-    if (!interaction.replied && !interaction.deferred) {
-      await interaction
-        .reply({
-          content: errorMessage,
-          flags: MessageFlags.Ephemeral,
-        })
-        .catch(() => {});
-    }
+    const payload = {
+      content: errorMessage,
+      flags: MessageFlags.Ephemeral,
+    } as const;
+    const send =
+      interaction.replied || interaction.deferred
+        ? interaction.followUp(payload)
+        : interaction.reply(payload);
+    await send.catch((sendError: unknown) => {
+      log.warn(`${label} error reply failed:`, getErrorMessage(sendError));
+    });
   }
 }
 

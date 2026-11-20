@@ -49,21 +49,33 @@ const unauthorizedUsers: Array<[string, FakeUser]> = [
 
 interface Replies {
   payloads: unknown[];
+  followUps: unknown[];
 }
 
 function fakeInteraction(
   kind: Kind,
   user: FakeUser,
   replies: Replies,
-  replyError?: Error,
-  repliable = true,
-  replied = false,
+  options: {
+    replyError?: Error;
+    repliable?: boolean;
+    replied?: boolean;
+    deferred?: boolean;
+    followUpError?: Error;
+  } = {},
 ): Interaction {
+  const {
+    replyError,
+    repliable = true,
+    replied = false,
+    deferred = false,
+    followUpError,
+  } = options;
   const fake = {
     guildId: user.guildId,
     user: { id: user.userId, bot: user.bot },
     replied,
-    deferred: false,
+    deferred,
     customId: "custom-id",
     isRepliable: () => repliable,
     isButton: () => kind === "button",
@@ -73,6 +85,10 @@ function fakeInteraction(
     reply: (payload: unknown) => {
       replies.payloads.push(payload);
       return replyError ? Promise.reject(replyError) : Promise.resolve();
+    },
+    followUp: (payload: unknown) => {
+      replies.followUps.push(payload);
+      return followUpError ? Promise.reject(followUpError) : Promise.resolve();
     },
   };
   return fake as unknown as Interaction;
@@ -108,7 +124,7 @@ describe("dispatchInteraction", () => {
   for (const [label, user] of unauthorizedUsers) {
     for (const kind of kinds) {
       test(`${label}の ${kind} はハンドラを呼ばず ephemeral で拒否されること`, async () => {
-        const replies: Replies = { payloads: [] };
+        const replies: Replies = { payloads: [], followUps: [] };
         const { deps, calls } = fakeDeps();
         await dispatchInteraction(fakeInteraction(kind, user, replies), deps);
         assert.deepStrictEqual(calls, []);
@@ -124,7 +140,7 @@ describe("dispatchInteraction", () => {
 
   for (const kind of kinds) {
     test(`認可ユーザーの ${kind} は対応するハンドラへ渡ること`, async () => {
-      const replies: Replies = { payloads: [] };
+      const replies: Replies = { payloads: [], followUps: [] };
       const { deps, calls } = fakeDeps();
       await dispatchInteraction(
         fakeInteraction(kind, authorizedUser, replies),
@@ -136,15 +152,12 @@ describe("dispatchInteraction", () => {
   }
 
   test("拒否の reply が失敗しても throw せずハンドラも呼ばないこと", async () => {
-    const replies: Replies = { payloads: [] };
+    const replies: Replies = { payloads: [], followUps: [] };
     const { deps, calls } = fakeDeps();
     await dispatchInteraction(
-      fakeInteraction(
-        "button",
-        unauthorizedUsers[0][1],
-        replies,
-        new Error("reply failed"),
-      ),
+      fakeInteraction("button", unauthorizedUsers[0][1], replies, {
+        replyError: new Error("reply failed"),
+      }),
       deps,
     );
     assert.deepStrictEqual(calls, []);
@@ -152,16 +165,12 @@ describe("dispatchInteraction", () => {
   });
 
   test("返信不可の interaction は拒否しても reply もハンドラ呼び出しもしないこと", async () => {
-    const replies: Replies = { payloads: [] };
+    const replies: Replies = { payloads: [], followUps: [] };
     const { deps, calls } = fakeDeps();
     await dispatchInteraction(
-      fakeInteraction(
-        "chat",
-        unauthorizedUsers[0][1],
-        replies,
-        undefined,
-        false,
-      ),
+      fakeInteraction("chat", unauthorizedUsers[0][1], replies, {
+        repliable: false,
+      }),
       deps,
     );
     assert.deepStrictEqual(calls, []);
@@ -169,7 +178,7 @@ describe("dispatchInteraction", () => {
   });
 
   test("認可ユーザーのハンドラが throw したら ephemeral のエラー文言で返すこと", async () => {
-    const replies: Replies = { payloads: [] };
+    const replies: Replies = { payloads: [], followUps: [] };
     const { deps } = fakeDeps();
     deps.approvalManager.handleButton = () => Promise.reject(new Error("boom"));
     await dispatchInteraction(
@@ -182,10 +191,11 @@ describe("dispatchInteraction", () => {
         flags: MessageFlags.Ephemeral,
       },
     ]);
+    assert.deepStrictEqual(replies.followUps, []);
   });
 
   test("認可ユーザーの handleCommand が reject しても throw せず ephemeral のエラー文言で返すこと", async () => {
-    const replies: Replies = { payloads: [] };
+    const replies: Replies = { payloads: [], followUps: [] };
     const { deps } = fakeDeps();
     deps.handleCommand = () => Promise.reject(new Error("boom"));
     await dispatchInteraction(
@@ -200,14 +210,54 @@ describe("dispatchInteraction", () => {
     ]);
   });
 
-  test("返信済みの chat-input のハンドラが reject しても reply しないこと", async () => {
-    const replies: Replies = { payloads: [] };
+  // 既存テスト「返信済みの chat-input が reject しても reply しない」は、
+  // 「reply は呼ばず、followUp で返す」に期待値を変えた。
+  test("返信済みの chat-input のハンドラが reject したら reply せず followUp で ephemeral のエラー文言を返すこと", async () => {
+    const replies: Replies = { payloads: [], followUps: [] };
     const { deps } = fakeDeps();
     deps.handleCommand = () => Promise.reject(new Error("boom"));
     await dispatchInteraction(
-      fakeInteraction("chat", authorizedUser, replies, undefined, true, true),
+      fakeInteraction("chat", authorizedUser, replies, { replied: true }),
       deps,
     );
+    assert.deepStrictEqual(replies.payloads, []);
+    assert.deepStrictEqual(replies.followUps, [
+      {
+        content: "コマンド処理中にエラーが発生しました。",
+        flags: MessageFlags.Ephemeral,
+      },
+    ]);
+  });
+
+  test("defer 済みの button のハンドラが reject したら reply せず followUp で ephemeral のエラー文言を返すこと", async () => {
+    const replies: Replies = { payloads: [], followUps: [] };
+    const { deps } = fakeDeps();
+    deps.approvalManager.handleButton = () => Promise.reject(new Error("boom"));
+    await dispatchInteraction(
+      fakeInteraction("button", authorizedUser, replies, { deferred: true }),
+      deps,
+    );
+    assert.deepStrictEqual(replies.payloads, []);
+    assert.deepStrictEqual(replies.followUps, [
+      {
+        content: "承認処理中にエラーが発生しました。",
+        flags: MessageFlags.Ephemeral,
+      },
+    ]);
+  });
+
+  test("followUp が失敗しても throw しないこと", async () => {
+    const replies: Replies = { payloads: [], followUps: [] };
+    const { deps } = fakeDeps();
+    deps.handleCommand = () => Promise.reject(new Error("boom"));
+    await dispatchInteraction(
+      fakeInteraction("chat", authorizedUser, replies, {
+        replied: true,
+        followUpError: new Error("followUp failed"),
+      }),
+      deps,
+    );
+    assert.strictEqual(replies.followUps.length, 1);
     assert.deepStrictEqual(replies.payloads, []);
   });
 });
