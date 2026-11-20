@@ -156,7 +156,7 @@ cron で `channelId` 未指定のジョブでは、`createCanUseTool()` に渡�
 
 自己メンション・セッション間の依頼で起動したターンでは、承認ボタン・質問は通常どおりそのスコープに投稿される。承認・質問メッセージの本文はユーザーメンションを含まないため本人宛てのピングは無く、本人が見ていなければ 5 分の timeout で deny になり、依頼元には通知されない。
 
-`InteractionCreate` からの振り分け (`isButton()` → `handleButton`、`isStringSelectMenu()` → `handleSelect`、`isModalSubmit()` → `handleModal`、それ以外はスラッシュコマンド) と各ハンドラのエラー時の ephemeral 応答 (`runInteraction()`) は `client/discord/interaction.ts` の `dispatchInteraction()` にある。承認ボタン・select・modal も含む全種別が、振り分けの前に `isAuthorized()` を通り、認可されない操作は pending に触れず ephemeral で拒否される。詳細は [message-flow](message-flow.md) で扱う。`canUseTool` を `query()` の options に載せる箇所は [claude-integration](claude-integration.md) を参照。
+`InteractionCreate` からの振り分け (`isButton()` → `handleButton`、`isStringSelectMenu()` → `handleSelect`、`isModalSubmit()` → `handleModal`、それ以外はスラッシュコマンド) と各ハンドラのエラー時の ephemeral 応答 (`runInteraction()`。未応答なら `reply()`、返信済み・defer 済みなら `followUp()`) は `client/discord/interaction.ts` の `dispatchInteraction()` にある。承認ボタン・select・modal も含む全種別が、振り分けの前に `isAuthorized()` を通り、認可されない操作は pending に触れず ephemeral で拒否される。詳細は [message-flow](message-flow.md) で扱う。`canUseTool` を `query()` の options に載せる箇所は [claude-integration](claude-integration.md) を参照。
 
 ## テスト
 
