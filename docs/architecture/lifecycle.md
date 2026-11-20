@@ -69,7 +69,7 @@ DB の open/close は `main.ts` が対で所有する。`openStoreDatabase()` �
 ## `DiscordBot.start()`
 
 1. `await this.systemPrompts.load()`: `{cwd}/.claude/system-prompt/` 配下の `DEFAULT.md`/`CHAT.md`/`CRON.md` とスコープ別ファイルを読み込みキャッシュする。ディレクトリが無ければスキップする。内容は [claude-integration](claude-integration.md) を参照。
-2. `this.client.once(Events.ClientReady, ...)` を `login()` より前に登録する。理由: コード中のコメントによると、discord.js は gateway の READY を受けた時点で `ClientReady` を emit し、それは `login()` の解決前になり得るため、`login()` 後に `once()` を登録すると発火済みイベントを取りこぼし、次の初期化が実行されなくなる。
+2. `onceReady(this.client, Events.ClientReady, handler)` (`client/discord/ready.ts`) で `ClientReady` ハンドラを `login()` より前に登録する。`onceReady()` は内部で `once()` を使い、handler の完了で resolve、throw で reject する Promise (`ready`) を返す。理由: コード中のコメントによると、discord.js は gateway の READY を受けた時点で `ClientReady` を emit し、それは `login()` の解決前になり得るため、`login()` 後に `once()` を登録すると発火済みイベントを取りこぼし、次の初期化が実行されなくなる。
 3. `ClientReady` ハンドラ内の処理 (この順):
    1. `registerCommands()`: `REST` に token をセットし、`Routes.applicationGuildCommands(client.user.id, config.discord.guildId)` へ `[command.toJSON()]` (`client/discord/commands.ts` の `command`) を `PUT` する。ギルドスコープのコマンド登録で、グローバルコマンドは登録しない。
    2. `new CronExecutor({ ports: createDiscordCronPorts({ client, guildId, approvalManager }), config: config.claude, env: { DISCORD_BOT_TOKEN }, store, defaults: config.claude.defaults, systemPrompts })` (`cron/executor.ts`、`ports` は `client/discord/cron-target.ts`)。
@@ -77,9 +77,9 @@ DB の open/close は `main.ts` が対で所有する。`openStoreDatabase()` �
    4. `reloadJobs` (再読込 → `cronExecutor.reload()`) を定義し、`cronExecutor.setOnceCallback()` に once ジョブ実行後の処理 (`{cwd}/cron/{name}` を `rm()`。`name` は拡張子を含む → `reloadJobs()`) を登録する。削除失敗はログのみで、reload は行う。
    5. `runJobByName` (`findJob()` → `runJob()`、未登録なら throw。`runJob()` の結果 `succeeded`/`failed`/`skipped` を返す) を定義する。`POST /cron/run` はこの結果を `result` として返す。
    6. `CronRouteContext { reloadCronJobs, runJob, listJobs }`、`SettingsRouteContext { store, resolveParentId }`、`HealthRouteContext { isReady }` を組み立て、`startApiServer(config.claude.apiPort, settingsCtx, healthCtx, cronCtx)` (`api/server.ts`) を呼ぶ。サーバーは `127.0.0.1` にバインドされる。詳細は [internal-api](internal-api.md)。
-   7. `ready` Promise を resolve する。
+   7. ハンドラが正常に終わると `ready` が resolve する。手順 1〜6 のどこで例外が出ても (コマンド登録の REST 失敗、`loadCronJobsFromDir` の ENOENT 以外の例外、API サーバーのポート使用中など) `ready` は reject される。
 4. `await this.client.login(config.discord.token)`。
-5. `await ready` で上記ハンドラの完了を待ってから `start()` が解決する。
+5. `await ready` で上記ハンドラの完了を待ってから `start()` が解決する。ハンドラが失敗した場合は `start()` が reject され、`main.ts` の起動リトライ (後述の失敗した試行の `shutdown()` を含む) に入る。`await ready` にタイムアウトは無く、`ClientReady` 自体が届かない場合の打ち切りは行わない。
 
 cron の詳細は [cron](cron.md)、`SettingsRouteContext` の中身は [store-and-settings](store-and-settings.md) を参照。
 

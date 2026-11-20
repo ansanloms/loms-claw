@@ -47,6 +47,7 @@ import {
 } from "./commands.ts";
 import { resolveIncomingMessage } from "./incoming.ts";
 import { dispatchInteraction } from "./interaction.ts";
+import { onceReady } from "./ready.ts";
 import {
   appendImageReferences,
   cleanupImageFiles,
@@ -171,8 +172,14 @@ export class DiscordBot {
     // このタイミングは login() の解決前になり得るため、login() の後に
     // once() を登録すると発火済みイベントを取りこぼし、コマンド登録・
     // cron 初期化・API サーバー起動が永久に実行されない。
-    const ready = new Promise<void>((resolve, reject) => {
-      this.client.once(Events.ClientReady, async (c) => {
+    // ハンドラ内の失敗 (コマンド登録・cron 読み込み・API サーバー起動) は
+    // すべて start() の reject になり、main.ts のリトライに乗る。
+    // login() の await 中に失敗しても unhandledRejection にならないよう、
+    // onceReady() が返す前に受け手を付け、失敗は warn ログに残す (ready.ts)。
+    const ready = onceReady(
+      this.client,
+      Events.ClientReady,
+      async (c: Client<true>) => {
         log.info(`logged in as ${c.user.tag}`);
         await this.registerCommands();
 
@@ -242,22 +249,14 @@ export class DiscordBot {
               (shard) => shard.status === Status.Ready,
             ),
         };
-        try {
-          this.apiServer = await startApiServer(
-            this.config.claude.apiPort,
-            settingsCtx,
-            healthCtx,
-            cronCtx,
-          );
-        } catch (e) {
-          // ポート使用中などの listen 失敗は start() の例外として外へ出す。
-          reject(e);
-          return;
-        }
-
-        resolve();
-      });
-    });
+        this.apiServer = await startApiServer(
+          this.config.claude.apiPort,
+          settingsCtx,
+          healthCtx,
+          cronCtx,
+        );
+      },
+    );
 
     await this.client.login(this.config.discord.token);
 
