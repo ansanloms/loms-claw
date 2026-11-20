@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import type { Client } from "discord.js";
+import type { Client, StringSelectMenuInteraction } from "discord.js";
 import {
   formatAnswer,
   OTHER_VALUE,
@@ -257,5 +257,135 @@ describe("QuestionManager.requestAnswers", () => {
       kind: "denied",
       reason: "Failed to post questions",
     });
+  });
+});
+
+describe("QuestionManager 回答済みの表示", () => {
+  /**
+   * 質問を送信し、全問を select で回答して、回答後の `update` の content を返す。
+   */
+  async function answerAll(
+    questions: Question[],
+    body: string,
+    otherTexts?: string[],
+  ): Promise<string> {
+    let customIds: string[] = [];
+    const client = {
+      channels: {
+        fetch: () =>
+          Promise.resolve({
+            isTextBased: () => true,
+            send: (payload: {
+              content: string;
+              components: { components: { data: { custom_id: string } }[] }[];
+            }) => {
+              customIds = payload.components.map(
+                (row) => row.components[0].data.custom_id,
+              );
+              return Promise.resolve({
+                content: body,
+                edit: () => Promise.resolve(),
+              });
+            },
+          }),
+      },
+    } as unknown as Client;
+    const manager = new QuestionManager(client);
+    const resultPromise = manager.requestAnswers(questions, "ch-1");
+    await new Promise((r) => setTimeout(r, 0));
+
+    let updated = "";
+    for (let i = 0; i < questions.length; i++) {
+      const other = otherTexts?.[i];
+      if (other !== undefined) {
+        const modal = {
+          customId: customIds[i].replace("question:", "question-other:"),
+          fields: { getTextInputValue: () => other },
+          isFromMessage: () => true,
+          message: { content: body },
+          update: (edit: { content?: string }) => {
+            if (edit.content !== undefined) {
+              updated = edit.content;
+            }
+            return Promise.resolve();
+          },
+        };
+        // handleSelect の Other 経路で pendingOther を作る。
+        await manager.handleSelect({
+          customId: customIds[i],
+          values: [OTHER_VALUE],
+          showModal: () => Promise.resolve(),
+        } as unknown as StringSelectMenuInteraction);
+        await manager.handleModal(modal as never);
+      } else {
+        await manager.handleSelect({
+          customId: customIds[i],
+          values: ["0"],
+          message: { content: body },
+          update: (edit: { content?: string }) => {
+            if (edit.content !== undefined) {
+              updated = edit.content;
+            }
+            return Promise.resolve();
+          },
+        } as unknown as StringSelectMenuInteraction);
+      }
+    }
+    await resultPromise;
+    return updated;
+  }
+
+  function makeQuestions(count: number, header = "H"): Question[] {
+    return Array.from({ length: count }, (_, i) => ({
+      question: `Q${i}`,
+      header,
+      options: [{ label: "A", description: "" }],
+      multiSelect: false,
+    }));
+  }
+
+  test("本文が上限に近くても、→ 回答済み と要約が残り 2000 文字以内であること", async () => {
+    const body = "x".repeat(1990);
+    const content = await answerAll(makeQuestions(1, "Choice"), body);
+
+    assert.ok(content.length <= 2000);
+    assert.ok(content.includes("**→ 回答済み**"));
+    assert.ok(content.endsWith("**Choice**: A"));
+  });
+
+  test("1000 文字の Other を 4 件回答しても、2000 文字以内で → 回答済み が残ること", async () => {
+    const body = "x".repeat(1990);
+    const long = "y".repeat(1000);
+    const content = await answerAll(makeQuestions(4), body, [
+      long,
+      long,
+      long,
+      long,
+    ]);
+
+    assert.ok(content.length <= 2000);
+    assert.ok(content.includes("**→ 回答済み**"));
+    assert.ok(content.includes("**H**: "));
+    // 各質問の回答の先頭が残っていること。
+    assert.deepStrictEqual(content.match(/\*\*H\*\*: y{10}/g)?.length, 4);
+  });
+
+  test("回答に 3 連のバッククォートがあっても、表示に 3 連のバッククォートが残らないこと", async () => {
+    const content = await answerAll(makeQuestions(2), "body", [
+      "a ``` b ````` c",
+      "```",
+    ]);
+
+    assert.ok(content.includes("**→ 回答済み**"));
+    assert.ok(!content.includes("```"));
+  });
+
+  test("header が 500 文字でも回答の先頭が残ること", async () => {
+    const content = await answerAll(makeQuestions(1, "h".repeat(500)), "body", [
+      "ANSWER-START" + "z".repeat(500),
+    ]);
+
+    assert.ok(content.includes("**→ 回答済み**"));
+    assert.ok(content.includes("ANSWER-START"));
   });
 });
