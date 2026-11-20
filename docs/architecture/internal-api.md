@@ -1,6 +1,6 @@
 # 内部 HTTP API
 
-bot プロセス内で `127.0.0.1:{config.claude.apiPort}` に Hono アプリを `@hono/node-server` の `serve()` で起動し、cron 操作・ログ取得・スコープ設定の操作を同一ポートで提供する。呼び出し側は Claude (Agent SDK のツール側) で、Bash + curl で叩く。loopback バインドのみで認証は持たない。ツール承認は SDK の `canUseTool` コールバックで in-process に処理するため HTTP では扱わず、Discord 操作は Claude が公式 REST API を直接叩くため提供しない (以前あった discord.js Client 経由の `/discord/*` ラッパーは廃止済み)。リクエスト検証は `docs/api/` の OpenAPI を単一ソースとし、そこから生成した `api/internal-schemas.ts` を `@cfworker/json-schema` で評価する。
+bot プロセス内で `127.0.0.1:{config.claude.apiPort}` に Hono アプリを `@hono/node-server` の `serve()` で起動し、cron 操作・ログ取得・スコープ設定の操作・他セッションへの依頼を同一ポートで提供する。呼び出し側は Claude (Agent SDK のツール側) で、Bash + curl で叩く。loopback バインドのみで認証は持たない。ツール承認は SDK の `canUseTool` コールバックで in-process に処理するため HTTP では扱わず、Discord 操作は Claude が公式 REST API を直接叩くため提供しない (以前あった discord.js Client 経由の `/discord/*` ラッパーは廃止済み)。リクエスト検証は `docs/api/` の OpenAPI を単一ソースとし、そこから生成した `api/internal-schemas.ts` を `@cfworker/json-schema` で評価する。
 
 関連: [README.md](README.md)/[lifecycle.md](lifecycle.md) (起動順・ロガー)/[cron.md](cron.md) (cron の意味)/[store-and-settings.md](store-and-settings.md) (settings の意味)/[approval.md](approval.md)/[deployment.md](deployment.md)
 
@@ -10,18 +10,18 @@ bot プロセス内で `127.0.0.1:{config.claude.apiPort}` に Hono アプリを
 
 ## サーバー (`api/server.ts`)
 
-`createApp(settingsCtx, healthCtx, cronCtx?)` が `Hono` アプリの組み立て (ルートのマウント、`notFound`/`onError`) だけを行い、`startApiServer(port, settingsCtx, healthCtx, cronCtx?)` はそれを `serve({ fetch: app.fetch, port, hostname: "127.0.0.1" })` に渡して `ServerType` (Node の `http.Server` 等) を返す薄いラッパー。呼び出し側 (`client/discord/mod.ts`。`ClientReady` ハンドラは `cronExecutor` の生成・ジョブ読み込み後にこの関数を呼び、成功してから `cronExecutor.start()` でスケジューラを開始する (ジョブの登録は `reload()` で API 起動前に済ませる。起動待ちの間に `shutdown()` が走っていたら、起動したサーバーを閉じてスケジューラは始めない)。停止は `DiscordBot.shutdown()`) が `ServerType` を保持し、停止時に `close(cb)` を 5 秒の `withTimeout` で包んで呼ぶ。失敗は WARN ログに落とすだけで握りつぶす。`createApp()` を分離してあるのは、`serve()` を起動せず `app.request()` で直接ルーティング (404/500/マウント) を検証できるようにするためである。詳細は下記「テスト」を参照。
+`createApp(settingsCtx, healthCtx, cronCtx?, sessionsCtx?)` が `Hono` アプリの組み立て (ルートのマウント、`notFound`/`onError`) だけを行い、`startApiServer(port, settingsCtx, healthCtx, cronCtx?, sessionsCtx?)` はそれを `serve({ fetch: app.fetch, port, hostname: "127.0.0.1" })` に渡して `ServerType` (Node の `http.Server` 等) を返す薄いラッパー。呼び出し側 (`client/discord/mod.ts`。`ClientReady` ハンドラは `cronExecutor` の生成・ジョブ読み込み後にこの関数を呼び、成功してから `cronExecutor.start()` でスケジューラを開始する (ジョブの登録は `reload()` で API 起動前に済ませる。起動待ちの間に `shutdown()` が走っていたら、起動したサーバーを閉じてスケジューラは始めない)。停止は `DiscordBot.shutdown()`) が `ServerType` を保持し、停止時に `close(cb)` を 5 秒の `withTimeout` で包んで呼ぶ。失敗は WARN ログに落とすだけで握りつぶす。`createApp()` を分離してあるのは、`serve()` を起動せず `app.request()` で直接ルーティング (404/500/マウント) を検証できるようにするためである。詳細は下記「テスト」を参照。
 
-| 要素           | 内容                                                                                                                                                                                       |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| リクエストログ | `app.use()` の middleware で `{method} {path}` を DEBUG レベルで出力 (名前空間 `api-server`)                                                                                               |
-| マウント       | `/cron` → `createCronRoutes(cronCtx)`、`/health` → `createHealthRoutes(healthCtx)`、`/logs` → `createLogsRoutes()`、`/settings` → `createSettingsRoutes(settingsCtx)`                      |
-| `notFound`     | `{ "error": "Not Found" }` を 404 で返す                                                                                                                                                   |
-| `onError`      | `getErrorMessage(err)` (`errors.ts`) でメッセージを取り出し ERROR ログに出した上で `{ "error": msg }` を 500 で返す                                                                        |
-| bind           | `hostname: "127.0.0.1"` 固定。ポートは `config.json` の `claude.apiPort` (`config.schema.json` の default は 3000)                                                                         |
-| エラー応答の形 | 大半のルートで `{ "error": string }` + HTTP ステータス (RFC 9457 Problem Details ではない、`docs/api/README.md`)。`GET /health` のみ `{ "status": "ok" \| "unavailable" }` を返す (下記)。 |
+| 要素           | 内容                                                                                                                                                                                                                     |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| リクエストログ | `app.use()` の middleware で `{method} {path}` を DEBUG レベルで出力 (名前空間 `api-server`)                                                                                                                             |
+| マウント       | `/cron` → `createCronRoutes(cronCtx)`、`/health` → `createHealthRoutes(healthCtx)`、`/logs` → `createLogsRoutes()`、`/sessions` → `createSessionsRoutes(sessionsCtx)`、`/settings` → `createSettingsRoutes(settingsCtx)` |
+| `notFound`     | `{ "error": "Not Found" }` を 404 で返す                                                                                                                                                                                 |
+| `onError`      | `getErrorMessage(err)` (`errors.ts`) でメッセージを取り出し ERROR ログに出した上で `{ "error": msg }` を 500 で返す                                                                                                      |
+| bind           | `hostname: "127.0.0.1"` 固定。ポートは `config.json` の `claude.apiPort` (`config.schema.json` の default は 3000)                                                                                                       |
+| エラー応答の形 | 大半のルートで `{ "error": string }` + HTTP ステータス (RFC 9457 Problem Details ではない、`docs/api/README.md`)。`GET /health` のみ `{ "status": "ok" \| "unavailable" }` を返す (下記)。                               |
 
-`cronCtx` は省略可能で、省略時 (または個々の関数が未注入の時) は cron ルートが 503 を返す。
+`cronCtx` は省略可能で、省略時 (または個々の関数が未注入の時) は cron ルートが 503 を返す。`sessionsCtx` も省略可能で、省略時は sessions ルートが 503 を返す。
 
 ## ルート一覧
 
@@ -55,6 +55,17 @@ bot プロセス内で `127.0.0.1:{config.claude.apiPort}` に Hono アプリを
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /logs`     | `level` (大文字化して `DEBUG` / `INFO` / `WARN` / `ERROR` と照合。この重要度以上を返す) / `namespace` (前方一致) / `since` (`Temporal.Instant.from()` でパースできる ISO 8601。`Temporal.Instant.compare()` による時刻比較で絞るため、オフセット付き・小数秒無しの指定でも正しく比較される) / `limit` (`/^\d+$/` に一致しかつ 1 以上の整数のみ受理。`MAX_LOG_LIMIT` (`logger.ts`、1000) を超える値は 400。`getLogEntries` 側の clamp はロガー内部の防御として残る) | `LogEntry[]` (`{ timestamp, level, namespace, message }`)。時系列順で、条件に合う末尾 `limit` 件 | `level` 不正: 400 / `since` 不正: 400 `invalid since: must be ISO 8601` / `limit` 不正: 400 `limit must be a positive integer` / `limit` が `MAX_LOG_LIMIT` 超過: 400 `limit must not exceed 1000` |
 
+### sessions (`api/routes/sessions.ts`)
+
+別のチャンネル / スレッドのセッションへ依頼を渡す。依頼は対象スコープのキューに積み、処理の完了は待たずに 202 を返す。注入される `SessionsRouteContext` は `submitMessage(target, prompt, source?)` を持ち、`"accepted" | "not-found" | "rate-limited"` を返す。実体は `client/discord/session-request.ts` の `submitSessionRequest()`。`api/` は `client/` を import しないので、ルートは結果を HTTP ステータスに写すだけで、対象の検証は注入側が行う。通常の発話と同じ中核の経路 (直列化・セッション・システムプロンプト・承認) を通る。注記・レート制限・発話者の扱いは [message-flow.md](message-flow.md) の「セッション間の依頼」を参照。
+
+| メソッド / パス                                | リクエスト                                                                                                                                                      | 正常応答           | エラー                                                                                                                                                                                                                                                                                                                                                          |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /sessions/:channelId/messages`           | JSON `{ prompt, source? }` (`RequestPostSessionMessage`。`prompt` は 1 文字以上、`source` は 1〜100 文字で制御文字 (改行・タブを含む) を含まない、余剰キー不可) | 202 `{ ok: true }` | `sessionsCtx` 未注入: 503 `sessions not available` / JSON パース失敗: 400 `invalid JSON body` / スキーマ不適合: 400 / パスの ID が数字 17〜20 桁でない: 400 / 対象が無い・ギルド外・送信できない種別・bot に送信権限が無い・ロック中のスレッド・スレッドを指している: 404 `channel or thread not found` / レート超過: 429 `session request rate limit exceeded` |
+| `POST /sessions/:channelId/:threadId/messages` | 同上                                                                                                                                                            | 同上               | 同上。加えてスレッドの親が `channelId` と一致しない場合も 404                                                                                                                                                                                                                                                                                                   |
+
+ギルド外のチャンネルの存在を知らせないため、403 は返さず 404 にまとめる。検証の順序は、パスの ID (`/^\d{17,20}$/`。`channels.fetch` に渡す前に弾く) → JSON → スキーマ (`prompt` は空白以外を含む (`\S`)、`source` は `^[^\x00-\x1F\x7F]+$`) → 対象の検証 (404) → レート枠の消費 (429)。`active` / `activeChannelIds` は見ない (自己メンションと同じ)。
+
 ### settings (`api/routes/settings.ts`)
 
 注入される `SettingsRouteContext` は `store: Store` (必須) と `resolveParentId?: (id) => Promise<string | null>` を持つ。設定値の意味・フォールバック順は [store-and-settings.md](store-and-settings.md) を参照。
@@ -79,7 +90,7 @@ PATCH/DELETE の書き込みは Store の仕様どおり leaf id (`threadId ?? c
 
 ## コンテキスト注入 (`client/discord/mod.ts`)
 
-`DiscordBot.start()` の `ClientReady` ハンドラ内で、`CronExecutor` の初期化とジョブ読み込みの後に次を組み立てて `startApiServer(this.config.claude.apiPort, settingsCtx, healthCtx, cronCtx)` を呼ぶ。
+`DiscordBot.start()` の `ClientReady` ハンドラ内で、`CronExecutor` の初期化とジョブ読み込みの後に次を組み立てて `startApiServer(this.config.claude.apiPort, settingsCtx, healthCtx, cronCtx, sessionsCtx)` を呼ぶ。
 
 | コンテキスト           | フィールド        | 実体                                                                                                                                                                                  |
 | ---------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -89,6 +100,7 @@ PATCH/DELETE の書き込みは Store の仕様どおり leaf id (`threadId ?? c
 | `HealthRouteContext`   | `isReady`         | `client.ws.shards.size > 0 && client.ws.shards.every((shard) => shard.status === Status.Ready)`                                                                                       |
 | `SettingsRouteContext` | `store`           | `DiscordBot` が保持する `Store`                                                                                                                                                       |
 |                        | `resolveParentId` | `DiscordBot.resolveThreadParentId(id)`                                                                                                                                                |
+| `SessionsRouteContext` | `submitMessage`   | `submitSessionRequest(target, prompt, source, { client, guildId, userId, conversation })` (`client/discord/session-request.ts`)                                                       |
 
 `resolveThreadParentId` は `client.channels.fetch(id)` を呼び、`isThread()` なら `parentId`、そうでなければ `null` を返す。`fetch()` は存在しない ID や cron の擬似 id で throw しうるが、ここでは握りつぶさず素通しする。catch してチャンネル扱いへフォールバックするのは呼び出し元 (`resolveScope()`) の責務、という分担になっている。
 
@@ -133,9 +145,9 @@ flowchart LR
 
 ## テスト
 
-`api/routes/cron.test.ts`/`api/routes/health.test.ts`/`api/routes/logs.test.ts`/`api/routes/settings.test.ts` は `serve()` を起動せず、`new Hono()` に `createCronRoutes()`/`createHealthRoutes()`/`createLogsRoutes()`/`createSettingsRoutes()` をマウントして `app.request()` で直接リクエストを投げる形式。cron 側はコンテキスト関数をクロージャで差し替え、settings 側は `new DatabaseSync(":memory:")` の `Store` を使う。
+`api/routes/cron.test.ts`/`api/routes/health.test.ts`/`api/routes/logs.test.ts`/`api/routes/settings.test.ts`/`api/routes/sessions.test.ts` は `serve()` を起動せず、`new Hono()` に `createCronRoutes()`/`createHealthRoutes()`/`createLogsRoutes()`/`createSessionsRoutes()`/`createSettingsRoutes()` をマウントして `app.request()` で直接リクエストを投げる形式。cron 側はコンテキスト関数をクロージャで差し替え、settings 側は `new DatabaseSync(":memory:")` の `Store` を使う。
 
-`api/server.test.ts` は `createApp()` が返す Hono アプリを `app.request()` で直接叩いて次を検証する。未定義パスは 404 (`{ error: "Not Found" }`) を返す。マウント済みルート (`cronCtx.runJob` 等) が例外を投げた場合は共通 `onError` により 500 を返す。`/cron`/`/health`/`/logs`/`/settings` が実際にマウントされている。`serve()` を起動する `startApiServer()` 自体 (ポートバインド) は統合テストの対象外。
+`api/server.test.ts` は `createApp()` が返す Hono アプリを `app.request()` で直接叩いて次を検証する。未定義パスは 404 (`{ error: "Not Found" }`) を返す。マウント済みルート (`cronCtx.runJob` 等) が例外を投げた場合は共通 `onError` により 500 を返す。`/cron`/`/health`/`/logs`/`/settings` が実際にマウントされている。`/sessions` は `sessionsCtx` 未指定で 503、指定すると 202 を返す。`serve()` を起動する `startApiServer()` 自体 (ポートバインド) は統合テストの対象外。
 
 ## エージェント向けの利用手順
 
@@ -144,3 +156,4 @@ curl の呼び方・引数の意味はワークスペース側の skill に集�
 - cron: [data/workspace/.claude/skills/cron/SKILL.md](../../data/workspace/.claude/skills/cron/SKILL.md)
 - logs: [data/workspace/.claude/skills/logs/SKILL.md](../../data/workspace/.claude/skills/logs/SKILL.md)
 - settings: [data/workspace/.claude/skills/settings/SKILL.md](../../data/workspace/.claude/skills/settings/SKILL.md)
+- sessions: [data/workspace/.claude/skills/sessions/SKILL.md](../../data/workspace/.claude/skills/sessions/SKILL.md)

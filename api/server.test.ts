@@ -10,11 +10,17 @@ const defaults: StoreDefaults = {};
 async function withApp(
   fn: (app: ReturnType<typeof createApp>) => Promise<void>,
   cronCtx?: Parameters<typeof createApp>[2],
+  sessionsCtx?: Parameters<typeof createApp>[3],
 ): Promise<void> {
   const db = new DatabaseSync(":memory:");
   try {
     const store = new Store(db, defaults);
-    const app = createApp({ store }, { isReady: () => true }, cronCtx);
+    const app = createApp(
+      { store },
+      { isReady: () => true },
+      cronCtx,
+      sessionsCtx,
+    );
     await fn(app);
   } finally {
     db.close();
@@ -74,5 +80,31 @@ describe("createApp", () => {
       const res = await app.request("/cron");
       assert.deepStrictEqual(res.status, 503);
     });
+  });
+
+  test("/sessions は sessionsCtx 未指定でも 503 を返しマウント自体はされていること", async () => {
+    await withApp(async (app) => {
+      const res = await app.request("/sessions/10000000000000000/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: "hi" }),
+      });
+      assert.deepStrictEqual(res.status, 503);
+    });
+  });
+
+  test("/sessions は sessionsCtx を渡すと依頼を受け付けること", async () => {
+    await withApp(
+      async (app) => {
+        const res = await app.request("/sessions/10000000000000000/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: "hi" }),
+        });
+        assert.deepStrictEqual(res.status, 202);
+      },
+      undefined,
+      { submitMessage: () => Promise.resolve("accepted") },
+    );
   });
 });

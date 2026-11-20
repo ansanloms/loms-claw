@@ -22,6 +22,7 @@ import {
 } from "discord.js";
 import type { CronRouteContext } from "../../api/routes/cron.ts";
 import type { HealthRouteContext } from "../../api/routes/health.ts";
+import type { SessionsRouteContext } from "../../api/routes/sessions.ts";
 import type { SettingsRouteContext } from "../../api/routes/settings.ts";
 import { startApiServer } from "../../api/server.ts";
 import { SystemPromptStore } from "../../claude/system-prompt.ts";
@@ -31,6 +32,8 @@ import {
   SELF_MENTION_RATE_LIMIT_MAX_COUNT,
   SELF_MENTION_RATE_LIMIT_WINDOW_MINUTES,
   SelfMentionRateLimiter,
+  SESSION_REQUEST_RATE_LIMIT_MAX_COUNT,
+  SESSION_REQUEST_RATE_LIMIT_WINDOW_MINUTES,
 } from "../../core/ratelimit.ts";
 import { CronExecutor } from "../../cron/executor.ts";
 import { loadCronJobsFromDir } from "../../cron/loader.ts";
@@ -48,6 +51,7 @@ import { resolveIncomingMessage } from "./incoming.ts";
 import { dispatchInteraction } from "./interaction.ts";
 import { stripBotMentions } from "./message.ts";
 import { onceReady } from "./ready.ts";
+import { submitSessionRequest } from "./session-request.ts";
 import {
   buildTemplateVars,
   createTurnOutput,
@@ -107,6 +111,8 @@ export class DiscordBot {
   private systemPrompts: SystemPromptStore;
   /** 会話の中核 (キュー・セッション・ストリーム消費)。Discord には依存しない。 */
   private conversation: Conversation;
+  /** セッション間の依頼 (内部 API) の受付時のレート制限。 */
+  private readonly sessionRequestLimiter: SelfMentionRateLimiter;
   /**
    * `query()` の env へ注入する環境変数。discord skill の curl がここから
    * bot トークンを取る (skill 側は config.json を直読みしない)。
@@ -155,6 +161,11 @@ export class DiscordBot {
         SELF_MENTION_RATE_LIMIT_WINDOW_MINUTES,
       ),
     });
+    // セッション間の依頼のレート制限 (自己メンションとは別枠。受付時に消費する)。
+    this.sessionRequestLimiter = new SelfMentionRateLimiter(
+      SESSION_REQUEST_RATE_LIMIT_MAX_COUNT,
+      SESSION_REQUEST_RATE_LIMIT_WINDOW_MINUTES,
+    );
 
     this.client.on(Events.MessageCreate, this.onMessageCreate);
     this.client.on(Events.InteractionCreate, this.onInteractionCreate);
@@ -236,7 +247,7 @@ export class DiscordBot {
           return await this.cronExecutor!.runJob(job);
         };
 
-        // 統合 API サーバーを起動する（cron + ログ取得 + 設定）。
+        // 統合 API サーバーを起動する（cron + ログ取得 + 設定 + セッションへの依頼）。
         const cronCtx: CronRouteContext = {
           reloadCronJobs: reloadJobs,
           runJob: runJobByName,
@@ -245,6 +256,16 @@ export class DiscordBot {
         const settingsCtx: SettingsRouteContext = {
           store: this.store,
           resolveParentId: (id) => this.resolveThreadParentId(id),
+        };
+        const sessionsCtx: SessionsRouteContext = {
+          submitMessage: (target, prompt, source) =>
+            submitSessionRequest(target, prompt, source, {
+              client: this.client,
+              guildId: this.config.discord.guildId,
+              userId: this.config.discord.userId,
+              conversation: this.conversation,
+              limiter: this.sessionRequestLimiter,
+            }),
         };
         const healthCtx: HealthRouteContext = {
           // Client#isReady() は ws.status (WebSocketManager 全体の状態) を見るが、
@@ -264,6 +285,7 @@ export class DiscordBot {
           settingsCtx,
           healthCtx,
           cronCtx,
+          sessionsCtx,
         );
         if (this.closed) {
           // 起動待ちの間に shutdown() が走った。いま起動したサーバーを閉じ、

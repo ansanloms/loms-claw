@@ -203,6 +203,8 @@ Discord 実装 (`client/discord/cron-target.ts` の `createDiscordCronPorts({ cl
 | システムプロンプト     | `{ channelId: job.channelId ?? "" }` (context `cron`) | `{channelId}.md` が cron 実行にも適用される                                           |
 | 承認 / AskUserQuestion | `job.channelId`                                       | 省略時は `undefined` となり自動 deny (共有状態へのフォールバックは無い)               |
 
+cron のセッション (`cron:{name}`) は投稿先のチャンネル / スレッドの会話とは別の文脈である。投稿先のスコープのセッションへ依頼を渡したいときは、cron のターンから内部 API の `POST /sessions/{channelId}[/{threadId}]/messages` を呼ぶ ([internal-api](internal-api.md)、[message-flow](message-flow.md) の「セッション間の依頼」)。依頼は対象スコープのキューに積まれ、そのスコープの session・model・effort・システムプロンプト・承認で処理される (cron ジョブ自身の `channelId` や設定は使わない)。cron ジョブの frontmatter に `threadId` は無く、依頼先はターン内で API の引数として指定する。
+
 command ジョブ (`runCommandJob()`) はこの表のいずれにも触れない。session / model / effort のストアも、システムプロンプトも、承認 (`ApprovalManager`) も参照・更新しない。
 
 ## 起動と API の配線 (`client/discord/mod.ts`)

@@ -150,10 +150,11 @@ SDK の `CanUseTool` を返す。`ApprovalResult`/`QuestionResult` を SDK の `
 | チャット                | `core/conversation.ts` `Conversation` (`createCanUseTool(localId)` は `client/discord/mod.ts` の `DiscordBot` が橋渡し) | `localId` (スレッド内ならスレッド ID、そうでなければチャンネル ID)。承認 UI は発話スコープに出る |
 | cron                    | `cron/executor.ts` `CronExecutor` (`CronPorts.createCanUseTool()` を `client/discord/cron-target.ts` が実装)            | `job.channelId` (未指定なら `undefined`)                                                         |
 | AI to AI 自己メンション | チャットと同じ経路                                                                                                      | 同上。承認 UI は自己起動されたスコープに出る                                                     |
+| セッション間の依頼      | チャットと同じ経路 (`submitSessionRequest()` → `Conversation.submit()`)                                                 | 同上。承認 UI は依頼の対象のスコープ (チャンネル / スレッド) に出る                              |
 
 cron で `channelId` 未指定のジョブでは、`createCanUseTool()` に渡る `channelId` が `undefined` になり、`requestApproval()`/`requestAnswers()` はその場で `"No approval channel"`/`"No channel to ask the user"` を返して deny する。ターン間で共有される状態は無いため、他ターンの設定へフォールバックすることもない。
 
-自己メンション起動ターンでは承認ボタン・質問は通常どおりそのスコープに投稿される。承認・質問メッセージの本文はユーザーメンションを含まないため本人宛てのピングは無く、本人が見ていなければ 5 分の timeout で deny になり、依頼元には通知されない。
+自己メンション・セッション間の依頼で起動したターンでは、承認ボタン・質問は通常どおりそのスコープに投稿される。承認・質問メッセージの本文はユーザーメンションを含まないため本人宛てのピングは無く、本人が見ていなければ 5 分の timeout で deny になり、依頼元には通知されない。
 
 `InteractionCreate` からの振り分け (`isButton()` → `handleButton`、`isStringSelectMenu()` → `handleSelect`、`isModalSubmit()` → `handleModal`、それ以外はスラッシュコマンド) と各ハンドラのエラー時の ephemeral 応答 (`runInteraction()`) は `client/discord/interaction.ts` の `dispatchInteraction()` にある。承認ボタン・select・modal も含む全種別が、振り分けの前に `isAuthorized()` を通り、認可されない操作は pending に触れず ephemeral で拒否される。詳細は [message-flow](message-flow.md) で扱う。`canUseTool` を `query()` の options に載せる箇所は [claude-integration](claude-integration.md) を参照。
 

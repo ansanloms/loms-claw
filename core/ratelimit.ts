@@ -5,11 +5,17 @@ export const SELF_MENTION_RATE_LIMIT_MAX_COUNT = 6;
 /** 自己メンション応答のレート制限: ウィンドウ長 (分)。 */
 export const SELF_MENTION_RATE_LIMIT_WINDOW_MINUTES = 10;
 
+/** セッション間の依頼のレート制限: ウィンドウ内の最大依頼回数。自己メンションとは別枠。 */
+export const SESSION_REQUEST_RATE_LIMIT_MAX_COUNT = 6;
+/** セッション間の依頼のレート制限: ウィンドウ長 (分)。 */
+export const SESSION_REQUEST_RATE_LIMIT_WINDOW_MINUTES = 10;
+
 /**
  * 自己メンション応答のスライディングウィンドウレートリミッタ。
  *
  * bot 全体で「直近 windowMinutes 分間に maxCount 回まで」を強制する。
  * AI 出力が次の応答を起動する構造の暴走 (ループ・連鎖) に対する機械的な歯止め。
+ * セッション間の依頼の制限にも、別のインスタンスとして同じクラスを使う。
  */
 export class SelfMentionRateLimiter {
   private readonly maxCount: number;

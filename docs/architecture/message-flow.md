@@ -141,6 +141,7 @@ bot 側でメッセージをスレッドへ自動分離する機能は実装し�
 - 戻り値が空なら中核は return する (finally の後始末 `onTurnEnd` は走る)。
 - 自己メッセージなら `selfMentionLimiter.tryConsume()` で枠を消費する。超過なら WARN を出して return。消費は query 直前に置く。理由: 応答しないメッセージで枠を浪費しないため。
 - 自己メッセージなら `SELF_MENTION_PROMPT_NOTE` (`core/conversation.ts`。`[AI to AI 自己メンション] この依頼は認可ユーザー本人の発話ではなく、別のチャンネル/スレッドで動いている自 bot のセッションが投稿したもの。`) を空行を挟んでプロンプト先頭に付ける。
+- セッション間の依頼 (`TurnInput.sessionRequest` あり) なら、`SESSION_REQUEST_PROMPT_NOTE` (`[セッション間の依頼] この依頼は認可ユーザー本人の発話ではなく、別のセッションが内部 API 経由で渡したもの。`。`source` があれば次の行に `依頼元: {source}` を添える) を空行を挟んでプロンプト先頭に付ける。制御文字を含む `source` は注記の偽装に使えるので添えず、WARN を出す。レート枠は受付側 (`submitSessionRequest()`) が消費済みで、core は消費しない。
 
 ### 9. 設定の取得と `askClaude()` の呼び出し
 
@@ -206,6 +207,26 @@ per-scope の停止手段は無い。連鎖を止めるにはレート制限に�
 
 エージェント向けの案内は [data/workspace/CLAUDE.md](../../data/workspace/CLAUDE.md) の「AI to AI 自己メンション」節、投稿手順は [discord skill](../../data/workspace/.claude/skills/discord/SKILL.md) を参照。
 
+## セッション間の依頼 (内部 API)
+
+内部 API の `POST /sessions/{channelId}[/{threadId}]/messages` ([internal-api](internal-api.md)) は、Discord への投稿を経由せずに、対象のチャンネル / スレッドのセッションへ依頼を渡す。`client/discord/session-request.ts` の `submitSessionRequest()` が受け、`Conversation.submit()` へ投入する (完了は待たない)。設定項目は無く常時有効。自己メンションとの違いは次のとおり。
+
+| 項目         | 自己メンション                                                                                           | セッション間の依頼                                                                                                                |
+| ------------ | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| 経路         | Discord への投稿 (`<@botId>`) → `messageCreate`                                                          | 内部 API → `submitSessionRequest()`。中継の投稿が会話に残らない                                                                   |
+| 入力の判定   | `resolveIncomingMessage()` (認可・メンション。`active` は自己メッセージに適用しない)                     | 対象の検証 (下記)。`active` / `activeChannelIds` は見ない (自己メンションと同じ)。認可は内部 API が loopback 限定であることに依る |
+| レート制限   | `selfMentionLimiter` (直近 10 分に 6 回)。到着時に `isExhausted()` で事前判定、実行直前に `tryConsume()` | `submitSessionRequest()` の `limiter` (別枠。直近 10 分に 6 回)。宛先の検証を通った後、受付時に `tryConsume()` で消費する         |
+| 超過時       | WARN ログを出して無視                                                                                    | 受付時にその場で 429。202 を返した依頼はキューに積まれ、ターンとして実行する (失敗は対象のスコープへ通知)                         |
+| 注記         | `SELF_MENTION_PROMPT_NOTE`                                                                               | `SESSION_REQUEST_PROMPT_NOTE` (+ 任意の `source` を依頼元として添える)                                                            |
+| 発話者・変数 | `resolveSpeaker({ isSelfMessage: true })` で認可ユーザー                                                 | 同じ (`discord.user.*` は `config.discord.userId`)                                                                                |
+| 応答の宛先   | メンション無し                                                                                           | メンション無し。起点のメッセージが無いので ⏳ も添付も扱わない (`createTurnOutput` の `message` を省略)                           |
+
+対象の検証 (`resolveTargetChannel()`): `client.channels.fetch()` の reject と `null` は対象なし。設定のギルド (`guildId`) に属し、テキスト系 (`isTextBased()`) で DM でなく (`isDMBased()`)、送信できる (`isSendable()`) こと。加えて、`isSendable()` は `send` メソッドの有無しか見ないので、bot の権限を `permissionsFor()` で確かめる (チャンネルは ViewChannel と SendMessages、スレッドは ViewChannel と SendMessagesInThreads で、ロック中のスレッドは不可)。アーカイブ済みスレッドは判定に入れない (送信で解除されるかを discord.js のソースから確認できないため)。`threadId` があればスレッドで、`parentId` が URL の `channelId` と一致すること。`threadId` が無いときにスレッドを指していたら対象なしにする (スコープの親子が崩れるため)。満たさなければ API は 404 を返す。
+
+スコープは `{ channelId }` または `{ channelId, threadId }`、`localId` は `threadId ?? channelId`。キューの key が通常の発話と同じなので、会話中のターンの後ろに積まれ、同じセッションを resume して処理される。自己メンションと同じく、受けたセッションが同じ API で別のセッションへ依頼を渡す連鎖はレート制限で抑える。ツール承認・`AskUserQuestion` は対象のスコープに出る ([approval](approval.md))。
+
+エージェント向けの案内は [data/workspace/CLAUDE.md](../../data/workspace/CLAUDE.md) の「セッション間の依頼 API」節と [sessions skill](../../data/workspace/.claude/skills/sessions/SKILL.md)。
+
 ## インタラクション (`interactionCreate`, `DiscordBot.onInteraction`)
 
 `DiscordBot.onInteraction` は `dispatchInteraction(interaction, deps)` (`client/discord/interaction.ts`) を呼ぶだけで、認可と振り分けはここに集約してある。discord.js への依存は `Interaction` 型の判定メソッドだけで、`deps` は `{ config, approvalManager: { handleButton, handleSelect, handleModal }, handleCommand }` の最小の型で受ける。
@@ -224,16 +245,18 @@ per-scope の停止手段は無い。連鎖を止めるにはレート制限に�
 
 ## 定数一覧
 
-| 定数 / 値                                | 場所                                                   | 値      | 用途                                                 |
-| ---------------------------------------- | ------------------------------------------------------ | ------- | ---------------------------------------------------- |
-| `DISCORD_MESSAGE_LIMIT`                  | `client/discord/message.ts`                            | 2000    | 分割送信の上限。本文はメンション長を引いて分割       |
-| `FLUSH_THRESHOLD`                        | `core/conversation.ts`                                 | 800     | 本文の境界 flush 開始。2 倍 (1600) で強制 flush      |
-| `THINKING_FLUSH_THRESHOLD`               | `core/conversation.ts`                                 | 1500    | thinking の境界 flush 開始。2 倍 (3000) で強制 flush |
-| typing 間隔                              | `client/discord/message.ts` `keepTyping`               | 10 秒   | `sendTyping()` の再送間隔                            |
-| `PROGRESS_THROTTLE_MS`                   | `client/discord/message.ts`                            | 3000    | 進捗メッセージ更新の最短間隔                         |
-| `MAX_IMAGE_DIMENSION`                    | `client/discord/message.ts`                            | 1568 px | 長辺がこれを超える画像を縮小                         |
-| 添付ダウンロードのタイムアウト           | `client/discord/message.ts` `downloadImageAttachments` | 30 秒   | `fetch` の `AbortSignal.timeout`                     |
-| `SELF_MENTION_RATE_LIMIT_MAX_COUNT`      | `core/ratelimit.ts`                                    | 6       | 自己メンション応答の上限回数                         |
-| `SELF_MENTION_RATE_LIMIT_WINDOW_MINUTES` | `core/ratelimit.ts`                                    | 10      | 同ウィンドウ長 (分)                                  |
-| `claude.timeout`                         | `config.json`                                          | 設定値  | `askClaude()` の `AbortSignal.timeout`               |
-| `INTERACTION_TIMEOUT_MS`                 | `client/discord/approval/constants.ts`                 | 5 分    | 承認 / 質問の待ち時間 ([approval](approval.md))      |
+| 定数 / 値                                   | 場所                                                   | 値      | 用途                                                  |
+| ------------------------------------------- | ------------------------------------------------------ | ------- | ----------------------------------------------------- |
+| `DISCORD_MESSAGE_LIMIT`                     | `client/discord/message.ts`                            | 2000    | 分割送信の上限。本文はメンション長を引いて分割        |
+| `FLUSH_THRESHOLD`                           | `core/conversation.ts`                                 | 800     | 本文の境界 flush 開始。2 倍 (1600) で強制 flush       |
+| `THINKING_FLUSH_THRESHOLD`                  | `core/conversation.ts`                                 | 1500    | thinking の境界 flush 開始。2 倍 (3000) で強制 flush  |
+| typing 間隔                                 | `client/discord/message.ts` `keepTyping`               | 10 秒   | `sendTyping()` の再送間隔                             |
+| `PROGRESS_THROTTLE_MS`                      | `client/discord/message.ts`                            | 3000    | 進捗メッセージ更新の最短間隔                          |
+| `MAX_IMAGE_DIMENSION`                       | `client/discord/message.ts`                            | 1568 px | 長辺がこれを超える画像を縮小                          |
+| 添付ダウンロードのタイムアウト              | `client/discord/message.ts` `downloadImageAttachments` | 30 秒   | `fetch` の `AbortSignal.timeout`                      |
+| `SELF_MENTION_RATE_LIMIT_MAX_COUNT`         | `core/ratelimit.ts`                                    | 6       | 自己メンション応答の上限回数                          |
+| `SELF_MENTION_RATE_LIMIT_WINDOW_MINUTES`    | `core/ratelimit.ts`                                    | 10      | 同ウィンドウ長 (分)                                   |
+| `SESSION_REQUEST_RATE_LIMIT_MAX_COUNT`      | `core/ratelimit.ts`                                    | 6       | セッション間の依頼の上限回数 (自己メンションとは別枠) |
+| `SESSION_REQUEST_RATE_LIMIT_WINDOW_MINUTES` | `core/ratelimit.ts`                                    | 10      | 同ウィンドウ長 (分)                                   |
+| `claude.timeout`                            | `config.json`                                          | 設定値  | `askClaude()` の `AbortSignal.timeout`                |
+| `INTERACTION_TIMEOUT_MS`                    | `client/discord/approval/constants.ts`                 | 5 分    | 承認 / 質問の待ち時間 ([approval](approval.md))       |

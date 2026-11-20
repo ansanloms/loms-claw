@@ -105,20 +105,20 @@ cron は中核の `runOneShot()` (`core/conversation.ts`) が `drainResultEvent(
 
 `claude/template.ts` の `replaceTemplateVariables(template, vars)` は正規表現 `/\{\{([\w.]+)\}\}/g` で `{{key}}` を `vars[key]` に置換する。`vars` に無いキーはプレースホルダーのまま残る。
 
-| 変数                       | chat での値 (`client/discord/mod.ts` が組み立てて中核へ渡す)                                                                                        | cron での値 (`CronPorts.guildTemplateVars()`)        |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| `{{discord.guild.id}}`     | `config.discord.guildId`                                                                                                                            | `config.discord.guildId`                             |
-| `{{discord.guild.name}}`   | `message.guild?.name ?? ""`                                                                                                                         | `client.guilds.cache` から引いた名前 (無ければ `""`) |
-| `{{discord.channel.id}}`   | `localId` = `threadId ?? channelId` (発話があった場所)                                                                                              | 渡さない                                             |
-| `{{discord.channel.name}}` | 発話があったチャンネル / スレッドの `name` (無ければ `""`)                                                                                          | 渡さない                                             |
-| `{{discord.channel.type}}` | `"thread"` / `"text"`                                                                                                                               | 渡さない                                             |
-| `{{discord.user.id}}`      | 発話者 ID。AI to AI 自己メンション起動時は `config.discord.userId` (認可ユーザー)                                                                   | 渡さない                                             |
-| `{{discord.user.name}}`    | 発話者の表示名 (`message.member?.displayName`、無ければ `message.author.displayName`)。自己メンション起動時は認可ユーザーの表示名 (取れなければ ID) | 渡さない                                             |
+| 変数                       | chat での値 (`client/discord/mod.ts` が組み立てて中核へ渡す)                                                                                                              | cron での値 (`CronPorts.guildTemplateVars()`)        |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `{{discord.guild.id}}`     | `config.discord.guildId`                                                                                                                                                  | `config.discord.guildId`                             |
+| `{{discord.guild.name}}`   | `message.guild?.name ?? ""`                                                                                                                                               | `client.guilds.cache` から引いた名前 (無ければ `""`) |
+| `{{discord.channel.id}}`   | `localId` = `threadId ?? channelId` (発話があった場所)                                                                                                                    | 渡さない                                             |
+| `{{discord.channel.name}}` | 発話があったチャンネル / スレッドの `name` (無ければ `""`)                                                                                                                | 渡さない                                             |
+| `{{discord.channel.type}}` | `"thread"` / `"text"`                                                                                                                                                     | 渡さない                                             |
+| `{{discord.user.id}}`      | 発話者 ID。AI to AI 自己メンション・セッション間の依頼の起動時は `config.discord.userId` (認可ユーザー)                                                                   | 渡さない                                             |
+| `{{discord.user.name}}`    | 発話者の表示名 (`message.member?.displayName`、無ければ `message.author.displayName`)。自己メンション・セッション間の依頼の起動時は認可ユーザーの表示名 (取れなければ ID) | 渡さない                                             |
 
 注意点:
 
 - `{{discord.channel.id}}`/`{{discord.channel.name}}` はスレッド内の発話ではスレッドの ID/名前になる。`{channelId}.md` がスレッド内でフォールバック採用された場合も同様。
-- 自己メンション起動時に `{{discord.user.*}}` を認可ユーザーに差し替える。理由:「発話者へメンションせよ」という指示が `<@botId>` を生み連鎖の火種になるのを防ぐため。
+- 自己メンション・セッション間の依頼の起動時に `{{discord.user.*}}` を認可ユーザーに差し替える。理由:「発話者へメンションせよ」という指示が `<@botId>` を生み連鎖の火種になるのを防ぐため。
 - cron ではギルド変数のみ渡されるため、`CRON.md` にチャンネル/ユーザー変数を書くとプレースホルダーのまま残る。
 
 ## 呼び出し側の差分

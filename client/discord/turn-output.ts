@@ -103,7 +103,11 @@ export interface TurnOutputDeps {
 
 /** {@link createTurnOutput} の引数。 */
 export interface TurnOutputArgs {
-  message: TurnMessage;
+  /**
+   * 起点の Discord メッセージ。セッション間の依頼 (内部 API) のように起点が
+   * 無いときは省略する。省略時はメンションを付けず、⏳ も添付も扱わない。
+   */
+  message?: TurnMessage;
   channel: GuildTextBasedChannel;
   isSelfMessage: boolean;
   hasAttachments: boolean;
@@ -134,7 +138,8 @@ export function createTurnOutput(args: TurnOutputArgs): TurnOutput {
   // 自己メッセージ起動時は空文字にする: 応答冒頭に自 bot メンションを付けると、
   // 応答自体が再度メンション条件を満たし連鎖の火種になるため。
   // 発話者 (認可ユーザー) へのピングは Client 既定の allowedMentions で通る。
-  const mention = isSelfMessage ? "" : `<@${message.author.id}> `;
+  // 起点のメッセージが無いときも、宛先が居ないので空文字にする。
+  const mention = isSelfMessage || !message ? "" : `<@${message.author.id}> `;
   const sendChunks = async (text: string): Promise<void> => {
     const chunks = splitMessage(text, DISCORD_MESSAGE_LIMIT - mention.length);
     for (const chunk of chunks) {
@@ -144,6 +149,9 @@ export function createTurnOutput(args: TurnOutputArgs): TurnOutput {
 
   return {
     onQueued: () => {
+      if (!message) {
+        return;
+      }
       // 待機に入ったことを発言者へ可視化する。失敗は致命的でないので警告ログに残し、
       // undefined に解決させる。
       // react は await せず Promise を保持する (Conversation.submit の
@@ -172,7 +180,7 @@ export function createTurnOutput(args: TurnOutputArgs): TurnOutput {
 
     // 画像添付をダウンロード（画像フィルタは downloadImageAttachments 内で行う）
     preparePrompt: async (prompt) => {
-      if (!hasAttachments) {
+      if (!message || !hasAttachments) {
         return prompt;
       }
       downloadedImages = await downloadImages(message.attachments.values());

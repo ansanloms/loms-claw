@@ -52,6 +52,30 @@ export const THINKING_FLUSH_THRESHOLD = 1500;
 export const SELF_MENTION_PROMPT_NOTE =
   "[AI to AI 自己メンション] この依頼は認可ユーザー本人の発話ではなく、別のチャンネル/スレッドで動いている自 bot のセッションが投稿したもの。";
 
+/**
+ * セッション間の依頼 (内部 API の `POST /sessions/...`) で起動したターンの
+ * プロンプト先頭に付ける注記。自己メンションと同じく、発話者のテンプレート変数は
+ * 認可ユーザーに差し替えるため、この注記が無いとモデルは人間の発話と区別できない。
+ */
+export const SESSION_REQUEST_PROMPT_NOTE =
+  "[セッション間の依頼] この依頼は認可ユーザー本人の発話ではなく、別のセッションが内部 API 経由で渡したもの。";
+
+/**
+ * 注記の本文を組み立てる。`source` (依頼元。例: `cron:news.md`) があれば添える。
+ * 改行などの制御文字を含む `source` は注記の偽装に使えるので、使わず WARN を出す
+ * (API 側のスキーマでも拒否するので、これは防御の層)。
+ */
+export function buildSessionRequestNote(source?: string): string {
+  if (!source) {
+    return SESSION_REQUEST_PROMPT_NOTE;
+  }
+  if (/\p{Cc}/u.test(source)) {
+    log.warn("session request source contains control characters, ignoring it");
+    return SESSION_REQUEST_PROMPT_NOTE;
+  }
+  return `${SESSION_REQUEST_PROMPT_NOTE}\n依頼元: ${source}`;
+}
+
 /** 1 ターン分の入力。 */
 export interface TurnInput {
   /** 永続化スコープ (セッション・設定の引き先)。 */
@@ -64,6 +88,11 @@ export interface TurnInput {
   isSelfMessage: boolean;
   /** システムプロンプトのテンプレート変数。client が組み立てる。 */
   templateVars: Record<string, string>;
+  /**
+   * セッション間の依頼による起動なら指定する。注記をプロンプト先頭に付ける。
+   * `source` は依頼元 (任意)。レート制限は受付側 (client) が済ませている。
+   */
+  sessionRequest?: { source?: string };
 }
 
 /**
@@ -163,7 +192,8 @@ export class Conversation {
   }
 
   private async runTurn(input: TurnInput, output: TurnOutput): Promise<void> {
-    const { scope, localId, isSelfMessage, templateVars } = input;
+    const { scope, localId, isSelfMessage, templateVars, sessionRequest } =
+      input;
     const { store, systemPrompts, claudeConfig } = this.deps;
 
     try {
@@ -191,6 +221,9 @@ export class Conversation {
       // ため、これが無いと人間の発話と区別できない)。
       if (isSelfMessage) {
         prompt = `${SELF_MENTION_PROMPT_NOTE}\n\n${prompt}`;
+      }
+      if (sessionRequest) {
+        prompt = `${buildSessionRequestNote(sessionRequest.source)}\n\n${prompt}`;
       }
 
       // リセット世代は getSession と組で使う (世代が違えば書き戻さない)。両者が同じ

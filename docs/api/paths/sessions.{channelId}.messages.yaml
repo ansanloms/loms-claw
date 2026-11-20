@@ -1,0 +1,77 @@
+parameters:
+  - in: path
+    name: channelId
+    required: true
+    description: 対象のチャンネル ID (Discord Snowflake)。スレッドの ID は指定できない。スレッドへは threadId 付きのパスを使う。
+    schema:
+      type: string
+      pattern: ^\d{17,20}$
+    example: "1234567890123456789"
+post:
+  operationId: postSessionMessage
+  summary: チャンネルのセッションへの依頼。
+  tags:
+    - sessions
+  description: 対象チャンネルのセッションへ依頼を渡す。依頼は対象スコープのキューに積まれ、会話中のターンがあれば、その後ろで同じセッションを再開して処理する。応答は対象チャンネルへ投稿される。プロンプト先頭には、認可ユーザー本人の発話ではない旨の注記が付く。対象の active 設定や config.json の activeChannelIds は見ない (自己メンションと同じ)。
+  requestBody:
+    required: true
+    description: 依頼の本文と、任意の依頼元。
+    content:
+      application/json:
+        schema:
+          $ref: ../components/schemas/RequestPostSessionMessage.yaml
+        examples:
+          normal:
+            value:
+              $ref: ../examples/RequestPostSessionMessage.yaml
+  responses:
+    202:
+      description: 依頼を対象スコープのキューに積んだ場合。処理の完了は待たない。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponsePostSessionMessage.yaml
+          examples:
+            accepted:
+              value:
+                $ref: ../examples/ResponsePostSessionMessage.yaml
+    400:
+      description: JSON が不正、スキーマに適合しない、またはパスの ID が数字 17〜20 桁でない場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            badRequest:
+              value:
+                $ref: ../examples/ResponseError.yaml
+    404:
+      description: チャンネルが存在しない、設定のギルドに属さない、送信できない種別 (スレッドを含む) の場合。bot がそのチャンネルに送信できる権限 (ViewChannel と SendMessages、スレッドは SendMessagesInThreads。ロック中のスレッドは不可) を持たない場合も含む。ギルド外の存在を知らせないため 403 は返さない。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            notFound:
+              value:
+                $ref: ../examples/ResponseError.yaml
+    429:
+      description: 依頼のレート制限を超過した場合 (bot 全体で直近 10 分に 6 回まで。自己メンションとは別枠)。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            rateLimited:
+              value:
+                $ref: ../examples/ResponseError.yaml
+    503:
+      description: セッションへの依頼の機能が無効な場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            unavailable:
+              value:
+                $ref: ../examples/ResponseError.yaml

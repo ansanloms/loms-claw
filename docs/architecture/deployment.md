@@ -168,19 +168,19 @@ Node には権限モデルが無く、プロセスは起動したユーザの権
 
 本番でエージェントの cwd になるディレクトリ。Claude Code の project-scoped な設定 (`.claude/`) とエージェント向けの指示書をここに置く。
 
-| パス                        | 内容                                                                                                                                                                          | 追跡   |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| `CLAUDE.md`                 | エージェント向け指示書。見出しは「振る舞い」「定期実行(cron)について」「チャンネル / スレッド設定 (`/claw settings`)」「Discord 操作」「AI to AI 自己メンション」「ログ参照」 | 追跡   |
-| `.claude/rules/*.md`        | エージェントに常時読み込ませるルール (下表)                                                                                                                                   | 追跡   |
-| `.claude/system-prompt/`    | `DEFAULT.md` / `CHAT.md` / `CRON.md` と、チャンネル ID 名のファイルが 1 件。結合の仕組みは [claude-integration.md](claude-integration.md)                                     | 追跡   |
-| `.claude/settings.json`     | `permissions.allow` の置き場。承認フローとの関係は [approval.md](approval.md)                                                                                                 | 追跡   |
-| `.claude/skills/`           | skill 13 本 (下記)                                                                                                                                                            | 追跡   |
-| `cron/`                     | 定期実行ジョブファイル (恒久ジョブ)。書式と実行は [cron.md](cron.md)                                                                                                          | 追跡   |
-| `cron/*.once.md`            | `once: true` の一時ジョブ (実行後に自動削除される)                                                                                                                            | 管理外 |
-| `apm.yml` / `apm.lock.yaml` | APM の依存定義とロック                                                                                                                                                        | 追跡   |
-| `memory/`                   | エージェントのファイルベース永続メモリ (個人データ)                                                                                                                           | 管理外 |
-| `.claude/loms-claw.sqlite*` | SQLite ストア (`storePath` 既定値)                                                                                                                                            | 管理外 |
-| `apm_modules/`              | APM が取得したモジュール                                                                                                                                                      | 管理外 |
+| パス                        | 内容                                                                                                                                                                                                    | 追跡   |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| `CLAUDE.md`                 | エージェント向け指示書。見出しは「振る舞い」「定期実行(cron)について」「チャンネル / スレッド設定 (`/claw settings`)」「Discord 操作」「AI to AI 自己メンション」「セッション間の依頼 API」「ログ参照」 | 追跡   |
+| `.claude/rules/*.md`        | エージェントに常時読み込ませるルール (下表)                                                                                                                                                             | 追跡   |
+| `.claude/system-prompt/`    | `DEFAULT.md` / `CHAT.md` / `CRON.md` と、チャンネル ID 名のファイルが 1 件。結合の仕組みは [claude-integration.md](claude-integration.md)                                                               | 追跡   |
+| `.claude/settings.json`     | `permissions.allow` の置き場。承認フローとの関係は [approval.md](approval.md)                                                                                                                           | 追跡   |
+| `.claude/skills/`           | skill 13 本 (下記)                                                                                                                                                                                      | 追跡   |
+| `cron/`                     | 定期実行ジョブファイル (恒久ジョブ)。書式と実行は [cron.md](cron.md)                                                                                                                                    | 追跡   |
+| `cron/*.once.md`            | `once: true` の一時ジョブ (実行後に自動削除される)                                                                                                                                                      | 管理外 |
+| `apm.yml` / `apm.lock.yaml` | APM の依存定義とロック                                                                                                                                                                                  | 追跡   |
+| `memory/`                   | エージェントのファイルベース永続メモリ (個人データ)                                                                                                                                                     | 管理外 |
+| `.claude/loms-claw.sqlite*` | SQLite ストア (`storePath` 既定値)                                                                                                                                                                      | 管理外 |
+| `apm_modules/`              | APM が取得したモジュール                                                                                                                                                                                | 管理外 |
 
 ### 追跡対象
 

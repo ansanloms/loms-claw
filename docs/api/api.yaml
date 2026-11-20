@@ -14,6 +14,8 @@ tags:
     description: healthcheck 用 API。
   - name: logs
     description: メモリ上のリングバッファからのログ取得 API。
+  - name: sessions
+    description: 対象のチャンネル/スレッドのセッションへ依頼を渡す API。
   - name: settings
     description: チャンネル/スレッド単位の設定の取得・更新・削除 API。
 paths:
@@ -27,6 +29,10 @@ paths:
     $ref: ./paths/health.yaml
   /logs:
     $ref: ./paths/logs.yaml
+  /sessions/{channelId}/messages:
+    $ref: ./paths/sessions.{channelId}.messages.yaml
+  /sessions/{channelId}/{threadId}/messages:
+    $ref: ./paths/sessions.{channelId}.{threadId}.messages.yaml
   /settings/default:
     $ref: ./paths/settings.default.yaml
   /settings/{id}:
@@ -49,6 +55,8 @@ components:
       $ref: ./components/schemas/RequestPatchSettings.yaml
     RequestPostCronRun:
       $ref: ./components/schemas/RequestPostCronRun.yaml
+    RequestPostSessionMessage:
+      $ref: ./components/schemas/RequestPostSessionMessage.yaml
     ResponseDeleteSettings:
       $ref: ./components/schemas/ResponseDeleteSettings.yaml
     ResponseError:
@@ -63,3 +71,5 @@ components:
       $ref: ./components/schemas/ResponsePostCronReload.yaml
     ResponsePostCronRun:
       $ref: ./components/schemas/ResponsePostCronRun.yaml
+    ResponsePostSessionMessage:
+      $ref: ./components/schemas/ResponsePostSessionMessage.yaml
