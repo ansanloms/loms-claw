@@ -26,6 +26,7 @@ import {
 } from "../claude/mod.ts";
 import type { SystemPromptStore } from "../claude/system-prompt.ts";
 import type { ClaudeConfig } from "../config.ts";
+import { getErrorMessage } from "../errors.ts";
 import { createLogger } from "../logger.ts";
 import type { Store, StoreScope } from "../store/mod.ts";
 import { splitAtBoundary } from "./flush.ts";
@@ -159,6 +160,8 @@ export class Conversation {
   /** scope (channel / thread) 単位でターンを直列化するキュー。 */
   private readonly chatQueue = new ScopeQueue();
   private readonly deps: ConversationDeps;
+  /** `shutdown()` で abort する。全ターンの signal に合成する。 */
+  private readonly shutdownController = new AbortController();
 
   constructor(deps: ConversationDeps) {
     this.deps = deps;
@@ -167,6 +170,14 @@ export class Conversation {
   /** 自己メンション応答のレート枠が尽きているか (消費しない)。 */
   isSelfMentionExhausted(): boolean {
     return this.deps.selfMentionLimiter.isExhausted();
+  }
+
+  /**
+   * 実行中のターンを中断し、キュー待ちのターンと以後の `submit()` を実行せずに
+   * 終わらせる。ターンの完了は待たない。各ターンの `onTurnEnd` は従来どおり呼ばれる。
+   */
+  shutdown(): void {
+    this.shutdownController.abort();
   }
 
   /**
@@ -197,6 +208,13 @@ export class Conversation {
     const { store, systemPrompts, claudeConfig } = this.deps;
 
     try {
+      // shutdown() の後に始まるターン (キュー待ちだったもの・後から届いたもの) は
+      // 何も実行せず抜ける。onTurnStart は呼ばず、finally の onTurnEnd だけ走る。
+      if (this.shutdownController.signal.aborted) {
+        log.info(`turn skipped before start (shutting down): ${localId}`);
+        return;
+      }
+
       await output.onTurnStart();
 
       // 添付の取り込み等 (client 側のプロンプト加工)。
@@ -204,6 +222,13 @@ export class Conversation {
 
       // 加工後もプロンプトが空なら終了
       if (!prompt) {
+        return;
+      }
+
+      // onTurnStart や preparePrompt の待機中に shutdown() が走っていたら、枠を
+      // 消費せず、中断済みの signal で query も起動せずに抜ける。
+      if (this.shutdownController.signal.aborted) {
+        log.info(`turn skipped after prepare (shutting down): ${localId}`);
         return;
       }
 
@@ -246,7 +271,10 @@ export class Conversation {
         templateVars,
       );
 
-      const signal = AbortSignal.timeout(claudeConfig.timeout);
+      const signal = AbortSignal.any([
+        AbortSignal.timeout(claudeConfig.timeout),
+        this.shutdownController.signal,
+      ]);
 
       // ターン開始時のセッション。result での書き戻しはこれが現在値と一致するときだけ
       // 行い、実行中のリセット (`/claw settings unset session` 等) を打ち消さない。
@@ -373,6 +401,14 @@ export class Conversation {
         await output.sendReply(text);
       }
     } catch (error: unknown) {
+      // shutdown() による中断は失敗ではない。旧 bot が終了処理中に応答を
+      // 投稿しないよう、通知せずログだけ残す。タイムアウトや他のエラーは通知する。
+      if (this.shutdownController.signal.aborted) {
+        log.info(
+          `turn aborted by shutdown: ${localId}: ${getErrorMessage(error)}`,
+        );
+        return;
+      }
       // logger は Error の stack を自動で展開する。全文はここに残す。
       log.error("failed to process message:", error);
       // 通知には要約のみ送り、全文は上記ログ (GET /logs) を参照させる。

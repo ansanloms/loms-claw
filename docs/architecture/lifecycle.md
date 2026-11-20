@@ -90,6 +90,7 @@ cron の詳細は [cron](cron.md)、`SettingsRouteContext` の中身は [store-a
 `async shutdown(): Promise<void>`。次の順に呼ぶ。
 
 0. `this.closed = true` を立て、`this.client.off(Events.MessageCreate, onMessageCreate)` と `this.client.off(Events.InteractionCreate, onInteractionCreate)` で、コンストラクタが登録したリスナだけを外す (同じイベントの他のリスナは残る)。理由: 起動失敗後の再試行で `destroy()` が終わる (またはタイムアウトする) までの間、旧 client が次の試行の bot と並んで応答しないようにするため。実行中の cron ジョブの完了は待たない。
+   - 続けて `this.conversation.shutdown()` を呼ぶ。実行中のターンは signal で中断し (承認待ちも打ち切られる)、キュー待ちのターンと以後の `submit()` は何も実行せずに終わる。各ターンの `onTurnEnd` は呼ばれ、中断したターンは `notifyError` を呼ばない。ターンの完了は待たない。キュー待ちで終わったターンの ⏳ は `onTurnEnd` が外す。以後に届いたセッション間の依頼 (内部 API) は `unavailable` (503) で断る。理由: 起動リトライで畳んだ旧 bot のターンが `client.destroy()` の完了まで応答を投稿しないようにするため。中断後の書き戻しが `store.close()` の後に走りうる点は未対応。
 1. `this.cronExecutor?.stop()`: スケジューラの interval を止める。
 2. `apiServer.close()` (コールバック形式) を Promise で包んだもの (reject は `log.warn("api server shutdown error:", e)` で握る。`apiServer` が無ければ即 resolve) を `withTimeout()` (module 内ヘルパ) で `SHUTDOWN_TIMEOUT_MS` (5 秒、モジュール定数) のタイムアウトと競わせて待つ。タイムアウトした場合は `log.warn("api server shutdown timed out; proceeding")` を出して先へ進む。
 3. `this.client.destroy()` (reject は `log.warn("client destroy error:", e)` で握る) も同様に `withTimeout()` で `SHUTDOWN_TIMEOUT_MS` と競わせて待つ。タイムアウト時は `log.warn("client destroy timed out; proceeding")`。

@@ -59,6 +59,7 @@ function fakeChannel(options: FakeChannelOptions = {}) {
 function createDeps(args: {
   fetch: (id: string) => Promise<unknown>;
   exhausted?: boolean;
+  closed?: boolean;
   submit?: (input: TurnInput) => Promise<void>;
 }) {
   const submitted: TurnInput[] = [];
@@ -88,11 +89,31 @@ function createDeps(args: {
         return !(args.exhausted ?? false);
       },
     },
+    isClosed: () => args.closed ?? false,
   };
   return { deps, submitted, fetched, consumed: () => consumed };
 }
 
 describe("submitSessionRequest", () => {
+  test("終了処理中なら unavailable で、宛先の取得も枠の消費も submit もしないこと", async () => {
+    const { deps, submitted, fetched, consumed } = createDeps({
+      fetch: () => Promise.reject(new Error("must not be called")),
+      closed: true,
+    });
+
+    const result = await submitSessionRequest(
+      { channelId: "c1" },
+      "hi",
+      undefined,
+      deps,
+    );
+
+    assert.deepStrictEqual(result, "unavailable");
+    assert.deepStrictEqual(fetched, []);
+    assert.deepStrictEqual(consumed(), 0);
+    assert.deepStrictEqual(submitted, []);
+  });
+
   test("チャンネルの取得が reject したら not-found で、submit しないこと", async () => {
     const { deps, submitted } = createDeps({
       fetch: () => Promise.reject(new Error("Unknown Channel")),

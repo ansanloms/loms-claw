@@ -61,7 +61,7 @@ sequenceDiagram
     K->>B: onTurnStart (⏳ 除去 / typing / 進捗 reporter)
     K->>B: preparePrompt (画像添付ダウンロード)
     K->>S: getSession / getModel / getEffort / getShowThinking
-    K->>C: askClaude(prompt, opts (canUseTool: createCanUseTool(localId)))
+    K->>C: askClaude(prompt, opts (canUseTool: createCanUseTool(localId, signal)))
     loop SDKMessage
         C-->>K: stream_event / assistant / result / tool_progress
         C-->>A: canUseTool → 承認ボタン / 質問
@@ -125,7 +125,7 @@ bot 側でメッセージをスレッドへ自動分離する機能は実装し�
 
 `output.onTurnStart()` を await する。Discord 側の実装は次のとおり。
 
-- 待機していたなら ⏳ リアクションを外す。
+- 待機していたなら ⏳ リアクションを外す (`onTurnEnd` でも、`onTurnStart` が呼ばれずに終わったターンの分を同じ処理で外す。二重には外さない)。
 - `keepTyping(channel, signal)`: 初回 `sendTyping()` の後、10 秒間隔で送り続け、`AbortSignal` で停止する。
 - `createProgressReporter(channel)`: `tool_progress` 用。最初の `report()` で 1 件投稿し、以降は同じメッセージを `edit()` する。3 秒未満の呼び出しはスロットルで捨てる。`cleanup()` で削除する。初回投稿の待機中に `cleanup()` が走っても、後から届いたメッセージはその場で削除し、以後の `report()` は何もしない。
 
@@ -147,7 +147,7 @@ bot 側でメッセージをスレッドへ自動分離する機能は実装し�
 
 - `store.getSession / getModel / getEffort / getShowThinking` を `Promise.all` で並列取得する (解決順は [store-and-settings](store-and-settings.md))。
 - `systemPrompts.resolve("chat", scope, templateVars)` で追記システムプロンプトを得る ([claude-integration](claude-integration.md))。
-- `askClaude(prompt, { sessionId, config: claudeConfig, env, signal: AbortSignal.timeout(claudeConfig.timeout), appendSystemPrompt, model, effort, canUseTool: createCanUseTool(localId), queryFn })`。`env` は `ConversationDeps.env` (Discord では `{ DISCORD_BOT_TOKEN }`)。`createCanUseTool(localId)` は Discord 側で `ApprovalManager` へ橋渡しされ、`AskUserQuestion` を `requestAnswers()` へ、それ以外を `requestApproval()` へ振り分ける ([approval](approval.md))。
+- `askClaude(prompt, { sessionId, config: claudeConfig, env, signal, appendSystemPrompt, model, effort, canUseTool: createCanUseTool(localId, signal), queryFn })`。`signal` は `AbortSignal.any([AbortSignal.timeout(claudeConfig.timeout), 終了用の signal])`。終了用の signal は `Conversation.shutdown()` で abort される。`env` は `ConversationDeps.env` (Discord では `{ DISCORD_BOT_TOKEN }`)。`createCanUseTool(localId)` は Discord 側で `ApprovalManager` へ橋渡しされ、`AskUserQuestion` を `requestAnswers()` へ、それ以外を `requestApproval()` へ振り分ける ([approval](approval.md))。
 
 ### 10. ストリーム消費
 
@@ -174,7 +174,8 @@ bot 側でメッセージをスレッドへ自動分離する機能は実装し�
 
 ### 12. エラーと後始末
 
-- catch: `log.error` (全文) の後、`output.notifyError(error)` を呼ぶ (中核側で失敗は握り潰す)。Discord 側は `sendChunks(summarizeError(error))` (`errors.ts`) で定型文 + エラーメッセージの先頭 1 行 (最大 200 文字) をチャンネルへ送る。全文は `GET /logs` を参照させる。
+- ターン先頭 (`try` の中、`onTurnStart` の前) と、`preparePrompt` の後 (自己メンションの枠の消費と `askClaude()` の前): `Conversation.shutdown()` 済みなら INFO ログだけ残して return する。後者は、`onTurnStart` や `preparePrompt` の待機中に終了したターンが、枠を消費せず中断済みの signal で query を起動しないための確認。キュー待ちだったターンと、shutdown 後の `submit()` (依頼 API・自己メンションのターンを含む) がここで止まり、`onTurnStart` は呼ばれず `onTurnEnd` だけ走る。
+- catch: 終了用の signal が aborted のとき (`shutdown()` による中断) は エラーの内容 (メッセージ) を添えた `log.info` だけ残して return し、`notifyError` を呼ばない。タイムアウトや他のエラーは次のとおり従来どおり。`log.error` (全文) の後、`output.notifyError(error)` を呼ぶ (中核側で失敗は握り潰す)。Discord 側は `sendChunks(summarizeError(error))` (`errors.ts`) で定型文 + エラーメッセージの先頭 1 行 (最大 200 文字) をチャンネルへ送る。全文は `GET /logs` を参照させる。
 - finally: `output.onTurnEnd()`。Discord 側は次を順に行う。
   - ダウンロードした画像の temp ディレクトリを削除 (`cleanupImageFiles`)
   - 進捗メッセージを削除 (`progress.cleanup`)

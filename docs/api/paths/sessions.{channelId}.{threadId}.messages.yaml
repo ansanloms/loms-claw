@@ -74,7 +74,7 @@ post:
               value:
                 $ref: ../examples/ResponseError.yaml
     503:
-      description: セッションへの依頼の機能が無効な場合。
+      description: セッションへの依頼の機能が無効な場合、または bot が終了処理中の場合。
       content:
         application/json:
           schema:

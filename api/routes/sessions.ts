@@ -20,7 +20,11 @@ export interface SessionTarget {
 }
 
 /** {@link SessionsRouteContext.submitMessage} の結果。 */
-export type SessionSubmitResult = "accepted" | "not-found" | "rate-limited";
+export type SessionSubmitResult =
+  | "accepted"
+  | "not-found"
+  | "rate-limited"
+  | "unavailable";
 
 /** Discord の Snowflake (数字 17〜20 桁)。これ以外の ID は `channels.fetch` に渡さない。 */
 const SNOWFLAKE = /^\d{17,20}$/;
@@ -34,6 +38,7 @@ export interface SessionsRouteContext {
    * - `accepted`: 積んだ (処理の完了は待たない)。
    * - `not-found`: 対象が存在しない・ギルド外・送信できない種別・親子の不一致。
    * - `rate-limited`: 依頼のレート制限の超過。
+   * - `unavailable`: 終了処理中で受け付けられない。
    */
   submitMessage: (
     target: SessionTarget,
@@ -88,6 +93,9 @@ export function createSessionsRoutes(ctx?: SessionsRouteContext) {
     const result = await ctx.submitMessage(target, body.prompt, body.source);
     if (result === "not-found") {
       return c.json({ error: "channel or thread not found" }, 404);
+    }
+    if (result === "unavailable") {
+      return c.json({ error: "sessions not available (shutting down)" }, 503);
     }
     if (result === "rate-limited") {
       return c.json({ error: "session request rate limit exceeded" }, 429);

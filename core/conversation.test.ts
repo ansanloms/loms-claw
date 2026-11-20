@@ -562,6 +562,132 @@ describe("Conversation", () => {
     assert.deepStrictEqual(calls.slice(-2), ["notifyError", "onTurnEnd"]);
   });
 
+  test("shutdown: 実行中のターンの signal と query の abortController が aborted になり、以後の失敗で notifyError が呼ばれず onTurnEnd が呼ばれること", async () => {
+    const holder: { conv?: Conversation } = {};
+    const queryAborts: AbortSignal[] = [];
+    const steps = steppedQueryFn([
+      textDelta("partial"),
+      () => {
+        holder.conv?.shutdown();
+        throw new Error("aborted by shutdown");
+      },
+    ]);
+    const created = createConversation({
+      queryFn: ((params: Parameters<QueryFn>[0]) => {
+        const controller = params.options?.abortController;
+        if (controller) {
+          queryAborts.push(controller.signal);
+        }
+        return steps(params);
+      }) as QueryFn,
+    });
+    const conv = created.conversation;
+    holder.conv = conv;
+    const { output, calls, errors } = createOutput();
+
+    await conv.submit(createInput(), output);
+
+    assert.deepStrictEqual(created.canUseToolSignals[0]?.aborted, true);
+    assert.deepStrictEqual(queryAborts.length, 1);
+    assert.deepStrictEqual(queryAborts[0]?.aborted, true);
+    assert.deepStrictEqual(errors.length, 0);
+    assert.deepStrictEqual(calls.includes("notifyError"), false);
+    assert.deepStrictEqual(calls.at(-1), "onTurnEnd");
+  });
+
+  test("shutdown: キューで待っていたターンが query を実行せず onTurnEnd で終わること", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let queried = 0;
+    const { conversation } = createConversation({
+      queryFn: ((_params: Parameters<QueryFn>[0]) => {
+        queried++;
+        throw new Error("boom");
+      }) as QueryFn,
+    });
+    const first = createOutput({
+      preparePrompt: async (p) => {
+        await gate;
+        return p;
+      },
+    });
+    const second = createOutput();
+
+    const p1 = conversation.submit(createInput(), first.output);
+    const p2 = conversation.submit(createInput(), second.output);
+    conversation.shutdown();
+    release();
+    await Promise.all([p1, p2]);
+
+    assert.deepStrictEqual(second.calls, ["onQueued", "onTurnEnd"]);
+    assert.deepStrictEqual(first.calls.includes("notifyError"), false);
+    // 実行中だった先頭のターンも query を起動しない (キュー待ちの分は 0 回)。
+    assert.deepStrictEqual(queried, 0);
+  });
+
+  test("shutdown: preparePrompt の待機中に shutdown すると query も自己メンションの枠消費も行わないこと", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let queried = 0;
+    let consumed = 0;
+    const { conversation } = createConversation({
+      queryFn: ((_params: Parameters<QueryFn>[0]) => {
+        queried++;
+        throw new Error("must not be called");
+      }) as QueryFn,
+      tryConsume: () => {
+        consumed++;
+        return true;
+      },
+    });
+    let entered!: () => void;
+    const enteredPrepare = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const { output, calls } = createOutput({
+      preparePrompt: async (p) => {
+        entered();
+        await gate;
+        return p;
+      },
+    });
+
+    const p = conversation.submit(createInput({ isSelfMessage: true }), output);
+    await enteredPrepare;
+    conversation.shutdown();
+    release();
+    await p;
+
+    assert.deepStrictEqual(queried, 0);
+    assert.deepStrictEqual(consumed, 0);
+    assert.deepStrictEqual(calls, [
+      "onTurnStart",
+      "preparePrompt",
+      "onTurnEnd",
+    ]);
+  });
+
+  test("shutdown: shutdown の後の submit が query を実行せず onTurnEnd で終わること", async () => {
+    let queried = false;
+    const { conversation } = createConversation({
+      queryFn: (() => {
+        queried = true;
+        throw new Error("must not be called");
+      }) as unknown as QueryFn,
+    });
+    const { output, calls } = createOutput();
+
+    conversation.shutdown();
+    await conversation.submit(createInput(), output);
+
+    assert.deepStrictEqual(queried, false);
+    assert.deepStrictEqual(calls, ["onTurnEnd"]);
+  });
+
   test("submit: notifyError が失敗しても握り潰して onTurnEnd が呼ばれること", async () => {
     const { conversation } = createConversation({
       queryFn: throwingQueryFn("boom"),
