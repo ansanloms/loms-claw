@@ -41,10 +41,9 @@ export interface InteractionDeps {
 /**
  * インタラクションのハンドラを実行し、失敗時にログとエフェメラル返信で揃える。
  *
- * button / select メニュー / Modal 送信の 3 ハンドラが同形の
+ * button / select メニュー / Modal 送信 / スラッシュコマンドの 4 ハンドラが同形の
  * `try { handler } catch { log.error; if (!replied && !deferred) reply(ephemeral) }`
- * を持っていたため、ここに集約する。ログ文言・エラー返信文言は呼び出し側から渡す
- * (各分岐の現行の文言を変えない)。
+ * を持っていたため、ここに集約する。ログ文言・エラー返信文言は呼び出し側から渡す。
  */
 async function runInteraction(
   interaction: RepliableInteraction,
@@ -168,6 +167,11 @@ export async function dispatchInteraction(
   }
 
   if (interaction.isChatInputCommand()) {
-    await deps.handleCommand(interaction);
+    await runInteraction(
+      interaction,
+      "chat-input",
+      () => deps.handleCommand(interaction),
+      "コマンド処理中にエラーが発生しました。",
+    );
   }
 }
