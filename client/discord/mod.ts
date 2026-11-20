@@ -26,7 +26,7 @@ import type { SettingsRouteContext } from "../../api/routes/settings.ts";
 import { startApiServer } from "../../api/server.ts";
 import { SystemPromptStore } from "../../claude/system-prompt.ts";
 import type { Config } from "../../config.ts";
-import { Conversation, type TurnOutput } from "../../core/conversation.ts";
+import { Conversation } from "../../core/conversation.ts";
 import {
   SELF_MENTION_RATE_LIMIT_MAX_COUNT,
   SELF_MENTION_RATE_LIMIT_WINDOW_MINUTES,
@@ -34,7 +34,6 @@ import {
 } from "../../core/ratelimit.ts";
 import { CronExecutor } from "../../cron/executor.ts";
 import { loadCronJobsFromDir } from "../../cron/loader.ts";
-import { summarizeError } from "../../errors.ts";
 import { createLogger } from "../../logger.ts";
 import type { Store } from "../../store/mod.ts";
 import { ApprovalManager, createCanUseTool } from "./approval/manager.ts";
@@ -47,19 +46,13 @@ import {
 } from "./commands.ts";
 import { resolveIncomingMessage } from "./incoming.ts";
 import { dispatchInteraction } from "./interaction.ts";
+import { stripBotMentions } from "./message.ts";
 import { onceReady } from "./ready.ts";
 import {
-  appendImageReferences,
-  cleanupImageFiles,
-  createProgressReporter,
-  DISCORD_MESSAGE_LIMIT,
-  type DownloadedImage,
-  downloadImageAttachments,
-  keepTyping,
-  runTurnCleanup,
-  splitMessage,
-  stripBotMentions,
-} from "./message.ts";
+  buildTemplateVars,
+  createTurnOutput,
+  resolveSpeaker,
+} from "./turn-output.ts";
 
 const log = createLogger("bot");
 
@@ -450,144 +443,35 @@ export class DiscordBot {
     // 内で行い済み (枠の予約はせず、消費は query 実行直前の tryConsume で行うため、
     // busy なスコープに複数の自己メンションが積まれた場合は実行時に改めて弾かれる)。
 
-    // テンプレート変数の発話者。自己メンション起動時の message.author は自 bot
-    // だが、そのまま渡すと「発話者へメンションせよ」というプロンプト指示が
-    // `<@botId>` を生み、自己メンションの再発火 (連鎖) につながる。自己起動時は
-    // 認可ユーザー (本人) を発話者として渡す。
-    const speakerId = isSelfMessage
-      ? this.config.discord.userId
-      : message.author.id;
-    const speakerName = isSelfMessage
-      ? (message.guild?.members.cache.get(speakerId)?.displayName ??
-        this.client.users.cache.get(speakerId)?.displayName ??
-        speakerId)
-      : message.author.displayName;
+    // テンプレート変数の発話者 (自己メンション起動時の差し替えは resolveSpeaker)。
+    const speaker = resolveSpeaker({
+      isSelfMessage,
+      authorId: message.author.id,
+      authorDisplayName: message.author.displayName,
+      authorizedUserId: this.config.discord.userId,
+      lookupDisplayName: (userId) =>
+        message.guild?.members.cache.get(userId)?.displayName ??
+        this.client.users.cache.get(userId)?.displayName,
+    });
 
-    const templateVars: Record<string, string> = {
-      "discord.guild.id": this.config.discord.guildId,
-      "discord.guild.name": message.guild?.name ?? "",
-      "discord.channel.id": localId,
-      "discord.channel.name": "name" in channel ? (channel.name ?? "") : "",
-      "discord.channel.type": isThread ? "thread" : "text",
-      "discord.user.id": speakerId,
-      "discord.user.name": speakerName,
-    };
+    const templateVars = buildTemplateVars({
+      guildId: this.config.discord.guildId,
+      guildName: message.guild?.name ?? "",
+      localId,
+      channelName: "name" in channel ? (channel.name ?? "") : "",
+      isThread,
+      speaker,
+    });
 
     await this.conversation.submit(
       { scope, localId, prompt, isSelfMessage, templateVars },
-      this.createTurnOutput(message, channel, isSelfMessage, hasAttachments),
+      createTurnOutput({
+        message,
+        channel,
+        isSelfMessage,
+        hasAttachments,
+        getBotUserId: () => this.client.user?.id,
+      }),
     );
-  }
-
-  /**
-   * 1 ターン分の出力先 ({@link TurnOutput}) を Discord 向けに組み立てる。
-   *
-   * typing・進捗 reporter・ダウンロードした画像はターン単位の状態なので、
-   * ターンごとにこの関数のクロージャで持つ。
-   */
-  private createTurnOutput(
-    message: Message,
-    channel: GuildTextBasedChannel,
-    isSelfMessage: boolean,
-    hasAttachments: boolean,
-  ): TurnOutput {
-    const typingController = new AbortController();
-    let progress: ReturnType<typeof createProgressReporter> | undefined;
-    let downloadedImages: DownloadedImage[] = [];
-    let wasQueued = false;
-
-    // 応答は発言者宛にする: 分割後のすべての投稿の先頭にメンションを付ける。
-    // メンション分を引いた上限で分割してから各チャンク先頭に付与することで、
-    // どのチャンクでも上限ぎりぎりでメンション分が溢れない（2000 字超過しない）。
-    // 自己メッセージ起動時は空文字にする: 応答冒頭に自 bot メンションを付けると、
-    // 応答自体が再度メンション条件を満たし連鎖の火種になるため。
-    // 発話者 (認可ユーザー) へのピングは Client 既定の allowedMentions で通る。
-    const mention = isSelfMessage ? "" : `<@${message.author.id}> `;
-    const sendChunks = async (text: string): Promise<void> => {
-      const chunks = splitMessage(text, DISCORD_MESSAGE_LIMIT - mention.length);
-      for (const chunk of chunks) {
-        await channel.send(mention + chunk);
-      }
-    };
-
-    return {
-      onQueued: () => {
-        wasQueued = true;
-        // 待機に入ったことを発言者へ可視化する。失敗は致命的でないので握り潰す。
-        // react は fire-and-forget にして await しない (Conversation.submit の
-        // isBusy 判定と enqueue の間に await を挟まないため)。
-        message.react("⏳").catch(() => {});
-      },
-
-      onTurnStart: async () => {
-        // 自分のターンが始まったら待機マーカー (⏳) を外す。
-        if (wasQueued && this.client.user) {
-          await message.reactions.cache
-            .get("⏳")
-            ?.users.remove(this.client.user.id)
-            .catch(() => {});
-        }
-
-        // typing インジケーター開始
-        keepTyping(channel, typingController.signal);
-
-        progress = createProgressReporter(channel);
-      },
-
-      // 画像添付をダウンロード（画像フィルタは downloadImageAttachments 内で行う）
-      preparePrompt: async (prompt) => {
-        if (!hasAttachments) {
-          return prompt;
-        }
-        downloadedImages = await downloadImageAttachments(
-          message.attachments.values(),
-        );
-        if (downloadedImages.length > 0) {
-          return appendImageReferences(
-            prompt || "この画像について説明して",
-            downloadedImages,
-          );
-        }
-        return prompt;
-      },
-
-      sendReply: sendChunks,
-
-      // thinking (推論) を引用形式で投稿する。回答ではないのでメンションは付けず、
-      // Discord の `> ` 引用で回答と視覚的に分離する。
-      sendThinking: async (text) => {
-        const quoted = text
-          .split("\n")
-          .map((line) => `> ${line}`)
-          .join("\n");
-        for (const chunk of splitMessage(quoted)) {
-          await channel.send(chunk);
-        }
-      },
-
-      reportProgress: async (toolName, elapsedSeconds) => {
-        await progress?.report(toolName, elapsedSeconds);
-      },
-
-      // エラーもまだ何も送っていなければ発言者宛にする（content 送出済みなら継続扱い）。
-      // Discord へは要約のみ送り、全文はログ (GET /logs) を参照させる。
-      notifyError: (error) => sendChunks(summarizeError(error)),
-
-      onTurnEnd: async () => {
-        await runTurnCleanup(
-          () => typingController.abort(),
-          [
-            async () => {
-              if (downloadedImages.length > 0) {
-                await cleanupImageFiles(downloadedImages);
-              }
-            },
-            async () => {
-              await progress?.cleanup();
-            },
-          ],
-        );
-      },
-    };
   }
 }
