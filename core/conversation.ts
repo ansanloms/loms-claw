@@ -103,7 +103,12 @@ export interface TurnOutput {
 export interface ConversationDeps {
   store: Pick<
     Store,
-    "getSession" | "setSession" | "getModel" | "getEffort" | "getShowThinking"
+    | "getSession"
+    | "getSessionGeneration"
+    | "replaceSession"
+    | "getModel"
+    | "getEffort"
+    | "getShowThinking"
   >;
   systemPrompts: Pick<SystemPromptStore, "resolve">;
   claudeConfig: ClaudeConfig;
@@ -188,6 +193,13 @@ export class Conversation {
         prompt = `${SELF_MENTION_PROMPT_NOTE}\n\n${prompt}`;
       }
 
+      // リセット世代は getSession と組で使う (世代が違えば書き戻さない)。両者が同じ
+      // 時点の値になるのは、現行 Store の getSession が async 関数でも同期的に
+      // 値を読む (最初の await までに完了する) ためで、ここで世代を先に同期で読む
+      // ことでその前提に乗っている。Store が非同期 I/O になると、getSession の読みと
+      // 世代の読みの間にリセットが入りうるので、組が崩れる (その場合は世代と
+      // session を 1 つの原子的な読み出しにまとめる必要がある)。
+      const sessionGeneration = store.getSessionGeneration(scope);
       const [sessionId, model, effort, showThinking] = await Promise.all([
         store.getSession(scope),
         store.getModel(scope),
@@ -202,6 +214,11 @@ export class Conversation {
       );
 
       const signal = AbortSignal.timeout(claudeConfig.timeout);
+
+      // ターン開始時のセッション。result での書き戻しはこれが現在値と一致するときだけ
+      // 行い、実行中のリセット (`/claw settings unset session` 等) を打ち消さない。
+      let expectedSession = sessionId;
+
       const stream = askClaude(prompt, {
         sessionId,
         config: claudeConfig,
@@ -287,7 +304,23 @@ export class Conversation {
                 `claude returned non-success subtype "${event.subtype}":`,
                 JSON.stringify(event),
               ),
-            setSession: (sessionId) => store.setSession(scope, sessionId),
+            setSession: (sid) => {
+              if (
+                store.replaceSession(
+                  scope,
+                  expectedSession,
+                  sid,
+                  sessionGeneration,
+                )
+              ) {
+                expectedSession = sid;
+              } else {
+                log.info(
+                  `session write-back skipped (changed during turn): ${localId}`,
+                );
+              }
+              return Promise.resolve();
+            },
           });
         } else if (event.type === "tool_progress") {
           await output.reportProgress(

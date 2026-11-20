@@ -54,6 +54,75 @@ describe("Store", () => {
     });
   });
 
+  test("replaceSession: 期待値が一致すれば更新して true を返すこと", async () => {
+    await withStore({}, async (store) => {
+      await store.setSession(ch("ch-1"), "session-a");
+      assert.deepStrictEqual(
+        store.replaceSession(ch("ch-1"), "session-a", "session-b", 0),
+        true,
+      );
+      assert.deepStrictEqual(await store.getSession(ch("ch-1")), "session-b");
+    });
+  });
+
+  test("replaceSession: 期待値が不一致なら更新せず false を返すこと", async () => {
+    await withStore({}, async (store) => {
+      await store.setSession(ch("ch-1"), "session-a");
+      assert.deepStrictEqual(
+        store.replaceSession(ch("ch-1"), "session-x", "session-b", 0),
+        false,
+      );
+      assert.deepStrictEqual(await store.getSession(ch("ch-1")), "session-a");
+    });
+  });
+
+  test("replaceSession: 期待値が無く行も無ければ INSERT すること", async () => {
+    await withStore({}, async (store) => {
+      assert.deepStrictEqual(
+        store.replaceSession(ch("ch-1"), undefined, "session-a", 0),
+        true,
+      );
+      assert.deepStrictEqual(await store.getSession(ch("ch-1")), "session-a");
+    });
+  });
+
+  test("replaceSession: 期待値が無く行がある場合は書かないこと", async () => {
+    await withStore({}, async (store) => {
+      await store.setSession(ch("ch-1"), "session-a");
+      assert.deepStrictEqual(
+        store.replaceSession(ch("ch-1"), undefined, "session-b", 0),
+        false,
+      );
+      assert.deepStrictEqual(await store.getSession(ch("ch-1")), "session-a");
+    });
+  });
+
+  test("getSessionGeneration: 未登録は 0 で、session の null patch と clearScope で増えること", async () => {
+    await withStore({}, async (store) => {
+      assert.deepStrictEqual(store.getSessionGeneration(ch("ch-1")), 0);
+      await store.applyPatch(ch("ch-1"), { model: "opus" });
+      assert.deepStrictEqual(store.getSessionGeneration(ch("ch-1")), 0);
+      await store.applyPatch(ch("ch-1"), { session: null });
+      assert.deepStrictEqual(store.getSessionGeneration(ch("ch-1")), 1);
+      await store.clearScope(ch("ch-1"));
+      assert.deepStrictEqual(store.getSessionGeneration(ch("ch-1")), 2);
+      assert.deepStrictEqual(store.getSessionGeneration(ch("ch-2")), 0);
+      assert.deepStrictEqual(store.getSessionGeneration(th("ch-1", "th-1")), 0);
+    });
+  });
+
+  test("replaceSession: 世代が不一致なら期待値が一致しても書かないこと", async () => {
+    await withStore({}, async (store) => {
+      const generation = store.getSessionGeneration(ch("ch-1"));
+      await store.applyPatch(ch("ch-1"), { session: null });
+      assert.deepStrictEqual(
+        store.replaceSession(ch("ch-1"), undefined, "session-a", generation),
+        false,
+      );
+      assert.deepStrictEqual(await store.getSession(ch("ch-1")), undefined);
+    });
+  });
+
   test("getSession: session を null で patch すると消えること", async () => {
     await withStore({}, async (store) => {
       await store.setSession(ch("ch-1"), "session-a");

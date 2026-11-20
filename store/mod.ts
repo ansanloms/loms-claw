@@ -165,9 +165,13 @@ function toSettingRow(row: unknown): {
  */
 export class Store {
   private readonly db: DatabaseSync;
+  /** leaf id ごとの session リセット世代 (メモリのみ。再起動で消える)。 */
+  private readonly sessionGenerations = new Map<string, number>();
   private readonly defaults: StoreDefaults;
   private readonly selectValue: StatementSync;
   private readonly upsertValue: StatementSync;
+  private readonly updateIfEquals: StatementSync;
+  private readonly insertIfAbsent: StatementSync;
   private readonly deleteField: StatementSync;
   private readonly deleteAll: StatementSync;
   private readonly selectChannel: StatementSync;
@@ -190,6 +194,14 @@ export class Store {
     this.upsertValue = this.db.prepare(
       `INSERT INTO settings (id, field, value) VALUES ($id, $field, $value)
        ON CONFLICT(id, field) DO UPDATE SET value = excluded.value`,
+    );
+    this.updateIfEquals = this.db.prepare(
+      `UPDATE settings SET value = $next
+       WHERE id = $id AND field = $field AND value = $expected`,
+    );
+    this.insertIfAbsent = this.db.prepare(
+      `INSERT INTO settings (id, field, value) VALUES ($id, $field, $next)
+       ON CONFLICT(id, field) DO NOTHING`,
     );
     this.deleteField = this.db.prepare(
       "DELETE FROM settings WHERE id = $id AND field = $field",
@@ -231,6 +243,44 @@ export class Store {
   async setSession(scope: StoreScope, sessionId: string): Promise<void> {
     const id = scope.threadId ?? scope.channelId;
     this.writeValue(id, SESSION, sessionId);
+  }
+
+  private bumpSessionGeneration(id: string): void {
+    this.sessionGenerations.set(id, (this.sessionGenerations.get(id) ?? 0) + 1);
+  }
+
+  /**
+   * session のリセット世代を返す (未登録は 0)。`applyPatch` で session を null に
+   * したとき・`clearScope` したときに増える。ターン開始時に読み、
+   * {@link replaceSession} へ渡す。
+   */
+  getSessionGeneration(scope: StoreScope): number {
+    const id = scope.threadId ?? scope.channelId;
+    return this.sessionGenerations.get(id) ?? 0;
+  }
+
+  /**
+   * session を条件付きで書き換える。現在のリセット世代が `generation` と違えば
+   * 何も書かず false を返す (ターン実行中にリセットされた)。世代が一致すれば、
+   * `expected` が現在値と一致するとき (`expected` が undefined なら行が無いとき)
+   * だけ `next` を書く。`expected` だけでは、session 無しで始まったターンの途中の
+   * リセットは行が無いままで区別できないため、世代で検知する。書き込めたら true。
+   */
+  replaceSession(
+    scope: StoreScope,
+    expected: string | undefined,
+    next: string,
+    generation: number,
+  ): boolean {
+    if (this.getSessionGeneration(scope) !== generation) {
+      return false;
+    }
+    const id = scope.threadId ?? scope.channelId;
+    const result =
+      expected === undefined
+        ? this.insertIfAbsent.run({ id, field: SESSION, next })
+        : this.updateIfEquals.run({ id, field: SESSION, expected, next });
+    return Number(result.changes) > 0;
   }
 
   // ── thread → channel → (defaults) の共通解決ヘルパ ─────────
@@ -322,6 +372,7 @@ export class Store {
   async clearScope(scope: StoreScope): Promise<void> {
     const id = scope.threadId ?? scope.channelId;
     this.deleteScope(id);
+    this.bumpSessionGeneration(id);
   }
 
   /**
@@ -367,6 +418,9 @@ export class Store {
           this.deleteValue(id, SESSION);
         }
         this.db.exec("COMMIT");
+        if (deleteSession) {
+          this.bumpSessionGeneration(id);
+        }
       } catch (e) {
         if (this.db.isTransaction) {
           this.db.exec("ROLLBACK");
