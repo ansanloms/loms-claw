@@ -98,6 +98,12 @@ export class DiscordBot {
   private approvalManager: ApprovalManager;
   private apiServer: ServerType | null = null;
   private cronExecutor: CronExecutor | null = null;
+  /** shutdown() が始まったら true。ready ハンドラが終了処理中に起動を進めないための印。 */
+  private closed = false;
+  /** コンストラクタで登録したリスナ。shutdown() で自分の分だけ外す。 */
+  private readonly onMessageCreate = (msg: Message) => this.onMessage(msg);
+  private readonly onInteractionCreate = (i: Interaction) =>
+    this.onInteraction(i);
   private systemPrompts: SystemPromptStore;
   /** 会話の中核 (キュー・セッション・ストリーム消費)。Discord には依存しない。 */
   private conversation: Conversation;
@@ -150,8 +156,8 @@ export class DiscordBot {
       ),
     });
 
-    this.client.on(Events.MessageCreate, (msg) => this.onMessage(msg));
-    this.client.on(Events.InteractionCreate, (i) => this.onInteraction(i));
+    this.client.on(Events.MessageCreate, this.onMessageCreate);
+    this.client.on(Events.InteractionCreate, this.onInteractionCreate);
   }
 
   /**
@@ -175,6 +181,10 @@ export class DiscordBot {
       async (c: Client<true>) => {
         log.info(`logged in as ${c.user.tag}`);
         await this.registerCommands();
+        // 待機中に shutdown() が走っていたら、実行器を作らずポートも開かずに終える。
+        if (this.closed) {
+          return;
+        }
 
         // cron 初期化。
         this.cronExecutor = new CronExecutor({
@@ -190,8 +200,15 @@ export class DiscordBot {
           systemPrompts: this.systemPrompts,
         });
 
+        // ジョブの読み込みと登録 (reload。タイマーは始めない) までをここで済ませ、
+        // スケジューラの開始 (start) は API サーバーの起動後に回す。API サーバーの
+        // 起動失敗 (EADDRINUSE 等) の時点でスケジューラが動いていない状態にし、
+        // 起動中の一覧・手動実行がジョブを見られるようにするため。
         const cronJobs = await loadCronJobsFromDir(this.config.claude.cwd);
-        this.cronExecutor.start(cronJobs);
+        if (this.closed) {
+          return;
+        }
+        this.cronExecutor.reload(cronJobs);
 
         const reloadJobs = async () => {
           const jobs = await loadCronJobsFromDir(this.config.claude.cwd);
@@ -242,12 +259,24 @@ export class DiscordBot {
               (shard) => shard.status === Status.Ready,
             ),
         };
-        this.apiServer = await startApiServer(
+        const apiServer = await startApiServer(
           this.config.claude.apiPort,
           settingsCtx,
           healthCtx,
           cronCtx,
         );
+        if (this.closed) {
+          // 起動待ちの間に shutdown() が走った。いま起動したサーバーを閉じ、
+          // スケジューラは始めずに終える (エラーにはしない)。
+          await this.closeApiServer(apiServer);
+          return;
+        }
+        this.apiServer = apiServer;
+
+        // API サーバーの起動に成功してからスケジューラを始める。登録済みの
+        // ジョブは起動待ちの間の reload で入れ替わりうるので、起動時点の
+        // 一覧ではなく、いま実行器に登録されているものを渡す。
+        this.cronExecutor.start(this.cronExecutor.listJobs());
       },
     );
 
@@ -259,6 +288,9 @@ export class DiscordBot {
   /**
    * bot をシャットダウンする。
    *
+   * 先に終了フラグを立て (起動途中の ready ハンドラがスケジューラを始めない
+   * ようにする)、自分が登録した MessageCreate / InteractionCreate の
+   * リスナを外し、cron スケジューラを止めてから、
    * HTTP サーバー停止 → Discord クライアント破棄 (await) の順で処理する。
    * 両ステップとも `SHUTDOWN_TIMEOUT_MS` (5 秒) で個別に打ち切り、超過時は
    * 警告ログを出して先へ進む (合計最大 10 秒)。`client.destroy()` の reject
@@ -268,18 +300,16 @@ export class DiscordBot {
    */
   async shutdown(): Promise<void> {
     log.info("shutting down");
+    // destroy() が終わるまでの間に旧 client が応答・実行しないよう、
+    // 先にハンドラを外す。
+    this.closed = true;
+    this.client.off(Events.MessageCreate, this.onMessageCreate);
+    this.client.off(Events.InteractionCreate, this.onInteractionCreate);
     this.cronExecutor?.stop();
 
-    const apiServer = this.apiServer;
-    await withTimeout(
-      apiServer
-        ? new Promise<void>((resolve, reject) => {
-            apiServer.close((e) => (e ? reject(e) : resolve()));
-          }).catch((e) => log.warn("api server shutdown error:", e))
-        : Promise.resolve(),
-      SHUTDOWN_TIMEOUT_MS,
-      "api server shutdown",
-    );
+    if (this.apiServer) {
+      await this.closeApiServer(this.apiServer);
+    }
 
     await withTimeout(
       this.client.destroy().catch((e) => log.warn("client destroy error:", e)),
@@ -288,6 +318,20 @@ export class DiscordBot {
     );
 
     log.info("shutdown sequence complete");
+  }
+
+  /**
+   * API サーバーを `SHUTDOWN_TIMEOUT_MS` 以内に閉じる。close の失敗は WARN
+   * ログに落とし、タイムアウト時は警告を出して先へ進む。
+   */
+  private async closeApiServer(server: ServerType): Promise<void> {
+    await withTimeout(
+      new Promise<void>((resolve, reject) => {
+        server.close((e) => (e ? reject(e) : resolve()));
+      }).catch((e) => log.warn("api server shutdown error:", e)),
+      SHUTDOWN_TIMEOUT_MS,
+      "api server shutdown",
+    );
   }
 
   /**

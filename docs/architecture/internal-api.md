@@ -10,7 +10,7 @@ bot プロセス内で `127.0.0.1:{config.claude.apiPort}` に Hono アプリを
 
 ## サーバー (`api/server.ts`)
 
-`createApp(settingsCtx, healthCtx, cronCtx?)` が `Hono` アプリの組み立て (ルートのマウント、`notFound`/`onError`) だけを行い、`startApiServer(port, settingsCtx, healthCtx, cronCtx?)` はそれを `serve({ fetch: app.fetch, port, hostname: "127.0.0.1" })` に渡して `ServerType` (Node の `http.Server` 等) を返す薄いラッパー。呼び出し側 (`client/discord/mod.ts` の `DiscordBot.shutdown()`) が `ServerType` を保持し、停止時に `close(cb)` を 5 秒の `withTimeout` で包んで呼ぶ。失敗は WARN ログに落とすだけで握りつぶす。`createApp()` を分離してあるのは、`serve()` を起動せず `app.request()` で直接ルーティング (404/500/マウント) を検証できるようにするためである。詳細は下記「テスト」を参照。
+`createApp(settingsCtx, healthCtx, cronCtx?)` が `Hono` アプリの組み立て (ルートのマウント、`notFound`/`onError`) だけを行い、`startApiServer(port, settingsCtx, healthCtx, cronCtx?)` はそれを `serve({ fetch: app.fetch, port, hostname: "127.0.0.1" })` に渡して `ServerType` (Node の `http.Server` 等) を返す薄いラッパー。呼び出し側 (`client/discord/mod.ts`。`ClientReady` ハンドラは `cronExecutor` の生成・ジョブ読み込み後にこの関数を呼び、成功してから `cronExecutor.start()` でスケジューラを開始する (ジョブの登録は `reload()` で API 起動前に済ませる。起動待ちの間に `shutdown()` が走っていたら、起動したサーバーを閉じてスケジューラは始めない)。停止は `DiscordBot.shutdown()`) が `ServerType` を保持し、停止時に `close(cb)` を 5 秒の `withTimeout` で包んで呼ぶ。失敗は WARN ログに落とすだけで握りつぶす。`createApp()` を分離してあるのは、`serve()` を起動せず `app.request()` で直接ルーティング (404/500/マウント) を検証できるようにするためである。詳細は下記「テスト」を参照。
 
 | 要素           | 内容                                                                                                                                                                                       |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

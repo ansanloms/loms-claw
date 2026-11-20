@@ -210,13 +210,14 @@ command ジョブ (`runCommandJob()`) はこの表のいずれにも触れない
 `DiscordBot.start()` の `ClientReady` ハンドラ内で、スラッシュコマンド登録の後に次を行う。起動順全体は [lifecycle](lifecycle.md)。
 
 1. `new CronExecutor({ ports: createDiscordCronPorts({ client, guildId, approvalManager }), config: config.claude, env: { DISCORD_BOT_TOKEN }, store, defaults: config.claude.defaults, systemPrompts })`。
-2. `loadCronJobsFromDir(config.claude.cwd)` → `cronExecutor.start(jobs)`。`config.claude.cwd` はワークスペースルート (本番は `/data/workspace`、devcontainer では `/app`。[deployment](deployment.md))。
+2. `loadCronJobsFromDir(config.claude.cwd)` でジョブを読み、`cronExecutor.reload(jobs)` で登録だけ行う (タイマーは始めない。スケジューラの開始は手順 7)。`config.claude.cwd` はワークスペースルート (本番は `/data/workspace`、devcontainer では `/app`。[deployment](deployment.md))。
 3. `reloadJobs = () => loadCronJobsFromDir(cwd) → cronExecutor.reload(jobs)` を定義する。
 4. `cronExecutor.setOnceCallback()` で once 後処理を登録する: `join(cwd, "cron", name)` (`name` は拡張子込みのファイル名) を `rm()` し (失敗は ERROR ログ)、続けて `reloadJobs()` を呼ぶ。エージェント側の手動 reload は不要。
 5. `runJobByName(name)`: `cronExecutor.findJob(name)` が無ければ `job not found: {name}` を throw、あれば `runJob(job)` を await してその結果を返す。
 6. `CronRouteContext { reloadCronJobs: reloadJobs, runJob: runJobByName, listJobs: () => cronExecutor.listJobs() }` を `startApiServer(config.claude.apiPort, settingsCtx, healthCtx, cronCtx)` に渡す。
+7. API サーバーの起動に成功したら `cronExecutor.start(cronExecutor.listJobs())` (起動待ちの間の reload を上書きしないよう、実行器に登録済みのジョブを渡す) でスケジューラを開始する。API サーバーの起動に失敗した時点ではスケジューラは始まっていない。起動待ちの間に `shutdown()` が走った場合は、起動したサーバーをタイムアウト付きで閉じてスケジューラを始めずに終える (それ以前の待機の後でも、実行器を作らず・ポートを開かずに終える)。
 
-`shutdown()` では最初に `cronExecutor.stop()` を呼ぶ。
+`shutdown()` では最初に終了フラグを立てて自分が登録した `MessageCreate` / `InteractionCreate` のリスナを外し、続けて `cronExecutor.stop()` を呼ぶ (実行中のジョブの完了は待たない)。
 
 `/claw settings show` (`client/discord/commands.ts` の `handleSettingsShow()`) は `cronExecutor.listJobs()` を使って登録済みジョブ名とスケジュールを一覧表示する。
 

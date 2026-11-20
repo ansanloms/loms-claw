@@ -32,8 +32,9 @@ sequenceDiagram
         B->>D: login(token)
         D-->>B: ClientReady
         B->>D: registerCommands() (REST PUT)
-        B->>X: new CronExecutor(...) / loadCronJobsFromDir(cwd) / start(jobs)
+        B->>X: new CronExecutor(...) / loadCronJobsFromDir(cwd) / reload(jobs) (登録のみ。まだ start しない)
         B->>A: startApiServer(apiPort, settingsCtx, healthCtx, cronCtx)
+        B->>X: start(listJobs()) (API サーバー起動後に、登録済みのジョブでスケジューラを開始)
         B-->>M: start() 解決
     end
 ```
@@ -45,7 +46,7 @@ sequenceDiagram
 3. `initLogger(config.log)` (`logger.ts`) でログレベルとリングバッファ容量を適用する。この呼び出しより前に出るログ (手順 1 のハンドラ経由を含む) は `logger.ts` の既定値 (`INFO`/1000 件) で扱われる。
 4. ストアの初期化: `mkdir(dirname(config.storePath), { recursive: true })` (`node:fs/promises`)、`openStoreDatabase(config.storePath)` (`store/mod.ts`。`new DatabaseSync(path, { timeout: 5000 })` (`node:sqlite`。`timeout` は他プロセスがロックを持つ間の待ち時間 (ミリ秒)) の直後に `PRAGMA journal_mode = WAL` を実行する)、`new Store()` を同じ `try/catch` で囲んで実行する (`new Store(db, config.claude.defaults)`)。`Store` のコンストラクタは `settings` テーブルを `CREATE TABLE IF NOT EXISTS` で作る。ストアはリトライループの外側で 1 度だけ開く。`mkdir()` が失敗した場合 (`storeDirReady` フラグが立つ前) は `log.error("failed to prepare store directory: ...")`、`openStoreDatabase()` 以降が失敗した場合 (フラグが立った後) は `log.error("failed to open store: ...")` を出し、いずれも `process.exit(1)` する。理由: ローカル SQLite バックエンドのため起動リトライで回復する見込みが無く、リトライ対象にしない。
 5. シグナルハンドラ: `process.on("SIGINT" / "SIGTERM", ...)` に同じ `onSignal` を登録する。1 回目は `shuttingDown = true` にして、`let failed = false` を追跡しながら次を非同期に実行する: `try { await bot?.shutdown(); } catch (e) { failed = true; log.error("bot shutdown failed:", e); } finally { try { store.close(); } catch (e) { failed = true; log.error("store close failed:", e); } process.exit(failed ? 1 : 0); }`。`store.close()` は `finally` に置くため `bot.shutdown()` が例外を投げても必ず呼ばれる (`bot` が未生成、すなわちリトライ待ち中なら `shutdown()` は no-op)。`bot.shutdown()`/`store.close()` のいずれかが失敗すれば終了コードは `1`、両方成功すれば `0`。2 回目のシグナルは `process.exit(1)` で強制終了する。
-6. 起動リトライ: `MAX_RETRIES = 5`、`BASE_DELAY_MS = 3_000`。ループの先頭で `shuttingDown` を見て true ならループを抜ける。理由: シグナル受信後に新しい試行が閉じた DB を使う経路を無くすため。各試行で `new DiscordBot(config, store)` を生成して `await bot.start()` し、成功すればループを抜ける。失敗時はまず失敗した試行の bot を `await bot.shutdown()` で畳み (cron の停止・API サーバーの close・client の destroy。`shutdown()` が投げたら `log.warn("cleanup after failed start:", ...)` で握って続行する。`shutdown()` は `apiServer` / `cronExecutor` が未初期化でも安全に呼べる)、次の試行で生成する bot と重複して応答・cron 実行しないようにする。その後 `BASE_DELAY_MS * 2^(attempt - 1)` ミリ秒 (3s, 6s, 12s, 24s) 待って再試行し、`MAX_RETRIES` 回目の失敗で `process.exit(1)` する。
+6. 起動リトライ: `MAX_RETRIES = 5`、`BASE_DELAY_MS = 3_000`。ループの先頭で `shuttingDown` を見て true ならループを抜ける。理由: シグナル受信後に新しい試行が閉じた DB を使う経路を無くすため。各試行で `new DiscordBot(config, store)` を生成して `await bot.start()` し、成功すればループを抜ける。失敗時はまず失敗した試行の bot を `await bot.shutdown()` で畳み (終了フラグ・MessageCreate/InteractionCreate リスナの除去・cron の停止・API サーバーの close・client の destroy。`shutdown()` が投げたら `log.warn("cleanup after failed start:", ...)` で握って続行する。`shutdown()` は `apiServer` / `cronExecutor` が未初期化でも安全に呼べる)、次の試行で生成する bot と重複して応答・cron 実行しないようにする。その後 `BASE_DELAY_MS * 2^(attempt - 1)` ミリ秒 (3s, 6s, 12s, 24s) 待って再試行し、`MAX_RETRIES` 回目の失敗で `process.exit(1)` する。
 
 DB の open/close は `main.ts` が対で所有する。`openStoreDatabase()` で開き、`onSignal` が `bot.shutdown()` の成否に関わらず `finally` で `store.close()` を呼ぶ。`DiscordBot.shutdown()` は Store に触れない。
 
@@ -73,11 +74,12 @@ DB の open/close は `main.ts` が対で所有する。`openStoreDatabase()` �
 3. `ClientReady` ハンドラ内の処理 (この順):
    1. `registerCommands()`: `REST` に token をセットし、`Routes.applicationGuildCommands(client.user.id, config.discord.guildId)` へ `[command.toJSON()]` (`client/discord/commands.ts` の `command`) を `PUT` する。ギルドスコープのコマンド登録で、グローバルコマンドは登録しない。
    2. `new CronExecutor({ ports: createDiscordCronPorts({ client, guildId, approvalManager }), config: config.claude, env: { DISCORD_BOT_TOKEN }, store, defaults: config.claude.defaults, systemPrompts })` (`cron/executor.ts`、`ports` は `client/discord/cron-target.ts`)。
-   3. `loadCronJobsFromDir(config.claude.cwd)` (`cron/loader.ts`) で `{cwd}/cron/*.md` と `{cwd}/cron/*.yaml` を読み、`cronExecutor.start(jobs)` でスケジューラを開始する。`cron/` が無ければ空配列で開始する。
+   3. `loadCronJobsFromDir(config.claude.cwd)` (`cron/loader.ts`) で `{cwd}/cron/*.md` と `{cwd}/cron/*.yaml` を読む (`cron/` が無ければ空配列)。ジョブは `cronExecutor.reload(jobs)` で登録だけ行い (タイマーは始めない。API 起動中の一覧・手動実行がジョブを見られる)、スケジューラの開始 (`cronExecutor.start(jobs)`) は手順 7 に回す。理由: API ルートのコンテキストが `cronExecutor` に依存するため、実行器の生成とジョブの読み込みは API 起動より前に済ませる。一方で、API サーバーの起動失敗 (ポート使用中など) の時点ではスケジューラが始まっていない状態にしておく。
    4. `reloadJobs` (再読込 → `cronExecutor.reload()`) を定義し、`cronExecutor.setOnceCallback()` に once ジョブ実行後の処理 (`{cwd}/cron/{name}` を `rm()`。`name` は拡張子を含む → `reloadJobs()`) を登録する。削除失敗はログのみで、reload は行う。
    5. `runJobByName` (`findJob()` → `runJob()`、未登録なら throw。`runJob()` の結果 `succeeded`/`failed`/`skipped` を返す) を定義する。`POST /cron/run` はこの結果を `result` として返す。
    6. `CronRouteContext { reloadCronJobs, runJob, listJobs }`、`SettingsRouteContext { store, resolveParentId }`、`HealthRouteContext { isReady }` を組み立て、`startApiServer(config.claude.apiPort, settingsCtx, healthCtx, cronCtx)` (`api/server.ts`) を呼ぶ。サーバーは `127.0.0.1` にバインドされる。詳細は [internal-api](internal-api.md)。
-   7. ハンドラが正常に終わると `ready` が resolve する。手順 1〜6 のどこで例外が出ても (コマンド登録の REST 失敗、`loadCronJobsFromDir` の ENOENT 以外の例外、API サーバーのポート使用中など) `ready` は reject される。
+   7. API サーバーの起動に成功したら `cronExecutor.start(cronExecutor.listJobs())` でスケジューラを開始する。起動待ちの間の reload を古い一覧で上書きしないよう、起動時点の一覧ではなく実行器に登録済みのジョブを渡す。`closed` が立っている場合は先へ進まない。`registerCommands()` と `loadCronJobsFromDir` の後に立っていれば、実行器を作らず・ポートを開かずに終える。`startApiServer` の後に立っていれば、いま起動したサーバーを `shutdown()` と同じタイムアウト付きの閉じ方 (`closeApiServer()`) で閉じ、スケジューラは始めずにエラーなしで終える。
+   8. ハンドラが正常に終わると `ready` が resolve する。手順 1〜7 のどこで例外が出ても (コマンド登録の REST 失敗、`loadCronJobsFromDir` の ENOENT 以外の例外、API サーバーのポート使用中など) `ready` は reject される。
 4. `await this.client.login(config.discord.token)`。
 5. `await ready` で上記ハンドラの完了を待ってから `start()` が解決する。ハンドラが失敗した場合は `start()` が reject され、`main.ts` の起動リトライ (後述の失敗した試行の `shutdown()` を含む) に入る。`await ready` にタイムアウトは無く、`ClientReady` 自体が届かない場合の打ち切りは行わない。
 
@@ -87,6 +89,7 @@ cron の詳細は [cron](cron.md)、`SettingsRouteContext` の中身は [store-a
 
 `async shutdown(): Promise<void>`。次の順に呼ぶ。
 
+0. `this.closed = true` を立て、`this.client.off(Events.MessageCreate, onMessageCreate)` と `this.client.off(Events.InteractionCreate, onInteractionCreate)` で、コンストラクタが登録したリスナだけを外す (同じイベントの他のリスナは残る)。理由: 起動失敗後の再試行で `destroy()` が終わる (またはタイムアウトする) までの間、旧 client が次の試行の bot と並んで応答しないようにするため。実行中の cron ジョブの完了は待たない。
 1. `this.cronExecutor?.stop()`: スケジューラの interval を止める。
 2. `apiServer.close()` (コールバック形式) を Promise で包んだもの (reject は `log.warn("api server shutdown error:", e)` で握る。`apiServer` が無ければ即 resolve) を `withTimeout()` (module 内ヘルパ) で `SHUTDOWN_TIMEOUT_MS` (5 秒、モジュール定数) のタイムアウトと競わせて待つ。タイムアウトした場合は `log.warn("api server shutdown timed out; proceeding")` を出して先へ進む。
 3. `this.client.destroy()` (reject は `log.warn("client destroy error:", e)` で握る) も同様に `withTimeout()` で `SHUTDOWN_TIMEOUT_MS` と競わせて待つ。タイムアウト時は `log.warn("client destroy timed out; proceeding")`。
