@@ -16,6 +16,7 @@ import {
   type ButtonInteraction,
   ButtonStyle,
   type Client,
+  escapeMarkdown,
   type GuildTextBasedChannel,
   LabelBuilder,
   MessageFlags,
@@ -209,6 +210,48 @@ export function truncate(text: string, max: number): string {
  */
 export function neutralizeBackticks(text: string): string {
   return text.replace(/(?<=`)(?=`)/g, "\u200b");
+}
+
+/**
+ * 1 行に収めたい表示用の文字列から、行を割る文字を空白にする。
+ *
+ * 制御文字 (U+0000〜U+001F・U+007F) と行区切り・段落区切り (U+2028・U+2029) を
+ * 空白 1 つにする。CRLF も空白 1 つ。
+ */
+export function replaceControlChars(text: string): string {
+  return Array.from(text.replaceAll("\r\n", " "), (ch) => {
+    const code = ch.charCodeAt(0);
+    return code <= 0x1f || code === 0x7f || code === 0x2028 || code === 0x2029
+      ? " "
+      : ch;
+  }).join("");
+}
+
+/**
+ * 回答済みの要約の 1 項目 (header または回答) を表示用に整える。
+ *
+ * 改行などの制御文字を空白 1 つにし (行頭でだけ効く記号を効かなくする)、Markdown の記号を
+ * エスケープしてから `max` 文字で切る。エスケープ後に切るので、切れ目に
+ * エスケープ用のバックスラッシュだけが残った場合は落とす。
+ */
+export function formatSummaryPart(text: string, max: number): string {
+  // escapeMarkdown は 4 連以上のバッククォートに素のバッククォートを残す (3 連をコードブロック、
+  // 1〜2 連をインラインコードとして別々に処理するため)。そこでバッククォートの連なりは
+  // 自前で 1 つずつエスケープし、それ以外の部分だけ escapeMarkdown に渡す。
+  const escaped = replaceControlChars(text)
+    .split(/(`+)/)
+    .map((part, i) =>
+      i % 2 === 1 ? part.replaceAll("`", "\\`") : escapeMarkdown(part),
+    )
+    .join("");
+  const cut = truncate(escaped, max);
+  if (cut === escaped) {
+    return cut;
+  }
+  // 末尾の "…" の直前に、奇数個のバックスラッシュ (対になっていないもの) が残っていれば 1 つ落とす。
+  const head = cut.slice(0, -1);
+  const trailing = head.match(/\\+$/)?.[0].length ?? 0;
+  return trailing % 2 === 1 ? `${head.slice(0, -1)}…` : cut;
 }
 
 /**
@@ -510,17 +553,15 @@ export class QuestionManager {
     });
     pending.resolve({ kind: "answered", answers });
 
-    // 要約には長さの上限が無いので、バッククォートを無害化して先に切ってから suffix として本文側を切る。
+    // 要約には長さの上限が無いので、改行の除去とエスケープをして先に切ってから suffix として本文側を切る。
+    // 1 行は最大 80 + 200 + 6 文字、4 質問で改行 3 つを足しても 1200 文字に収まる。
     const summary = truncate(
       pending.questions
         .map((q, i) => {
           // header と回答は別々に切る (header が長くても回答を残す)。
-          const header = truncate(
-            neutralizeBackticks(q.header),
-            MAX_SUMMARY_HEADER,
-          );
-          const answer = truncate(
-            neutralizeBackticks(pending.answers.get(i) ?? ""),
+          const header = formatSummaryPart(q.header, MAX_SUMMARY_HEADER);
+          const answer = formatSummaryPart(
+            pending.answers.get(i) ?? "",
             MAX_SUMMARY_ANSWER,
           );
           return `**${header}**: ${answer}`;

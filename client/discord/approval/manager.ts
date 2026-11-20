@@ -33,6 +33,7 @@ import {
   type Question,
   QuestionManager,
   type QuestionResult,
+  replaceControlChars,
   truncate,
 } from "./question.ts";
 import {
@@ -228,10 +229,10 @@ export class ApprovalManager {
       typeof toolInput.description === "string"
         ? truncate(neutralizeBackticks(toolInput.description), 300)
         : "";
-    // インラインコードを閉じさせないよう、ヘッダの表示だけバッククォートを `'` にする。
+    // インラインコードを閉じさせないよう、ヘッダの表示だけ制御文字・U+2028・U+2029 を空白に、バッククォートを `'` にする。
     // 置き換えた後は単独のバッククォートが残らないので neutralizeBackticks は要らない。
     // allowlist に保存する toolName と customId は元のまま。
-    const displayToolName = toolName.replaceAll("`", "'");
+    const displayToolName = replaceControlChars(toolName).replaceAll("`", "'");
     const header = [
       `**Tool: \`${truncate(displayToolName, 100)}\`**`,
       ...(description ? [description] : []),
