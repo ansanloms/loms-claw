@@ -223,33 +223,102 @@ describe("addToSettingsAllowList", () => {
     );
   });
 
-  test("permissions が null や非オブジェクトなら作り直して追記すること", async () => {
-    for (const permissions of [null, "bad", 1]) {
+  test("トップレベルが JSON オブジェクトでなければ投げ、ファイルの内容を変えないこと", async () => {
+    for (const raw of ["null", "[]", "1", '"x"']) {
       const dir = await mkdtemp(join(tmpdir(), "loms-claw-test-"));
       const settingsPath = join(dir, "settings.json");
-      await writeFile(settingsPath, JSON.stringify({ permissions }));
+      await writeFile(settingsPath, raw);
+
+      await assert.rejects(
+        addToSettingsAllowList(settingsPath, "Read"),
+        /settings\.json is not a JSON object/,
+      );
+
+      assert.deepStrictEqual(await readFile(settingsPath, "utf8"), raw);
+    }
+  });
+
+  test("permissions がオブジェクトでなければ投げ、ファイルの内容を変えないこと", async () => {
+    for (const permissions of [[], "bad", 1]) {
+      const dir = await mkdtemp(join(tmpdir(), "loms-claw-test-"));
+      const settingsPath = join(dir, "settings.json");
+      const raw = JSON.stringify({ permissions });
+      await writeFile(settingsPath, raw);
+
+      await assert.rejects(
+        addToSettingsAllowList(settingsPath, "Read"),
+        /permissions is not a JSON object/,
+      );
+
+      assert.deepStrictEqual(await readFile(settingsPath, "utf8"), raw);
+    }
+  });
+
+  test("permissions.allow が配列でなければ投げ、ファイルの内容を変えないこと", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "loms-claw-test-"));
+    const settingsPath = join(dir, "settings.json");
+    const raw = JSON.stringify({
+      permissions: { allow: "x", deny: ["Bash"] },
+    });
+    await writeFile(settingsPath, raw);
+
+    await assert.rejects(
+      addToSettingsAllowList(settingsPath, "Edit"),
+      /permissions\.allow is not an array/,
+    );
+
+    assert.deepStrictEqual(await readFile(settingsPath, "utf8"), raw);
+  });
+  test("permissions や permissions.allow が null なら作り直し、兄弟キーを保つこと", async () => {
+    for (const permissions of [
+      null,
+      { allow: null, deny: ["Bash"] },
+    ] as const) {
+      const dir = await mkdtemp(join(tmpdir(), "loms-claw-test-"));
+      const settingsPath = join(dir, "settings.json");
+      await writeFile(settingsPath, JSON.stringify({ env: {}, permissions }));
 
       await addToSettingsAllowList(settingsPath, "Read");
 
       const result = JSON.parse(await readFile(settingsPath, "utf8"));
-      assert.deepStrictEqual(result, { permissions: { allow: ["Read"] } });
+      assert.deepStrictEqual(result, {
+        env: {},
+        permissions:
+          permissions === null
+            ? { allow: ["Read"] }
+            : { allow: ["Read"], deny: ["Bash"] },
+      });
     }
   });
 
-  test("permissions.allow が配列でなければ配列を作り直して追記すること", async () => {
+  test("permissions に allow が無ければ作り、兄弟キーを保つこと", async () => {
     const dir = await mkdtemp(join(tmpdir(), "loms-claw-test-"));
     const settingsPath = join(dir, "settings.json");
     await writeFile(
       settingsPath,
-      JSON.stringify({ permissions: { allow: "Read", deny: ["Bash"] } }),
+      JSON.stringify({ permissions: { deny: ["Bash"] } }),
     );
 
-    await addToSettingsAllowList(settingsPath, "Edit");
+    await addToSettingsAllowList(settingsPath, "Read");
 
     const result = JSON.parse(await readFile(settingsPath, "utf8"));
     assert.deepStrictEqual(result, {
-      permissions: { allow: ["Edit"], deny: ["Bash"] },
+      permissions: { allow: ["Read"], deny: ["Bash"] },
     });
+  });
+
+  test("permissions.allow に文字列以外の要素があれば投げ、ファイルの内容を変えないこと", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "loms-claw-test-"));
+    const settingsPath = join(dir, "settings.json");
+    const raw = JSON.stringify({ permissions: { allow: ["Read", 1, null] } });
+    await writeFile(settingsPath, raw);
+
+    await assert.rejects(
+      addToSettingsAllowList(settingsPath, "Edit"),
+      /permissions\.allow has a non-string entry/,
+    );
+
+    assert.deepStrictEqual(await readFile(settingsPath, "utf8"), raw);
   });
 });
 

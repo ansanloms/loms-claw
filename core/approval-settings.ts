@@ -18,6 +18,7 @@ import {
 } from "node:fs/promises";
 import { dirname } from "@std/path/dirname";
 import { isNotFoundError } from "../errors.ts";
+import { isRecord } from "../guards.ts";
 import { createLogger } from "../logger.ts";
 
 const log = createLogger("approval-settings");
@@ -44,6 +45,10 @@ export async function isInAllowList(
   }
 }
 
+function isStringArray(value: unknown[]): value is string[] {
+  return value.every((v) => typeof v === "string");
+}
+
 /** path ごとの書き込みチェーン。read-modify-write を 1 つずつ実行するために使う。 */
 const writeChains = new Map<string, Promise<void>>();
 
@@ -51,7 +56,10 @@ const writeChains = new Map<string, Promise<void>>();
  * 指定ツールを .claude/settings.json の permissions.allow に追加する。
  *
  * - ファイルが存在しない場合は新規作成する。
- * - JSON が不正な場合は throw し、ファイルには触れない。
+ * - JSON が不正な場合、トップレベル・permissions がオブジェクトでない場合、
+ *   permissions.allow が配列でない・文字列以外の要素を含む場合は throw し、
+ *   ファイルには触れない。permissions・permissions.allow が無い・null の
+ *   場合は作り直す。
  * - 既存フィールドは保持してマージする。
  * - 重複するツール名は追加しない。
  * - 同一 path への呼び出しは直列化し、一時ファイル + rename で置き換える。
@@ -82,31 +90,56 @@ async function doAddToSettingsAllowList(
   settingsPath: string,
   toolName: string,
 ): Promise<void> {
-  let settings: Record<string, unknown> = {};
+  let raw: string | undefined;
   try {
-    const raw = await readFile(settingsPath, "utf8");
-    try {
-      settings = JSON.parse(raw);
-    } catch (error: unknown) {
-      throw new Error(`settings.json is invalid JSON: ${settingsPath}`, {
-        cause: error,
-      });
-    }
+    raw = await readFile(settingsPath, "utf8");
   } catch (error: unknown) {
     if (!isNotFoundError(error)) {
       throw error;
     }
   }
 
-  if (!settings.permissions || typeof settings.permissions !== "object") {
+  let settings: Record<string, unknown> = {};
+  if (raw !== undefined) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (error: unknown) {
+      throw new Error(`settings.json is invalid JSON: ${settingsPath}`, {
+        cause: error,
+      });
+    }
+    if (!isRecord(parsed)) {
+      throw new Error(`settings.json is not a JSON object: ${settingsPath}`);
+    }
+    settings = parsed;
+  }
+
+  // キーが無い・明示の null は、守るべき元の値が無いので作り直す。
+  if (settings.permissions === undefined || settings.permissions === null) {
     settings.permissions = {};
   }
-  const perms = settings.permissions as Record<string, unknown>;
+  const perms = settings.permissions;
+  if (!isRecord(perms)) {
+    throw new Error(
+      `settings.json permissions is not a JSON object: ${settingsPath}`,
+    );
+  }
 
-  if (!Array.isArray(perms.allow)) {
+  if (perms.allow === undefined || perms.allow === null) {
     perms.allow = [];
   }
-  const allowList = perms.allow as string[];
+  const allowList = perms.allow;
+  if (!Array.isArray(allowList)) {
+    throw new Error(
+      `settings.json permissions.allow is not an array: ${settingsPath}`,
+    );
+  }
+  if (!isStringArray(allowList)) {
+    throw new Error(
+      `settings.json permissions.allow has a non-string entry: ${settingsPath}`,
+    );
+  }
 
   if (allowList.includes(toolName)) {
     log.debug("already in allow list:", toolName);
