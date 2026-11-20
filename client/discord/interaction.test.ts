@@ -57,11 +57,12 @@ function fakeInteraction(
   replies: Replies,
   replyError?: Error,
   repliable = true,
+  replied = false,
 ): Interaction {
   const fake = {
     guildId: user.guildId,
     user: { id: user.userId, bot: user.bot },
-    replied: false,
+    replied,
     deferred: false,
     customId: "custom-id",
     isRepliable: () => repliable,
@@ -181,5 +182,32 @@ describe("dispatchInteraction", () => {
         flags: MessageFlags.Ephemeral,
       },
     ]);
+  });
+
+  test("認可ユーザーの handleCommand が reject しても throw せず ephemeral のエラー文言で返すこと", async () => {
+    const replies: Replies = { payloads: [] };
+    const { deps } = fakeDeps();
+    deps.handleCommand = () => Promise.reject(new Error("boom"));
+    await dispatchInteraction(
+      fakeInteraction("chat", authorizedUser, replies),
+      deps,
+    );
+    assert.deepStrictEqual(replies.payloads, [
+      {
+        content: "コマンド処理中にエラーが発生しました。",
+        flags: MessageFlags.Ephemeral,
+      },
+    ]);
+  });
+
+  test("返信済みの chat-input のハンドラが reject しても reply しないこと", async () => {
+    const replies: Replies = { payloads: [] };
+    const { deps } = fakeDeps();
+    deps.handleCommand = () => Promise.reject(new Error("boom"));
+    await dispatchInteraction(
+      fakeInteraction("chat", authorizedUser, replies, undefined, true, true),
+      deps,
+    );
+    assert.deepStrictEqual(replies.payloads, []);
   });
 });
