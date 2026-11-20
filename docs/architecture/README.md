@@ -92,6 +92,7 @@ graph TD
   guard[client/discord/guard.ts]
   incoming[client/discord/incoming.ts]
   message[client/discord/message.ts]
+  turnoutput[client/discord/turn-output.ts]
   conversation[core/conversation.ts]
   queue[core/queue.ts]
   ratelimit[core/ratelimit.ts]
@@ -139,6 +140,9 @@ graph TD
   botmod --> conversation
   botmod --> ratelimit
   botmod --> message
+  botmod --> turnoutput
+  turnoutput -.-> conversation
+  turnoutput --> message
   botmod --> crontarget
   botmod --> server
   botmod -.-> rcron
@@ -214,7 +218,7 @@ graph TD
 
 ディレクトリをまたぐ辺は次に限られる。
 
-- `client/discord/*` → `core/*`: `DiscordBot` が `Conversation` を生成して `submit()` を呼び、`TurnOutput` を実装して渡す。`SelfMentionRateLimiter` と `core/approval-settings.ts` も core 側にある
+- `client/discord/*` → `core/*`: `DiscordBot` が `Conversation` を生成して `submit()` を呼び、`client/discord/turn-output.ts` の `createTurnOutput()` で組み立てた `TurnOutput` を渡す。`SelfMentionRateLimiter` と `core/approval-settings.ts` も core 側にある
 - `core/conversation.ts` → `claude/mod.ts`, `claude/system-prompt.ts` (型), `store/mod.ts` (型), `config.ts` (型): 会話の 1 ターンで Claude を呼び、セッション・設定を扱うため
 - `cron/executor.ts` → `core/conversation.ts` (`runOneShot`), `claude/system-prompt.ts` (型), `store/mod.ts` (型): cron の prompt ジョブも中核の `runOneShot()` で Claude を呼ぶ (`ScopeQueue` は通さない)
 - `client/discord/cron-target.ts` → `cron/executor.ts` (型のみ): `CronPorts` を Discord で実装する
@@ -265,19 +269,20 @@ graph TD
 
 ### `client/discord/` — Discord アダプタ
 
-| パス                                   | 役割                                                                                                                                                                                                                                                     |
-| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `client/discord/mod.ts`                | `DiscordBot` クラス。`messageCreate` / `interactionCreate` ハンドラ、`start()` (ClientReady 後にコマンド登録 → cron 初期化 → API サーバ起動)、`shutdown()`。`onMessage` は入力の組み立てと `TurnOutput` の実装だけを持ち、`Conversation.submit()` を呼ぶ |
-| `client/discord/commands.ts`           | スラッシュコマンド `/claw settings show\|set\|unset` の定義とハンドラ。`set` は model / effort / show_thinking / active、`unset` はそれに session を加えた対象を取る                                                                                     |
-| `client/discord/guard.ts`              | `isAuthorized()` (ギルド + ユーザ + bot 除外)、`resolveActive()`、`shouldRespond()`、`isAuthorizedSelfMessage()` (AI to AI 自己メンション)                                                                                                               |
-| `client/discord/message.ts`            | `splitMessage()`、`keepTyping()`、`createProgressReporter()`、`stripBotMentions()`、画像添付の取得・リサイズ・後始末 (`downloadImageAttachments()` / `resizeImageIfNeeded()` / `appendImageReferences()` / `cleanupImageFiles()`)                        |
-| `client/discord/scope.ts`              | `scopeFromChannel()`: チャンネル / スレッドから `StoreScope` を組み立てる。`client/discord/mod.ts` と `client/discord/commands.ts` の両方から使う                                                                                                        |
-| `client/discord/incoming.ts`           | `resolveIncomingMessage()`: `onMessage` の認可 → 自己メンション判定 (+ レート制限) → スコープ抽出 → active 上書き取得 → 反応判定を切り出した判定関数。discord.js には直接触れず、`client/discord/mod.ts` が最小の値と関数 (deps) を渡す                  |
-| `client/discord/interaction.ts`        | `dispatchInteraction()`: 全 interaction 種別を先頭で `isAuthorized()` に通し、拒否時は ephemeral で返す。通過したものを承認 UI / スラッシュコマンドへ振り分ける                                                                                          |
-| `client/discord/cron-target.ts`        | `createDiscordCronPorts()`: `CronPorts` の Discord 実装 (チャンネル解決 + 2000 文字分割送信、ギルド由来のテンプレート変数、承認コールバック)                                                                                                             |
-| `client/discord/approval/manager.ts`   | `ApprovalManager`: Discord ボタンによる承認 / 拒否。`createCanUseTool()` が SDK の `canUseTool` コールバックを生成                                                                                                                                       |
-| `client/discord/approval/question.ts`  | `QuestionManager`: `AskUserQuestion` を select menu (+ Other 自由入力の Modal) で提示し回答を収集                                                                                                                                                        |
-| `client/discord/approval/constants.ts` | `INTERACTION_TIMEOUT_MS`: 承認ボタン・質問 UI 共通のタイムアウト定数                                                                                                                                                                                     |
+| パス                                   | 役割                                                                                                                                                                                                                                                                                                                               |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `client/discord/mod.ts`                | `DiscordBot` クラス。`messageCreate` / `interactionCreate` ハンドラ、`start()` (ClientReady 後にコマンド登録 → cron 初期化 → API サーバ起動)、`shutdown()`。`onMessage` は入力の組み立て (発話者・テンプレート変数は `turn-output.ts` の関数) と `TurnOutput` の生成 (`createTurnOutput()`) を呼び、`Conversation.submit()` を呼ぶ |
+| `client/discord/commands.ts`           | スラッシュコマンド `/claw settings show\|set\|unset` の定義とハンドラ。`set` は model / effort / show_thinking / active、`unset` はそれに session を加えた対象を取る                                                                                                                                                               |
+| `client/discord/guard.ts`              | `isAuthorized()` (ギルド + ユーザ + bot 除外)、`resolveActive()`、`shouldRespond()`、`isAuthorizedSelfMessage()` (AI to AI 自己メンション)                                                                                                                                                                                         |
+| `client/discord/message.ts`            | `splitMessage()`、`keepTyping()`、`createProgressReporter()`、`stripBotMentions()`、画像添付の取得・リサイズ・後始末 (`downloadImageAttachments()` / `resizeImageIfNeeded()` / `appendImageReferences()` / `cleanupImageFiles()`)                                                                                                  |
+| `client/discord/scope.ts`              | `scopeFromChannel()`: チャンネル / スレッドから `StoreScope` を組み立てる。`client/discord/mod.ts` と `client/discord/commands.ts` の両方から使う                                                                                                                                                                                  |
+| `client/discord/incoming.ts`           | `resolveIncomingMessage()`: `onMessage` の認可 → 自己メンション判定 (+ レート制限) → スコープ抽出 → active 上書き取得 → 反応判定を切り出した判定関数。discord.js には直接触れず、`client/discord/mod.ts` が最小の値と関数 (deps) を渡す                                                                                            |
+| `client/discord/turn-output.ts`        | `createTurnOutput()`: Discord 向けの `TurnOutput` 実装 (⏳・typing・画像添付・応答/thinking/エラー送信・進捗・後始末)。`resolveSpeaker()` (自己メンション起動時は発話者を `config.discord.userId` に差し替え) と `buildTemplateVars()` もここにある                                                                                |
+| `client/discord/interaction.ts`        | `dispatchInteraction()`: 全 interaction 種別を先頭で `isAuthorized()` に通し、拒否時は ephemeral で返す。通過したものを承認 UI / スラッシュコマンドへ振り分ける                                                                                                                                                                    |
+| `client/discord/cron-target.ts`        | `createDiscordCronPorts()`: `CronPorts` の Discord 実装 (チャンネル解決 + 2000 文字分割送信、ギルド由来のテンプレート変数、承認コールバック)                                                                                                                                                                                       |
+| `client/discord/approval/manager.ts`   | `ApprovalManager`: Discord ボタンによる承認 / 拒否。`createCanUseTool()` が SDK の `canUseTool` コールバックを生成                                                                                                                                                                                                                 |
+| `client/discord/approval/question.ts`  | `QuestionManager`: `AskUserQuestion` を select menu (+ Other 自由入力の Modal) で提示し回答を収集                                                                                                                                                                                                                                  |
+| `client/discord/approval/constants.ts` | `INTERACTION_TIMEOUT_MS`: 承認ボタン・質問 UI 共通のタイムアウト定数                                                                                                                                                                                                                                                               |
 
 ### `claude/` — Agent SDK 連携
 

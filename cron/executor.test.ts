@@ -228,6 +228,188 @@ function createExecutor(
   });
 }
 
+/** `query()` に渡された options を記録しつつ成功レスポンスを返す mock queryFn。 */
+function capturingQueryFn(): {
+  fn: QueryFn;
+  calls: NonNullable<Parameters<QueryFn>[0]["options"]>[];
+} {
+  const calls: NonNullable<Parameters<QueryFn>[0]["options"]>[] = [];
+  const fn: QueryFn = (params) => {
+    if (params.options) {
+      calls.push(params.options);
+    }
+    return successQueryFn()(params);
+  };
+  return { fn, calls };
+}
+
+/** `resolve()` の引数を記録し、固定のシステムプロンプトを返すモック。 */
+function recordingSystemPromptStore(): {
+  store: SystemPromptStore;
+  calls: unknown[][];
+} {
+  const calls: unknown[][] = [];
+  const store = {
+    resolve: (...args: unknown[]) => {
+      calls.push(args);
+      return "resolved-prompt";
+    },
+    load: () => Promise.resolve(),
+  } as unknown as SystemPromptStore;
+  return { store, calls };
+}
+
+describe("CronExecutor: prompt ジョブの options 解決", () => {
+  const baseJob: CronJobDef = {
+    kind: "prompt",
+    name: "resolve-job",
+    schedule: "0 0 * * *",
+    prompt: "hello",
+    channelId: "ch-1",
+  };
+
+  test("frontmatter の model/effort/maxTurns がチャンネル設定・defaults より優先されること", () =>
+    withStore(async (store) => {
+      await store.applyPatch(
+        { channelId: "ch-1" },
+        { model: "channel-model", effort: "low" },
+      );
+      const { channel } = createMockChannel();
+      const { fn, calls } = capturingQueryFn();
+      const executor = createExecutor({
+        ports: createMockPorts(channel),
+        store,
+        defaults: { model: "default-model", effort: "medium" },
+        queryFn: fn,
+      });
+
+      await executor.runJob({
+        ...baseJob,
+        model: "job-model",
+        effort: "high",
+        maxTurns: 3,
+      });
+
+      assert.deepStrictEqual(calls.length, 1);
+      assert.deepStrictEqual(calls[0].model, "job-model");
+      assert.deepStrictEqual(calls[0].effort, "high");
+      assert.deepStrictEqual(calls[0].maxTurns, 3);
+    }));
+
+  test("frontmatter が無ければチャンネル設定が defaults より優先されること", () =>
+    withStore(async (store) => {
+      await store.applyPatch(
+        { channelId: "ch-1" },
+        { model: "channel-model", effort: "low" },
+      );
+      const { channel } = createMockChannel();
+      const { fn, calls } = capturingQueryFn();
+      const executor = createExecutor({
+        ports: createMockPorts(channel),
+        store,
+        defaults: { model: "default-model", effort: "medium" },
+        queryFn: fn,
+      });
+
+      await executor.runJob(baseJob);
+
+      assert.deepStrictEqual(calls[0].model, "channel-model");
+      assert.deepStrictEqual(calls[0].effort, "low");
+      // maxTurns はジョブ指定が無いので config の値のまま
+      assert.deepStrictEqual(calls[0].maxTurns, TEST_CONFIG.maxTurns);
+    }));
+
+  test("どちらも無ければ defaults が使われること", () =>
+    withStore(async (store) => {
+      const { channel } = createMockChannel();
+      const { fn, calls } = capturingQueryFn();
+      const executor = createExecutor({
+        ports: createMockPorts(channel),
+        store,
+        defaults: { model: "default-model", effort: "medium" },
+        queryFn: fn,
+      });
+
+      await executor.runJob(baseJob);
+
+      assert.deepStrictEqual(calls[0].model, "default-model");
+      assert.deepStrictEqual(calls[0].effort, "medium");
+    }));
+
+  test("systemPrompts.resolve に cron・スコープ・ギルドのみの変数が渡り、結果が append されること", () =>
+    withStore(async (store) => {
+      const { channel } = createMockChannel();
+      const { fn, calls } = capturingQueryFn();
+      const prompts = recordingSystemPromptStore();
+      const executor = createExecutor({
+        ports: createMockPorts(channel),
+        store,
+        systemPrompts: prompts.store,
+        queryFn: fn,
+      });
+
+      await executor.runJob(baseJob);
+
+      assert.deepStrictEqual(prompts.calls, [
+        [
+          "cron",
+          { channelId: "ch-1" },
+          { "discord.guild.id": "guild-1", "discord.guild.name": "test-guild" },
+        ],
+      ]);
+      assert.deepStrictEqual(calls[0].systemPrompt, {
+        type: "preset",
+        preset: "claude_code",
+        append: "resolved-prompt",
+      });
+    }));
+});
+
+describe("CronExecutor: prompt ジョブの失敗通知", () => {
+  const job: CronJobDef = {
+    kind: "prompt",
+    name: "notify-job",
+    schedule: "0 0 * * *",
+    prompt: "hello",
+    channelId: "ch-1",
+  };
+
+  test("result イベントが無いとき [cron: name] 付きで通知されること", () =>
+    withStore(async (store) => {
+      const { channel, sent } = createMockChannel();
+      const executor = createExecutor({
+        ports: createMockPorts(channel),
+        store,
+        queryFn: mockQueryFn([]),
+      });
+
+      assert.deepStrictEqual(await executor.runJob(job), "failed");
+      assert.deepStrictEqual(sent.length, 1);
+      assert.deepStrictEqual(sent[0].startsWith("[cron: notify-job] "), true);
+    }));
+
+  test("error_max_turns で result が無いとき [cron: name] 付きで通知されること", () =>
+    withStore(async (store) => {
+      const { channel, sent } = createMockChannel();
+      const executor = createExecutor({
+        ports: createMockPorts(channel),
+        store,
+        queryFn: mockQueryFn([
+          {
+            type: "result",
+            subtype: "error_max_turns",
+            session_id: "s",
+            is_error: true,
+          },
+        ]),
+      });
+
+      assert.deepStrictEqual(await executor.runJob(job), "failed");
+      assert.deepStrictEqual(sent.length, 1);
+      assert.deepStrictEqual(sent[0].startsWith("[cron: notify-job] "), true);
+    }));
+});
+
 describe("CronExecutor", () => {
   test("重複実行がスキップされること", () =>
     withStore(async (store) => {
@@ -988,5 +1170,152 @@ describe("CronExecutor", () => {
       const posted = sent.join("");
       assert.deepStrictEqual(posted, exactOutput);
       assert.deepStrictEqual(posted.includes("truncated"), false);
+    }));
+
+  const optionsJob: CronJobDef = {
+    kind: "prompt",
+    name: "resolve-job",
+    schedule: "0 0 * * *",
+    prompt: "hello",
+    channelId: "ch-1",
+  };
+
+  test("prompt job: frontmatter の model/effort/maxTurns がチャンネル設定・defaults より優先されること", () =>
+    withStore(async (store) => {
+      await store.applyPatch(
+        { channelId: "ch-1" },
+        { model: "channel-model", effort: "low" },
+      );
+      const { channel } = createMockChannel();
+      const { fn, calls } = capturingQueryFn();
+      const executor = createExecutor({
+        ports: createMockPorts(channel),
+        store,
+        defaults: { model: "default-model", effort: "medium" },
+        queryFn: fn,
+      });
+
+      await executor.runJob({
+        ...optionsJob,
+        model: "job-model",
+        effort: "high",
+        maxTurns: 3,
+      });
+
+      assert.deepStrictEqual(calls.length, 1);
+      assert.deepStrictEqual(calls[0].model, "job-model");
+      assert.deepStrictEqual(calls[0].effort, "high");
+      assert.deepStrictEqual(calls[0].maxTurns, 3);
+    }));
+
+  test("prompt job: frontmatter が無ければチャンネル設定が defaults より優先されること", () =>
+    withStore(async (store) => {
+      await store.applyPatch(
+        { channelId: "ch-1" },
+        { model: "channel-model", effort: "low" },
+      );
+      const { channel } = createMockChannel();
+      const { fn, calls } = capturingQueryFn();
+      const executor = createExecutor({
+        ports: createMockPorts(channel),
+        store,
+        defaults: { model: "default-model", effort: "medium" },
+        queryFn: fn,
+      });
+
+      await executor.runJob(optionsJob);
+
+      assert.deepStrictEqual(calls[0].model, "channel-model");
+      assert.deepStrictEqual(calls[0].effort, "low");
+      // maxTurns はジョブ指定が無いので config の値のまま
+      assert.deepStrictEqual(calls[0].maxTurns, TEST_CONFIG.maxTurns);
+    }));
+
+  test("prompt job: どちらも無ければ defaults が使われること", () =>
+    withStore(async (store) => {
+      const { channel } = createMockChannel();
+      const { fn, calls } = capturingQueryFn();
+      const executor = createExecutor({
+        ports: createMockPorts(channel),
+        store,
+        defaults: { model: "default-model", effort: "medium" },
+        queryFn: fn,
+      });
+
+      await executor.runJob(optionsJob);
+
+      assert.deepStrictEqual(calls[0].model, "default-model");
+      assert.deepStrictEqual(calls[0].effort, "medium");
+    }));
+
+  test("prompt job: systemPrompts.resolve に cron・スコープ・ギルドのみの変数が渡り、結果が append されること", () =>
+    withStore(async (store) => {
+      const { channel } = createMockChannel();
+      const { fn, calls } = capturingQueryFn();
+      const prompts = recordingSystemPromptStore();
+      const executor = createExecutor({
+        ports: createMockPorts(channel),
+        store,
+        systemPrompts: prompts.store,
+        queryFn: fn,
+      });
+
+      await executor.runJob(optionsJob);
+
+      assert.deepStrictEqual(prompts.calls, [
+        [
+          "cron",
+          { channelId: "ch-1" },
+          { "discord.guild.id": "guild-1", "discord.guild.name": "test-guild" },
+        ],
+      ]);
+      assert.deepStrictEqual(calls[0].systemPrompt, {
+        type: "preset",
+        preset: "claude_code",
+        append: "resolved-prompt",
+      });
+    }));
+
+  const notifyJob: CronJobDef = {
+    kind: "prompt",
+    name: "notify-job",
+    schedule: "0 0 * * *",
+    prompt: "hello",
+    channelId: "ch-1",
+  };
+
+  test("prompt job: result イベントが無いとき [cron: name] 付きで通知されること", () =>
+    withStore(async (store) => {
+      const { channel, sent } = createMockChannel();
+      const executor = createExecutor({
+        ports: createMockPorts(channel),
+        store,
+        queryFn: mockQueryFn([]),
+      });
+
+      assert.deepStrictEqual(await executor.runJob(notifyJob), "failed");
+      assert.deepStrictEqual(sent.length, 1);
+      assert.deepStrictEqual(sent[0].startsWith("[cron: notify-job] "), true);
+    }));
+
+  test("prompt job: error_max_turns で result が無いとき [cron: name] 付きで通知されること", () =>
+    withStore(async (store) => {
+      const { channel, sent } = createMockChannel();
+      const executor = createExecutor({
+        ports: createMockPorts(channel),
+        store,
+        queryFn: mockQueryFn([
+          {
+            type: "result",
+            subtype: "error_max_turns",
+            session_id: "s",
+            is_error: true,
+          },
+        ]),
+      });
+
+      assert.deepStrictEqual(await executor.runJob(notifyJob), "failed");
+      assert.deepStrictEqual(sent.length, 1);
+      assert.deepStrictEqual(sent[0].startsWith("[cron: notify-job] "), true);
     }));
 });

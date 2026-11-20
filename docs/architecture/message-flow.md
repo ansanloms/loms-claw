@@ -1,10 +1,10 @@
 # メッセージ処理 (Discord → Claude → Discord)
 
-`client/discord/mod.ts` の `DiscordBot` が discord.js の `messageCreate`/`interactionCreate` を受け取り、認可・反応判定・入力の組み立てを行ったうえで、会話の中核 (`core/conversation.ts` の `Conversation`) へ 1 ターンを投入し、ストリームを Discord へ流し込むまでの流れを記す。スコープ単位の直列化・設定取得・`askClaude()` 呼び出し・ストリーム消費は中核が担い、Discord への入出力 (⏳・typing・画像添付・送信) は `DiscordBot` が `TurnOutput` として実装して渡す。AI to AI 自己メンション (bot 自身の投稿で別スコープのセッションを起動する経路) の発火条件と連鎖制御も本章で扱う。加えて、インタラクション (ボタン/select/modal/スラッシュコマンド) の振り分けも扱う。
+`client/discord/mod.ts` の `DiscordBot` が discord.js の `messageCreate`/`interactionCreate` を受け取り、認可・反応判定・入力の組み立てを行ったうえで、会話の中核 (`core/conversation.ts` の `Conversation`) へ 1 ターンを投入し、ストリームを Discord へ流し込むまでの流れを記す。スコープ単位の直列化・設定取得・`askClaude()` 呼び出し・ストリーム消費は中核が担い、Discord への入出力 (⏳・typing・画像添付・送信) は `client/discord/turn-output.ts` の `createTurnOutput()` が `TurnOutput` として実装し、`DiscordBot` が渡す。AI to AI 自己メンション (bot 自身の投稿で別スコープのセッションを起動する経路) の発火条件と連鎖制御も本章で扱う。加えて、インタラクション (ボタン/select/modal/スラッシュコマンド) の振り分けも扱う。
 
 関連: [README](README.md)/[lifecycle](lifecycle.md)/[claude-integration](claude-integration.md)/[store-and-settings](store-and-settings.md)/[approval](approval.md)/[cron](cron.md)/[deployment](deployment.md)
 
-対象ソース: `client/discord/mod.ts`, `client/discord/guard.ts`, `client/discord/incoming.ts`, `client/discord/interaction.ts`, `core/conversation.ts`, `core/queue.ts`, `core/ratelimit.ts`, `core/flush.ts`, `client/discord/message.ts`, `client/discord/commands.ts`, `claude/mod.ts` (抽出ヘルパー), `client/discord/approval/manager.ts` (`createCanUseTool()` の入口)
+対象ソース: `client/discord/mod.ts`, `client/discord/guard.ts`, `client/discord/incoming.ts`, `client/discord/interaction.ts`, `client/discord/turn-output.ts`, `core/conversation.ts`, `core/queue.ts`, `core/ratelimit.ts`, `core/flush.ts`, `client/discord/message.ts`, `client/discord/commands.ts`, `claude/mod.ts` (抽出ヘルパー), `client/discord/approval/manager.ts` (`createCanUseTool()` の入口)
 
 ## 中核とアダプタの境界
 
@@ -31,7 +31,7 @@ interface TurnOutput {
 }
 ```
 
-Discord 側の実装 (`DiscordBot.createTurnOutput()`) は typing の `AbortController`・進捗 reporter・ダウンロード済み画像をターン単位のクロージャで持つ。`Conversation` は `ConversationDeps` (`store`, `systemPrompts`, `claudeConfig`, `env`, `createCanUseTool`, `selfMentionLimiter`, `queryFn?`) を受け取り、`DiscordBot` のコンストラクタが生成する (`env` は `{ DISCORD_BOT_TOKEN }`、`createCanUseTool` は `ApprovalManager` へ橋渡しする)。認可 (`isAuthorized` / `isAuthorizedSelfMessage`) は中核に入れず、アダプタ側で完結する。
+Discord 側の実装 (`client/discord/turn-output.ts` の `createTurnOutput()`。`DiscordBot.onMessage` が呼ぶ) は typing の `AbortController`・進捗 reporter・ダウンロード済み画像をターン単位のクロージャで持つ。`Conversation` は `ConversationDeps` (`store`, `systemPrompts`, `claudeConfig`, `env`, `createCanUseTool`, `selfMentionLimiter`, `queryFn?`) を受け取り、`DiscordBot` のコンストラクタが生成する (`env` は `{ DISCORD_BOT_TOKEN }`、`createCanUseTool` は `ApprovalManager` へ橋渡しする)。認可 (`isAuthorized` / `isAuthorizedSelfMessage`) は中核に入れず、アダプタ側で完結する。
 
 ## 全体像
 
@@ -111,9 +111,9 @@ bot 側でメッセージをスレッドへ自動分離する機能は実装し�
 
 `DiscordBot.onMessage` はここまでで確定した値から次を組み立てて `Conversation.submit()` に渡す (以降は特記が無い限り中核 `core/conversation.ts` の処理)。
 
-- 発話者: 人間なら `message.author.id`/`message.author.displayName`。自己メッセージなら `config.discord.userId` と、その表示名 (guild member cache → users cache → ID の順で解決)。
-- テンプレート変数 `discord.guild.id / discord.guild.name / discord.channel.id (= localId) / discord.channel.name / discord.channel.type ("thread" | "text") / discord.user.id / discord.user.name`。いずれも cache の同期参照で、キュー投入前に算出する。
-- `TurnOutput` (`createTurnOutput()`)。応答は `mention = isSelfMessage ? "" : "<@authorId> "` を付け、`splitMessage(text, DISCORD_MESSAGE_LIMIT - mention.length)` で分割してから各チャンク先頭に付与して `channel.send()` する (`sendReply`)。`sendThinking` は各行の先頭に `>` と半角スペース (Discord の引用記法) を付け、`splitMessage()` の既定上限で分割し、メンション無しで送る。
+- 発話者 (`resolveSpeaker()`、`client/discord/turn-output.ts`): 人間なら `message.author.id`/`message.author.displayName`。自己メッセージなら `config.discord.userId` と、その表示名 (guild member cache → users cache → ID の順で解決)。
+- テンプレート変数 (`buildTemplateVars()`) `discord.guild.id / discord.guild.name / discord.channel.id (= localId) / discord.channel.name / discord.channel.type ("thread" | "text") / discord.user.id / discord.user.name`。いずれも cache の同期参照で、キュー投入前に算出する。
+- `TurnOutput` (`createTurnOutput()`、`client/discord/turn-output.ts`)。応答は `mention = isSelfMessage ? "" : "<@authorId> "` を付け、`splitMessage(text, DISCORD_MESSAGE_LIMIT - mention.length)` で分割してから各チャンク先頭に付与して `channel.send()` する (`sendReply`)。`sendThinking` は各行の先頭に `>` と半角スペース (Discord の引用記法) を付け、`splitMessage()` の既定上限で分割し、メンション無しで送る。
 
 ### 6. スコープ単位の直列化 (`ScopeQueue`)
 
