@@ -1,0 +1,2434 @@
+{
+  "openapi": "3.2.1",
+  "info": {
+    "version": "0.2.0",
+    "title": "loms-claw API",
+    "description": "# loms-claw API\n\nloms-claw を「常駐する本体と、その周辺 (Discord・CLI・スマホ等)」の構成にするための、次期 I/F の設計。client から本体へは REST、本体から client へは SSE (Server-Sent Events) で渡す。\n\n## 位置付け\n\nこの定義は `next` ブランチの I/F の定義である。実装はまだ無い。main の実装と、main の `docs/api/` (0.1.0) は、この定義に対応しない。`info.version` は 0.2.0 で、`next` が main に入るまで release とタグを切らない。\n\n## 決定事項\n\nissue #278 の「決めること」と、そこから派生した論点の結論を次に示す。\n\n| #   | 論点                 | 決定                                                                                                                                                                                                                                                                                                                                                                                                                                  |\n| --- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |\n| 1   | 出力の届け先         | スコープの購読者全員に配る。中核がイベントを発行し、Discord も SSE の client も購読者になる。                                                                                                                                                                                                                                                                                                                                         |\n| 2   | スコープ ID          | 不透明な文字列とする。Discord の client はチャンネル ID をそのまま使う。親はスコープの属性として本体が保存する (`PUT /scopes/{scopeId}` の `parentId`)。スコープは `PUT /scopes/{scopeId}` で登録してから使う。未登録のスコープへの要求は 404 を返す。Discord の client は、応答するチャンネルとスレッドを最初の依頼の前に登録する。単一ギルドの検査は Discord の client が持つ。親を持つスコープを登録するときは、親を先に登録する。 |\n| 3   | 承認待ちの台帳       | 中核へ移す。保留中の承認と質問を、SSE と `GET /approvals`・`GET /questions` で全 client に配るため。                                                                                                                                                                                                                                                                                                                                  |\n| 4   | パス空間             | 内部 API と client 向け API を同じパス空間に置く。OpenAPI は 1 本とする。                                                                                                                                                                                                                                                                                                                                                             |\n| 5   | Discord への直接投稿 | 整理の対象外とする。Discord 専用の機能として扱う (下記「範囲外」)。                                                                                                                                                                                                                                                                                                                                                                   |\n| 6   | 版の表し方           | パスに版を入れない。`info.version` が正本である (#277 の方針を引き継ぐ)。SSE は追加のみで進化させ、client は未知のイベント種別とフィールドを無視する。                                                                                                                                                                                                                                                                                |\n| 7   | 認証                 | 含めない。承認・質問に答える operation と一緒に、後で足す。                                                                                                                                                                                                                                                                                                                                                                           |\n| 8   | 状態の取り直し       | 含める。SSE は切断中のイベントを再送しない。代わりに、実行中と待機中のターン (`GET /scopes/{scopeId}/turns`) と保留中の承認・質問を `GET` で取り直す。                                                                                                                                                                                                                                                                                |\n| 9   | 設定の持ち場         | `session`・`model`・`effort` は本体がスコープごとに持ち、継承を解決して出所を `scope` / `parent` / `default` で返す。`showThinking` と `active` (`activeChannelIds` を含む) は client が持つ。                                                                                                                                                                                                                                        |\n\n## 接続\n\n- ホスト: `127.0.0.1`。ポートは `config.json` の `claude.apiPort` で、既定値は `3000`。\n- 認証: 無い。当面は認証を実装せず、定義にも含めない。\n\n本体と同じプロセスの client (Discord) は中核を直接呼び、`POST /scopes/{scopeId}/messages` を通らない。この operation は本体の外から依頼を渡すためのものである。\n\n承認・質問に答える operation (承認への回答、質問への回答、`permissions.allow` の書き換え) は置かない。認証なしで置くと、ワークスペースの Claude が `curl` で叩いて、自分のツール実行を自分で承認できてしまうためである。現行の API は承認に答える operation を持たず、127.0.0.1 は認証なしで足りたので、この穴は今回の設計で初めて生じる。\n\n- 承認と質問に答えられるのは、本体と同じプロセスの client (Discord) だけである。解決の結果は SSE の `approval.resolved`・`question.resolved` で流れる。Discord 以外の client は承認・質問の要求を SSE で受けるが、答える手段が無い。Discord で答えが無ければ時間切れになる。\n- `GET /approvals`・`GET /questions`・`GET /permissions/allow` は読むだけなので置く。\n- `POST /scopes/{scopeId}/messages` の依頼には全部「認可ユーザー本人の発話ではない旨の注記」とレート制限を掛ける。認証が無い間は本人の依頼と他の依頼を見分けられないので、この operation の依頼は全部本人以外の依頼として扱う。本人の依頼を区別する手段は、認証と一緒に足す。レート制限の目的は暴走 (ループ・連鎖) を止めることで、攻撃を防ぐことではない。\n\n## 資源の ID\n\n保存先を持たない資源は自然キーを ID にする。スコープは client が決める文字列、定期実行タスクはファイル名を ID にする。数値の連番は振らない。保存先が無いと、再読み込みのたびに連番が変わりうるためである。\n\n## エラー応答\n\nエラー時は HTTP ステータスコードと `application/json` の `{ \"error\": string }` を返す。RFC 9457 Problem Details 形式ではない。`GET /health` の 503 だけは例外で、`{ \"status\": \"unavailable\" }` を返す。\n\n## SSE の規約\n\n`GET /events` が 1 本の接続で全イベントを配る。query の `scopeId` で絞れる。スコープごとのパスにしない理由は、承認と定期実行タスクのイベントを 1 接続で受けられるからである。\n\n- イベントは追加のみで進化させる。既存のフィールドの意味や型は変えない。\n- client は未知の `event` と未知のフィールドを無視する。\n- 切断中のイベントは再送しない。そのため `id` と `retry` は定義しない。\n- 再接続したら、`GET /approvals`・`GET /questions`・`GET /scopes/{scopeId}/turns` で状態を取り直す。\n- `scopeId` で絞った購読には、`scopeId` を持たないイベントは流れない。\n- `thinking` イベントは、本体が常に流す。見せるかどうかは client が決める。\n- 各イベントは `event` と、JSON 文字列の `data` からなる。\n\nイベントの一覧は `GET /events` の `itemSchema` (`ResponseGetEvents`) に定義している。\n\n## schema の additionalProperties 方針\n\n`components/schemas/*.yaml` の `additionalProperties: false` は、リクエストボディの schema と、それが `$ref` で参照する schema にのみ付ける。レスポンス専用の schema には、将来のフィールド追加を許容するために付けない。\n\n## 範囲外\n\n- 画像の添付。\n- webhook・位置通知・heartbeat。\n- 音声。\n- Discord アダプタの別プロセス化。\n- Discord への直接投稿の経路。Discord 専用の機能であり、この I/F では整理しない。\n\n## 未決事項\n\nこの定義では決めていない。\n\n- 認証と、承認・質問に答える operation・常時許可の書き換え・本人の依頼の区別 (一緒に足す)。\n- ワークスペースの Claude が定期実行タスクの再読み込みと実行を呼べるため、command 種別のタスク経由でツール承認を通らずにコマンドを実行できる点 (認証を足す時に検討する)。\n- 現行実装の cron の擬似スコープ (`cron:<ジョブ名>`) に当たるものを、定期実行タスクでどう扱い、誰が登録するか。\n- `GET /health` の判定が Discord の gateway に結び付いていること (#278 の 1 章)。\n- 定期実行タスクの送信先 `channelId` をスコープ ID に寄せるか (#278 の 4.3)。\n- 回答 800 文字・thinking 1500 文字の区切りを SSE でも保つか (#278 の 4.7)。\n- Discord アダプタが `showThinking` と `active` をどこに保存するか。\n- 壊す変更の手順 (#276)。\n"
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:3000",
+      "description": "ローカルの API サーバ (apiPort 既定値 3000)。"
+    }
+  ],
+  "security": [],
+  "tags": [
+    {
+      "name": "approvals",
+      "description": "保留中のツール承認の一覧取得。"
+    },
+    {
+      "name": "scheduled-tasks",
+      "description": "定期実行タスクの一覧取得・手動実行・再読み込み。"
+    },
+    {
+      "name": "events",
+      "description": "SSE によるイベントの購読。"
+    },
+    {
+      "name": "health",
+      "description": "healthcheck。"
+    },
+    {
+      "name": "logs",
+      "description": "メモリ上のリングバッファからのログ取得。"
+    },
+    {
+      "name": "permissions",
+      "description": "ツールの常時許可の取得。"
+    },
+    {
+      "name": "questions",
+      "description": "保留中の質問 (AskUserQuestion) の一覧取得。"
+    },
+    {
+      "name": "scopes",
+      "description": "スコープの登録と取得。"
+    },
+    {
+      "name": "settings",
+      "description": "スコープ単位の設定の取得・更新・削除と、グローバルデフォルトの取得。"
+    },
+    {
+      "name": "turns",
+      "description": "ターンの開始・取得・中止。"
+    }
+  ],
+  "paths": {
+    "/approvals": {
+      "get": {
+        "operationId": "getApprovals",
+        "summary": "保留中の承認の一覧。",
+        "tags": [
+          "approvals"
+        ],
+        "description": "保留中のツール承認を返す。SSE の再接続後に状態を取り直すために使う。承認に答える operation は置かない (README の「接続」)。解決は `approval.resolved` で配られる。\n",
+        "responses": {
+          "200": {
+            "description": "処理成功時。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseGetApprovals"
+                },
+                "examples": {
+                  "succeeded": {
+                    "value": {
+                      "approvals": [
+                        {
+                          "id": "a-0001",
+                          "scopeId": "1234567890123456789",
+                          "toolName": "Bash",
+                          "description": "テストを実行する。",
+                          "input": {
+                            "command": "npm test",
+                            "description": "テストを実行する。"
+                          },
+                          "requestedAt": "2026-11-21T09:00:00Z",
+                          "expiresAt": "2026-11-21T09:05:00Z"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/events": {
+      "get": {
+        "operationId": "getEvents",
+        "summary": "イベントの購読。",
+        "tags": [
+          "events"
+        ],
+        "description": "ターンの経過、定期実行タスクの出力、承認と質問の要求と解決を Server-Sent Events で配信する。scopeId で絞らなければ、全スコープのイベントと定期実行タスクのイベントを 1 接続で受ける。切断中のイベントは再送しない。再接続したら `GET /approvals`、`GET /questions`、`GET /scopes/{scopeId}/turns` で状態を取り直す。イベントは追加のみで進化させる。client は未知の event と未知のフィールドを無視する。thinking は本体が常に流し、見せるかどうかは client が決める。scopeId に未登録のスコープを指定すると 404 を返す。scopeId を省いた要求では 404 は起きない。scopeId で絞った購読には、scopeId を持たないイベントは流れない。\n",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scopeId",
+            "required": false,
+            "description": "このスコープのイベントだけに絞る。省略すると全スコープ。登録されていないスコープを指定すると 404 を返す。scopeId で絞った購読には、scopeId を持たないイベントは流れない。",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "処理成功時。",
+            "content": {
+              "text/event-stream": {
+                "itemSchema": {
+                  "$ref": "#/components/schemas/ResponseGetEvents"
+                },
+                "examples": {
+                  "turnQueued": {
+                    "serializedValue": "event: turn.queued\ndata: {\"scopeId\":\"1234567890123456789\",\"turnId\":\"t-0001\"}\n\n"
+                  },
+                  "turnStarted": {
+                    "serializedValue": "event: turn.started\ndata: {\"scopeId\":\"1234567890123456789\",\"turnId\":\"t-0001\"}\n\n"
+                  },
+                  "reply": {
+                    "serializedValue": "event: reply\ndata: {\"scopeId\":\"1234567890123456789\",\"turnId\":\"t-0001\",\"text\":\"宿まであと 40 km だ。\"}\n\n"
+                  },
+                  "thinking": {
+                    "serializedValue": "event: thinking\ndata: {\"scopeId\":\"1234567890123456789\",\"turnId\":\"t-0001\",\"text\":\"残りの距離を確かめる。\"}\n\n"
+                  },
+                  "progress": {
+                    "serializedValue": "event: progress\ndata: {\"scopeId\":\"1234567890123456789\",\"turnId\":\"t-0001\",\"toolName\":\"Bash\",\"elapsedSeconds\":12}\n\n"
+                  },
+                  "error": {
+                    "serializedValue": "event: error\ndata: {\"scopeId\":\"1234567890123456789\",\"turnId\":\"t-0001\",\"message\":\"API error: 500\"}\n\n"
+                  },
+                  "turnEnded": {
+                    "serializedValue": "event: turn.ended\ndata: {\"scopeId\":\"1234567890123456789\",\"turnId\":\"t-0001\",\"result\":\"completed\"}\n\n"
+                  },
+                  "scheduledTaskOutput": {
+                    "serializedValue": "event: scheduled-task.output\ndata: {\"scopeId\":\"1234567890123456789\",\"taskId\":\"news.md\",\"text\":\"今日のニュースは次のとおり。\"}\n\n"
+                  },
+                  "scheduledTaskError": {
+                    "serializedValue": "event: scheduled-task.error\ndata: {\"scopeId\":\"1234567890123456789\",\"taskId\":\"news.md\",\"message\":\"command failed: exit 1\"}\n\n"
+                  },
+                  "approvalRequested": {
+                    "serializedValue": "event: approval.requested\ndata: {\"id\":\"a-0001\",\"scopeId\":\"1234567890123456789\",\"toolName\":\"Bash\",\"description\":\"テストを実行する\",\"input\":{\"command\":\"npm test\",\"description\":\"テストを実行する\"},\"requestedAt\":\"2026-11-21T09:00:00Z\",\"expiresAt\":\"2026-11-21T09:05:00Z\"}\n\n"
+                  },
+                  "approvalResolved": {
+                    "serializedValue": "event: approval.resolved\ndata: {\"approvalId\":\"a-0001\",\"scopeId\":\"1234567890123456789\",\"decision\":\"allow\"}\n\n"
+                  },
+                  "questionRequested": {
+                    "serializedValue": "event: question.requested\ndata: {\"id\":\"q-0001\",\"scopeId\":\"1234567890123456789\",\"questions\":[{\"question\":\"どちらの宿にしますか。\",\"header\":\"宿\",\"options\":[{\"label\":\"駅前\",\"description\":\"駅から徒歩 3 分。\"},{\"label\":\"海沿い\",\"description\":\"駅から徒歩 20 分。\"}],\"multiSelect\":false}],\"requestedAt\":\"2026-11-21T09:00:00Z\",\"expiresAt\":\"2026-11-21T09:05:00Z\"}\n\n"
+                  },
+                  "questionResolved": {
+                    "serializedValue": "event: question.resolved\ndata: {\"questionId\":\"q-0001\",\"scopeId\":\"1234567890123456789\",\"result\":\"answered\"}\n\n"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "scopeId に指定したスコープが登録されていない場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "notFound": {
+                    "value": {
+                      "error": "Scope not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "getHealth",
+        "summary": "healthcheck。",
+        "tags": [
+          "health"
+        ],
+        "description": "HTTP サーバの応答性と Discord Gateway の接続状態を反映した healthcheck 用の operation。\n",
+        "responses": {
+          "200": {
+            "description": "healthy な場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseGetHealth"
+                },
+                "examples": {
+                  "ok": {
+                    "value": {
+                      "status": "ok"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "unhealthy な場合 (Discord Gateway が未接続等)。エラー応答の形は例外で、error ではなく status を返す。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseGetHealth"
+                },
+                "examples": {
+                  "unavailable": {
+                    "value": {
+                      "status": "unavailable"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/logs": {
+      "get": {
+        "operationId": "getLogs",
+        "summary": "ログ取得。",
+        "tags": [
+          "logs"
+        ],
+        "description": "メモリ上のリングバッファからログエントリを時系列順で取得する。リングバッファは log.level (コンソールに出力する最低ログレベル) に関わらず全レベルのエントリを保持するため、level に DEBUG を指定すると標準出力に出ていないエントリも返る。\n",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "level",
+            "required": false,
+            "description": "この重要度以上のエントリのみ返す。",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "DEBUG",
+                "INFO",
+                "WARN",
+                "ERROR"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "namespace",
+            "required": false,
+            "description": "名前空間の前方一致フィルタ。",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "description": "この ISO 8601 タイムスタンプ以降のエントリのみ返す。",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "description": "最大取得件数。1 以上 1000 以下。既定は 100。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "処理成功時。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseGetLogs"
+                },
+                "examples": {
+                  "succeeded": {
+                    "value": [
+                      {
+                        "timestamp": "2026-06-14T09:00:00.000Z",
+                        "level": "INFO",
+                        "namespace": "api-scheduled-tasks",
+                        "message": "manual run: news"
+                      },
+                      {
+                        "timestamp": "2026-06-14T09:00:01.000Z",
+                        "level": "ERROR",
+                        "namespace": "claude",
+                        "message": "API error: 500"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "level、since、limit のいずれかが不正な場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "badRequest": {
+                    "value": {
+                      "error": "Scope not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/permissions/allow": {
+      "get": {
+        "operationId": "getPermissionsAllow",
+        "summary": "常時許可の取得。",
+        "tags": [
+          "permissions"
+        ],
+        "description": "ワークスペースの permissions.allow に入っているツール名の一覧を返す。書き換える operation は置かない。\n",
+        "responses": {
+          "200": {
+            "description": "処理成功時。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseGetPermissionsAllow"
+                },
+                "examples": {
+                  "succeeded": {
+                    "value": {
+                      "allow": [
+                        "Read",
+                        "Grep"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/questions": {
+      "get": {
+        "operationId": "getQuestions",
+        "summary": "保留中の質問の一覧。",
+        "tags": [
+          "questions"
+        ],
+        "description": "保留中の質問 (AskUserQuestion) を返す。SSE の再接続後に状態を取り直すために使う。質問に答える operation は置かない。解決は `question.resolved` で配られる。\n",
+        "responses": {
+          "200": {
+            "description": "処理成功時。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseGetQuestions"
+                },
+                "examples": {
+                  "succeeded": {
+                    "value": {
+                      "questions": [
+                        {
+                          "id": "q-0001",
+                          "scopeId": "1234567890123456789",
+                          "questions": [
+                            {
+                              "question": "どちらの宿にしますか。",
+                              "header": "宿",
+                              "options": [
+                                {
+                                  "label": "駅前",
+                                  "description": "駅から徒歩 3 分。"
+                                },
+                                {
+                                  "label": "海沿い",
+                                  "description": "駅から徒歩 20 分。"
+                                }
+                              ],
+                              "multiSelect": false
+                            }
+                          ],
+                          "requestedAt": "2026-11-21T09:00:00Z",
+                          "expiresAt": "2026-11-21T09:05:00Z"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-tasks": {
+      "get": {
+        "operationId": "getScheduledTasks",
+        "summary": "定期実行タスク一覧の取得。",
+        "tags": [
+          "scheduled-tasks"
+        ],
+        "description": "登録済みの定期実行タスクの一覧を取得する。\n",
+        "responses": {
+          "200": {
+            "description": "処理成功時。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseGetScheduledTasks"
+                },
+                "examples": {
+                  "succeeded": {
+                    "value": {
+                      "tasks": [
+                        {
+                          "id": "news.md",
+                          "kind": "prompt",
+                          "schedule": "0 9 * * *",
+                          "channelId": "1234567890123456789",
+                          "once": false
+                        },
+                        {
+                          "id": "reminder.md",
+                          "kind": "prompt",
+                          "schedule": "30 18 * * 5",
+                          "once": true
+                        },
+                        {
+                          "id": "check.yaml",
+                          "kind": "command",
+                          "schedule": "*/30 * * * *",
+                          "once": false
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "定期実行機能が無効な場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "unavailable": {
+                    "value": {
+                      "error": "Scope not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-tasks/reload": {
+      "post": {
+        "operationId": "postScheduledTasksReload",
+        "summary": "定期実行タスクの定義の再読み込み。",
+        "tags": [
+          "scheduled-tasks"
+        ],
+        "description": "定期実行タスクの定義ファイルを再読み込みする。定義の変更を反映する際に使う。\n",
+        "responses": {
+          "200": {
+            "description": "処理成功時。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsePostScheduledTasksReload"
+                },
+                "examples": {
+                  "succeeded": {
+                    "value": {
+                      "ok": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "定期実行の再読み込み機能が無効な場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "unavailable": {
+                    "value": {
+                      "error": "Scope not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-tasks/{taskId}/run": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "taskId",
+          "required": true,
+          "description": "実行するタスクの ID (例 news.md)。ID はパーセントエンコードして渡す。",
+          "schema": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ],
+      "post": {
+        "operationId": "postScheduledTasksTaskIdRun",
+        "summary": "定期実行タスクの手動実行。",
+        "tags": [
+          "scheduled-tasks"
+        ],
+        "description": "path の ID で登録済みのタスクを即座に実行する。\n",
+        "responses": {
+          "200": {
+            "description": "タスクの実行が終わった場合。成否は result で判断する。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsePostScheduledTasksTaskIdRun"
+                },
+                "examples": {
+                  "succeeded": {
+                    "value": {
+                      "ok": true,
+                      "id": "news.md",
+                      "result": "succeeded"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "指定したタスクが存在しない場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "notFound": {
+                    "value": {
+                      "error": "Scope not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "ルート内で想定外の例外が起きた場合。タスクの失敗では返らない。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "processingFailed": {
+                    "value": {
+                      "error": "Scope not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "定期実行機能が無効な場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "unavailable": {
+                    "value": {
+                      "error": "Scope not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scopes/{scopeId}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "scopeId",
+          "required": true,
+          "description": "client が決めるスコープ ID。不透明な文字列として扱う。",
+          "schema": {
+            "type": "string"
+          },
+          "example": "1234567890123456789"
+        }
+      ],
+      "put": {
+        "operationId": "putScopesScopeId",
+        "summary": "スコープの登録・更新。",
+        "tags": [
+          "scopes"
+        ],
+        "description": "スコープを登録する。既にあれば親を更新する。親は設定のフォールバック解決で辿る。親を持つスコープを登録するときは、親を先に登録する。`/scopes/{scopeId}` 配下の他の operation は、この operation で登録したスコープだけを対象にし、未登録のスコープには 404 を返す。parentId が自分自身のとき、親をたどると自分に戻るとき、親が未登録のときは、継承の解決が終わらなくなるため 400 で拒否する。Discord の client は、チャンネル ID またはスレッド ID をそのままスコープ ID に使い、スレッドの親チャンネルを parentId に渡す。\n",
+        "requestBody": {
+          "required": true,
+          "description": "親スコープ。",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestPutScopesScopeId"
+              },
+              "examples": {
+                "normal": {
+                  "value": {
+                    "parentId": "1234567890123456780"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "登録・更新したスコープ。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Scope"
+                },
+                "examples": {
+                  "succeeded": {
+                    "value": {
+                      "id": "1234567890123456789",
+                      "parentId": "1234567890123456780"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "JSON が不正、スキーマに適合しない、または parentId が自分自身、循環する親、未登録の親を指す場合。親を持つスコープを登録するときは、親を先に登録する。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "badRequest": {
+                    "value": {
+                      "error": "Scope not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "getScopesScopeId",
+        "summary": "スコープの取得。",
+        "tags": [
+          "scopes"
+        ],
+        "description": "登録済みのスコープを返す。登録されていないスコープには 404 を返す。\n",
+        "responses": {
+          "200": {
+            "description": "処理成功時。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Scope"
+                },
+                "examples": {
+                  "succeeded": {
+                    "value": {
+                      "id": "1234567890123456789",
+                      "parentId": "1234567890123456780"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "スコープが登録されていない場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "notFound": {
+                    "value": {
+                      "error": "Scope not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scopes/{scopeId}/messages": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "scopeId",
+          "required": true,
+          "description": "client が決めるスコープ ID。不透明な文字列として扱う。",
+          "schema": {
+            "type": "string"
+          },
+          "example": "1234567890123456789"
+        }
+      ],
+      "post": {
+        "operationId": "postScopesScopeIdMessages",
+        "summary": "ターンの開始。",
+        "tags": [
+          "turns"
+        ],
+        "description": "対象スコープへ依頼を渡してターンを始める。依頼は対象スコープのキューに積まれ、会話中のターンがあれば、その後ろで同じセッションを再開して処理する。処理の完了を待たずに 202 と turnId を返す。経過と結果は `GET /events` の SSE で受け取る。全ての依頼に、プロンプト先頭に認可ユーザー本人の発話ではない旨の注記が付き、依頼のレート制限 (bot 全体で直近 10 分に 6 回) を超えると 429 を返す。登録されていないスコープには 404 を返す。\n",
+        "requestBody": {
+          "required": true,
+          "description": "依頼の本文と、任意の依頼元。",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestPostScopesScopeIdMessages"
+              },
+              "examples": {
+                "normal": {
+                  "value": {
+                    "prompt": "旅行スレッドで、今日の宿までの残りの道のりを一言添えて声をかけて。",
+                    "source": "scheduled-task:touring-check"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "依頼を対象スコープのキューに積んだ場合。処理の完了は待たない。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsePostScopesScopeIdMessages"
+                },
+                "examples": {
+                  "accepted": {
+                    "value": {
+                      "turnId": "t-0001"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "JSON が不正、またはスキーマに適合しない場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "badRequest": {
+                    "value": {
+                      "error": "Scope not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "スコープが登録されていない場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "notFound": {
+                    "value": {
+                      "error": "Scope not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "依頼のレート制限を超過した場合 (bot 全体で直近 10 分に 6 回まで。自己メンションとは別枠)。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Scope not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "依頼の機能が無効な場合、または bot が終了処理中の場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "unavailable": {
+                    "value": {
+                      "error": "Scope not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scopes/{scopeId}/settings": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "scopeId",
+          "required": true,
+          "description": "client が決めるスコープ ID。不透明な文字列として扱う。",
+          "schema": {
+            "type": "string"
+          },
+          "example": "1234567890123456789"
+        }
+      ],
+      "get": {
+        "operationId": "getScopesScopeIdSettings",
+        "summary": "スコープ設定の取得。",
+        "tags": [
+          "settings"
+        ],
+        "description": "指定スコープの設定を返す。session、model、effort は本体がスコープごとに持つ。model と effort は自身、親、デフォルトの順に継承を解決し、値の出所を source で返す。\n",
+        "responses": {
+          "200": {
+            "description": "処理成功時。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScopeSettings"
+                },
+                "examples": {
+                  "succeeded": {
+                    "value": {
+                      "session": "550e8400-e29b-41d4-a716-446655440000",
+                      "model": {
+                        "value": "claude-sonnet-4-6",
+                        "source": "parent"
+                      },
+                      "effort": {
+                        "value": "high",
+                        "source": "scope"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "スコープが登録されていない場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "notFound": {
+                    "value": {
+                      "error": "Scope not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "patchScopesScopeIdSettings",
+        "summary": "スコープ設定の部分更新。",
+        "tags": [
+          "settings"
+        ],
+        "description": "指定スコープの設定を JSON Merge Patch (RFC 7386) の意味論で部分更新する。書き込みは常に scopeId 自身に対して行われる。レスポンスは書き込み後にサーバが解決した設定であり、親へのフォールバックを含む。\n",
+        "requestBody": {
+          "required": true,
+          "description": "更新内容。",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestPatchScopesScopeIdSettings"
+              },
+              "examples": {
+                "normal": {
+                  "value": {
+                    "model": "claude-sonnet-4-6",
+                    "effort": null
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "処理成功時。更新後にサーバが解決した設定を返す。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScopeSettings"
+                },
+                "examples": {
+                  "succeeded": {
+                    "value": {
+                      "session": "550e8400-e29b-41d4-a716-446655440000",
+                      "model": {
+                        "value": "claude-sonnet-4-6",
+                        "source": "parent"
+                      },
+                      "effort": {
+                        "value": "high",
+                        "source": "scope"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "リクエストボディがスキーマに適合しない場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "badRequest": {
+                    "value": {
+                      "error": "Scope not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "スコープが登録されていない場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "notFound": {
+                    "value": {
+                      "error": "Scope not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteScopesScopeIdSettings",
+        "summary": "スコープ設定の削除。",
+        "tags": [
+          "settings"
+        ],
+        "description": "指定スコープの設定を全削除する。削除は常に scopeId 自身に対して行われるため、消えるのは scopeId 配下のキーだけであり、親スコープの設定は残る。\n",
+        "responses": {
+          "200": {
+            "description": "処理成功時。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseDeleteScopesScopeIdSettings"
+                },
+                "examples": {
+                  "succeeded": {
+                    "value": {
+                      "ok": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "スコープが登録されていない場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "notFound": {
+                    "value": {
+                      "error": "Scope not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scopes/{scopeId}/turns": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "scopeId",
+          "required": true,
+          "description": "client が決めるスコープ ID。不透明な文字列として扱う。",
+          "schema": {
+            "type": "string"
+          },
+          "example": "1234567890123456789"
+        }
+      ],
+      "get": {
+        "operationId": "getScopesScopeIdTurns",
+        "summary": "ターンの一覧の取得。",
+        "tags": [
+          "turns"
+        ],
+        "description": "実行中と待機中のターンの一覧を返す。実行中のターンが先頭で、続けて待機中のターンをキューの順に並べる。ターンが無ければ空配列を返す。SSE は切断中のイベントを再送しないため、再接続した client が状態を取り直すために使う。登録されていないスコープには 404 を返す。\n",
+        "responses": {
+          "200": {
+            "description": "処理成功時。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseGetScopesScopeIdTurns"
+                },
+                "examples": {
+                  "succeeded": {
+                    "value": {
+                      "turns": [
+                        {
+                          "id": "t-0001",
+                          "scopeId": "1234567890123456789",
+                          "status": "running",
+                          "source": "scheduled-task:touring-check"
+                        },
+                        {
+                          "id": "t-0002",
+                          "scopeId": "1234567890123456789",
+                          "status": "queued"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "スコープが登録されていない場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "notFound": {
+                    "value": {
+                      "error": "Scope not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scopes/{scopeId}/turns/{turnId}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "scopeId",
+          "required": true,
+          "description": "client が決めるスコープ ID。不透明な文字列として扱う。",
+          "schema": {
+            "type": "string"
+          },
+          "example": "1234567890123456789"
+        },
+        {
+          "in": "path",
+          "name": "turnId",
+          "required": true,
+          "description": "ターン ID。",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "operationId": "deleteScopesScopeIdTurnsTurnId",
+        "summary": "ターンの中止。",
+        "tags": [
+          "turns"
+        ],
+        "description": "ターンを 1 件止める。実行中のターンは中断し、待機中のターンはキューから外す。中止を受け付けた時点で 202 を返し、完了は `turn.ended` (`result` は `cancelled`) で知る。スコープが登録されていない場合と、該当するターンが無い場合 (既に終わったものを含む) は 404 を返す。\n",
+        "responses": {
+          "202": {
+            "description": "中止を受け付けた場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseDeleteScopesScopeIdTurnsTurnId"
+                },
+                "examples": {
+                  "accepted": {
+                    "value": {
+                      "ok": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "スコープが登録されていない場合、または該当するターンが無い場合 (既に終わったターンを含む)。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "notFound": {
+                    "value": {
+                      "error": "Scope not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/settings/default": {
+      "get": {
+        "operationId": "getSettingsDefault",
+        "summary": "グローバルデフォルト設定の取得。",
+        "tags": [
+          "settings"
+        ],
+        "description": "config.json の claude.defaults に由来するグローバルデフォルト設定を取得する。読み取り専用であり、config.json はランタイムで書き換えない方針のため PATCH と DELETE は定義しない。\n",
+        "responses": {
+          "200": {
+            "description": "処理成功時。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefaultSettings"
+                },
+                "examples": {
+                  "succeeded": {
+                    "value": {
+                      "model": "claude-sonnet-4-6",
+                      "effort": "high"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Approval": {
+        "type": "object",
+        "description": "保留中のツール承認。時間切れは要求から 5 分後。",
+        "required": [
+          "id",
+          "scopeId",
+          "toolName",
+          "input",
+          "requestedAt",
+          "expiresAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "承認 ID。"
+          },
+          "scopeId": {
+            "type": "string",
+            "description": "client が決めるスコープ ID。不透明な文字列として扱う。"
+          },
+          "toolName": {
+            "type": "string",
+            "description": "承認を求めているツール名。"
+          },
+          "description": {
+            "type": "string",
+            "description": "ツール入力の description。ツールが渡した場合だけ入る。"
+          },
+          "input": {
+            "type": "object",
+            "description": "ツールへの入力。ツールごとに形が違う。",
+            "additionalProperties": true
+          },
+          "requestedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "要求した時刻。RFC 3339 形式。"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "時間切れになる時刻。RFC 3339 形式。"
+          }
+        }
+      },
+      "DefaultSettings": {
+        "type": "object",
+        "description": "config.json の claude.defaults に由来するグローバルデフォルト設定。出所 (source) は持たない。",
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "デフォルトのモデル alias またはフルネーム。config.json で未設定の場合はフィールドごと省略される。",
+            "example": "claude-sonnet-4-6"
+          },
+          "effort": {
+            "type": "string",
+            "description": "デフォルトの effort レベル。config.json で未設定の場合はフィールドごと省略される。",
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ],
+            "example": "high"
+          }
+        }
+      },
+      "EventApprovalResolvedData": {
+        "type": "object",
+        "description": "ツール承認の解決。",
+        "required": [
+          "scopeId",
+          "approvalId",
+          "decision"
+        ],
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "client が決めるスコープ ID。不透明な文字列として扱う。"
+          },
+          "approvalId": {
+            "type": "string",
+            "description": "承認 ID。"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/EnumApprovalOutcome"
+          }
+        }
+      },
+      "EventErrorData": {
+        "type": "object",
+        "description": "ターンの失敗。",
+        "required": [
+          "scopeId",
+          "turnId",
+          "message"
+        ],
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "client が決めるスコープ ID。不透明な文字列として扱う。"
+          },
+          "turnId": {
+            "type": "string",
+            "description": "ターン ID。"
+          },
+          "message": {
+            "type": "string",
+            "description": "失敗の要約。"
+          }
+        }
+      },
+      "EventProgressData": {
+        "type": "object",
+        "description": "ツール実行の進捗。",
+        "required": [
+          "scopeId",
+          "turnId",
+          "toolName",
+          "elapsedSeconds"
+        ],
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "client が決めるスコープ ID。不透明な文字列として扱う。"
+          },
+          "turnId": {
+            "type": "string",
+            "description": "ターン ID。"
+          },
+          "toolName": {
+            "type": "string",
+            "description": "実行中のツール名。"
+          },
+          "elapsedSeconds": {
+            "type": "number",
+            "description": "ツールの実行開始からの経過秒数。"
+          }
+        }
+      },
+      "EventQuestionResolvedData": {
+        "type": "object",
+        "description": "質問の解決。",
+        "required": [
+          "scopeId",
+          "questionId",
+          "result"
+        ],
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "client が決めるスコープ ID。不透明な文字列として扱う。"
+          },
+          "questionId": {
+            "type": "string",
+            "description": "質問 ID。"
+          },
+          "result": {
+            "$ref": "#/components/schemas/EnumQuestionOutcome"
+          }
+        }
+      },
+      "EventReplyData": {
+        "type": "object",
+        "description": "Claude の回答テキスト。分割や宛先の前置は client が行う。",
+        "required": [
+          "scopeId",
+          "turnId",
+          "text"
+        ],
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "client が決めるスコープ ID。不透明な文字列として扱う。"
+          },
+          "turnId": {
+            "type": "string",
+            "description": "ターン ID。"
+          },
+          "text": {
+            "type": "string",
+            "description": "回答テキスト。"
+          }
+        }
+      },
+      "EventScheduledTaskErrorData": {
+        "type": "object",
+        "description": "定期実行タスクの失敗。",
+        "required": [
+          "taskId",
+          "message"
+        ],
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "client が決めるスコープ ID。不透明な文字列として扱う。送信先のスコープを持たないタスクでは省略される。"
+          },
+          "taskId": {
+            "type": "string",
+            "description": "タスクの ID。"
+          },
+          "message": {
+            "type": "string",
+            "description": "失敗の要約。"
+          }
+        }
+      },
+      "EventScheduledTaskOutputData": {
+        "type": "object",
+        "description": "定期実行タスクの結果または標準出力。",
+        "required": [
+          "taskId",
+          "text"
+        ],
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "client が決めるスコープ ID。不透明な文字列として扱う。送信先のスコープを持たないタスクでは省略される。"
+          },
+          "taskId": {
+            "type": "string",
+            "description": "タスクの ID。"
+          },
+          "text": {
+            "type": "string",
+            "description": "出力のテキスト。"
+          }
+        }
+      },
+      "EventThinkingData": {
+        "type": "object",
+        "description": "Claude の推論 (thinking) のテキスト。本体は常に流し、見せるかどうかは client が決める。",
+        "required": [
+          "scopeId",
+          "turnId",
+          "text"
+        ],
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "client が決めるスコープ ID。不透明な文字列として扱う。"
+          },
+          "turnId": {
+            "type": "string",
+            "description": "ターン ID。"
+          },
+          "text": {
+            "type": "string",
+            "description": "推論のテキスト。"
+          }
+        }
+      },
+      "EventTurnEndedData": {
+        "type": "object",
+        "description": "ターンが終わった。成否に関わらず最後に 1 回届く。",
+        "required": [
+          "scopeId",
+          "turnId",
+          "result"
+        ],
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "client が決めるスコープ ID。不透明な文字列として扱う。"
+          },
+          "turnId": {
+            "type": "string",
+            "description": "ターン ID。"
+          },
+          "result": {
+            "$ref": "#/components/schemas/EnumTurnResult"
+          }
+        }
+      },
+      "EventTurnQueuedData": {
+        "type": "object",
+        "description": "同じスコープで実行中のターンがあり、このターンが待機に入った。",
+        "required": [
+          "scopeId",
+          "turnId"
+        ],
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "client が決めるスコープ ID。不透明な文字列として扱う。"
+          },
+          "turnId": {
+            "type": "string",
+            "description": "ターン ID。"
+          }
+        }
+      },
+      "EventTurnStartedData": {
+        "type": "object",
+        "description": "ターンが始まった。",
+        "required": [
+          "scopeId",
+          "turnId"
+        ],
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "client が決めるスコープ ID。不透明な文字列として扱う。"
+          },
+          "turnId": {
+            "type": "string",
+            "description": "ターン ID。"
+          }
+        }
+      },
+      "LogEntry": {
+        "type": "object",
+        "description": "ログエントリ。",
+        "required": [
+          "timestamp",
+          "level",
+          "namespace",
+          "message"
+        ],
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "タイムスタンプ。ISO 8601 形式。"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "DEBUG",
+              "INFO",
+              "WARN",
+              "ERROR"
+            ],
+            "description": "ログレベル。"
+          },
+          "namespace": {
+            "type": "string",
+            "description": "ロガーの名前空間。",
+            "example": "api-scheduled-tasks"
+          },
+          "message": {
+            "type": "string",
+            "description": "メッセージ本文。引数を含む文字列化済み。"
+          }
+        }
+      },
+      "PendingQuestion": {
+        "type": "object",
+        "description": "保留中の質問。時間切れは要求から 5 分後。",
+        "required": [
+          "id",
+          "scopeId",
+          "questions",
+          "requestedAt",
+          "expiresAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "質問 ID。"
+          },
+          "scopeId": {
+            "type": "string",
+            "description": "client が決めるスコープ ID。不透明な文字列として扱う。"
+          },
+          "questions": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 4,
+            "description": "質問。1 件以上 4 件以下。",
+            "items": {
+              "$ref": "#/components/schemas/Question"
+            }
+          },
+          "requestedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "要求した時刻。RFC 3339 形式。"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "時間切れになる時刻。RFC 3339 形式。"
+          }
+        }
+      },
+      "Question": {
+        "type": "object",
+        "description": "AskUserQuestion の 1 質問。",
+        "required": [
+          "question",
+          "header",
+          "options",
+          "multiSelect"
+        ],
+        "properties": {
+          "question": {
+            "type": "string",
+            "description": "質問文。"
+          },
+          "header": {
+            "type": "string",
+            "description": "質問の見出し。"
+          },
+          "options": {
+            "type": "array",
+            "maxItems": 24,
+            "description": "選択肢。24 件まで。自由入力は client が足す。",
+            "items": {
+              "$ref": "#/components/schemas/QuestionOption"
+            }
+          },
+          "multiSelect": {
+            "type": "boolean",
+            "description": "複数選択を許すか。"
+          }
+        }
+      },
+      "QuestionOption": {
+        "type": "object",
+        "description": "質問の選択肢。",
+        "required": [
+          "label",
+          "description"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "選択肢の表示名。"
+          },
+          "description": {
+            "type": "string",
+            "description": "選択肢の説明。"
+          }
+        }
+      },
+      "ScheduledTask": {
+        "type": "object",
+        "description": "登録済みの定期実行タスク。",
+        "required": [
+          "id",
+          "schedule",
+          "kind"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "タスクの ID。ファイル名と同じ。"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "prompt",
+              "command"
+            ],
+            "description": "タスクの種別。prompt は本文を Claude に渡す `.md`、command は `sh -c` で実行する `.yaml`。"
+          },
+          "schedule": {
+            "type": "string",
+            "description": "cron 式。5 フィールド、TZ 環境変数に依存する。",
+            "example": "0 9 * * *"
+          },
+          "channelId": {
+            "type": "string",
+            "description": "結果の自動投稿先チャンネル ID。未指定のタスクでは省略される。"
+          },
+          "once": {
+            "type": "boolean",
+            "description": "1 回実行後にタスクのファイルを自動削除するか。"
+          }
+        }
+      },
+      "Scope": {
+        "type": "object",
+        "description": "スコープ。会話のまとまりの単位で、親を 1 つだけ持てる。",
+        "required": [
+          "id",
+          "parentId"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "client が決めるスコープ ID。不透明な文字列として扱う。"
+          },
+          "parentId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "親スコープの ID。親が無ければ null。設定のフォールバック解決で親を辿る。"
+          }
+        }
+      },
+      "ScopeSettings": {
+        "type": "object",
+        "description": "スコープの解決済み設定。model と effort は自身、親、デフォルトの順にフォールバックして解決し、値の出所を source で返す。session は親子で独立しており、フォールバックしない。",
+        "properties": {
+          "session": {
+            "type": "string",
+            "description": "セッション ID。未設定の場合はフィールドごと省略される。",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "model": {
+            "$ref": "#/components/schemas/SettingEntry"
+          },
+          "effort": {
+            "$ref": "#/components/schemas/SettingEntry"
+          }
+        }
+      },
+      "SettingEntry": {
+        "type": "object",
+        "description": "文字列設定値とその出所。",
+        "required": [
+          "value",
+          "source"
+        ],
+        "properties": {
+          "value": {
+            "type": "string",
+            "description": "解決された設定値。",
+            "example": "claude-sonnet-4-6"
+          },
+          "source": {
+            "$ref": "#/components/schemas/EnumSettingSource"
+          }
+        }
+      },
+      "Turn": {
+        "type": "object",
+        "description": "ターン。依頼 1 件の処理の単位。",
+        "required": [
+          "id",
+          "scopeId",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ターン ID。"
+          },
+          "scopeId": {
+            "type": "string",
+            "description": "client が決めるスコープ ID。不透明な文字列として扱う。"
+          },
+          "status": {
+            "$ref": "#/components/schemas/EnumTurnStatus"
+          },
+          "source": {
+            "type": "string",
+            "description": "依頼元の識別子。依頼の `source` をそのまま返す。省略された依頼では省かれる。"
+          }
+        }
+      },
+      "EnumApprovalOutcome": {
+        "type": "string",
+        "description": "承認の結果。allow は今回だけ許可、allowAlways は常時許可に加えて許可、deny は拒否、expired は時間切れ。",
+        "enum": [
+          "allow",
+          "allowAlways",
+          "deny",
+          "expired"
+        ]
+      },
+      "EnumQuestionOutcome": {
+        "type": "string",
+        "description": "質問の結果。answered は回答あり、denied は回答の拒否、expired は時間切れ。",
+        "enum": [
+          "answered",
+          "denied",
+          "expired"
+        ]
+      },
+      "EnumSettingSource": {
+        "type": "string",
+        "description": "値の出所。scope はそのスコープ自身の値、parent は親スコープの値、default はグローバルデフォルト値を表す。",
+        "enum": [
+          "scope",
+          "parent",
+          "default"
+        ]
+      },
+      "EnumTurnResult": {
+        "type": "string",
+        "description": "ターンの終わり方。completed は最後まで実行した、failed は失敗した、cancelled は中止した (待機中のまま止められたターンを含む)。",
+        "enum": [
+          "completed",
+          "failed",
+          "cancelled"
+        ]
+      },
+      "EnumTurnStatus": {
+        "type": "string",
+        "description": "ターンの状態。queued は同じスコープで実行中のターンの後ろで待機中、running は実行中。",
+        "enum": [
+          "queued",
+          "running"
+        ]
+      },
+      "RequestPatchScopesScopeIdSettings": {
+        "type": "object",
+        "description": "スコープ設定の部分更新リクエスト。JSON Merge Patch (RFC 7386) の意味論に従う。指定しなかったキーは変更せず、値に null を指定したキーは設定を削除してフォールバック解決へ戻す。",
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "description": "モデルの alias またはフルネーム。null を指定すると削除し、フォールバック解決へ戻す。",
+            "example": "claude-sonnet-4-6"
+          },
+          "effort": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "effort レベル。null を指定すると削除し、フォールバック解決へ戻す。",
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max",
+              null
+            ],
+            "example": "high"
+          },
+          "session": {
+            "type": "null",
+            "description": "セッションの削除指定のみを許可する。null 以外の値の書き込みを許可すると、任意のセッション ID を指定して他スコープの会話セッションを乗っ取れる経路になるため、削除以外の操作は許可しない。"
+          }
+        }
+      },
+      "RequestPostScopesScopeIdMessages": {
+        "type": "object",
+        "description": "ターンの開始リクエスト。",
+        "additionalProperties": false,
+        "required": [
+          "prompt"
+        ],
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S",
+            "description": "対象のスコープへ渡す依頼の本文。空白以外を 1 文字以上含むこと。"
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "^[^\\x00-\\x1F\\x7F]+$",
+            "description": "依頼元の識別子 (例 scheduled-task:news.md)。指定すると、プロンプト先頭の注記に依頼元として入る。日本語や空白も使えるが、改行・タブなどの制御文字は使えない (改行による注記の偽装を防ぐため)。"
+          }
+        }
+      },
+      "RequestPutScopesScopeId": {
+        "type": "object",
+        "description": "スコープの登録・更新リクエスト。parentId が自分自身のとき、親をたどると自分に戻るとき、親が未登録のときは 400 で拒否する。",
+        "additionalProperties": false,
+        "required": [
+          "parentId"
+        ],
+        "properties": {
+          "parentId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "description": "親スコープの ID。親を持たせないなら null。自分自身、循環する親、未登録の親は 400 で拒否する。"
+          }
+        }
+      },
+      "ResponseDeleteScopesScopeIdSettings": {
+        "type": "object",
+        "description": "スコープ設定の削除結果。",
+        "required": [
+          "ok"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "description": "削除を受け付けたか。常に true を返す。",
+            "example": true
+          }
+        }
+      },
+      "ResponseDeleteScopesScopeIdTurnsTurnId": {
+        "type": "object",
+        "description": "ターンの中止の受付結果。",
+        "required": [
+          "ok"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "description": "中止を受け付けたか。常に true を返す。完了は turn.ended で知る。",
+            "example": true
+          }
+        }
+      },
+      "ResponseError": {
+        "type": "object",
+        "description": "エラー応答。",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "エラーメッセージ。"
+          }
+        }
+      },
+      "ResponseGetApprovals": {
+        "type": "object",
+        "description": "保留中の承認の一覧。",
+        "required": [
+          "approvals"
+        ],
+        "properties": {
+          "approvals": {
+            "type": "array",
+            "description": "承認。要求した順。",
+            "items": {
+              "$ref": "#/components/schemas/Approval"
+            }
+          }
+        }
+      },
+      "ResponseGetEvents": {
+        "description": "SSE の 1 イベント。event の値で data の形が決まる。イベントは追加のみで進化する。client は未知の event を受け取っても検証エラーにせず無視する。この oneOf は現時点で定義済みのイベントの一覧である。",
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "同じスコープで実行中のターンがあり、このターンが待機に入った。",
+            "required": [
+              "event",
+              "data"
+            ],
+            "properties": {
+              "event": {
+                "type": "string",
+                "const": "turn.queued",
+                "description": "イベント種別。"
+              },
+              "data": {
+                "type": "string",
+                "description": "イベントの本体。JSON 文字列である。",
+                "contentMediaType": "application/json",
+                "contentSchema": {
+                  "$ref": "#/components/schemas/EventTurnQueuedData"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "ターンが始まった。",
+            "required": [
+              "event",
+              "data"
+            ],
+            "properties": {
+              "event": {
+                "type": "string",
+                "const": "turn.started",
+                "description": "イベント種別。"
+              },
+              "data": {
+                "type": "string",
+                "description": "イベントの本体。JSON 文字列である。",
+                "contentMediaType": "application/json",
+                "contentSchema": {
+                  "$ref": "#/components/schemas/EventTurnStartedData"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Claude の回答テキスト。分割や宛先の前置は client が行う。",
+            "required": [
+              "event",
+              "data"
+            ],
+            "properties": {
+              "event": {
+                "type": "string",
+                "const": "reply",
+                "description": "イベント種別。"
+              },
+              "data": {
+                "type": "string",
+                "description": "イベントの本体。JSON 文字列である。",
+                "contentMediaType": "application/json",
+                "contentSchema": {
+                  "$ref": "#/components/schemas/EventReplyData"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Claude の推論 (thinking) のテキスト。",
+            "required": [
+              "event",
+              "data"
+            ],
+            "properties": {
+              "event": {
+                "type": "string",
+                "const": "thinking",
+                "description": "イベント種別。"
+              },
+              "data": {
+                "type": "string",
+                "description": "イベントの本体。JSON 文字列である。",
+                "contentMediaType": "application/json",
+                "contentSchema": {
+                  "$ref": "#/components/schemas/EventThinkingData"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "ツール実行の進捗。",
+            "required": [
+              "event",
+              "data"
+            ],
+            "properties": {
+              "event": {
+                "type": "string",
+                "const": "progress",
+                "description": "イベント種別。"
+              },
+              "data": {
+                "type": "string",
+                "description": "イベントの本体。JSON 文字列である。",
+                "contentMediaType": "application/json",
+                "contentSchema": {
+                  "$ref": "#/components/schemas/EventProgressData"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "ターンの失敗。",
+            "required": [
+              "event",
+              "data"
+            ],
+            "properties": {
+              "event": {
+                "type": "string",
+                "const": "error",
+                "description": "イベント種別。"
+              },
+              "data": {
+                "type": "string",
+                "description": "イベントの本体。JSON 文字列である。",
+                "contentMediaType": "application/json",
+                "contentSchema": {
+                  "$ref": "#/components/schemas/EventErrorData"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "ターンが終わった。成否に関わらず最後に 1 回届く。",
+            "required": [
+              "event",
+              "data"
+            ],
+            "properties": {
+              "event": {
+                "type": "string",
+                "const": "turn.ended",
+                "description": "イベント種別。"
+              },
+              "data": {
+                "type": "string",
+                "description": "イベントの本体。JSON 文字列である。",
+                "contentMediaType": "application/json",
+                "contentSchema": {
+                  "$ref": "#/components/schemas/EventTurnEndedData"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "定期実行タスクの結果または標準出力。",
+            "required": [
+              "event",
+              "data"
+            ],
+            "properties": {
+              "event": {
+                "type": "string",
+                "const": "scheduled-task.output",
+                "description": "イベント種別。"
+              },
+              "data": {
+                "type": "string",
+                "description": "イベントの本体。JSON 文字列である。",
+                "contentMediaType": "application/json",
+                "contentSchema": {
+                  "$ref": "#/components/schemas/EventScheduledTaskOutputData"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "定期実行タスクの失敗。",
+            "required": [
+              "event",
+              "data"
+            ],
+            "properties": {
+              "event": {
+                "type": "string",
+                "const": "scheduled-task.error",
+                "description": "イベント種別。"
+              },
+              "data": {
+                "type": "string",
+                "description": "イベントの本体。JSON 文字列である。",
+                "contentMediaType": "application/json",
+                "contentSchema": {
+                  "$ref": "#/components/schemas/EventScheduledTaskErrorData"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "ツール承認の要求。data は Approval と同じ。",
+            "required": [
+              "event",
+              "data"
+            ],
+            "properties": {
+              "event": {
+                "type": "string",
+                "const": "approval.requested",
+                "description": "イベント種別。"
+              },
+              "data": {
+                "type": "string",
+                "description": "イベントの本体。JSON 文字列である。",
+                "contentMediaType": "application/json",
+                "contentSchema": {
+                  "$ref": "#/components/schemas/Approval"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "ツール承認の解決。",
+            "required": [
+              "event",
+              "data"
+            ],
+            "properties": {
+              "event": {
+                "type": "string",
+                "const": "approval.resolved",
+                "description": "イベント種別。"
+              },
+              "data": {
+                "type": "string",
+                "description": "イベントの本体。JSON 文字列である。",
+                "contentMediaType": "application/json",
+                "contentSchema": {
+                  "$ref": "#/components/schemas/EventApprovalResolvedData"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "質問の要求。data は PendingQuestion と同じ。",
+            "required": [
+              "event",
+              "data"
+            ],
+            "properties": {
+              "event": {
+                "type": "string",
+                "const": "question.requested",
+                "description": "イベント種別。"
+              },
+              "data": {
+                "type": "string",
+                "description": "イベントの本体。JSON 文字列である。",
+                "contentMediaType": "application/json",
+                "contentSchema": {
+                  "$ref": "#/components/schemas/PendingQuestion"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "質問の解決。",
+            "required": [
+              "event",
+              "data"
+            ],
+            "properties": {
+              "event": {
+                "type": "string",
+                "const": "question.resolved",
+                "description": "イベント種別。"
+              },
+              "data": {
+                "type": "string",
+                "description": "イベントの本体。JSON 文字列である。",
+                "contentMediaType": "application/json",
+                "contentSchema": {
+                  "$ref": "#/components/schemas/EventQuestionResolvedData"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "ResponseGetHealth": {
+        "type": "object",
+        "description": "healthcheck の結果。",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "healthy なら ok、そうでなければ unavailable。",
+            "enum": [
+              "ok",
+              "unavailable"
+            ]
+          }
+        }
+      },
+      "ResponseGetLogs": {
+        "type": "array",
+        "description": "ログエントリ一覧。時系列順。",
+        "items": {
+          "$ref": "#/components/schemas/LogEntry"
+        }
+      },
+      "ResponseGetPermissionsAllow": {
+        "type": "object",
+        "required": [
+          "allow"
+        ],
+        "properties": {
+          "allow": {
+            "type": "array",
+            "description": "常時許可するツール名の一覧。",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "常時許可の一覧。"
+      },
+      "ResponseGetQuestions": {
+        "type": "object",
+        "description": "保留中の質問の一覧。",
+        "required": [
+          "questions"
+        ],
+        "properties": {
+          "questions": {
+            "type": "array",
+            "description": "質問。要求した順。",
+            "items": {
+              "$ref": "#/components/schemas/PendingQuestion"
+            }
+          }
+        }
+      },
+      "ResponseGetScheduledTasks": {
+        "type": "object",
+        "description": "登録済みの定期実行タスクの一覧。",
+        "required": [
+          "tasks"
+        ],
+        "properties": {
+          "tasks": {
+            "type": "array",
+            "description": "タスクの一覧。",
+            "items": {
+              "$ref": "#/components/schemas/ScheduledTask"
+            }
+          }
+        }
+      },
+      "ResponseGetScopesScopeIdTurns": {
+        "type": "object",
+        "description": "実行中と待機中のターンの一覧。実行中が先頭で、続けて待機中をキューの順に並べる。ターンが無ければ空配列。",
+        "required": [
+          "turns"
+        ],
+        "properties": {
+          "turns": {
+            "type": "array",
+            "description": "ターン。",
+            "items": {
+              "$ref": "#/components/schemas/Turn"
+            }
+          }
+        }
+      },
+      "ResponsePostScheduledTasksReload": {
+        "type": "object",
+        "description": "定期実行タスクの定義の再読み込み結果。",
+        "required": [
+          "ok"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "description": "再読み込みを受け付けたか。"
+          }
+        }
+      },
+      "ResponsePostScheduledTasksTaskIdRun": {
+        "type": "object",
+        "description": "定期実行タスクの手動実行結果。",
+        "required": [
+          "ok",
+          "id",
+          "result"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "description": "リクエストを受け付けて処理したか (常に true。タスクの成否は result で返す)。"
+          },
+          "id": {
+            "type": "string",
+            "description": "実行したタスクの ID。"
+          },
+          "result": {
+            "type": "string",
+            "description": "タスクの実行結果。succeeded はタスクが最後まで実行された、failed は実行中に例外が起きた、skipped は同じタスクが実行中、または終了処理中のため実行しなかった。",
+            "enum": [
+              "succeeded",
+              "failed",
+              "skipped"
+            ]
+          }
+        }
+      },
+      "ResponsePostScopesScopeIdMessages": {
+        "type": "object",
+        "description": "ターンの受付結果。",
+        "required": [
+          "turnId"
+        ],
+        "properties": {
+          "turnId": {
+            "type": "string",
+            "description": "受け付けたターンの ID。SSE のイベントはこの値で突き合わせる。"
+          }
+        }
+      }
+    }
+  }
+}
