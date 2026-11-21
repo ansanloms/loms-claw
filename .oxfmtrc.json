@@ -10,7 +10,8 @@
   "ignorePatterns": [
     "data/**",
     "docs/api/**",
-    "api/internal-schemas.ts",
+    "api/openapi.gen.*",
+    "tools/**",
     ".claude/**",
     ".github/workflows/**",
     "**/*.yaml",

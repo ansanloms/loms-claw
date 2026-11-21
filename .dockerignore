@@ -10,6 +10,7 @@ node_modules
 
 # 実行時に不要 (npm run generate 等の開発時のみ使う)
 docs/
+tools/
 README.md
 LICENSE
 **/*.test.ts

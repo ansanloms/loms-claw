@@ -2,7 +2,7 @@
 
 Discord + Claude Agent SDK のパーソナル AI エージェント。単一ギルド・単一ユーザ専用の bot として Discord のメッセージや定期実行 (cron) を受け、Agent SDK の `query()` で SDK 同梱の Claude Code バイナリをエージェントワークスペース上で動かし、結果を Discord に返す。
 
-このブランチ (`next`) は作り直しの途中で、実装は無い。I/F の定義は [docs/api/](docs/api/README.md) にある。要る部品は main から持ち込む。
+このブランチ (`next`) は作り直しの途中で、実装は土台 (API の起動と `GET /health`) だけである。I/F の定義は [docs/api/](docs/api/README.md) にある。要る部品は main から持ち込む。
 
 このファイルは不変条件・規約・開発手順・ドキュメント索引に絞る。
 
@@ -37,13 +37,13 @@ npm run start      # 起動
 npm run dev        # ウォッチモードで起動
 npm test           # テスト + カバレッジ
 npm run check      # 型チェック（tsc --noEmit）
+npm run generate   # docs/api の定義から api/openapi.gen.* を再生成
 npm run lint       # lint + format チェック（oxlint + oxfmt --check）
 npm run fix        # lint 自動修正 + format（oxlint --fix + oxfmt）
 ```
 
-`start`・`dev`・`test`・`check` は、実装が入るまで動かない。
-
-- 実装が入るまでの検証は `npm --prefix docs/api run lint` と `npm --prefix docs/api test`（初回と依存更新後は `npm --prefix docs/api ci` が先に要る）。
+- 初回と依存更新後は `npm ci`・`npm --prefix docs/api ci`・`npm --prefix tools/openapi-typescript ci` が先に要る。
+- `docs/api` の検証は `npm --prefix docs/api run lint` と `npm --prefix docs/api test`。
 
 ## コミット規約
 
@@ -57,6 +57,7 @@ npm run fix        # lint 自動修正 + format（oxlint --fix + oxfmt）
 - テストコード以外で `oxlint-disable-next-line` や `any` を使わない。型の絞り込みは type guard で行う。
 - Node の型除去で落ちる構文（parameter property、`enum`、`namespace`、角括弧アサーション `<T>expr`）を使わない。`tsc` の `erasableSyntaxOnly` が検出する。
 - 相対 import には `.ts` 拡張子を付ける（Node は拡張子無しの相対 import を解決しない）。
+- `api/openapi.gen.*` は生成物で、手で編集しない。`docs/api` の定義を変えたら `npm run generate` を回して差分をコミットする。
 
 ## テスト方針
 

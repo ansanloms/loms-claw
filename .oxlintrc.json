@@ -80,7 +80,8 @@
     "data/",
     "docs/api/",
     "coverage/",
-    "api/internal-schemas.ts",
+    "api/openapi.gen.d.ts",
+    "tools/",
     ".claude/"
   ]
 }

@@ -1,0 +1,12 @@
+{
+  "name": "loms-claw-openapi-typescript",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "openapi-typescript ../../api/openapi.gen.json -o ../../api/openapi.gen.d.ts"
+  },
+  "devDependencies": {
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3"
+  }
+}

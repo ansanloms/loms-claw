@@ -18,6 +18,7 @@
     "build": "run-s build:bundle build:docs",
     "build:bundle": "redocly bundle ./api.yaml --config ./redocly.yaml --ext yaml --output ./dist/api.yaml",
     "build:docs": "redocly build-docs ./api.yaml --config ./redocly.yaml --inlineBundle --output ./dist/index.html",
+    "bundle:json": "redocly bundle ./api.yaml --config ./redocly.yaml --ext json --output",
     "sort": "node ./bin/sort.ts",
     "start": "vite preview --port 4000",
     "dev": "vite"
