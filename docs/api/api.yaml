@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  version: 0.1.0
+  version: 0.1.1
   title: loms-claw Internal API
   description:
     $ref: ./README.md

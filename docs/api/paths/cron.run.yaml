@@ -45,6 +45,16 @@ post:
             notFound:
               value:
                 $ref: ../examples/ResponseError.yaml
+    429:
+      description: 手動実行のレート制限を超過した場合 (bot 全体で直近 10 分に 6 回まで。自己メンション・セッション間の依頼とは別枠)。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            rateLimited:
+              value:
+                $ref: ../examples/ResponseError.yaml
     500:
       description: ルート内で想定外の例外が起きた場合 (onError)。ジョブの失敗では返らない。
       content:

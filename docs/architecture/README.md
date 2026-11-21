@@ -227,7 +227,7 @@ graph TD
 
 ディレクトリをまたぐ辺は次に限られる。
 
-- `client/discord/*` → `core/*`: `DiscordBot` が `Conversation` を生成して `submit()` を呼び、`client/discord/turn-output.ts` の `createTurnOutput()` で組み立てた `TurnOutput` を渡す。`SelfMentionRateLimiter` (自己メンション用は `Conversation` が持ち、セッション間の依頼用は別インスタンスを `client/discord/mod.ts` が持つ) と `core/approval-settings.ts` も core 側にある。`client/discord/session-request.ts` の `submitSessionRequest()` は `Conversation` の `submit()` を呼ぶ。依頼用の `SelfMentionRateLimiter` は `client/discord/mod.ts` が生成して渡す
+- `client/discord/*` → `core/*`: `DiscordBot` が `Conversation` を生成して `submit()` を呼び、`client/discord/turn-output.ts` の `createTurnOutput()` で組み立てた `TurnOutput` を渡す。`SelfMentionRateLimiter` (自己メンション用は `Conversation` が持ち、セッション間の依頼用と cron の手動実行用は別インスタンスを `client/discord/mod.ts` が持つ) と `core/approval-settings.ts` も core 側にある。`client/discord/session-request.ts` の `submitSessionRequest()` は `Conversation` の `submit()` を呼ぶ。依頼用の `SelfMentionRateLimiter` は `client/discord/mod.ts` が生成して渡す
 - `core/conversation.ts` → `claude/mod.ts`, `claude/system-prompt.ts` (型), `store/mod.ts` (型), `config.ts` (型): 会話の 1 ターンで Claude を呼び、セッション・設定を扱うため
 - `cron/executor.ts` → `core/conversation.ts` (`runOneShot`), `claude/system-prompt.ts` (型), `store/mod.ts` (型): cron の prompt ジョブも中核の `runOneShot()` で Claude を呼ぶ (`ScopeQueue` は通さない)
 - `client/discord/cron-target.ts` → `cron/executor.ts` (型のみ): `CronPorts` を Discord で実装する
@@ -271,7 +271,7 @@ graph TD
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `core/conversation.ts`      | `Conversation`: scope 単位の直列キュー → セッション・設定の取得 → システムプロンプト解決 → `askClaude()` → ストリーム消費。出力先 IF `TurnOutput`、入力 `TurnInput`、cron 用の `runOneShot()` もここで定義 |
 | `core/queue.ts`             | `ScopeQueue`: scope 単位でターンを直列化                                                                                                                                                                   |
-| `core/ratelimit.ts`         | `SelfMentionRateLimiter`: スライディングウィンドウレート制限 (bot 全体、Temporal ベース)。自己メンション応答用とセッション間の依頼用の 2 インスタンスで使う                                                |
+| `core/ratelimit.ts`         | `SelfMentionRateLimiter`: スライディングウィンドウレート制限 (bot 全体、Temporal ベース)。自己メンション応答用・セッション間の依頼用・cron の手動実行用の 3 インスタンスで使う                             |
 | `core/flush.ts`             | `splitAtBoundary()`: 文境界 (`。` / 改行) でのバッファ分割アルゴリズム。`Conversation` の回答・thinking のフラッシュが共有する純粋関数                                                                     |
 | `core/approval-settings.ts` | `isInAllowList()` / `addToSettingsAllowList()`: ワークスペースの `.claude/settings.json` の `permissions.allow` 読み書き                                                                                   |
 
@@ -322,13 +322,14 @@ graph TD
 
 ### `cron/` — 定期実行
 
-| パス                | 役割                                                                                                    |
-| ------------------- | ------------------------------------------------------------------------------------------------------- |
-| `cron/types.ts`     | `CronJobDef` 型                                                                                         |
-| `cron/match.ts`     | cron 式パーサー + マッチャー (`parseCronExpression()` / `matchesCron()`)。Temporal でローカルタイム評価 |
-| `cron/loader.ts`    | frontmatter パーサー + `cron/` ディレクトリスキャン (`loadCronJobsFromDir()` / `validateCronJob()`)     |
-| `cron/scheduler.ts` | `CronScheduler`: `setInterval` ベースのスケジューラ                                                     |
-| `cron/executor.ts`  | `CronExecutor`: スケジューラ連携 + `runOneShot()` → `CronPorts` 経由の送信。`CronPorts` の型定義もここ  |
+| パス                 | 役割                                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------------------- |
+| `cron/types.ts`      | `CronJobDef` 型                                                                                         |
+| `cron/match.ts`      | cron 式パーサー + マッチャー (`parseCronExpression()` / `matchesCron()`)。Temporal でローカルタイム評価 |
+| `cron/loader.ts`     | frontmatter パーサー + `cron/` ディレクトリスキャン (`loadCronJobsFromDir()` / `validateCronJob()`)     |
+| `cron/scheduler.ts`  | `CronScheduler`: `setInterval` ベースのスケジューラ                                                     |
+| `cron/manual-run.ts` | `runJobManually()`: 手動実行 (`POST /cron/run`) の存在確認 → レート枠の消費 → 実行                      |
+| `cron/executor.ts`   | `CronExecutor`: スケジューラ連携 + `runOneShot()` → `CronPorts` 経由の送信。`CronPorts` の型定義もここ  |
 
 ### `docs/`, `data/`
 

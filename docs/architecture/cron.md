@@ -15,6 +15,7 @@
 | `cron/loader.ts`                | `loadCronJobsFromDir()` / `validateCronJob()` | `cron/` 走査、フロントマター抽出、JSON Schema 検証                                                                                |
 | `cron/scheduler.ts`             | `CronScheduler`                               | 60 秒 tick で全ジョブを評価し (遅れた tick は直近 60 分まで遡って評価)、マッチしたジョブのコールバックを呼ぶ                      |
 | `cron/executor.ts`              | `CronExecutor`                                | scheduler を保持し、ジョブ 1 件の実行 (`runOneShot()` → `CronPorts` 経由の送信) を担う。`CronPorts` / `CronTarget` の型定義もここ |
+| `cron/manual-run.ts`            | `runJobManually()`                            | 手動実行 (`POST /cron/run`) の入口。存在確認 → レート枠の消費 → `CronExecutor.runJob()` の順に進める                              |
 | `client/discord/cron-target.ts` | `createDiscordCronPorts()`                    | `CronPorts` の Discord 実装 (チャンネル解決 + 分割送信、ギルド変数、承認コールバック)                                             |
 | `client/discord/mod.ts`         | `DiscordBot.start()`                          | `ClientReady` で executor を生成・起動し、reload / run / list を API へ配線する                                                   |
 | `api/routes/cron.ts`            | `createCronRoutes()` / `CronRouteContext`     | `GET /cron` / `POST /cron/run` / `POST /cron/reload`                                                                              |
@@ -166,7 +167,7 @@ Discord 実装 (`client/discord/cron-target.ts` の `createDiscordCronPorts({ cl
 
 `runJob(job)` が 1 件の実行本体で、スケジューラのコールバックと `POST /cron/run` の両方から呼ばれる。共通処理の後、`job.kind` で `runPromptJob()`/`runCommandJob()` (どちらも private) に分岐する。
 
-0. 終了済みガード: `stop()` 済み (終了用の signal が aborted) なら INFO ログを出して `"skipped"` を返す (`running` には足さない)。スケジューラ経由と `POST /cron/run` の両方がここで止まる。
+0. 終了済みガード: `stop()` 済み (終了用の signal が aborted) なら INFO ログを出して `"skipped"` を返す (`running` には足さない)。スケジューラ経由と `POST /cron/run` の両方がここで止まる。`POST /cron/run` はこの前に手動実行のレート枠を消費しており、skip でも枠は戻らない (後述の `POST /cron/run` の段落)。
 1. 並行実行ガード: `running: Set<string>` に同名ジョブがあれば WARN ログを出して return する。無ければ追加する。このガードはジョブ名単位であり、別名ジョブは同一 tick で同時に起動する。
    - news-* 6 本は 8:00 に揃えて同時起動させている。2026-08-23 に 10 分刻みへ分散したが、分散前 (2026-08-23 以前) の同時起動でも負荷集中は見られなかったため、2026-08-29 に 8:00 へ戻した。
    - 負荷集中が問題になる場合はジョブ定義側で `schedule` をずらす。
@@ -223,7 +224,7 @@ command ジョブ (`runCommandJob()`) はこの表のいずれにも触れない
 2. `loadCronJobsFromDir(config.claude.cwd)` でジョブを読み、`cronExecutor.reload(jobs)` で登録だけ行う (タイマーは始めない。スケジューラの開始は手順 7)。`config.claude.cwd` はワークスペースルート (本番は `/data/workspace`、devcontainer では `/app`。[deployment](deployment.md))。
 3. `reloadJobs = () => loadCronJobsFromDir(cwd) → cronExecutor.reload(jobs)` を定義する。
 4. `cronExecutor.setOnceCallback()` で once 後処理を登録する: `join(cwd, "cron", name)` (`name` は拡張子込みのファイル名) を `rm()` し (失敗は ERROR ログ)、続けて `reloadJobs()` を呼ぶ。エージェント側の手動 reload は不要。
-5. `runJobByName(name)`: `cronExecutor.findJob(name)` が無ければ `job not found: {name}` を throw、あれば `runJob(job)` を await してその結果を返す。
+5. `runJobByName(name)`: `cron/manual-run.ts` の `runJobManually()` を呼ぶ。`cronExecutor.findJob(name)` が無ければ `job not found: {name}` を throw する。あれば手動実行のレート枠を消費し、枠が尽きていれば `rate-limited` を返す。枠があれば `runJob(job)` を await してその結果を返す。
 6. `CronRouteContext { reloadCronJobs: reloadJobs, runJob: runJobByName, listJobs: () => cronExecutor.listJobs() }` を `startApiServer(config.claude.apiPort, settingsCtx, healthCtx, cronCtx)` に渡す。
 7. API サーバーの起動に成功したら `cronExecutor.start(cronExecutor.listJobs())` (起動待ちの間の reload を上書きしないよう、実行器に登録済みのジョブを渡す) でスケジューラを開始する。API サーバーの起動に失敗した時点ではスケジューラは始まっていない。起動待ちの間に `shutdown()` が走った場合は、起動したサーバーをタイムアウト付きで閉じてスケジューラを始めずに終える (それ以前の待機の後でも、実行器を作らず・ポートを開かずに終える)。
 
@@ -235,13 +236,15 @@ command ジョブ (`runCommandJob()`) はこの表のいずれにも触れない
 
 `createCronRoutes(ctx)` が Hono サブアプリを返し、`api/server.ts` が `/cron` にマウントする。`ctx` の各関数が未注入なら 503 (`cron not available`/`cron reload not available`) を返す。リクエスト/レスポンスの正は `docs/api/paths/cron*.yaml` と、そこから生成した `api/internal-schemas.ts`。詳細は [internal-api](internal-api.md)。
 
-| エンドポイント      | 入力               | 出力                                                                                    |
-| ------------------- | ------------------ | --------------------------------------------------------------------------------------- |
-| `GET /cron`         | —                  | `{ jobs: [{ name, kind, schedule, channelId?, once }] }` (`channelId` は未指定なら省略) |
-| `POST /cron/run`    | `{ name: string }` | `{ ok: true, name, result }`。`name` 不正は 400、未登録は 404 (`job not found: ...`)    |
-| `POST /cron/reload` | —                  | `{ ok: true }` (ファイル単位の読み込み失敗があっても 200)                               |
+| エンドポイント      | 入力               | 出力                                                                                                                                          |
+| ------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /cron`         | —                  | `{ jobs: [{ name, kind, schedule, channelId?, once }] }` (`channelId` は未指定なら省略)                                                       |
+| `POST /cron/run`    | `{ name: string }` | `{ ok: true, name, result }`。`name` 不正は 400、未登録は 404 (`job not found: ...`)、レート制限の超過は 429 (`cron run rate limit exceeded`) |
+| `POST /cron/reload` | —                  | `{ ok: true }` (ファイル単位の読み込み失敗があっても 200)                                                                                     |
 
 `POST /cron/run` は `runJob()` の完了まで await するため、レスポンスはジョブの実行が終わってから返る。`runJob()` は結果を `CronRunResult` (`succeeded`/`failed`/`skipped`) で返し、レスポンスの `result` に載る。実行中の同名ジョブがある場合と終了処理中 (`stop()` 済み) は、ガードにより skip され (`skipped`)、ジョブ内で例外が起きれば `failed` になるが、どちらも HTTP は 200 のままで 500 にはならない (500 はルート内の想定外の例外のみ)。
+
+手動実行には、bot 全体で直近 10 分に 6 回までのレート制限がある (`core/ratelimit.ts` の `CRON_RUN_RATE_LIMIT_*`。自己メンション・セッション間の依頼とは別枠で、`DiscordBot` の `cronRunLimiter` が持つ)。ルートに注入される `runJob` の実体は `cron/manual-run.ts` の `runJobManually()` で、ジョブの存在確認 (未登録は枠を消費せず 404) → `tryConsume()` → `CronExecutor.runJob()` の順に進む。枠が尽きていれば実行せず、ルートが WARN ログを出して 429 を返す。消費は実行の前なので、`runJob()` のガードで `skipped` になる呼び出しも枠を消費する。こうしているのは、skip になるかが `runJob()` の中で決まって消費の前には分からず、連鎖を抑えるには試行を数えるほうが安全側だからである。スケジューラによる定時起動は制限の対象外。
 
 ## 利用規約との関係
 
