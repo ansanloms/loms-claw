@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
-import { describe, test } from "node:test";
+import { describe, mock, test } from "node:test";
 import { Hono } from "hono";
 import { errorWith } from "../test-helpers.ts";
-import { jsonBody } from "./openapi.ts";
+import { handleError, jsonBody } from "./openapi.ts";
 
 function createTestApp(): Hono {
   const app = new Hono();
+  app.onError(handleError);
+  app.get("/boom", () => {
+    throw new Error("boom");
+  });
   app.patch("/settings", jsonBody("patchScopesScopeIdSettings"), (c) =>
     c.json(c.req.valid("json"), 200),
   );
@@ -60,6 +64,32 @@ describe("jsonBody", () => {
     assert.ok(typeof body === "object" && body !== null);
     assert.deepStrictEqual(Object.keys(body), ["error"]);
     assert.ok("error" in body && typeof body.error === "string");
+  });
+
+  test("JSON として読めない body は { error: string } の 400 になること", async () => {
+    const res = await createTestApp().request("/settings", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: "{bad",
+    });
+    assert.deepStrictEqual(res.status, 400);
+    const body: unknown = await res.json();
+    assert.ok(typeof body === "object" && body !== null);
+    assert.deepStrictEqual(Object.keys(body), ["error"]);
+    assert.ok("error" in body && typeof body.error === "string");
+  });
+
+  test('HTTPException 以外の例外は { error: "Internal Server Error" } の 500 になること', async () => {
+    const spy = mock.method(console, "error", () => {});
+    try {
+      const res = await createTestApp().request("/boom");
+      assert.deepStrictEqual(res.status, 500);
+      assert.deepStrictEqual(await res.json(), {
+        error: "Internal Server Error",
+      });
+    } finally {
+      spy.mock.restore();
+    }
   });
 
   test("存在しない operationId は例外を投げること", () => {

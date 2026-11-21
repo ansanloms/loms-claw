@@ -15,62 +15,6 @@
       "rules": {
         "typescript/no-explicit-any": "off"
       }
-    },
-    {
-      "files": ["**/*.ts"],
-      "excludeFiles": ["client/**", "main.ts"],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "paths": [
-              {
-                "name": "discord.js",
-                "message": "discord.js は client/discord/ でのみ import する"
-              }
-            ],
-            "patterns": [
-              {
-                "group": ["**/client/**"],
-                "message": "client/ は main.ts からのみ import する (依存は client -> core の一方向)"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "files": ["client/**/*.ts"],
-      "excludeFiles": ["client/discord/**"],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "paths": [
-              {
-                "name": "discord.js",
-                "message": "discord.js は client/discord/ でのみ import する"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "files": ["main.ts"],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "paths": [
-              {
-                "name": "discord.js",
-                "message": "discord.js は client/discord/ でのみ import する"
-              }
-            ]
-          }
-        ]
-      }
     }
   ],
   "env": {
@@ -80,7 +24,7 @@
     "data/",
     "docs/api/",
     "coverage/",
-    "api/openapi.gen.d.ts",
+    "packages/server/api/openapi.gen.d.ts",
     "tools/",
     ".claude/"
   ]

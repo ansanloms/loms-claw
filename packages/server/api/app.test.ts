@@ -8,4 +8,10 @@ describe("createApp", () => {
     assert.deepStrictEqual(res.status, 200);
     assert.deepStrictEqual(await res.json(), { status: "ok" });
   });
+
+  test("定義に無いパスへの GET が 404 と { error: Not Found } を返すこと", async () => {
+    const res = await createApp().request("/nope");
+    assert.deepStrictEqual(res.status, 404);
+    assert.deepStrictEqual(await res.json(), { error: "Not Found" });
+  });
 });

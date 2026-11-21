@@ -26,19 +26,11 @@ EOF
 WORKDIR /app
 
 COPY package.json package-lock.json .npmrc ./
+COPY packages/server/package.json packages/server/
 
-# Agent SDK が同梱する Claude Code バイナリを PATH に出す
-# (実行時は SDK が自動解決する。symlink は初回認証 `claude auth login` 等の手動操作用)
 RUN <<EOF
 	set -e
 	npm ci --omit=dev
-	case "$(dpkg --print-architecture)" in
-		amd64) sdk_arch="x64" ;;
-		arm64) sdk_arch="arm64" ;;
-		*) echo "unsupported architecture" >&2; exit 1 ;;
-	esac
-	ln -sf /app/node_modules/@anthropic-ai/claude-agent-sdk-linux-${sdk_arch}/claude /usr/local/bin/claude
-	claude --version
 EOF
 
 COPY . .
@@ -46,4 +38,4 @@ COPY . .
 # 実行時の cwd はエージェントワークスペース (/data/workspace) にする。
 # コードはイメージ焼き込みの /app を絶対パスで参照する。
 WORKDIR /data/workspace
-CMD ["node", "/app/main.ts"]
+CMD ["node", "/app/packages/server/main.ts"]

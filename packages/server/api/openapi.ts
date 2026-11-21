@@ -2,6 +2,8 @@
 import { readFileSync } from "node:fs";
 import { Validator } from "@cfworker/json-schema";
 import type { ValidationResult, Schema } from "@cfworker/json-schema";
+import type { Context } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { validator } from "hono/validator";
 import type { components, operations } from "./openapi.gen.d.ts";
 
@@ -73,6 +75,24 @@ function findBodySchema(operationId: string): Schema {
     }
   }
   throw new Error(`${operationId}: operation が無い`);
+}
+
+/**
+ * hono の onError に渡す関数。hono 自身が投げる HTTPException (JSON として読めない body 等) も
+ * 定義のエラー形式 `{ error: string }` で返す。
+ */
+export function handleError(err: Error, c: Context): Response {
+  if (err instanceof HTTPException) {
+    const body: components["schemas"]["ResponseError"] = {
+      error: err.message,
+    };
+    return c.json(body, err.status);
+  }
+  console.error(err);
+  const body: components["schemas"]["ResponseError"] = {
+    error: "Internal Server Error",
+  };
+  return c.json(body, 500);
 }
 
 /** operationId の requestBody を定義どおりに検証し、型を付ける hono の validator。 */

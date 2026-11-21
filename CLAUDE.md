@@ -13,6 +13,15 @@ Discord + Claude Agent SDK のパーソナル AI エージェント。単一ギ�
 - 単一ギルド ID・単一ユーザー ID（サブスクリプション購入者本人）との完全一致を要求し続ける。他のユーザーがアクセスできない状態を維持する。bot 自身の投稿による起動（「AI to AI 自己メンション」）は別途判定するが、同一ギルド内の自 bot の投稿に限られ、第三者のリクエストが流入する経路にしない。
 - cron による自動実行の頻度・規模を「個人の通常利用（ordinary, individual usage）」の範囲に保つ。
 
+## 構成
+
+npm workspaces (`packages/*`) で package に分ける。依存は package ごとに宣言し、直下の `package.json` は scripts と開発ツールだけを持つ。
+
+- `packages/server`: `@loms-claw/server`。本体で、入口は `packages/server/main.ts`。
+- `tools/openapi-typescript`: OpenAPI からの型生成。workspaces に入れず、独立の `package.json` と lockfile を持つ。
+- `docs/api`: API 定義の文書。package にせず、独立のまま。
+- client (Discord 等) は、server とは別プロセスで動く package として `packages/` に足す予定。
+
 ## 技術スタック
 
 - Node.js 26（TypeScript は型除去で直接実行。`Temporal` は `@js-temporal/polyfill` を各ファイルで import する。Node が組み込みで提供したら外す）
@@ -22,6 +31,8 @@ Discord + Claude Agent SDK のパーソナル AI エージェント。単一ギ�
 - Hono + `@hono/node-server`（内部 HTTP API）
 - SQLite（`node:sqlite`。スコープ設定の永続化）
 - `@cfworker/json-schema`（設定・API・cron frontmatter の検証）
+
+この一覧は完成時の構成で、まだ実装の無い機能の依存（discord.js・croner・Agent SDK・`@js-temporal/polyfill` 等）は入っていない。最初に使う package の `dependencies` に足す。
 
 ## ドキュメント索引
 
@@ -37,7 +48,7 @@ npm run start      # 起動
 npm run dev        # ウォッチモードで起動
 npm test           # テスト + カバレッジ
 npm run check      # 型チェック（tsc --noEmit）
-npm run generate   # docs/api の定義から api/openapi.gen.* を再生成
+npm run generate   # docs/api の定義から packages/server/api/openapi.gen.* を再生成
 npm run lint       # lint + format チェック（oxlint + oxfmt --check）
 npm run fix        # lint 自動修正 + format（oxlint --fix + oxfmt）
 ```
@@ -57,7 +68,7 @@ npm run fix        # lint 自動修正 + format（oxlint --fix + oxfmt）
 - テストコード以外で `oxlint-disable-next-line` や `any` を使わない。型の絞り込みは type guard で行う。
 - Node の型除去で落ちる構文（parameter property、`enum`、`namespace`、角括弧アサーション `<T>expr`）を使わない。`tsc` の `erasableSyntaxOnly` が検出する。
 - 相対 import には `.ts` 拡張子を付ける（Node は拡張子無しの相対 import を解決しない）。
-- `api/openapi.gen.*` は生成物で、手で編集しない。`docs/api` の定義を変えたら `npm run generate` を回して差分をコミットする。
+- `packages/server/api/openapi.gen.*` は生成物で、手で編集しない。`docs/api` の定義を変えたら `npm run generate` を回して差分をコミットする。
 
 ## テスト方針
 
