@@ -55,6 +55,8 @@ npm run fix        # lint 自動修正 + format（oxlint --fix + oxfmt）
 - 初回と依存更新後は `npm ci`・`npm --prefix docs/api ci` が先に要る。
 - 型検査は直下の `npm run check` で回す (`packages/server` の下には生成用の TypeScript 5 が入る)。
 - `docs/api` の検証は `npm --prefix docs/api run lint` と `npm --prefix docs/api test`。
+- CI (`.github/workflows/ci.yml`) は PR と `main`・`next` への push で、直下の `check`・`lint`・`test` (`root`)、生成物の差分検査 (`generated`)、`docs/api` の `lint`・`test` (`docs-api`)、`docker build .` (`docker`) を回す。`verify-lockfile.yml` は `gh actions-lock --verify` で lockfile を検証する。
+- workflow の action を足す・上げるときは `gh actions-lock --no-interactive` で `.github/workflows/actions.lock` を更新する。
 
 ## コミット規約
 
