@@ -1,5 +1,5 @@
 type: object
-description: ターンの開始リクエスト。
+description: ターンの作成リクエスト。
 additionalProperties: false
 required:
   - prompt
@@ -8,10 +8,17 @@ properties:
     type: string
     minLength: 1
     pattern: \S
-    description: 対象のスコープへ渡す依頼の本文。空白以外を 1 文字以上含むこと。
+    description: 対象のスレッドへ渡す依頼の本文。空白以外を 1 文字以上含むこと。
   source:
     type: string
     minLength: 1
     maxLength: 100
     pattern: ^[^\x00-\x1F\x7F]+$
     description: 依頼元の識別子 (例 scheduled-task:news.md)。指定すると、プロンプト先頭の注記に依頼元として入る。日本語や空白も使えるが、改行・タブなどの制御文字は使えない (改行による注記の偽装を防ぐため)。
+  model:
+    type: string
+    minLength: 1
+    description: このターンで使うモデルの alias またはフルネーム。省くと本体の既定値を使う。
+    example: claude-sonnet-4-6
+  effort:
+    $ref: ./EnumEffort.yaml

@@ -33,7 +33,7 @@ export interface paths {
         };
         /**
          * イベントの購読。
-         * @description ターンの経過、定期実行タスクの出力、承認と質問の要求と解決を Server-Sent Events で配信する。scopeId で絞らなければ、全スコープのイベントと定期実行タスクのイベントを 1 接続で受ける。切断中のイベントは再送しない。再接続したら `GET /approvals`、`GET /questions`、`GET /scopes/{scopeId}/turns` で状態を取り直す。イベントは追加のみで進化させる。client は未知の event と未知のフィールドを無視する。thinking は本体が常に流し、見せるかどうかは client が決める。scopeId に未登録のスコープを指定すると 404 を返す。scopeId を省いた要求では 404 は起きない。scopeId で絞った購読には、scopeId を持たないイベントは流れない。
+         * @description ターンの経過、定期実行タスクの出力、承認と質問の要求と解決を Server-Sent Events で配信する。threadId で絞らなければ、全スレッドのイベントと定期実行タスクのイベントを 1 接続で受ける。切断中のイベントは再送しない。再接続したら `GET /approvals`、`GET /questions`、`GET /threads/{threadId}/turns` で状態を取り直す。イベントは追加のみで進化させる。client は未知の event と未知のフィールドを無視する。thinking は本体が常に流し、見せるかどうかは client が決める。threadId に未登録のスレッドを指定すると 404 を返す。threadId を省いた要求では 404 は起きない。threadId で絞った購読には、threadId を持たないイベントは流れない。
          */
         get: operations["getEvents"];
         put?: never;
@@ -76,26 +76,6 @@ export interface paths {
          * @description メモリ上のリングバッファからログエントリを時系列順で取得する。リングバッファは log.level (コンソールに出力する最低ログレベル) に関わらず全レベルのエントリを保持するため、level に DEBUG を指定すると標準出力に出ていないエントリも返る。
          */
         get: operations["getLogs"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/permissions/allow": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 常時許可の取得。
-         * @description ワークスペースの permissions.allow に入っているツール名の一覧を返す。書き換える operation は置かない。
-         */
-        get: operations["getPermissionsAllow"];
         put?: never;
         post?: never;
         delete?: never;
@@ -187,29 +167,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/scopes/{scopeId}": {
+    "/threads/{threadId}": {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /**
-                 * @description client が決めるスコープ ID。不透明な文字列として扱う。
+                 * @description client が決めるスレッド ID。不透明な文字列として扱う。ID はパーセントエンコードして渡す。
                  * @example 1234567890123456789
                  */
-                scopeId: string;
+                threadId: string;
             };
             cookie?: never;
         };
         /**
-         * スコープの取得。
-         * @description 登録済みのスコープを返す。登録されていないスコープには 404 を返す。
+         * スレッドの取得。
+         * @description 登録済みのスレッドを返す。セッションがあれば `sessionId` を含める。登録されていないスレッドには 404 を返す。
          */
-        get: operations["getScopesScopeId"];
+        get: operations["getThreadsThreadId"];
         /**
-         * スコープの登録・更新。
-         * @description スコープを登録する。既にあれば親を更新する。親は設定のフォールバック解決で辿る。親を持つスコープを登録するときは、親を先に登録する。`/scopes/{scopeId}` 配下の他の operation は、この operation で登録したスコープだけを対象にし、未登録のスコープには 404 を返す。parentId が自分自身のとき、親をたどると自分に戻るとき、親が未登録のときは、継承の解決が終わらなくなるため 400 で拒否する。Discord の client は、チャンネル ID またはスレッド ID をそのままスコープ ID に使い、スレッドの親チャンネルを parentId に渡す。
+         * スレッドの登録。
+         * @description スレッドを登録する。既に登録されていれば何もせず、登録済みのスレッドを返す。新しく登録したときは 201、既にあったときは 200 を返す。`/threads/{threadId}` 配下と `POST /threads/{threadId}/turns` の他の operation は、この operation で登録したスレッドだけを対象にし、未登録のスレッドには 404 を返す。Discord の client は、チャンネル ID またはスレッド ID をそのままスレッド ID に使う。
          */
-        put: operations["putScopesScopeId"];
+        put: operations["putThreadsThreadId"];
         post?: never;
         delete?: never;
         options?: never;
@@ -217,103 +197,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/scopes/{scopeId}/messages": {
+    "/threads/{threadId}/session": {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /**
-                 * @description client が決めるスコープ ID。不透明な文字列として扱う。
+                 * @description client が決めるスレッド ID。不透明な文字列として扱う。ID はパーセントエンコードして渡す。
                  * @example 1234567890123456789
                  */
-                scopeId: string;
+                threadId: string;
             };
             cookie?: never;
         };
         get?: never;
         put?: never;
+        post?: never;
         /**
-         * ターンの開始。
-         * @description 対象スコープへ依頼を渡してターンを始める。依頼は対象スコープのキューに積まれ、会話中のターンがあれば、その後ろで同じセッションを再開して処理する。処理の完了を待たずに 202 と turnId を返す。経過と結果は `GET /events` の SSE で受け取る。全ての依頼に、プロンプト先頭に認可ユーザー本人の発話ではない旨の注記が付き、依頼のレート制限 (bot 全体で直近 10 分に 6 回) を超えると 429 を返す。登録されていないスコープには 404 を返す。
+         * セッションの破棄。
+         * @description スレッドのセッションを捨てる。次のターンは新しいセッションを作る。待機中や実行中のターンは止めない (止めるには `DELETE /turns/{turnId}` を使う)。セッションが無いスレッドでは何もせず、捨てた場合と同じく 204 を返す。登録されていないスレッドには 404 を返す。
          */
-        post: operations["postScopesScopeIdMessages"];
-        delete?: never;
+        delete: operations["deleteThreadsThreadIdSession"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/scopes/{scopeId}/settings": {
+    "/threads/{threadId}/turns": {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /**
-                 * @description client が決めるスコープ ID。不透明な文字列として扱う。
+                 * @description client が決めるスレッド ID。不透明な文字列として扱う。ID はパーセントエンコードして渡す。
                  * @example 1234567890123456789
                  */
-                scopeId: string;
-            };
-            cookie?: never;
-        };
-        /**
-         * スコープ設定の取得。
-         * @description 指定スコープの設定を返す。session、model、effort は本体がスコープごとに持つ。model と effort は自身、親、デフォルトの順に継承を解決し、値の出所を source で返す。
-         */
-        get: operations["getScopesScopeIdSettings"];
-        put?: never;
-        post?: never;
-        /**
-         * スコープ設定の削除。
-         * @description 指定スコープの設定を全削除する。削除は常に scopeId 自身に対して行われるため、消えるのは scopeId 配下のキーだけであり、親スコープの設定は残る。
-         */
-        delete: operations["deleteScopesScopeIdSettings"];
-        options?: never;
-        head?: never;
-        /**
-         * スコープ設定の部分更新。
-         * @description 指定スコープの設定を JSON Merge Patch (RFC 7386) の意味論で部分更新する。書き込みは常に scopeId 自身に対して行われる。レスポンスは書き込み後にサーバが解決した設定であり、親へのフォールバックを含む。
-         */
-        patch: operations["patchScopesScopeIdSettings"];
-        trace?: never;
-    };
-    "/scopes/{scopeId}/turns": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description client が決めるスコープ ID。不透明な文字列として扱う。
-                 * @example 1234567890123456789
-                 */
-                scopeId: string;
+                threadId: string;
             };
             cookie?: never;
         };
         /**
          * ターンの一覧の取得。
-         * @description 実行中と待機中のターンの一覧を返す。実行中のターンが先頭で、続けて待機中のターンをキューの順に並べる。ターンが無ければ空配列を返す。SSE は切断中のイベントを再送しないため、再接続した client が状態を取り直すために使う。登録されていないスコープには 404 を返す。
+         * @description 実行中と待機中のターンの一覧を返す。実行中のターンが先頭で、続けて待機中のターンをキューの順に並べる。ターンが無ければ空配列を返す。SSE は切断中のイベントを再送しないため、再接続した client が状態を取り直すために使う。登録されていないスレッドには 404 を返す。
          */
-        get: operations["getScopesScopeIdTurns"];
+        get: operations["getThreadsThreadIdTurns"];
         put?: never;
-        post?: never;
+        /**
+         * ターンの作成。
+         * @description 対象スレッドへ依頼を渡してターンを作る。依頼は対象スレッドのキューに積まれ、会話中のターンがあれば、その後ろで同じセッションを再開して処理する。`model` と `effort` はこのターンだけに効く。省いたら本体の既定値を使う。処理の完了を待たずに 202 と作った `Turn` を返す。経過と結果は `GET /events` の SSE で受け取り、`Turn` の `id` と各イベントの `turnId` を突き合わせる。全ての依頼に、プロンプト先頭に認可ユーザー本人の発話ではない旨の注記が付き、依頼のレート制限 (bot 全体で直近 10 分に 6 回) を超えると 429 を返す。登録されていないスレッドには 404 を返す。
+         */
+        post: operations["postThreadsThreadIdTurns"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/scopes/{scopeId}/turns/{turnId}": {
+    "/turns/{turnId}": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /**
-                 * @description client が決めるスコープ ID。不透明な文字列として扱う。
-                 * @example 1234567890123456789
-                 */
-                scopeId: string;
-                /** @description ターン ID。 */
+                /** @description ターン ID。スレッドをまたいで一意。ID はパーセントエンコードして渡す。 */
                 turnId: string;
             };
             cookie?: never;
@@ -323,29 +268,9 @@ export interface paths {
         post?: never;
         /**
          * ターンの中止。
-         * @description ターンを 1 件止める。実行中のターンは中断し、待機中のターンはキューから外す。中止を受け付けた時点で 202 を返し、完了は `turn.ended` (`result` は `cancelled`) で知る。スコープが登録されていない場合と、該当するターンが無い場合 (既に終わったものを含む) は 404 を返す。
+         * @description ターンを 1 件止める。ターン ID は本体が採番し、スレッドをまたいで一意なので、スレッドを指定せずに止められる。実行中のターンは中断し、待機中のターンはキューから外す。中止を受け付けた時点で 202 を返し、完了は `turn.ended` (`result` は `cancelled`) で知る。該当するターンが無い場合 (既に終わったものを含む) は 404 を返す。
          */
-        delete: operations["deleteScopesScopeIdTurnsTurnId"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/settings/default": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * グローバルデフォルト設定の取得。
-         * @description config.json の claude.defaults に由来するグローバルデフォルト設定を取得する。読み取り専用であり、config.json はランタイムで書き換えない方針のため PATCH と DELETE は定義しない。
-         */
-        get: operations["getSettingsDefault"];
-        put?: never;
-        post?: never;
-        delete?: never;
+        delete: operations["deleteTurnsTurnId"];
         options?: never;
         head?: never;
         patch?: never;
@@ -359,8 +284,8 @@ export interface components {
         Approval: {
             /** @description 承認 ID。 */
             id: string;
-            /** @description client が決めるスコープ ID。不透明な文字列として扱う。 */
-            scopeId: string;
+            /** @description client が決めるスレッド ID。不透明な文字列として扱う。 */
+            threadId: string;
             /** @description 承認を求めているツール名。 */
             toolName: string;
             /** @description ツール入力の description。ツールが渡した場合だけ入る。 */
@@ -380,32 +305,18 @@ export interface components {
              */
             expiresAt: string;
         };
-        /** @description config.json の claude.defaults に由来するグローバルデフォルト設定。出所 (source) は持たない。 */
-        DefaultSettings: {
-            /**
-             * @description デフォルトのモデル alias またはフルネーム。config.json で未設定の場合はフィールドごと省略される。
-             * @example claude-sonnet-4-6
-             */
-            model?: string;
-            /**
-             * @description デフォルトの effort レベル。config.json で未設定の場合はフィールドごと省略される。
-             * @example high
-             * @enum {string}
-             */
-            effort?: "low" | "medium" | "high" | "xhigh" | "max";
-        };
         /** @description ツール承認の解決。 */
         EventApprovalResolvedData: {
-            /** @description client が決めるスコープ ID。不透明な文字列として扱う。 */
-            scopeId: string;
+            /** @description client が決めるスレッド ID。不透明な文字列として扱う。 */
+            threadId: string;
             /** @description 承認 ID。 */
             approvalId: string;
             decision: components["schemas"]["EnumApprovalOutcome"];
         };
         /** @description ターンの失敗。 */
         EventErrorData: {
-            /** @description client が決めるスコープ ID。不透明な文字列として扱う。 */
-            scopeId: string;
+            /** @description client が決めるスレッド ID。不透明な文字列として扱う。 */
+            threadId: string;
             /** @description ターン ID。 */
             turnId: string;
             /** @description 失敗の要約。 */
@@ -413,8 +324,8 @@ export interface components {
         };
         /** @description ツール実行の進捗。 */
         EventProgressData: {
-            /** @description client が決めるスコープ ID。不透明な文字列として扱う。 */
-            scopeId: string;
+            /** @description client が決めるスレッド ID。不透明な文字列として扱う。 */
+            threadId: string;
             /** @description ターン ID。 */
             turnId: string;
             /** @description 実行中のツール名。 */
@@ -424,16 +335,16 @@ export interface components {
         };
         /** @description 質問の解決。 */
         EventQuestionResolvedData: {
-            /** @description client が決めるスコープ ID。不透明な文字列として扱う。 */
-            scopeId: string;
+            /** @description client が決めるスレッド ID。不透明な文字列として扱う。 */
+            threadId: string;
             /** @description 質問 ID。 */
             questionId: string;
             result: components["schemas"]["EnumQuestionOutcome"];
         };
         /** @description Claude の回答テキスト。分割や宛先の前置は client が行う。 */
         EventReplyData: {
-            /** @description client が決めるスコープ ID。不透明な文字列として扱う。 */
-            scopeId: string;
+            /** @description client が決めるスレッド ID。不透明な文字列として扱う。 */
+            threadId: string;
             /** @description ターン ID。 */
             turnId: string;
             /** @description 回答テキスト。 */
@@ -441,8 +352,8 @@ export interface components {
         };
         /** @description 定期実行タスクの失敗。 */
         EventScheduledTaskErrorData: {
-            /** @description client が決めるスコープ ID。不透明な文字列として扱う。送信先のスコープを持たないタスクでは省略される。 */
-            scopeId?: string;
+            /** @description client が決めるスレッド ID。不透明な文字列として扱う。送信先のスレッドを持たないタスクでは省略される。 */
+            threadId?: string;
             /** @description タスクの ID。 */
             taskId: string;
             /** @description 失敗の要約。 */
@@ -450,8 +361,8 @@ export interface components {
         };
         /** @description 定期実行タスクの結果または標準出力。 */
         EventScheduledTaskOutputData: {
-            /** @description client が決めるスコープ ID。不透明な文字列として扱う。送信先のスコープを持たないタスクでは省略される。 */
-            scopeId?: string;
+            /** @description client が決めるスレッド ID。不透明な文字列として扱う。送信先のスレッドを持たないタスクでは省略される。 */
+            threadId?: string;
             /** @description タスクの ID。 */
             taskId: string;
             /** @description 出力のテキスト。 */
@@ -459,8 +370,8 @@ export interface components {
         };
         /** @description Claude の推論 (thinking) のテキスト。本体は常に流し、見せるかどうかは client が決める。 */
         EventThinkingData: {
-            /** @description client が決めるスコープ ID。不透明な文字列として扱う。 */
-            scopeId: string;
+            /** @description client が決めるスレッド ID。不透明な文字列として扱う。 */
+            threadId: string;
             /** @description ターン ID。 */
             turnId: string;
             /** @description 推論のテキスト。 */
@@ -468,23 +379,23 @@ export interface components {
         };
         /** @description ターンが終わった。成否に関わらず最後に 1 回届く。 */
         EventTurnEndedData: {
-            /** @description client が決めるスコープ ID。不透明な文字列として扱う。 */
-            scopeId: string;
+            /** @description client が決めるスレッド ID。不透明な文字列として扱う。 */
+            threadId: string;
             /** @description ターン ID。 */
             turnId: string;
             result: components["schemas"]["EnumTurnResult"];
         };
-        /** @description 同じスコープで実行中のターンがあり、このターンが待機に入った。 */
+        /** @description 同じスレッドで実行中のターンがあり、このターンが待機に入った。 */
         EventTurnQueuedData: {
-            /** @description client が決めるスコープ ID。不透明な文字列として扱う。 */
-            scopeId: string;
+            /** @description client が決めるスレッド ID。不透明な文字列として扱う。 */
+            threadId: string;
             /** @description ターン ID。 */
             turnId: string;
         };
         /** @description ターンが始まった。 */
         EventTurnStartedData: {
-            /** @description client が決めるスコープ ID。不透明な文字列として扱う。 */
-            scopeId: string;
+            /** @description client が決めるスレッド ID。不透明な文字列として扱う。 */
+            threadId: string;
             /** @description ターン ID。 */
             turnId: string;
         };
@@ -512,8 +423,8 @@ export interface components {
         PendingQuestion: {
             /** @description 質問 ID。 */
             id: string;
-            /** @description client が決めるスコープ ID。不透明な文字列として扱う。 */
-            scopeId: string;
+            /** @description client が決めるスレッド ID。不透明な文字列として扱う。 */
+            threadId: string;
             /** @description 質問。1 件以上 4 件以下。 */
             questions: components["schemas"]["Question"][];
             /**
@@ -559,43 +470,24 @@ export interface components {
              * @example 0 9 * * *
              */
             schedule: string;
-            /** @description 結果の自動投稿先チャンネル ID。未指定のタスクでは省略される。 */
-            channelId?: string;
+            /** @description 結果の送信先のスレッド ID。未指定のタスクでは省略される。 */
+            threadId?: string;
             /** @description 1 回実行後にタスクのファイルを自動削除するか。 */
             once?: boolean;
         };
-        /** @description スコープ。会話のまとまりの単位で、親を 1 つだけ持てる。 */
-        Scope: {
-            /** @description client が決めるスコープ ID。不透明な文字列として扱う。 */
+        /** @description スレッド。続いていく会話の単位で、Claude のセッションとターンのキューを持つ。 */
+        Thread: {
+            /** @description client が決めるスレッド ID。不透明な文字列として扱う。 */
             id: string;
-            /** @description 親スコープの ID。親が無ければ null。設定のフォールバック解決で親を辿る。 */
-            parentId: string | null;
-        };
-        /** @description スコープの解決済み設定。model と effort は自身、親、デフォルトの順にフォールバックして解決し、値の出所を source で返す。session は親子で独立しており、フォールバックしない。 */
-        ScopeSettings: {
-            /**
-             * @description セッション ID。未設定の場合はフィールドごと省略される。
-             * @example 550e8400-e29b-41d4-a716-446655440000
-             */
-            session?: string;
-            model?: components["schemas"]["SettingEntry"];
-            effort?: components["schemas"]["SettingEntry"];
-        };
-        /** @description 文字列設定値とその出所。 */
-        SettingEntry: {
-            /**
-             * @description 解決された設定値。
-             * @example claude-sonnet-4-6
-             */
-            value: string;
-            source: components["schemas"]["EnumSettingSource"];
+            /** @description Claude のセッション ID。セッションが無いスレッドでは省かれる。 */
+            sessionId?: string;
         };
         /** @description ターン。依頼 1 件の処理の単位。 */
         Turn: {
-            /** @description ターン ID。 */
+            /** @description ターン ID。スレッドをまたいで一意。 */
             id: string;
-            /** @description client が決めるスコープ ID。不透明な文字列として扱う。 */
-            scopeId: string;
+            /** @description client が決めるスレッド ID。不透明な文字列として扱う。 */
+            threadId: string;
             status: components["schemas"]["EnumTurnStatus"];
             /** @description 依頼元の識別子。依頼の `source` をそのまま返す。省略された依頼では省かれる。 */
             source?: string;
@@ -606,63 +498,40 @@ export interface components {
          */
         EnumApprovalOutcome: "allow" | "allowAlways" | "deny" | "expired";
         /**
+         * @description effort レベル。
+         * @enum {string}
+         */
+        EnumEffort: "low" | "medium" | "high" | "xhigh" | "max";
+        /**
          * @description 質問の結果。answered は回答あり、denied は回答の拒否、expired は時間切れ。
          * @enum {string}
          */
         EnumQuestionOutcome: "answered" | "denied" | "expired";
-        /**
-         * @description 値の出所。scope はそのスコープ自身の値、parent は親スコープの値、default はグローバルデフォルト値を表す。
-         * @enum {string}
-         */
-        EnumSettingSource: "scope" | "parent" | "default";
         /**
          * @description ターンの終わり方。completed は最後まで実行した、failed は失敗した、cancelled は中止した (待機中のまま止められたターンを含む)。
          * @enum {string}
          */
         EnumTurnResult: "completed" | "failed" | "cancelled";
         /**
-         * @description ターンの状態。queued は同じスコープで実行中のターンの後ろで待機中、running は実行中。
+         * @description ターンの状態。queued は同じスレッドで実行中のターンの後ろで待機中、running は実行中。
          * @enum {string}
          */
         EnumTurnStatus: "queued" | "running";
-        /** @description スコープ設定の部分更新リクエスト。JSON Merge Patch (RFC 7386) の意味論に従う。指定しなかったキーは変更せず、値に null を指定したキーは設定を削除してフォールバック解決へ戻す。 */
-        RequestPatchScopesScopeIdSettings: {
-            /**
-             * @description モデルの alias またはフルネーム。null を指定すると削除し、フォールバック解決へ戻す。
-             * @example claude-sonnet-4-6
-             */
-            model?: string | null;
-            /**
-             * @description effort レベル。null を指定すると削除し、フォールバック解決へ戻す。
-             * @example high
-             * @enum {string|null}
-             */
-            effort?: "low" | "medium" | "high" | "xhigh" | "max" | null;
-            /** @description セッションの削除指定のみを許可する。null 以外の値の書き込みを許可すると、任意のセッション ID を指定して他スコープの会話セッションを乗っ取れる経路になるため、削除以外の操作は許可しない。 */
-            session?: null;
-        };
-        /** @description ターンの開始リクエスト。 */
-        RequestPostScopesScopeIdMessages: {
-            /** @description 対象のスコープへ渡す依頼の本文。空白以外を 1 文字以上含むこと。 */
+        /** @description ターンの作成リクエスト。 */
+        RequestPostThreadsThreadIdTurns: {
+            /** @description 対象のスレッドへ渡す依頼の本文。空白以外を 1 文字以上含むこと。 */
             prompt: string;
             /** @description 依頼元の識別子 (例 scheduled-task:news.md)。指定すると、プロンプト先頭の注記に依頼元として入る。日本語や空白も使えるが、改行・タブなどの制御文字は使えない (改行による注記の偽装を防ぐため)。 */
             source?: string;
-        };
-        /** @description スコープの登録・更新リクエスト。parentId が自分自身のとき、親をたどると自分に戻るとき、親が未登録のときは 400 で拒否する。 */
-        RequestPutScopesScopeId: {
-            /** @description 親スコープの ID。親を持たせないなら null。自分自身、循環する親、未登録の親は 400 で拒否する。 */
-            parentId: string | null;
-        };
-        /** @description スコープ設定の削除結果。 */
-        ResponseDeleteScopesScopeIdSettings: {
             /**
-             * @description 削除を受け付けたか。常に true を返す。
-             * @example true
+             * @description このターンで使うモデルの alias またはフルネーム。省くと本体の既定値を使う。
+             * @example claude-sonnet-4-6
              */
-            ok: boolean;
+            model?: string;
+            effort?: components["schemas"]["EnumEffort"];
         };
         /** @description ターンの中止の受付結果。 */
-        ResponseDeleteScopesScopeIdTurnsTurnId: {
+        ResponseDeleteTurnsTurnId: {
             /**
              * @description 中止を受け付けたか。常に true を返す。完了は turn.ended で知る。
              * @example true
@@ -795,11 +664,6 @@ export interface components {
         };
         /** @description ログエントリ一覧。時系列順。 */
         ResponseGetLogs: components["schemas"]["LogEntry"][];
-        /** @description 常時許可の一覧。 */
-        ResponseGetPermissionsAllow: {
-            /** @description 常時許可するツール名の一覧。 */
-            allow: string[];
-        };
         /** @description 保留中の質問の一覧。 */
         ResponseGetQuestions: {
             /** @description 質問。要求した順。 */
@@ -811,7 +675,7 @@ export interface components {
             tasks: components["schemas"]["ScheduledTask"][];
         };
         /** @description 実行中と待機中のターンの一覧。実行中が先頭で、続けて待機中をキューの順に並べる。ターンが無ければ空配列。 */
-        ResponseGetScopesScopeIdTurns: {
+        ResponseGetThreadsThreadIdTurns: {
             /** @description ターン。 */
             turns: components["schemas"]["Turn"][];
         };
@@ -831,11 +695,6 @@ export interface components {
              * @enum {string}
              */
             result: "succeeded" | "failed" | "skipped";
-        };
-        /** @description ターンの受付結果。 */
-        ResponsePostScopesScopeIdMessages: {
-            /** @description 受け付けたターンの ID。SSE のイベントはこの値で突き合わせる。 */
-            turnId: string;
         };
     };
     responses: never;
@@ -869,8 +728,8 @@ export interface operations {
     getEvents: {
         parameters: {
             query?: {
-                /** @description このスコープのイベントだけに絞る。省略すると全スコープ。登録されていないスコープを指定すると 404 を返す。scopeId で絞った購読には、scopeId を持たないイベントは流れない。 */
-                scopeId?: string;
+                /** @description このスレッドのイベントだけに絞る。省略すると全スレッド。登録されていないスレッドを指定すると 404 を返す。threadId で絞った購読には、threadId を持たないイベントは流れない。 */
+                threadId?: string;
             };
             header?: never;
             path?: never;
@@ -887,7 +746,7 @@ export interface operations {
                     "text/event-stream": unknown;
                 };
             };
-            /** @description scopeId に指定したスコープが登録されていない場合。 */
+            /** @description threadId に指定したスレッドが登録されていない場合。 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -961,26 +820,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResponseError"];
-                };
-            };
-        };
-    };
-    getPermissionsAllow: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 処理成功時。 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResponseGetPermissionsAllow"];
                 };
             };
         };
@@ -1113,16 +952,16 @@ export interface operations {
             };
         };
     };
-    getScopesScopeId: {
+    getThreadsThreadId: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /**
-                 * @description client が決めるスコープ ID。不透明な文字列として扱う。
+                 * @description client が決めるスレッド ID。不透明な文字列として扱う。ID はパーセントエンコードして渡す。
                  * @example 1234567890123456789
                  */
-                scopeId: string;
+                threadId: string;
             };
             cookie?: never;
         };
@@ -1134,10 +973,10 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Scope"];
+                    "application/json": components["schemas"]["Thread"];
                 };
             };
-            /** @description スコープが登録されていない場合。 */
+            /** @description スレッドが登録されていない場合。 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1148,37 +987,65 @@ export interface operations {
             };
         };
     };
-    putScopesScopeId: {
+    putThreadsThreadId: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /**
-                 * @description client が決めるスコープ ID。不透明な文字列として扱う。
+                 * @description client が決めるスレッド ID。不透明な文字列として扱う。ID はパーセントエンコードして渡す。
                  * @example 1234567890123456789
                  */
-                scopeId: string;
+                threadId: string;
             };
             cookie?: never;
         };
-        /** @description 親スコープ。 */
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RequestPutScopesScopeId"];
-            };
-        };
+        requestBody?: never;
         responses: {
-            /** @description 登録・更新したスコープ。 */
+            /** @description 既に登録されていたスレッド。 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Scope"];
+                    "application/json": components["schemas"]["Thread"];
                 };
             };
-            /** @description JSON が不正、スキーマに適合しない、または parentId が自分自身、循環する親、未登録の親を指す場合。親を持つスコープを登録するときは、親を先に登録する。 */
-            400: {
+            /** @description 新しく登録したスレッド。 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Thread"];
+                };
+            };
+        };
+    };
+    deleteThreadsThreadIdSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description client が決めるスレッド ID。不透明な文字列として扱う。ID はパーセントエンコードして渡す。
+                 * @example 1234567890123456789
+                 */
+                threadId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description セッションを捨てた場合、または捨てるセッションが無かった場合。 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description スレッドが登録されていない場合。 */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1188,33 +1055,68 @@ export interface operations {
             };
         };
     };
-    postScopesScopeIdMessages: {
+    getThreadsThreadIdTurns: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /**
-                 * @description client が決めるスコープ ID。不透明な文字列として扱う。
+                 * @description client が決めるスレッド ID。不透明な文字列として扱う。ID はパーセントエンコードして渡す。
                  * @example 1234567890123456789
                  */
-                scopeId: string;
+                threadId: string;
             };
             cookie?: never;
         };
-        /** @description 依頼の本文と、任意の依頼元。 */
+        requestBody?: never;
+        responses: {
+            /** @description 処理成功時。 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseGetThreadsThreadIdTurns"];
+                };
+            };
+            /** @description スレッドが登録されていない場合。 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+        };
+    };
+    postThreadsThreadIdTurns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description client が決めるスレッド ID。不透明な文字列として扱う。ID はパーセントエンコードして渡す。
+                 * @example 1234567890123456789
+                 */
+                threadId: string;
+            };
+            cookie?: never;
+        };
+        /** @description 依頼の本文と、任意の依頼元・モデル・effort。 */
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RequestPostScopesScopeIdMessages"];
+                "application/json": components["schemas"]["RequestPostThreadsThreadIdTurns"];
             };
         };
         responses: {
-            /** @description 依頼を対象スコープのキューに積んだ場合。処理の完了は待たない。 */
+            /** @description 依頼を対象スレッドのキューに積んだ場合。処理の完了は待たない。作ったターンを返す。 */
             202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ResponsePostScopesScopeIdMessages"];
+                    "application/json": components["schemas"]["Turn"];
                 };
             };
             /** @description JSON が不正、またはスキーマに適合しない場合。 */
@@ -1226,7 +1128,7 @@ export interface operations {
                     "application/json": components["schemas"]["ResponseError"];
                 };
             };
-            /** @description スコープが登録されていない場合。 */
+            /** @description スレッドが登録されていない場合。 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1255,171 +1157,12 @@ export interface operations {
             };
         };
     };
-    getScopesScopeIdSettings: {
+    deleteTurnsTurnId: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /**
-                 * @description client が決めるスコープ ID。不透明な文字列として扱う。
-                 * @example 1234567890123456789
-                 */
-                scopeId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 処理成功時。 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ScopeSettings"];
-                };
-            };
-            /** @description スコープが登録されていない場合。 */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResponseError"];
-                };
-            };
-        };
-    };
-    deleteScopesScopeIdSettings: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description client が決めるスコープ ID。不透明な文字列として扱う。
-                 * @example 1234567890123456789
-                 */
-                scopeId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 処理成功時。 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResponseDeleteScopesScopeIdSettings"];
-                };
-            };
-            /** @description スコープが登録されていない場合。 */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResponseError"];
-                };
-            };
-        };
-    };
-    patchScopesScopeIdSettings: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description client が決めるスコープ ID。不透明な文字列として扱う。
-                 * @example 1234567890123456789
-                 */
-                scopeId: string;
-            };
-            cookie?: never;
-        };
-        /** @description 更新内容。 */
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RequestPatchScopesScopeIdSettings"];
-            };
-        };
-        responses: {
-            /** @description 処理成功時。更新後にサーバが解決した設定を返す。 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ScopeSettings"];
-                };
-            };
-            /** @description リクエストボディがスキーマに適合しない場合。 */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResponseError"];
-                };
-            };
-            /** @description スコープが登録されていない場合。 */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResponseError"];
-                };
-            };
-        };
-    };
-    getScopesScopeIdTurns: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description client が決めるスコープ ID。不透明な文字列として扱う。
-                 * @example 1234567890123456789
-                 */
-                scopeId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 処理成功時。 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResponseGetScopesScopeIdTurns"];
-                };
-            };
-            /** @description スコープが登録されていない場合。 */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResponseError"];
-                };
-            };
-        };
-    };
-    deleteScopesScopeIdTurnsTurnId: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description client が決めるスコープ ID。不透明な文字列として扱う。
-                 * @example 1234567890123456789
-                 */
-                scopeId: string;
-                /** @description ターン ID。 */
+                /** @description ターン ID。スレッドをまたいで一意。ID はパーセントエンコードして渡す。 */
                 turnId: string;
             };
             cookie?: never;
@@ -1432,36 +1175,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ResponseDeleteScopesScopeIdTurnsTurnId"];
+                    "application/json": components["schemas"]["ResponseDeleteTurnsTurnId"];
                 };
             };
-            /** @description スコープが登録されていない場合、または該当するターンが無い場合 (既に終わったターンを含む)。 */
+            /** @description 該当するターンが無い場合 (既に終わったターンを含む)。 */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["ResponseError"];
-                };
-            };
-        };
-    };
-    getSettingsDefault: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 処理成功時。 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DefaultSettings"];
                 };
             };
         };

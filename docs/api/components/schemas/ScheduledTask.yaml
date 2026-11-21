@@ -18,9 +18,9 @@ properties:
     type: string
     description: cron 式。5 フィールド、TZ 環境変数に依存する。
     example: 0 9 * * *
-  channelId:
+  threadId:
     type: string
-    description: 結果の自動投稿先チャンネル ID。未指定のタスクでは省略される。
+    description: 結果の送信先のスレッド ID。未指定のタスクでは省略される。
   once:
     type: boolean
     description: 1 回実行後にタスクのファイルを自動削除するか。

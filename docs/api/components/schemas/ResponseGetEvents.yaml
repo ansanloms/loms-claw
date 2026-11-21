@@ -1,7 +1,7 @@
 description: SSE の 1 イベント。event の値で data の形が決まる。イベントは追加のみで進化する。client は未知の event を受け取っても検証エラーにせず無視する。この oneOf は現時点で定義済みのイベントの一覧である。
 oneOf:
   - type: object
-    description: 同じスコープで実行中のターンがあり、このターンが待機に入った。
+    description: 同じスレッドで実行中のターンがあり、このターンが待機に入った。
     required:
       - event
       - data

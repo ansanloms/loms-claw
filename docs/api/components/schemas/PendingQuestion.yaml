@@ -2,7 +2,7 @@ type: object
 description: 保留中の質問。時間切れは要求から 5 分後。
 required:
   - id
-  - scopeId
+  - threadId
   - questions
   - requestedAt
   - expiresAt
@@ -10,9 +10,9 @@ properties:
   id:
     type: string
     description: 質問 ID。
-  scopeId:
+  threadId:
     type: string
-    description: client が決めるスコープ ID。不透明な文字列として扱う。
+    description: client が決めるスレッド ID。不透明な文字列として扱う。
   questions:
     type: array
     minItems: 1

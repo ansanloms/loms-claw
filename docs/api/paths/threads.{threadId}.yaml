@@ -1,0 +1,65 @@
+parameters:
+  - in: path
+    name: threadId
+    required: true
+    description: client が決めるスレッド ID。不透明な文字列として扱う。ID はパーセントエンコードして渡す。
+    schema:
+      type: string
+      minLength: 1
+    example: "1234567890123456789"
+put:
+  operationId: putThreadsThreadId
+  summary: スレッドの登録。
+  tags:
+    - threads
+  description:
+    $ref: ./descriptions/putThreadsThreadId.md
+  responses:
+    200:
+      description: 既に登録されていたスレッド。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Thread.yaml
+          examples:
+            succeeded:
+              value:
+                $ref: ../examples/Thread/default.yaml
+    201:
+      description: 新しく登録したスレッド。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Thread.yaml
+          examples:
+            created:
+              value:
+                $ref: ../examples/Thread/default.yaml
+get:
+  operationId: getThreadsThreadId
+  summary: スレッドの取得。
+  tags:
+    - threads
+  description:
+    $ref: ./descriptions/getThreadsThreadId.md
+  responses:
+    200:
+      description: 処理成功時。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Thread.yaml
+          examples:
+            succeeded:
+              value:
+                $ref: ../examples/Thread/default.yaml
+    404:
+      description: スレッドが登録されていない場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            notFound:
+              value:
+                $ref: ../examples/ResponseError/default.yaml

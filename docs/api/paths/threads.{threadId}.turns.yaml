@@ -1,40 +1,41 @@
 parameters:
   - in: path
-    name: scopeId
+    name: threadId
     required: true
-    description: client が決めるスコープ ID。不透明な文字列として扱う。
+    description: client が決めるスレッド ID。不透明な文字列として扱う。ID はパーセントエンコードして渡す。
     schema:
       type: string
+      minLength: 1
     example: "1234567890123456789"
 post:
-  operationId: postScopesScopeIdMessages
-  summary: ターンの開始。
+  operationId: postThreadsThreadIdTurns
+  summary: ターンの作成。
   tags:
     - turns
   description:
-    $ref: ./descriptions/postScopesScopeIdMessages.md
+    $ref: ./descriptions/postThreadsThreadIdTurns.md
   requestBody:
     required: true
-    description: 依頼の本文と、任意の依頼元。
+    description: 依頼の本文と、任意の依頼元・モデル・effort。
     content:
       application/json:
         schema:
-          $ref: ../components/schemas/RequestPostScopesScopeIdMessages.yaml
+          $ref: ../components/schemas/RequestPostThreadsThreadIdTurns.yaml
         examples:
           normal:
             value:
-              $ref: ../examples/RequestPostScopesScopeIdMessages/default.yaml
+              $ref: ../examples/RequestPostThreadsThreadIdTurns/default.yaml
   responses:
     202:
-      description: 依頼を対象スコープのキューに積んだ場合。処理の完了は待たない。
+      description: 依頼を対象スレッドのキューに積んだ場合。処理の完了は待たない。作ったターンを返す。
       content:
         application/json:
           schema:
-            $ref: ../components/schemas/ResponsePostScopesScopeIdMessages.yaml
+            $ref: ../components/schemas/Turn.yaml
           examples:
             accepted:
               value:
-                $ref: ../examples/ResponsePostScopesScopeIdMessages/default.yaml
+                $ref: ../examples/Turn/default.yaml
     400:
       description: JSON が不正、またはスキーマに適合しない場合。
       content:
@@ -46,7 +47,7 @@ post:
               value:
                 $ref: ../examples/ResponseError/default.yaml
     404:
-      description: スコープが登録されていない場合。
+      description: スレッドが登録されていない場合。
       content:
         application/json:
           schema:
@@ -73,5 +74,33 @@ post:
             $ref: ../components/schemas/ResponseError.yaml
           examples:
             unavailable:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+get:
+  operationId: getThreadsThreadIdTurns
+  summary: ターンの一覧の取得。
+  tags:
+    - turns
+  description:
+    $ref: ./descriptions/getThreadsThreadIdTurns.md
+  responses:
+    200:
+      description: 処理成功時。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseGetThreadsThreadIdTurns.yaml
+          examples:
+            succeeded:
+              value:
+                $ref: ../examples/ResponseGetThreadsThreadIdTurns/default.yaml
+    404:
+      description: スレッドが登録されていない場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            notFound:
               value:
                 $ref: ../examples/ResponseError/default.yaml

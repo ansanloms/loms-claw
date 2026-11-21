@@ -1,0 +1,1 @@
+スレッドを登録する。既に登録されていれば何もせず、登録済みのスレッドを返す。新しく登録したときは 201、既にあったときは 200 を返す。`/threads/{threadId}` 配下と `POST /threads/{threadId}/turns` の他の operation は、この operation で登録したスレッドだけを対象にし、未登録のスレッドには 404 を返す。Discord の client は、チャンネル ID またはスレッド ID をそのままスレッド ID に使う。

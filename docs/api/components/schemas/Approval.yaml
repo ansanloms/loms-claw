@@ -2,7 +2,7 @@ type: object
 description: 保留中のツール承認。時間切れは要求から 5 分後。
 required:
   - id
-  - scopeId
+  - threadId
   - toolName
   - input
   - requestedAt
@@ -11,9 +11,9 @@ properties:
   id:
     type: string
     description: 承認 ID。
-  scopeId:
+  threadId:
     type: string
-    description: client が決めるスコープ ID。不透明な文字列として扱う。
+    description: client が決めるスレッド ID。不透明な文字列として扱う。
   toolName:
     type: string
     description: 承認を求めているツール名。
