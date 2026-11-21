@@ -1,0 +1,15 @@
+type: object
+description: 質問の解決。
+required:
+  - scopeId
+  - questionId
+  - result
+properties:
+  scopeId:
+    type: string
+    description: client が決めるスコープ ID。不透明な文字列として扱う。
+  questionId:
+    type: string
+    description: 質問 ID。
+  result:
+    $ref: ./EnumQuestionOutcome.yaml

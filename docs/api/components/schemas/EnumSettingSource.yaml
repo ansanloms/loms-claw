@@ -1,0 +1,6 @@
+type: string
+description: 値の出所。scope はそのスコープ自身の値、parent は親スコープの値、default はグローバルデフォルト値を表す。
+enum:
+  - scope
+  - parent
+  - default

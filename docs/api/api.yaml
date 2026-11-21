@@ -1,75 +1,152 @@
-openapi: 3.1.0
+openapi: 3.2.1
 info:
-  version: 0.1.0
-  title: loms-claw Internal API
+  version: 0.2.0
+  title: loms-claw API
   description:
     $ref: ./README.md
 servers:
   - url: http://127.0.0.1:3000
-    description: ローカルの in-process API サーバ (apiPort 既定値 3000)。
+    description: ローカルの API サーバ (apiPort 既定値 3000)。
 tags:
-  - name: cron
-    description: cron ジョブの一覧取得・手動実行・再読み込み API。
+  - name: approvals
+    description: 保留中のツール承認の一覧取得。
+  - name: scheduled-tasks
+    description: 定期実行タスクの一覧取得・手動実行・再読み込み。
+  - name: events
+    description: SSE によるイベントの購読。
   - name: health
-    description: healthcheck 用 API。
+    description: healthcheck。
   - name: logs
-    description: メモリ上のリングバッファからのログ取得 API。
-  - name: sessions
-    description: 対象のチャンネル/スレッドのセッションへ依頼を渡す API。
+    description: メモリ上のリングバッファからのログ取得。
+  - name: permissions
+    description: ツールの常時許可の取得。
+  - name: questions
+    description: 保留中の質問 (AskUserQuestion) の一覧取得。
+  - name: scopes
+    description: スコープの登録と取得。
   - name: settings
-    description: チャンネル/スレッド単位の設定の取得・更新・削除 API。
+    description: スコープ単位の設定の取得・更新・削除と、グローバルデフォルトの取得。
+  - name: turns
+    description: ターンの開始・取得・中止。
+security: []
 paths:
-  /cron:
-    $ref: ./paths/cron.yaml
-  /cron/reload:
-    $ref: ./paths/cron.reload.yaml
-  /cron/run:
-    $ref: ./paths/cron.run.yaml
+  /approvals:
+    $ref: ./paths/approvals.yaml
+  /events:
+    $ref: ./paths/events.yaml
   /health:
     $ref: ./paths/health.yaml
   /logs:
     $ref: ./paths/logs.yaml
-  /sessions/{channelId}/messages:
-    $ref: ./paths/sessions.{channelId}.messages.yaml
-  /sessions/{channelId}/{threadId}/messages:
-    $ref: ./paths/sessions.{channelId}.{threadId}.messages.yaml
+  /permissions/allow:
+    $ref: ./paths/permissions.allow.yaml
+  /questions:
+    $ref: ./paths/questions.yaml
+  /scheduled-tasks:
+    $ref: ./paths/scheduled-tasks.yaml
+  /scheduled-tasks/reload:
+    $ref: ./paths/scheduled-tasks.reload.yaml
+  /scheduled-tasks/{taskId}/run:
+    $ref: ./paths/scheduled-tasks.{taskId}.run.yaml
+  /scopes/{scopeId}:
+    $ref: ./paths/scopes.{scopeId}.yaml
+  /scopes/{scopeId}/messages:
+    $ref: ./paths/scopes.{scopeId}.messages.yaml
+  /scopes/{scopeId}/settings:
+    $ref: ./paths/scopes.{scopeId}.settings.yaml
+  /scopes/{scopeId}/turns:
+    $ref: ./paths/scopes.{scopeId}.turns.yaml
+  /scopes/{scopeId}/turns/{turnId}:
+    $ref: ./paths/scopes.{scopeId}.turns.{turnId}.yaml
   /settings/default:
     $ref: ./paths/settings.default.yaml
-  /settings/{id}:
-    $ref: ./paths/settings.{id}.yaml
 components:
   schemas:
-    BoolSettingEntry:
-      $ref: ./components/schemas/BoolSettingEntry.yaml
-    CronJob:
-      $ref: ./components/schemas/CronJob.yaml
+    Approval:
+      $ref: ./components/schemas/Approval.yaml
     DefaultSettings:
       $ref: ./components/schemas/DefaultSettings.yaml
+    EventApprovalResolvedData:
+      $ref: ./components/schemas/EventApprovalResolvedData.yaml
+    EventErrorData:
+      $ref: ./components/schemas/EventErrorData.yaml
+    EventProgressData:
+      $ref: ./components/schemas/EventProgressData.yaml
+    EventQuestionResolvedData:
+      $ref: ./components/schemas/EventQuestionResolvedData.yaml
+    EventReplyData:
+      $ref: ./components/schemas/EventReplyData.yaml
+    EventScheduledTaskErrorData:
+      $ref: ./components/schemas/EventScheduledTaskErrorData.yaml
+    EventScheduledTaskOutputData:
+      $ref: ./components/schemas/EventScheduledTaskOutputData.yaml
+    EventThinkingData:
+      $ref: ./components/schemas/EventThinkingData.yaml
+    EventTurnEndedData:
+      $ref: ./components/schemas/EventTurnEndedData.yaml
+    EventTurnQueuedData:
+      $ref: ./components/schemas/EventTurnQueuedData.yaml
+    EventTurnStartedData:
+      $ref: ./components/schemas/EventTurnStartedData.yaml
     LogEntry:
       $ref: ./components/schemas/LogEntry.yaml
+    PendingQuestion:
+      $ref: ./components/schemas/PendingQuestion.yaml
+    Question:
+      $ref: ./components/schemas/Question.yaml
+    QuestionOption:
+      $ref: ./components/schemas/QuestionOption.yaml
+    ScheduledTask:
+      $ref: ./components/schemas/ScheduledTask.yaml
+    Scope:
+      $ref: ./components/schemas/Scope.yaml
     ScopeSettings:
       $ref: ./components/schemas/ScopeSettings.yaml
     SettingEntry:
       $ref: ./components/schemas/SettingEntry.yaml
-    RequestPatchSettings:
-      $ref: ./components/schemas/RequestPatchSettings.yaml
-    RequestPostCronRun:
-      $ref: ./components/schemas/RequestPostCronRun.yaml
-    RequestPostSessionMessage:
-      $ref: ./components/schemas/RequestPostSessionMessage.yaml
-    ResponseDeleteSettings:
-      $ref: ./components/schemas/ResponseDeleteSettings.yaml
+    Turn:
+      $ref: ./components/schemas/Turn.yaml
+    EnumApprovalOutcome:
+      $ref: ./components/schemas/EnumApprovalOutcome.yaml
+    EnumQuestionOutcome:
+      $ref: ./components/schemas/EnumQuestionOutcome.yaml
+    EnumSettingSource:
+      $ref: ./components/schemas/EnumSettingSource.yaml
+    EnumTurnResult:
+      $ref: ./components/schemas/EnumTurnResult.yaml
+    EnumTurnStatus:
+      $ref: ./components/schemas/EnumTurnStatus.yaml
+    RequestPatchScopesScopeIdSettings:
+      $ref: ./components/schemas/RequestPatchScopesScopeIdSettings.yaml
+    RequestPostScopesScopeIdMessages:
+      $ref: ./components/schemas/RequestPostScopesScopeIdMessages.yaml
+    RequestPutScopesScopeId:
+      $ref: ./components/schemas/RequestPutScopesScopeId.yaml
+    ResponseDeleteScopesScopeIdSettings:
+      $ref: ./components/schemas/ResponseDeleteScopesScopeIdSettings.yaml
+    ResponseDeleteScopesScopeIdTurnsTurnId:
+      $ref: ./components/schemas/ResponseDeleteScopesScopeIdTurnsTurnId.yaml
     ResponseError:
       $ref: ./components/schemas/ResponseError.yaml
-    ResponseGetCron:
-      $ref: ./components/schemas/ResponseGetCron.yaml
+    ResponseGetApprovals:
+      $ref: ./components/schemas/ResponseGetApprovals.yaml
+    ResponseGetEvents:
+      $ref: ./components/schemas/ResponseGetEvents.yaml
     ResponseGetHealth:
       $ref: ./components/schemas/ResponseGetHealth.yaml
     ResponseGetLogs:
       $ref: ./components/schemas/ResponseGetLogs.yaml
-    ResponsePostCronReload:
-      $ref: ./components/schemas/ResponsePostCronReload.yaml
-    ResponsePostCronRun:
-      $ref: ./components/schemas/ResponsePostCronRun.yaml
-    ResponsePostSessionMessage:
-      $ref: ./components/schemas/ResponsePostSessionMessage.yaml
+    ResponseGetPermissionsAllow:
+      $ref: ./components/schemas/ResponseGetPermissionsAllow.yaml
+    ResponseGetQuestions:
+      $ref: ./components/schemas/ResponseGetQuestions.yaml
+    ResponseGetScheduledTasks:
+      $ref: ./components/schemas/ResponseGetScheduledTasks.yaml
+    ResponseGetScopesScopeIdTurns:
+      $ref: ./components/schemas/ResponseGetScopesScopeIdTurns.yaml
+    ResponsePostScheduledTasksReload:
+      $ref: ./components/schemas/ResponsePostScheduledTasksReload.yaml
+    ResponsePostScheduledTasksTaskIdRun:
+      $ref: ./components/schemas/ResponsePostScheduledTasksTaskIdRun.yaml
+    ResponsePostScopesScopeIdMessages:
+      $ref: ./components/schemas/ResponsePostScopesScopeIdMessages.yaml

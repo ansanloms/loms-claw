@@ -1,0 +1,15 @@
+type: object
+description: 定期実行タスクの結果または標準出力。
+required:
+  - taskId
+  - text
+properties:
+  scopeId:
+    type: string
+    description: client が決めるスコープ ID。不透明な文字列として扱う。送信先のスコープを持たないタスクでは省略される。
+  taskId:
+    type: string
+    description: タスクの ID。
+  text:
+    type: string
+    description: 出力のテキスト。

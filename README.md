@@ -38,7 +38,7 @@ npm run fix        # lint 自動修正 + format
 npm run generate   # docs/api の OpenAPI から api/internal-schemas.ts を再生成 (事前に `npm --prefix docs/api ci` が必要)
 ```
 
-PR 作成前は `npm run fix && npm run check && npm run lint && npm test` を通す ([.claude/rules/pr.md](.claude/rules/pr.md))。
+PR 作成前は `npm run fix && npm run check && npm run lint && npm test` を通す。
 
 ## ドキュメント
 

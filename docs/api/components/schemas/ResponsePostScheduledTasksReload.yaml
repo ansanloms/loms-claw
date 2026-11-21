@@ -1,0 +1,8 @@
+type: object
+description: 定期実行タスクの定義の再読み込み結果。
+required:
+  - ok
+properties:
+  ok:
+    type: boolean
+    description: 再読み込みを受け付けたか。

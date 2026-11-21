@@ -1,0 +1,6 @@
+type: string
+description: ターンの終わり方。completed は最後まで実行した、failed は失敗した、cancelled は中止した (待機中のまま止められたターンを含む)。
+enum:
+  - completed
+  - failed
+  - cancelled

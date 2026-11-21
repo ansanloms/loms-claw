@@ -1,0 +1,34 @@
+type: object
+description: 保留中のツール承認。時間切れは要求から 5 分後。
+required:
+  - id
+  - scopeId
+  - toolName
+  - input
+  - requestedAt
+  - expiresAt
+properties:
+  id:
+    type: string
+    description: 承認 ID。
+  scopeId:
+    type: string
+    description: client が決めるスコープ ID。不透明な文字列として扱う。
+  toolName:
+    type: string
+    description: 承認を求めているツール名。
+  description:
+    type: string
+    description: ツール入力の description。ツールが渡した場合だけ入る。
+  input:
+    type: object
+    description: ツールへの入力。ツールごとに形が違う。
+    additionalProperties: true
+  requestedAt:
+    type: string
+    format: date-time
+    description: 要求した時刻。RFC 3339 形式。
+  expiresAt:
+    type: string
+    format: date-time
+    description: 時間切れになる時刻。RFC 3339 形式。

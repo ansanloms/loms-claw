@@ -1,7 +1,5 @@
 type: object
 description: config.json の claude.defaults に由来するグローバルデフォルト設定。出所 (source) は持たない。
-required:
-  - showThinking
 properties:
   model:
     type: string
@@ -17,7 +15,3 @@ properties:
       - xhigh
       - max
     example: high
-  showThinking:
-    type: boolean
-    description: デフォルトの thinking 表示設定。config.json で未設定でも false が入る。
-    example: false

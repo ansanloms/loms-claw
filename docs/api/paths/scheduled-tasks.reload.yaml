@@ -1,0 +1,28 @@
+post:
+  operationId: postScheduledTasksReload
+  summary: 定期実行タスクの定義の再読み込み。
+  tags:
+    - scheduled-tasks
+  description:
+    $ref: ./descriptions/postScheduledTasksReload.md
+  responses:
+    200:
+      description: 処理成功時。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponsePostScheduledTasksReload.yaml
+          examples:
+            succeeded:
+              value:
+                $ref: ../examples/ResponsePostScheduledTasksReload/default.yaml
+    503:
+      description: 定期実行の再読み込み機能が無効な場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            unavailable:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
