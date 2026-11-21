@@ -24,7 +24,7 @@ export function createLogsRoutes() {
 
   // GET /
   app.get("/", (c) => {
-    const levelParam = c.req.query("level")?.toUpperCase();
+    const levelParam = c.req.query("level");
     const namespace = c.req.query("namespace");
     const since = c.req.query("since");
     const limitParam = c.req.query("limit");

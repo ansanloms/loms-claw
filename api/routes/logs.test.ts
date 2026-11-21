@@ -82,6 +82,23 @@ describe("createLogsRoutes", () => {
     );
   });
 
+  test("GET /: level が小文字の場合に 400 を返すこと", async () => {
+    const app = buildApp();
+    const res = await app.request("/logs?level=info");
+    assert.deepStrictEqual(res.status, 400);
+    const json = (await res.json()) as Record<string, unknown>;
+    assert.deepStrictEqual(
+      json.error,
+      "invalid level: info. valid: DEBUG, INFO, WARN, ERROR",
+    );
+  });
+
+  test("GET /: level が大文字の場合に 200 を返すこと", async () => {
+    const app = buildApp();
+    const res = await app.request("/logs?level=INFO");
+    assert.deepStrictEqual(res.status, 200);
+  });
+
   test("GET /: since が不正な場合に 400 を返すこと", async () => {
     const app = buildApp();
     const res = await app.request("/logs?since=not-a-date");
