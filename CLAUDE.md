@@ -72,7 +72,6 @@ npm run generate   # docs/api の OpenAPI から api/internal-schemas.ts を再�
 
 - 設定は `data/config.json`（`data/config.json.example` をコピーして必須項目を埋める）。別パスは環境変数 `LOMS_CLAW_CONFIG` で指定する。フィールド一覧は [docs/architecture/lifecycle.md](docs/architecture/lifecycle.md)。
 - `api/internal-schemas.ts` は生成物。内部 API のリクエスト/レスポンス形を変えるときは `docs/api/` の YAML を編集して `npm run generate` で再生成し（docs/api は独立した npm パッケージなので、初回と依存更新後は `npm --prefix docs/api ci` が先に要る）、生成物もコミットする（[docs/architecture/internal-api.md](docs/architecture/internal-api.md)）。
-- PR 作成前・push 前の検証チェーンは [.claude/rules/pr.md](.claude/rules/pr.md) に従う。
 
 ## Docker
 
