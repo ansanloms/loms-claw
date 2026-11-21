@@ -11,7 +11,6 @@
     "data/**",
     "docs/api/**",
     "packages/server/api/openapi.gen.*",
-    "tools/**",
     ".claude/**",
     ".github/workflows/**",
     "**/*.yaml",

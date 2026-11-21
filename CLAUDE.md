@@ -17,8 +17,7 @@ Discord + Claude Agent SDK のパーソナル AI エージェント。単一ギ�
 
 npm workspaces (`packages/*`) で package に分ける。依存は package ごとに宣言し、直下の `package.json` は scripts と開発ツールだけを持つ。
 
-- `packages/server`: `@loms-claw/server`。本体で、入口は `packages/server/main.ts`。
-- `tools/openapi-typescript`: OpenAPI からの型生成。workspaces に入れず、独立の `package.json` と lockfile を持つ。
+- `packages/server`: `@loms-claw/server`。本体で、入口は `packages/server/main.ts`。型生成の道具 (`openapi-typescript` と TypeScript 5) は `devDependencies` に持つ。
 - `docs/api`: API 定義の文書。package にせず、独立のまま。
 - client (Discord 等) は、server とは別プロセスで動く package として `packages/` に足す予定。
 
@@ -53,7 +52,8 @@ npm run lint       # lint + format チェック（oxlint + oxfmt --check）
 npm run fix        # lint 自動修正 + format（oxlint --fix + oxfmt）
 ```
 
-- 初回と依存更新後は `npm ci`・`npm --prefix docs/api ci`・`npm --prefix tools/openapi-typescript ci` が先に要る。
+- 初回と依存更新後は `npm ci`・`npm --prefix docs/api ci` が先に要る。
+- 型検査は直下の `npm run check` で回す (`packages/server` の下には生成用の TypeScript 5 が入る)。
 - `docs/api` の検証は `npm --prefix docs/api run lint` と `npm --prefix docs/api test`。
 
 ## コミット規約

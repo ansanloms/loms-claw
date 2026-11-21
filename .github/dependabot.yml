@@ -36,23 +36,6 @@ updates:
           - "minor"
           - "patch"
 
-  # tools/openapi-typescript は型生成だけに使う package。openapi-typescript が
-  # TypeScript 5 系を要求するため、ルートとは別の lockfile で固定する。
-  - package-ecosystem: "npm"
-    directory: "/tools/openapi-typescript"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "07:00"
-      timezone: "Asia/Tokyo"
-    commit-message:
-      prefix: "build"
-    groups:
-      minor-and-patch:
-        update-types:
-          - "minor"
-          - "patch"
-
   - package-ecosystem: "docker"
     directory: "/"
     schedule:

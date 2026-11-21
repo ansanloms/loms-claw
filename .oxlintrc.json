@@ -25,7 +25,6 @@
     "docs/api/",
     "coverage/",
     "packages/server/api/openapi.gen.d.ts",
-    "tools/",
     ".claude/"
   ]
 }

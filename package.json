@@ -12,7 +12,7 @@
     "check": "tsc --noEmit",
     "lint": "oxlint && oxfmt --check",
     "fix": "oxlint --fix && oxfmt",
-    "generate": "npm --prefix docs/api run bundle:json -- ../../packages/server/api/openapi.gen.json && npm --prefix tools/openapi-typescript run generate"
+    "generate": "npm --prefix docs/api run bundle:json -- ../../packages/server/api/openapi.gen.json && npm run generate --workspace @loms-claw/server"
   },
   "devDependencies": {
     "@types/node": "26.6.6",
