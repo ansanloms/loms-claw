@@ -1,12 +1,12 @@
 type: object
-description: 同じスコープで実行中のターンがあり、このターンが待機に入った。
+description: 同じスレッドで実行中のターンがあり、このターンが待機に入った。
 required:
-  - scopeId
+  - threadId
   - turnId
 properties:
-  scopeId:
+  threadId:
     type: string
-    description: client が決めるスコープ ID。不透明な文字列として扱う。
+    description: client が決めるスレッド ID。不透明な文字列として扱う。
   turnId:
     type: string
     description: ターン ID。

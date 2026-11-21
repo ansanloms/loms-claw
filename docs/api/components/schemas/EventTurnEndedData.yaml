@@ -1,13 +1,13 @@
 type: object
 description: ターンが終わった。成否に関わらず最後に 1 回届く。
 required:
-  - scopeId
+  - threadId
   - turnId
   - result
 properties:
-  scopeId:
+  threadId:
     type: string
-    description: client が決めるスコープ ID。不透明な文字列として扱う。
+    description: client が決めるスレッド ID。不透明な文字列として扱う。
   turnId:
     type: string
     description: ターン ID。

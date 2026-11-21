@@ -1,13 +1,13 @@
 type: object
 description: Claude の回答テキスト。分割や宛先の前置は client が行う。
 required:
-  - scopeId
+  - threadId
   - turnId
   - text
 properties:
-  scopeId:
+  threadId:
     type: string
-    description: client が決めるスコープ ID。不透明な文字列として扱う。
+    description: client が決めるスレッド ID。不透明な文字列として扱う。
   turnId:
     type: string
     description: ターン ID。

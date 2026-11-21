@@ -1,5 +1,5 @@
 type: string
-description: ターンの状態。queued は同じスコープで実行中のターンの後ろで待機中、running は実行中。
+description: ターンの状態。queued は同じスレッドで実行中のターンの後ろで待機中、running は実行中。
 enum:
   - queued
   - running

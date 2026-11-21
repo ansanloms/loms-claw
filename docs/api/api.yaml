@@ -18,16 +18,12 @@ tags:
     description: healthcheck。
   - name: logs
     description: メモリ上のリングバッファからのログ取得。
-  - name: permissions
-    description: ツールの常時許可の取得。
   - name: questions
     description: 保留中の質問 (AskUserQuestion) の一覧取得。
-  - name: scopes
-    description: スコープの登録と取得。
-  - name: settings
-    description: スコープ単位の設定の取得・更新・削除と、グローバルデフォルトの取得。
+  - name: threads
+    description: スレッドの登録・取得とセッションの破棄。
   - name: turns
-    description: ターンの開始・取得・中止。
+    description: ターンの作成・一覧の取得・中止。
 security: []
 paths:
   /approvals:
@@ -38,8 +34,6 @@ paths:
     $ref: ./paths/health.yaml
   /logs:
     $ref: ./paths/logs.yaml
-  /permissions/allow:
-    $ref: ./paths/permissions.allow.yaml
   /questions:
     $ref: ./paths/questions.yaml
   /scheduled-tasks:
@@ -48,24 +42,18 @@ paths:
     $ref: ./paths/scheduled-tasks.reload.yaml
   /scheduled-tasks/{taskId}/run:
     $ref: ./paths/scheduled-tasks.{taskId}.run.yaml
-  /scopes/{scopeId}:
-    $ref: ./paths/scopes.{scopeId}.yaml
-  /scopes/{scopeId}/messages:
-    $ref: ./paths/scopes.{scopeId}.messages.yaml
-  /scopes/{scopeId}/settings:
-    $ref: ./paths/scopes.{scopeId}.settings.yaml
-  /scopes/{scopeId}/turns:
-    $ref: ./paths/scopes.{scopeId}.turns.yaml
-  /scopes/{scopeId}/turns/{turnId}:
-    $ref: ./paths/scopes.{scopeId}.turns.{turnId}.yaml
-  /settings/default:
-    $ref: ./paths/settings.default.yaml
+  /threads/{threadId}:
+    $ref: ./paths/threads.{threadId}.yaml
+  /threads/{threadId}/session:
+    $ref: ./paths/threads.{threadId}.session.yaml
+  /threads/{threadId}/turns:
+    $ref: ./paths/threads.{threadId}.turns.yaml
+  /turns/{turnId}:
+    $ref: ./paths/turns.{turnId}.yaml
 components:
   schemas:
     Approval:
       $ref: ./components/schemas/Approval.yaml
-    DefaultSettings:
-      $ref: ./components/schemas/DefaultSettings.yaml
     EventApprovalResolvedData:
       $ref: ./components/schemas/EventApprovalResolvedData.yaml
     EventErrorData:
@@ -98,34 +86,24 @@ components:
       $ref: ./components/schemas/QuestionOption.yaml
     ScheduledTask:
       $ref: ./components/schemas/ScheduledTask.yaml
-    Scope:
-      $ref: ./components/schemas/Scope.yaml
-    ScopeSettings:
-      $ref: ./components/schemas/ScopeSettings.yaml
-    SettingEntry:
-      $ref: ./components/schemas/SettingEntry.yaml
+    Thread:
+      $ref: ./components/schemas/Thread.yaml
     Turn:
       $ref: ./components/schemas/Turn.yaml
     EnumApprovalOutcome:
       $ref: ./components/schemas/EnumApprovalOutcome.yaml
+    EnumEffort:
+      $ref: ./components/schemas/EnumEffort.yaml
     EnumQuestionOutcome:
       $ref: ./components/schemas/EnumQuestionOutcome.yaml
-    EnumSettingSource:
-      $ref: ./components/schemas/EnumSettingSource.yaml
     EnumTurnResult:
       $ref: ./components/schemas/EnumTurnResult.yaml
     EnumTurnStatus:
       $ref: ./components/schemas/EnumTurnStatus.yaml
-    RequestPatchScopesScopeIdSettings:
-      $ref: ./components/schemas/RequestPatchScopesScopeIdSettings.yaml
-    RequestPostScopesScopeIdMessages:
-      $ref: ./components/schemas/RequestPostScopesScopeIdMessages.yaml
-    RequestPutScopesScopeId:
-      $ref: ./components/schemas/RequestPutScopesScopeId.yaml
-    ResponseDeleteScopesScopeIdSettings:
-      $ref: ./components/schemas/ResponseDeleteScopesScopeIdSettings.yaml
-    ResponseDeleteScopesScopeIdTurnsTurnId:
-      $ref: ./components/schemas/ResponseDeleteScopesScopeIdTurnsTurnId.yaml
+    RequestPostThreadsThreadIdTurns:
+      $ref: ./components/schemas/RequestPostThreadsThreadIdTurns.yaml
+    ResponseDeleteTurnsTurnId:
+      $ref: ./components/schemas/ResponseDeleteTurnsTurnId.yaml
     ResponseError:
       $ref: ./components/schemas/ResponseError.yaml
     ResponseGetApprovals:
@@ -136,17 +114,13 @@ components:
       $ref: ./components/schemas/ResponseGetHealth.yaml
     ResponseGetLogs:
       $ref: ./components/schemas/ResponseGetLogs.yaml
-    ResponseGetPermissionsAllow:
-      $ref: ./components/schemas/ResponseGetPermissionsAllow.yaml
     ResponseGetQuestions:
       $ref: ./components/schemas/ResponseGetQuestions.yaml
     ResponseGetScheduledTasks:
       $ref: ./components/schemas/ResponseGetScheduledTasks.yaml
-    ResponseGetScopesScopeIdTurns:
-      $ref: ./components/schemas/ResponseGetScopesScopeIdTurns.yaml
+    ResponseGetThreadsThreadIdTurns:
+      $ref: ./components/schemas/ResponseGetThreadsThreadIdTurns.yaml
     ResponsePostScheduledTasksReload:
       $ref: ./components/schemas/ResponsePostScheduledTasksReload.yaml
     ResponsePostScheduledTasksTaskIdRun:
       $ref: ./components/schemas/ResponsePostScheduledTasksTaskIdRun.yaml
-    ResponsePostScopesScopeIdMessages:
-      $ref: ./components/schemas/ResponsePostScopesScopeIdMessages.yaml

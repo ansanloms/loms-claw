@@ -28,7 +28,7 @@ npm workspaces (`packages/*`) で package に分ける。依存は package ご�
 - croner（cron 式のパースと一致判定）
 - Claude Agent SDK (`@anthropic-ai/claude-agent-sdk` の `query()`)
 - Hono + `@hono/node-server`（内部 HTTP API）
-- SQLite（`node:sqlite`。スコープ設定の永続化）
+- SQLite（`node:sqlite`。永続化）
 - `@cfworker/json-schema`（設定・API・cron frontmatter の検証）
 
 この一覧は完成時の構成で、まだ実装の無い機能の依存（discord.js・croner・Agent SDK・`@js-temporal/polyfill` 等）は入っていない。最初に使う package の `dependencies` に足す。

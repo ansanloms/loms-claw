@@ -1,5 +1,5 @@
 id: q-0001
-scopeId: "1234567890123456789"
+threadId: "1234567890123456789"
 questions:
   - question: どちらの宿にしますか。
     header: 宿

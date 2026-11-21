@@ -1,0 +1,8 @@
+type: string
+description: effort レベル。
+enum:
+  - low
+  - medium
+  - high
+  - xhigh
+  - max

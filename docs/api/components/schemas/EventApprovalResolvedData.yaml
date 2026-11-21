@@ -1,13 +1,13 @@
 type: object
 description: ツール承認の解決。
 required:
-  - scopeId
+  - threadId
   - approvalId
   - decision
 properties:
-  scopeId:
+  threadId:
     type: string
-    description: client が決めるスコープ ID。不透明な文字列として扱う。
+    description: client が決めるスレッド ID。不透明な文字列として扱う。
   approvalId:
     type: string
     description: 承認 ID。
