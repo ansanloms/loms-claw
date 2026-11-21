@@ -1,27 +1,83 @@
-# loms-claw Internal API
+# loms-claw API
 
-loms-claw が Bot プロセス内で起動する内部 HTTP API の定義。
+loms-claw を「常駐する本体と、その周辺 (Discord・CLI・スマホ等)」の構成にするための、次期 I/F の設計。client から本体へは REST、本体から client へは SSE (Server-Sent Events) で渡す。
 
-cron ジョブ・ログ取得・チャンネル設定の操作と、他のセッションへの依頼を単一ポートで提供する。Claude (Agent SDK) の Bash ツールから `curl` 経由で呼び出す用途を想定する。
+## 位置付け
+
+この定義は `next` ブランチの I/F の定義である。実装はまだ無い。main の実装と、main の `docs/api/` (0.1.0) は、この定義に対応しない。`info.version` は 0.2.0 で、`next` が main に入るまで release とタグを切らない。
+
+## 決定事項
+
+issue #278 の「決めること」と、そこから派生した論点の結論を次に示す。
+
+| #   | 論点                 | 決定                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| --- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | 出力の届け先         | スコープの購読者全員に配る。中核がイベントを発行し、Discord も SSE の client も購読者になる。                                                                                                                                                                                                                                                                                                                                         |
+| 2   | スコープ ID          | 不透明な文字列とする。Discord の client はチャンネル ID をそのまま使う。親はスコープの属性として本体が保存する (`PUT /scopes/{scopeId}` の `parentId`)。スコープは `PUT /scopes/{scopeId}` で登録してから使う。未登録のスコープへの要求は 404 を返す。Discord の client は、応答するチャンネルとスレッドを最初の依頼の前に登録する。単一ギルドの検査は Discord の client が持つ。親を持つスコープを登録するときは、親を先に登録する。 |
+| 3   | 承認待ちの台帳       | 中核へ移す。保留中の承認と質問を、SSE と `GET /approvals`・`GET /questions` で全 client に配るため。                                                                                                                                                                                                                                                                                                                                  |
+| 4   | パス空間             | 内部 API と client 向け API を同じパス空間に置く。OpenAPI は 1 本とする。                                                                                                                                                                                                                                                                                                                                                             |
+| 5   | Discord への直接投稿 | 整理の対象外とする。Discord 専用の機能として扱う (下記「範囲外」)。                                                                                                                                                                                                                                                                                                                                                                   |
+| 6   | 版の表し方           | パスに版を入れない。`info.version` が正本である (#277 の方針を引き継ぐ)。SSE は追加のみで進化させ、client は未知のイベント種別とフィールドを無視する。                                                                                                                                                                                                                                                                                |
+| 7   | 認証                 | 含めない。承認・質問に答える operation と一緒に、後で足す。                                                                                                                                                                                                                                                                                                                                                                           |
+| 8   | 状態の取り直し       | 含める。SSE は切断中のイベントを再送しない。代わりに、実行中と待機中のターン (`GET /scopes/{scopeId}/turns`) と保留中の承認・質問を `GET` で取り直す。                                                                                                                                                                                                                                                                                |
+| 9   | 設定の持ち場         | `session`・`model`・`effort` は本体がスコープごとに持ち、継承を解決して出所を `scope` / `parent` / `default` で返す。`showThinking` と `active` (`activeChannelIds` を含む) は client が持つ。                                                                                                                                                                                                                                        |
 
 ## 接続
 
-- ホスト: `127.0.0.1` 固定。in-process 専用であり外部へは公開しない。
-- ポート: `config.json` の `claude.apiPort`。既定値は `3000`。
-- 認証: なし。ローカルバインドのため認証機構を持たない。
+- ホスト: `127.0.0.1`。ポートは `config.json` の `claude.apiPort` で、既定値は `3000`。
+- 認証: 無い。当面は認証を実装せず、定義にも含めない。
+
+本体と同じプロセスの client (Discord) は中核を直接呼び、`POST /scopes/{scopeId}/messages` を通らない。この operation は本体の外から依頼を渡すためのものである。
+
+承認・質問に答える operation (承認への回答、質問への回答、`permissions.allow` の書き換え) は置かない。認証なしで置くと、ワークスペースの Claude が `curl` で叩いて、自分のツール実行を自分で承認できてしまうためである。現行の API は承認に答える operation を持たず、127.0.0.1 は認証なしで足りたので、この穴は今回の設計で初めて生じる。
+
+- 承認と質問に答えられるのは、本体と同じプロセスの client (Discord) だけである。解決の結果は SSE の `approval.resolved`・`question.resolved` で流れる。Discord 以外の client は承認・質問の要求を SSE で受けるが、答える手段が無い。Discord で答えが無ければ時間切れになる。
+- `GET /approvals`・`GET /questions`・`GET /permissions/allow` は読むだけなので置く。
+- `POST /scopes/{scopeId}/messages` の依頼には全部「認可ユーザー本人の発話ではない旨の注記」とレート制限を掛ける。認証が無い間は本人の依頼と他の依頼を見分けられないので、この operation の依頼は全部本人以外の依頼として扱う。本人の依頼を区別する手段は、認証と一緒に足す。レート制限の目的は暴走 (ループ・連鎖) を止めることで、攻撃を防ぐことではない。
+
+## 資源の ID
+
+保存先を持たない資源は自然キーを ID にする。スコープは client が決める文字列、定期実行タスクはファイル名を ID にする。数値の連番は振らない。保存先が無いと、再読み込みのたびに連番が変わりうるためである。
 
 ## エラー応答
 
-エラー時は HTTP ステータスコードと `application/json` の `{ "error": string }` を返す。RFC 9457 Problem Details 形式ではない。`GET /health` のみ例外で、503 時も `{ "status": "unavailable" }` を返す。
+エラー時は HTTP ステータスコードと `application/json` の `{ "error": string }` を返す。RFC 9457 Problem Details 形式ではない。`GET /health` の 503 だけは例外で、`{ "status": "unavailable" }` を返す。
+
+## SSE の規約
+
+`GET /events` が 1 本の接続で全イベントを配る。query の `scopeId` で絞れる。スコープごとのパスにしない理由は、承認と定期実行タスクのイベントを 1 接続で受けられるからである。
+
+- イベントは追加のみで進化させる。既存のフィールドの意味や型は変えない。
+- client は未知の `event` と未知のフィールドを無視する。
+- 切断中のイベントは再送しない。そのため `id` と `retry` は定義しない。
+- 再接続したら、`GET /approvals`・`GET /questions`・`GET /scopes/{scopeId}/turns` で状態を取り直す。
+- `scopeId` で絞った購読には、`scopeId` を持たないイベントは流れない。
+- `thinking` イベントは、本体が常に流す。見せるかどうかは client が決める。
+- 各イベントは `event` と、JSON 文字列の `data` からなる。
+
+イベントの一覧は `GET /events` の `itemSchema` (`ResponseGetEvents`) に定義している。
 
 ## schema の additionalProperties 方針
 
-`components/schemas/*.yaml` の `additionalProperties: false` は、リクエストボディの schema と、それが `$ref` で参照する schema にのみ付ける。レスポンス専用の schema には付けない。理由: 将来のフィールド追加を許容するため。
+`components/schemas/*.yaml` の `additionalProperties: false` は、リクエストボディの schema と、それが `$ref` で参照する schema にのみ付ける。レスポンス専用の schema には、将来のフィールド追加を許容するために付けない。
 
-## セッションへの依頼
+## 範囲外
 
-`POST /sessions/{channelId}/messages` と `POST /sessions/{channelId}/{threadId}/messages` は、対象のチャンネル/スレッドのセッションへ依頼を渡す。依頼は対象スコープのキューに積まれ、処理の完了を待たずに 202 を返す。対象は設定のギルドに属するテキスト系のチャンネル/スレッドに限り、それ以外は 404 を返す。依頼用のレート制限 (bot 全体で直近 10 分に 6 回) を超えると 429 を返す。
+- 画像の添付。
+- webhook・位置通知・heartbeat。
+- 音声。
+- Discord アダプタの別プロセス化。
+- Discord への直接投稿の経路。Discord 専用の機能であり、この I/F では整理しない。
 
-## 補足
+## 未決事項
 
-ツール承認は SDK の `canUseTool` コールバックで in-process に処理するため、対応する HTTP エンドポイントを持たない。
+この定義では決めていない。
+
+- 認証と、承認・質問に答える operation・常時許可の書き換え・本人の依頼の区別 (一緒に足す)。
+- ワークスペースの Claude が定期実行タスクの再読み込みと実行を呼べるため、command 種別のタスク経由でツール承認を通らずにコマンドを実行できる点 (認証を足す時に検討する)。
+- 現行実装の cron の擬似スコープ (`cron:<ジョブ名>`) に当たるものを、定期実行タスクでどう扱い、誰が登録するか。
+- `GET /health` の判定が Discord の gateway に結び付いていること (#278 の 1 章)。
+- 定期実行タスクの送信先 `channelId` をスコープ ID に寄せるか (#278 の 4.3)。
+- 回答 800 文字・thinking 1500 文字の区切りを SSE でも保つか (#278 の 4.7)。
+- Discord アダプタが `showThinking` と `active` をどこに保存するか。
+- 壊す変更の手順 (#276)。

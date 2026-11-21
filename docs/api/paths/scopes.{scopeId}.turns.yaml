@@ -1,0 +1,36 @@
+parameters:
+  - in: path
+    name: scopeId
+    required: true
+    description: client が決めるスコープ ID。不透明な文字列として扱う。
+    schema:
+      type: string
+    example: "1234567890123456789"
+get:
+  operationId: getScopesScopeIdTurns
+  summary: ターンの一覧の取得。
+  tags:
+    - turns
+  description:
+    $ref: ./descriptions/getScopesScopeIdTurns.md
+  responses:
+    200:
+      description: 処理成功時。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseGetScopesScopeIdTurns.yaml
+          examples:
+            succeeded:
+              value:
+                $ref: ../examples/ResponseGetScopesScopeIdTurns/default.yaml
+    404:
+      description: スコープが登録されていない場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            notFound:
+              value:
+                $ref: ../examples/ResponseError/default.yaml

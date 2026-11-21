@@ -1,0 +1,12 @@
+type: object
+description: 質問の選択肢。
+required:
+  - label
+  - description
+properties:
+  label:
+    type: string
+    description: 選択肢の表示名。
+  description:
+    type: string
+    description: 選択肢の説明。

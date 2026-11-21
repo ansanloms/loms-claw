@@ -2,19 +2,16 @@
 
 Discord + Claude Agent SDK のパーソナル AI エージェント。単一ギルド・単一ユーザ専用の bot として Discord のメッセージや定期実行 (cron) を受け、Agent SDK の `query()` で SDK 同梱の Claude Code バイナリをエージェントワークスペース上で動かし、結果を Discord に返す。
 
-このファイルは不変条件・規約・開発手順・ドキュメント索引に絞る。仕組みの記述は [docs/architecture/](docs/architecture/README.md) が正本で、コードと食い違う場合はコードが優先する。
+このブランチ (`next`) は作り直しの途中で、実装は無い。I/F の定義は [docs/api/](docs/api/README.md) にある。要る部品は main から持ち込む。
+
+このファイルは不変条件・規約・開発手順・ドキュメント索引に絞る。
 
 ## 利用規約
 
 規約上の根拠・引用・経緯は [docs/terms-of-service.md](docs/terms-of-service.md) にまとめている。実装時に守る不変条件は次の 2 点。
 
-- `client/discord/guard.ts` の `isAuthorized()` による単一ギルド ID・単一ユーザー ID（サブスクリプション購入者本人）との完全一致要求を崩さない。他のユーザーがアクセスできない状態を維持する。bot 自身の投稿による起動（「AI to AI 自己メンション」）は `isAuthorizedSelfMessage()` で別途判定するが、同一ギルド内の自 bot の投稿に限られ、第三者のリクエストが流入する経路にはならない。
+- 単一ギルド ID・単一ユーザー ID（サブスクリプション購入者本人）との完全一致を要求し続ける。他のユーザーがアクセスできない状態を維持する。bot 自身の投稿による起動（「AI to AI 自己メンション」）は別途判定するが、同一ギルド内の自 bot の投稿に限られ、第三者のリクエストが流入する経路にしない。
 - cron による自動実行の頻度・規模を「個人の通常利用（ordinary, individual usage）」の範囲に保つ。
-
-## 依存の向き
-
-- 依存は `client/` → `core/` の一方向。`client/` を import してよいのは `client/` 自身とエントリポイント `main.ts` だけで、`core/`・`cron/`・`api/` 等は import しない。discord.js も `client/discord/` 以外（`main.ts` を含む）は import しない（`.oxlintrc.json` の `no-restricted-imports` が `npm run lint` で検査する）。
-- Discord に触れる必要がある中核側の処理は、中核が IF を定義して client が実装する。会話の 1 ターンの出力先は `core/conversation.ts` の `TurnOutput`、cron の送信先等は `cron/executor.ts` の `CronPorts`。汎用の client API は用意しない（[docs/architecture/message-flow.md](docs/architecture/message-flow.md)、[docs/architecture/cron.md](docs/architecture/cron.md)）。
 
 ## 技術スタック
 
@@ -28,35 +25,10 @@ Discord + Claude Agent SDK のパーソナル AI エージェント。単一ギ�
 
 ## ドキュメント索引
 
-| ドキュメント                                                                       | 内容                                                                                             |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| [docs/architecture/README.md](docs/architecture/README.md)                         | 全体像（目的・技術スタック・システムコンテキスト・モジュール依存・ファイル構成）と各章の索引     |
-| [docs/architecture/lifecycle.md](docs/architecture/lifecycle.md)                   | 起動 / 終了シーケンス、`config.json` の読み込みと全フィールド、ロガー                            |
-| [docs/architecture/message-flow.md](docs/architecture/message-flow.md)             | Discord メッセージ処理の全ステップ、AI to AI 自己メンション、インタラクションの振り分け          |
-| [docs/architecture/claude-integration.md](docs/architecture/claude-integration.md) | `askClaude()` と `query()` に渡すオプション、システムプロンプトの結合規則、テンプレート変数      |
-| [docs/architecture/store-and-settings.md](docs/architecture/store-and-settings.md) | `Store`（SQLite）のテーブル配置とフォールバック、`/claw settings`、`/settings` API               |
-| [docs/architecture/approval.md](docs/architecture/approval.md)                     | ツール承認（`canUseTool`）、`AskUserQuestion`、`permissions.allow`                               |
-| [docs/architecture/cron.md](docs/architecture/cron.md)                             | cron ジョブファイルの形式、ローダ / スケジューラ / 実行器、once、reload                          |
-| [docs/architecture/internal-api.md](docs/architecture/internal-api.md)             | 内部 HTTP API のルート、`docs/api`（OpenAPI）から `api/internal-schemas.ts` への検証パイプライン |
-| [docs/architecture/deployment.md](docs/architecture/deployment.md)                 | Docker / compose / devcontainer、`data/` と環境変数、ワークスペース（`data/workspace/`）の構成   |
-| [docs/architecture/constants.md](docs/architecture/constants.md)                   | ハードコード定数の分類表、設定化しない方針                                                       |
-| [docs/terms-of-service.md](docs/terms-of-service.md)                               | 利用規約上の根拠・引用・経緯                                                                     |
-| [docs/api/README.md](docs/api/README.md)                                           | 内部 HTTP API の OpenAPI 定義（接続条件・エラー応答の形）                                        |
-| [data/workspace/CLAUDE.md](data/workspace/CLAUDE.md)                               | ワークスペースで動く Claude（bot の中の Claude）に向けた指示書                                   |
-
-ディレクトリの対応は次のとおり。詳細なファイル構成表は [docs/architecture/README.md](docs/architecture/README.md) にある。
-
-| ディレクトリ / ファイル                                             | 役割                                                                                                                                            |
-| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `main.ts`, `config.ts`, `config.schema.*`, `logger.ts`, `errors.ts` | エントリポイント、設定、ロガー、エラー整形                                                                                                      |
-| `client/discord/`                                                   | Discord アダプタ（`DiscordBot`、認可、メッセージ整形、スラッシュコマンド、ツール承認 UI、cron の送信先）。discord.js に依存してよいのはここだけ |
-| `claude/`                                                           | Agent SDK 連携（`askClaude()`、システムプロンプト、テンプレート変数）                                                                           |
-| `store/`                                                            | SQLite（`node:sqlite`）によるスコープ設定の永続化                                                                                               |
-| `core/`                                                             | 会話の中核（`Conversation`、直列キュー、レートリミット、フラッシュ分割、承認 allowlist）。discord.js・`client/` に依存しない                    |
-| `api/`                                                              | 内部 HTTP API（cron / logs / settings）と生成物 `internal-schemas.ts`                                                                           |
-| `cron/`                                                             | 定期実行（ローダ・スケジューラ・実行器）                                                                                                        |
-| `docs/api/`                                                         | 内部 HTTP API の OpenAPI（独自の `package.json` を持つ Node プロジェクト）                                                                      |
-| `data/`                                                             | 実行時データ（`config.json` / `home/` / `workspace/`）。追跡対象は一部のみ                                                                      |
+| ドキュメント                                         | 内容                                  |
+| ---------------------------------------------------- | ------------------------------------- |
+| [docs/api/README.md](docs/api/README.md)             | 次期 I/F (REST / SSE) の OpenAPI 定義 |
+| [docs/terms-of-service.md](docs/terms-of-service.md) | 利用規約上の根拠・引用・経緯          |
 
 ## 開発コマンド
 
@@ -67,26 +39,11 @@ npm test           # テスト + カバレッジ
 npm run check      # 型チェック（tsc --noEmit）
 npm run lint       # lint + format チェック（oxlint + oxfmt --check）
 npm run fix        # lint 自動修正 + format（oxlint --fix + oxfmt）
-npm run generate   # docs/api の OpenAPI から api/internal-schemas.ts を再生成（事前に `npm --prefix docs/api ci` が必要）
 ```
 
-- 設定は `data/config.json`（`data/config.json.example` をコピーして必須項目を埋める）。別パスは環境変数 `LOMS_CLAW_CONFIG` で指定する。フィールド一覧は [docs/architecture/lifecycle.md](docs/architecture/lifecycle.md)。
-- `api/internal-schemas.ts` は生成物。内部 API のリクエスト/レスポンス形を変えるときは `docs/api/` の YAML を編集して `npm run generate` で再生成し（docs/api は独立した npm パッケージなので、初回と依存更新後は `npm --prefix docs/api ci` が先に要る）、生成物もコミットする（[docs/architecture/internal-api.md](docs/architecture/internal-api.md)）。
-- PR 作成前・push 前の検証チェーンは [.claude/rules/pr.md](.claude/rules/pr.md) に従う。
+`start`・`dev`・`test`・`check` は、実装が入るまで動かない。
 
-## Docker
-
-`Dockerfile`/`compose.yaml` はリポジトリルートに置き、コマンドはすべてリポジトリルートで実行する。`data/` を丸ごとコンテナの `/data` へ bind mount する（マウントはこの 1 つだけ）。コンテナ内の cwd は `/data/workspace`（エージェントワークスペース）になる。
-
-```bash
-docker compose build                 # ビルド
-docker compose run --rm -it bot bash # 初回認証（コンテナ内で claude auth login → exit）
-docker compose up -d                 # 本番起動
-docker compose down                  # 本番停止
-docker compose logs -f               # ログ確認
-```
-
-コンテナ内の `claude` コマンドは Agent SDK が同梱する Claude Code バイナリ（`/app/node_modules/@anthropic-ai/claude-agent-sdk-linux-*/claude`）への symlink で、Claude Code CLI を別途インストールはしない。開発は `.devcontainer/` で行う（本番と同じ compose プロジェクトを使うため、devcontainer 起動中は本番 bot が置き換わる）。Dockerfile の各段、環境変数（`CLAUDE_CONFIG_DIR`/`LOMS_CLAW_CONFIG`/`TZ`/`DISCORD_BOT_TOKEN`）、`data/` のレイアウトは [docs/architecture/deployment.md](docs/architecture/deployment.md)。
+- 実装が入るまでの検証は `npm --prefix docs/api run lint` と `npm --prefix docs/api test`（初回と依存更新後は `npm --prefix docs/api ci` が先に要る）。
 
 ## コミット規約
 
@@ -96,15 +53,14 @@ docker compose logs -f               # ログ確認
 
 ## 実装時の注意
 
-- ワークスペースの `.claude/settings.json` の `permissions.allow` に `AskUserQuestion` を入れない。理由: SDK が `canUseTool` を呼ばず素通しし、回答が空のまま解決される（[docs/architecture/approval.md](docs/architecture/approval.md)）。
-- cron 用システムプロンプト（`CRON.md`）ではチャンネル/ユーザー固有のテンプレート変数を使わない。理由: cron ではギルド変数しか渡されず、プレースホルダーのまま残る（[docs/architecture/claude-integration.md](docs/architecture/claude-integration.md)）。
-- 日時は `Date` ではなく Temporal を使う（`cron/match.ts`、`core/ratelimit.ts`、`logger.ts` と同じ流儀）。Node にはグローバルの `Temporal` が無いため、`import { Temporal } from "@js-temporal/polyfill"` を各ファイルで書く。
+- 日時は `Date` ではなく Temporal を使う。Node にはグローバルの `Temporal` が無いため、`import { Temporal } from "@js-temporal/polyfill"` を各ファイルで書く。
 - テストコード以外で `oxlint-disable-next-line` や `any` を使わない。型の絞り込みは type guard で行う。
 - Node の型除去で落ちる構文（parameter property、`enum`、`namespace`、角括弧アサーション `<T>expr`）を使わない。`tsc` の `erasableSyntaxOnly` が検出する。
 - 相対 import には `.ts` 拡張子を付ける（Node は拡張子無しの相対 import を解決しない）。
-- 定期実行は本リポジトリ独自の cron 機能（`cron/`）であり、Claude Code 組み込みの `CronCreate` 等とは無関係。
 
 ## テスト方針
+
+次の方針は main の実装のもので、消したファイルへの言及を含む。実装を持ち込む時に見直す。
 
 - `Conversation` は fake の `TurnOutput` と `queryFn` のモックでテストする（`core/conversation.test.ts`）。`CronExecutor` は fake の `CronPorts` でテストする
 - 純粋関数（`isAuthorized`, `shouldRespond`, `splitMessage`, `buildQueryOptions`, `normalizeEffort` 等）は単体テストでカバー

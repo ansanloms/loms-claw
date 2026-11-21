@@ -1,0 +1,10 @@
+type: object
+description: 登録済みの定期実行タスクの一覧。
+required:
+  - tasks
+properties:
+  tasks:
+    type: array
+    description: タスクの一覧。
+    items:
+      $ref: ./ScheduledTask.yaml

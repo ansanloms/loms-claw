@@ -1,0 +1,20 @@
+type: object
+description: 定期実行タスクの手動実行結果。
+required:
+  - ok
+  - id
+  - result
+properties:
+  ok:
+    type: boolean
+    description: リクエストを受け付けて処理したか (常に true。タスクの成否は result で返す)。
+  id:
+    type: string
+    description: 実行したタスクの ID。
+  result:
+    type: string
+    description: タスクの実行結果。succeeded はタスクが最後まで実行された、failed は実行中に例外が起きた、skipped は同じタスクが実行中、または終了処理中のため実行しなかった。
+    enum:
+      - succeeded
+      - failed
+      - skipped

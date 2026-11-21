@@ -1,8 +1,0 @@
-type: object
-description: セッションへの依頼の受付結果。
-required:
-  - ok
-properties:
-  ok:
-    type: boolean
-    description: 依頼をキューに積んだか (常に true。処理の完了は待たない)。

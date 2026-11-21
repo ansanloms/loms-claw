@@ -1,0 +1,77 @@
+parameters:
+  - in: path
+    name: scopeId
+    required: true
+    description: client が決めるスコープ ID。不透明な文字列として扱う。
+    schema:
+      type: string
+    example: "1234567890123456789"
+post:
+  operationId: postScopesScopeIdMessages
+  summary: ターンの開始。
+  tags:
+    - turns
+  description:
+    $ref: ./descriptions/postScopesScopeIdMessages.md
+  requestBody:
+    required: true
+    description: 依頼の本文と、任意の依頼元。
+    content:
+      application/json:
+        schema:
+          $ref: ../components/schemas/RequestPostScopesScopeIdMessages.yaml
+        examples:
+          normal:
+            value:
+              $ref: ../examples/RequestPostScopesScopeIdMessages/default.yaml
+  responses:
+    202:
+      description: 依頼を対象スコープのキューに積んだ場合。処理の完了は待たない。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponsePostScopesScopeIdMessages.yaml
+          examples:
+            accepted:
+              value:
+                $ref: ../examples/ResponsePostScopesScopeIdMessages/default.yaml
+    400:
+      description: JSON が不正、またはスキーマに適合しない場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            badRequest:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+    404:
+      description: スコープが登録されていない場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            notFound:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+    429:
+      description: 依頼のレート制限を超過した場合 (bot 全体で直近 10 分に 6 回まで。自己メンションとは別枠)。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            rateLimited:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+    503:
+      description: 依頼の機能が無効な場合、または bot が終了処理中の場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            unavailable:
+              value:
+                $ref: ../examples/ResponseError/default.yaml

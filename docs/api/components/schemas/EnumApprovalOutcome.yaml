@@ -1,0 +1,7 @@
+type: string
+description: 承認の結果。allow は今回だけ許可、allowAlways は常時許可に加えて許可、deny は拒否、expired は時間切れ。
+enum:
+  - allow
+  - allowAlways
+  - deny
+  - expired

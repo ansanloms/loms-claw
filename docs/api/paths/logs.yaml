@@ -3,12 +3,13 @@ get:
   summary: ログ取得。
   tags:
     - logs
-  description: メモリ上のリングバッファからログエントリを時系列順で取得する。リングバッファは `log.level`（コンソールに出力する最低ログレベル）に関わらず全レベルのエントリを保持するため、`level=DEBUG` を指定すると標準出力に出ていないエントリも返る。
+  description:
+    $ref: ./descriptions/getLogs.md
   parameters:
     - in: query
       name: level
       required: false
-      description: この重要度以上のエントリのみ返す。大文字小文字を区別しない。
+      description: この重要度以上のエントリのみ返す。
       schema:
         type: string
         enum:
@@ -48,9 +49,9 @@ get:
           examples:
             succeeded:
               value:
-                $ref: ../examples/ResponseGetLogs.yaml
+                $ref: ../examples/ResponseGetLogs/default.yaml
     400:
-      description: level/since/limit のいずれかが不正な場合。
+      description: level、since、limit のいずれかが不正な場合。
       content:
         application/json:
           schema:
@@ -58,4 +59,4 @@ get:
           examples:
             badRequest:
               value:
-                $ref: ../examples/ResponseError.yaml
+                $ref: ../examples/ResponseError/default.yaml

@@ -1,0 +1,28 @@
+get:
+  operationId: getScheduledTasks
+  summary: 定期実行タスク一覧の取得。
+  tags:
+    - scheduled-tasks
+  description:
+    $ref: ./descriptions/getScheduledTasks.md
+  responses:
+    200:
+      description: 処理成功時。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseGetScheduledTasks.yaml
+          examples:
+            succeeded:
+              value:
+                $ref: ../examples/ResponseGetScheduledTasks/default.yaml
+    503:
+      description: 定期実行機能が無効な場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            unavailable:
+              value:
+                $ref: ../examples/ResponseError/default.yaml

@@ -1,0 +1,26 @@
+type: object
+description: 登録済みの定期実行タスク。
+required:
+  - id
+  - schedule
+  - kind
+properties:
+  id:
+    type: string
+    description: タスクの ID。ファイル名と同じ。
+  kind:
+    type: string
+    enum:
+      - prompt
+      - command
+    description: タスクの種別。prompt は本文を Claude に渡す `.md`、command は `sh -c` で実行する `.yaml`。
+  schedule:
+    type: string
+    description: cron 式。5 フィールド、TZ 環境変数に依存する。
+    example: 0 9 * * *
+  channelId:
+    type: string
+    description: 結果の自動投稿先チャンネル ID。未指定のタスクでは省略される。
+  once:
+    type: boolean
+    description: 1 回実行後にタスクのファイルを自動削除するか。

@@ -1,0 +1,14 @@
+questions:
+  - id: q-0001
+    scopeId: "1234567890123456789"
+    questions:
+      - question: どちらの宿にしますか。
+        header: 宿
+        options:
+          - label: 駅前
+            description: 駅から徒歩 3 分。
+          - label: 海沿い
+            description: 駅から徒歩 20 分。
+        multiSelect: false
+    requestedAt: 2026-11-21T09:00:00Z
+    expiresAt: 2026-11-21T09:05:00Z

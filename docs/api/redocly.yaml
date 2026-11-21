@@ -1,3 +1,4 @@
+telemetry: off
 extends:
   - recommended-strict
 
@@ -11,7 +12,12 @@ rules:
   no-invalid-media-type-examples: off
   operation-2xx-response: off
   operation-4xx-response: off
-  # 内部 API は 127.0.0.1 バインドの in-process 専用で認証機構を持たないため無効化する。
-  security-defined: off
+  ansanloms/operation-id-naming: error
+  ansanloms/description-file-naming: error
+  ansanloms/examples-layout: error
+  ansanloms/no-unreferenced-files:
+    severity: error
+    # examples は対象にしない。example の value 内の $ref は参照として辿られず、誤検出になるため。
+    dirs: [paths, components]
 preprocessors:
   ansanloms/inline-examples: on

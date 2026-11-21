@@ -1,0 +1,8 @@
+type: object
+description: ターンの受付結果。
+required:
+  - turnId
+properties:
+  turnId:
+    type: string
+    description: 受け付けたターンの ID。SSE のイベントはこの値で突き合わせる。

@@ -1,5 +1,5 @@
 type: object
-description: エラー応答。Hono の onError および各ハンドラが application/json で返す。
+description: エラー応答。
 required:
   - error
 properties:

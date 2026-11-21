@@ -1,0 +1,56 @@
+parameters:
+  - in: path
+    name: taskId
+    required: true
+    description: 実行するタスクの ID (例 news.md)。ID はパーセントエンコードして渡す。
+    schema:
+      type: string
+      minLength: 1
+post:
+  operationId: postScheduledTasksTaskIdRun
+  summary: 定期実行タスクの手動実行。
+  tags:
+    - scheduled-tasks
+  description:
+    $ref: ./descriptions/postScheduledTasksTaskIdRun.md
+  responses:
+    200:
+      description: タスクの実行が終わった場合。成否は result で判断する。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponsePostScheduledTasksTaskIdRun.yaml
+          examples:
+            succeeded:
+              value:
+                $ref: ../examples/ResponsePostScheduledTasksTaskIdRun/default.yaml
+    404:
+      description: 指定したタスクが存在しない場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            notFound:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+    500:
+      description: ルート内で想定外の例外が起きた場合。タスクの失敗では返らない。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            processingFailed:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+    503:
+      description: 定期実行機能が無効な場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            unavailable:
+              value:
+                $ref: ../examples/ResponseError/default.yaml

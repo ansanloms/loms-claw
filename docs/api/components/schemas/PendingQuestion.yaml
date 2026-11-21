@@ -1,0 +1,30 @@
+type: object
+description: 保留中の質問。時間切れは要求から 5 分後。
+required:
+  - id
+  - scopeId
+  - questions
+  - requestedAt
+  - expiresAt
+properties:
+  id:
+    type: string
+    description: 質問 ID。
+  scopeId:
+    type: string
+    description: client が決めるスコープ ID。不透明な文字列として扱う。
+  questions:
+    type: array
+    minItems: 1
+    maxItems: 4
+    description: 質問。1 件以上 4 件以下。
+    items:
+      $ref: ./Question.yaml
+  requestedAt:
+    type: string
+    format: date-time
+    description: 要求した時刻。RFC 3339 形式。
+  expiresAt:
+    type: string
+    format: date-time
+    description: 時間切れになる時刻。RFC 3339 形式。
