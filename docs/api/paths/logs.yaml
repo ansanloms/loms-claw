@@ -8,7 +8,7 @@ get:
     - in: query
       name: level
       required: false
-      description: この重要度以上のエントリのみ返す。大文字小文字を区別しない。
+      description: この重要度以上のエントリのみ返す。
       schema:
         type: string
         enum:
