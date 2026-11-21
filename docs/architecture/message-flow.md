@@ -224,7 +224,7 @@ per-scope の停止手段は無い。連鎖を止めるにはレート制限に�
 
 対象の検証 (`resolveTargetChannel()`): `client.channels.fetch()` の reject と `null` は対象なし。設定のギルド (`guildId`) に属し、テキスト系 (`isTextBased()`) で DM でなく (`isDMBased()`)、送信できる (`isSendable()`) こと。加えて、`isSendable()` は `send` メソッドの有無しか見ないので、bot の権限を `permissionsFor()` で確かめる (チャンネルは ViewChannel と SendMessages、スレッドは ViewChannel と SendMessagesInThreads で、ロック中のスレッドは不可)。アーカイブ済みスレッドは判定に入れない (送信で解除されるかを discord.js のソースから確認できないため)。`threadId` があればスレッドで、`parentId` が URL の `channelId` と一致すること。`threadId` が無いときにスレッドを指していたら対象なしにする (スコープの親子が崩れるため)。満たさなければ API は 404 を返す。
 
-スコープは `{ channelId }` または `{ channelId, threadId }`、`localId` は `threadId ?? channelId`。キューの key が通常の発話と同じなので、会話中のターンの後ろに積まれ、同じセッションを resume して処理される。自己メンションと同じく、受けたセッションが同じ API で別のセッションへ依頼を渡す連鎖はレート制限で抑える。ツール承認・`AskUserQuestion` は対象のスコープに出る ([approval](approval.md))。
+スコープは `{ channelId }` または `{ channelId, threadId }`、`localId` は `threadId ?? channelId`。キューの key が通常の発話と同じなので、会話中のターンの後ろに積まれ、同じセッションを resume して処理される。自己メンションと同じく、受けたセッションが同じ API で別のセッションへ依頼を渡す連鎖はレート制限で抑える。同じ構造の歯止めは `POST /cron/run` による cron の手動実行にもある ([cron](cron.md))。ツール承認・`AskUserQuestion` は対象のスコープに出る ([approval](approval.md))。
 
 エージェント向けの案内は [data/workspace/CLAUDE.md](../../data/workspace/CLAUDE.md) の「セッション間の依頼 API」節と [sessions skill](../../data/workspace/.claude/skills/sessions/SKILL.md)。
 
@@ -259,5 +259,7 @@ per-scope の停止手段は無い。連鎖を止めるにはレート制限に�
 | `SELF_MENTION_RATE_LIMIT_WINDOW_MINUTES`    | `core/ratelimit.ts`                                    | 10      | 同ウィンドウ長 (分)                                   |
 | `SESSION_REQUEST_RATE_LIMIT_MAX_COUNT`      | `core/ratelimit.ts`                                    | 6       | セッション間の依頼の上限回数 (自己メンションとは別枠) |
 | `SESSION_REQUEST_RATE_LIMIT_WINDOW_MINUTES` | `core/ratelimit.ts`                                    | 10      | 同ウィンドウ長 (分)                                   |
+| `CRON_RUN_RATE_LIMIT_MAX_COUNT`             | `core/ratelimit.ts`                                    | 6       | cron の手動実行の上限回数 (他とは別枠)                |
+| `CRON_RUN_RATE_LIMIT_WINDOW_MINUTES`        | `core/ratelimit.ts`                                    | 10      | 同ウィンドウ長 (分)                                   |
 | `claude.timeout`                            | `config.json`                                          | 設定値  | `askClaude()` の `AbortSignal.timeout`                |
 | `INTERACTION_TIMEOUT_MS`                    | `client/discord/approval/constants.ts`                 | 5 分    | 承認 / 質問の待ち時間 ([approval](approval.md))       |

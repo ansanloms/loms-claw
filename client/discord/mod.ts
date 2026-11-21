@@ -29,6 +29,8 @@ import { SystemPromptStore } from "../../claude/system-prompt.ts";
 import type { Config } from "../../config.ts";
 import { Conversation } from "../../core/conversation.ts";
 import {
+  CRON_RUN_RATE_LIMIT_MAX_COUNT,
+  CRON_RUN_RATE_LIMIT_WINDOW_MINUTES,
   SELF_MENTION_RATE_LIMIT_MAX_COUNT,
   SELF_MENTION_RATE_LIMIT_WINDOW_MINUTES,
   SelfMentionRateLimiter,
@@ -37,6 +39,7 @@ import {
 } from "../../core/ratelimit.ts";
 import { CronExecutor } from "../../cron/executor.ts";
 import { loadCronJobsFromDir } from "../../cron/loader.ts";
+import { runJobManually } from "../../cron/manual-run.ts";
 import { createLogger } from "../../logger.ts";
 import type { Store } from "../../store/mod.ts";
 import { ApprovalManager, createCanUseTool } from "./approval/manager.ts";
@@ -113,6 +116,8 @@ export class DiscordBot {
   private conversation: Conversation;
   /** セッション間の依頼 (内部 API) の受付時のレート制限。 */
   private readonly sessionRequestLimiter: SelfMentionRateLimiter;
+  /** cron の手動実行 (POST /cron/run) のレート制限 (自己メンション・セッション間の依頼とは別枠)。 */
+  private readonly cronRunLimiter: SelfMentionRateLimiter;
   /**
    * `query()` の env へ注入する環境変数。discord skill の curl がここから
    * bot トークンを取る (skill 側は config.json を直読みしない)。
@@ -165,6 +170,11 @@ export class DiscordBot {
     this.sessionRequestLimiter = new SelfMentionRateLimiter(
       SESSION_REQUEST_RATE_LIMIT_MAX_COUNT,
       SESSION_REQUEST_RATE_LIMIT_WINDOW_MINUTES,
+    );
+    // cron の手動実行 (`POST /cron/run`) のレート制限 (他とは別枠。存在確認の後、実行の前に消費する)。
+    this.cronRunLimiter = new SelfMentionRateLimiter(
+      CRON_RUN_RATE_LIMIT_MAX_COUNT,
+      CRON_RUN_RATE_LIMIT_WINDOW_MINUTES,
     );
 
     this.client.on(Events.MessageCreate, this.onMessageCreate);
@@ -239,13 +249,12 @@ export class DiscordBot {
         });
 
         // 手動実行関数
-        const runJobByName = async (name: string) => {
-          const job = this.cronExecutor!.findJob(name);
-          if (!job) {
-            throw new Error(`job not found: ${name}`);
-          }
-          return await this.cronExecutor!.runJob(job);
-        };
+        const runJobByName = (name: string) =>
+          runJobManually(name, {
+            findJob: (n) => this.cronExecutor!.findJob(n),
+            runJob: (job) => this.cronExecutor!.runJob(job),
+            limiter: this.cronRunLimiter,
+          });
 
         // 統合 API サーバーを起動する（cron + ログ取得 + 設定 + セッションへの依頼）。
         const cronCtx: CronRouteContext = {

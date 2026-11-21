@@ -6,7 +6,8 @@
 
 import { Hono } from "hono";
 import type { FromSchema } from "json-schema-to-ts";
-import type { CronJobDef, CronRunResult } from "../../cron/types.ts";
+import type { ManualRunResult } from "../../cron/manual-run.ts";
+import type { CronJobDef } from "../../cron/types.ts";
 import { createLogger } from "../../logger.ts";
 import type { internalSchemas } from "../internal-schemas.ts";
 import { matchesSchema, schemaErrorOf } from "../validate.ts";
@@ -21,10 +22,11 @@ export interface CronRouteContext {
   reloadCronJobs?: () => Promise<void>;
   /**
    * 名前を指定してジョブを手動実行する。
-   * ジョブの失敗と実行中による skip は例外でなく戻り値 ({@link CronRunResult}) で返る。
+   * ジョブの失敗と実行中による skip は例外でなく戻り値 ({@link ManualRunResult}) で返る。
+   * 手動実行のレート制限を超過した場合は実行せず `"rate-limited"` を返す。
    * throw するのは未登録 (`job not found:` で始まる Error) のときだけ。
    */
-  runJob?: (name: string) => Promise<CronRunResult>;
+  runJob?: (name: string) => Promise<ManualRunResult>;
   /** 登録済みジョブ一覧を返す。 */
   listJobs?: () => CronJobDef[];
 }
@@ -75,6 +77,10 @@ export function createCronRoutes(ctx: CronRouteContext = {}) {
     try {
       log.debug(`manual run: ${name}`);
       const result = await ctx.runJob(name);
+      if (result === "rate-limited") {
+        log.warn(`manual run rate limited: ${name}`);
+        return c.json({ error: "cron run rate limit exceeded" }, 429);
+      }
       return c.json({ ok: true, name, result });
     } catch (e) {
       if (e instanceof Error && e.message.startsWith("job not found:")) {

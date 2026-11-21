@@ -93,7 +93,7 @@ curl -s 'http://127.0.0.1:3000/logs?namespace=cron-loader&level=ERROR'
 
 ジョブの実行が終わるまで待ってから応答を返す（prompt ジョブなら Claude の応答完了まで。最長でジョブの `timeout` 程度かかる）。
 
-`200` でもジョブの成功とは限らない。成否は応答の `result` で分かる。`succeeded` は最後まで実行された、`failed` は実行中に例外が起きた（チャンネルが存在しない、Claude の実行エラー、command ジョブの非 0 終了、タイムアウト等。内容はログに出る）、`skipped` は同名ジョブが実行中で実行しなかった。いずれも HTTP は `200` で、`500` はルート内の想定外の例外のときだけ返る。`succeeded` でも投稿の有無とログは次で確認すること。
+`200` でもジョブの成功とは限らない。成否は応答の `result` で分かる。`succeeded` は最後まで実行された、`failed` は実行中に例外が起きた（チャンネルが存在しない、Claude の実行エラー、command ジョブの非 0 終了、タイムアウト等。内容はログに出る）、`skipped` は同名ジョブが実行中で実行しなかった。いずれも HTTP は `200` で、`500` はルート内の想定外の例外のときだけ返る。手動実行には bot 全体で直近 10 分に 6 回までの制限があり、超えると実行せず `429` を返す（`skipped` になった呼び出しも 1 回に数える）。`succeeded` でも投稿の有無とログは次で確認すること。
 
 - `channelId` があるジョブ: 投稿先チャンネルに結果、または `[cron: {name}] ...` のエラー通知が届いているか。ただしチャンネルの取得自体に失敗した場合（存在しない ID 等）は通知されない。
 - 共通: `GET /logs?namespace=cron&level=ERROR` に `cron job "{name}" failed: ...` が出ていないか。
@@ -109,6 +109,14 @@ curl -s 'http://127.0.0.1:3000/logs?namespace=cron-loader&level=ERROR'
 ```json
 { "error": "job not found: news.md" }
 ```
+
+#### 手動実行の制限を超えた場合（429）
+
+```json
+{ "error": "cron run rate limit exceeded" }
+```
+
+ジョブは実行されない。直近 10 分の枠が空くまで待つ。
 
 #### リクエストボディが不正な場合（400、JSON 不正・`name` 未指定等）
 

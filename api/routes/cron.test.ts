@@ -159,6 +159,25 @@ describe("createCronRoutes", () => {
     });
   }
 
+  test("POST /run: レート制限の超過は 429 を返すこと", async () => {
+    const app = new Hono();
+    app.route(
+      "/cron",
+      createCronRoutes({ runJob: () => Promise.resolve("rate-limited") }),
+    );
+
+    const res = await app.request("/cron/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "my-job" }),
+    });
+
+    assert.deepStrictEqual(res.status, 429);
+    assert.deepStrictEqual(await res.json(), {
+      error: "cron run rate limit exceeded",
+    });
+  });
+
   test("POST /run: name 未指定で 400 を返すこと", async () => {
     const app = new Hono();
     app.route(

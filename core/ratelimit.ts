@@ -10,12 +10,17 @@ export const SESSION_REQUEST_RATE_LIMIT_MAX_COUNT = 6;
 /** セッション間の依頼のレート制限: ウィンドウ長 (分)。 */
 export const SESSION_REQUEST_RATE_LIMIT_WINDOW_MINUTES = 10;
 
+/** cron の手動実行 (`POST /cron/run`) のレート制限: ウィンドウ内の最大実行回数。自己メンション・セッション間の依頼とは別枠。 */
+export const CRON_RUN_RATE_LIMIT_MAX_COUNT = 6;
+/** cron の手動実行のレート制限: ウィンドウ長 (分)。 */
+export const CRON_RUN_RATE_LIMIT_WINDOW_MINUTES = 10;
+
 /**
  * 自己メンション応答のスライディングウィンドウレートリミッタ。
  *
  * bot 全体で「直近 windowMinutes 分間に maxCount 回まで」を強制する。
  * AI 出力が次の応答を起動する構造の暴走 (ループ・連鎖) に対する機械的な歯止め。
- * セッション間の依頼の制限にも、別のインスタンスとして同じクラスを使う。
+ * セッション間の依頼と cron の手動実行の制限にも、それぞれ別のインスタンスとして同じクラスを使う。
  */
 export class SelfMentionRateLimiter {
   private readonly maxCount: number;
