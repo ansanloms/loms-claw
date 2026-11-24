@@ -44,26 +44,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/health": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * healthcheck。
-         * @description HTTP サーバの応答性と Discord Gateway の接続状態を反映した healthcheck 用の operation。
-         */
-        get: operations["getHealth"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/logs": {
         parameters: {
             query?: never;
@@ -215,7 +195,7 @@ export interface paths {
         post?: never;
         /**
          * セッションの破棄。
-         * @description スレッドのセッションを捨てる。次のターンは新しいセッションを作る。待機中や実行中のターンは止めない (止めるには `DELETE /turns/{turnId}` を使う)。セッションが無いスレッドでは何もせず、捨てた場合と同じく 204 を返す。登録されていないスレッドには 404 を返す。
+         * @description スレッドのセッションを捨てる。次のターンは新しいセッションを作る。待機中や実行中のターンは止めない。捨てた時点で実行中だったターンは、終わってもセッションを書き戻さない。捨てた後に始まるターン (その時点で待機中だったものを含む) が、新しいセッションを作る。セッションが無いスレッドでは何もせず、捨てた場合と同じく 204 を返す。登録されていないスレッドには 404 を返す。
          */
         delete: operations["deleteThreadsThreadIdSession"];
         options?: never;
@@ -248,29 +228,6 @@ export interface paths {
          */
         post: operations["postThreadsThreadIdTurns"];
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/turns/{turnId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description ターン ID。スレッドをまたいで一意。ID はパーセントエンコードして渡す。 */
-                turnId: string;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * ターンの中止。
-         * @description ターンを 1 件止める。ターン ID は本体が採番し、スレッドをまたいで一意なので、スレッドを指定せずに止められる。実行中のターンは中断し、待機中のターンはキューから外す。中止を受け付けた時点で 202 を返し、完了は `turn.ended` (`result` は `cancelled`) で知る。該当するターンが無い場合 (既に終わったものを含む) は 404 を返す。
-         */
-        delete: operations["deleteTurnsTurnId"];
         options?: never;
         head?: never;
         patch?: never;
@@ -508,10 +465,10 @@ export interface components {
          */
         EnumQuestionOutcome: "answered" | "denied" | "expired";
         /**
-         * @description ターンの終わり方。completed は最後まで実行した、failed は失敗した、cancelled は中止した (待機中のまま止められたターンを含む)。
+         * @description ターンの終わり方。completed は最後まで実行した、failed は失敗した。値は後から追加されうる。client は未知の値を受け取っても落ちないこと。
          * @enum {string}
          */
-        EnumTurnResult: "completed" | "failed" | "cancelled";
+        EnumTurnResult: "completed" | "failed";
         /**
          * @description ターンの状態。queued は同じスレッドで実行中のターンの後ろで待機中、running は実行中。
          * @enum {string}
@@ -529,14 +486,6 @@ export interface components {
              */
             model?: string;
             effort?: components["schemas"]["EnumEffort"];
-        };
-        /** @description ターンの中止の受付結果。 */
-        ResponseDeleteTurnsTurnId: {
-            /**
-             * @description 中止を受け付けたか。常に true を返す。完了は turn.ended で知る。
-             * @example true
-             */
-            ok: boolean;
         };
         /** @description エラー応答。 */
         ResponseError: {
@@ -654,14 +603,6 @@ export interface components {
             /** @description イベントの本体。JSON 文字列である。 */
             data: string;
         };
-        /** @description healthcheck の結果。 */
-        ResponseGetHealth: {
-            /**
-             * @description healthy なら ok、そうでなければ unavailable。
-             * @enum {string}
-             */
-            status: "ok" | "unavailable";
-        };
         /** @description ログエントリ一覧。時系列順。 */
         ResponseGetLogs: components["schemas"]["LogEntry"][];
         /** @description 保留中の質問の一覧。 */
@@ -753,35 +694,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResponseError"];
-                };
-            };
-        };
-    };
-    getHealth: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description healthy な場合。 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResponseGetHealth"];
-                };
-            };
-            /** @description unhealthy な場合 (Discord Gateway が未接続等)。エラー応答の形は例外で、error ではなく status を返す。 */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResponseGetHealth"];
                 };
             };
         };
@@ -1148,38 +1060,6 @@ export interface operations {
             };
             /** @description 依頼の機能が無効な場合、または bot が終了処理中の場合。 */
             503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResponseError"];
-                };
-            };
-        };
-    };
-    deleteTurnsTurnId: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description ターン ID。スレッドをまたいで一意。ID はパーセントエンコードして渡す。 */
-                turnId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 中止を受け付けた場合。 */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResponseDeleteTurnsTurnId"];
-                };
-            };
-            /** @description 該当するターンが無い場合 (既に終わったターンを含む)。 */
-            404: {
                 headers: {
                     [name: string]: unknown;
                 };

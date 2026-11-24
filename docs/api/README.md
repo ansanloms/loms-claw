@@ -4,7 +4,7 @@ loms-claw を「常駐する本体と、その周辺 (Discord・CLI・スマホ�
 
 ## 位置付け
 
-この定義は `next` ブランチの I/F の定義である。実装は `packages/server/` で進めている。この定義の operation が全部実装済みとは限らない。main の実装と、main の `docs/api/` (0.1.0) は、この定義に対応しない。`info.version` は 0.2.0 で、`next` が main に入るまで release とタグを切らない。
+この定義は `next` ブランチの I/F の定義である。実装は `packages/server/` で進めている。この定義の operation が全部実装済みとは限らない。main の実装と、main の `docs/api/` (0.1.0) は、この定義に対応しない。`info.version` は 0.2.0 で、`next` が main に入るまで release とタグを切らない。それまでは、壊す変更を入れても版を上げない。
 
 ## 決定事項
 
@@ -47,14 +47,14 @@ issue #278 の「決めること」と、そこから派生した論点の結論
 
 ## エラー応答
 
-エラー時は HTTP ステータスコードと `application/json` の `{ "error": string }` を返す。RFC 9457 Problem Details 形式ではない。`GET /health` の 503 だけは例外で、`{ "status": "unavailable" }` を返す。
+エラー時は HTTP ステータスコードと `application/json` の `{ "error": string }` を返す。RFC 9457 Problem Details 形式ではない。
 
 ## SSE の規約
 
 `GET /events` が 1 本の接続で全イベントを配る。query の `threadId` で絞れる。スレッドごとのパスにしない理由は、承認と定期実行タスクのイベントを 1 接続で受けられるからである。
 
 - イベントは追加のみで進化させる。既存のフィールドの意味や型は変えない。
-- client は未知の `event` と未知のフィールドを無視する。
+- client は未知の `event`・未知のフィールド・列挙の未知の値を受け取っても落ちない。未知の `event` とフィールドは無視する。
 - 切断中のイベントは再送しない。そのため `id` と `retry` は定義しない。
 - 再接続したら、`GET /approvals`・`GET /questions`・`GET /threads/{threadId}/turns` で状態を取り直す。
 - `threadId` で絞った購読には、`threadId` を持たないイベントは流れない。
@@ -82,7 +82,8 @@ issue #278 の「決めること」と、そこから派生した論点の結論
 - 認証と、承認・質問に答える operation・常時許可の書き換え・本人の依頼の区別 (一緒に足す)。
 - ワークスペースの Claude が定期実行タスクの再読み込みと実行を呼べるため、command 種別のタスク経由でツール承認を通らずにコマンドを実行できる点 (認証を足す時に検討する)。
 - 現行実装の cron の擬似スレッド (`cron:<ジョブ名>`) に当たるものを、定期実行タスクでどう扱い、誰が登録するか。
-- `GET /health` の判定が Discord の gateway に結び付いていること (#278 の 1 章)。
+- 稼働の確認を I/F に含めるか (#278 の 1 章)。server は compose の healthcheck 用に `GET /health` を持つが、この定義には載せていない。
+- ターンを止める操作。
 - 回答 800 文字・thinking 1500 文字の区切りを SSE でも保つか (#278 の 4.7)。
 - client が設定 (`model`・`effort`・`showThinking`・`active`) をどこに保存するか。
 - 全体の設定 (既定の `model`・`effort`、常時許可) を読み書きする operation。

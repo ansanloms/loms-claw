@@ -94,7 +94,7 @@ describe("jsonBody", () => {
 
   test("requestBody の無い operationId は例外を投げること", () => {
     assert.throws(
-      () => jsonBody("getHealth"),
+      () => jsonBody("getApprovals"),
       errorWith(Error, "JSON の requestBody が無い"),
     );
   });

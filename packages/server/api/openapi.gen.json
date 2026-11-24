@@ -3,7 +3,7 @@
   "info": {
     "version": "0.2.0",
     "title": "loms-claw API",
-    "description": "# loms-claw API\n\nloms-claw を「常駐する本体と、その周辺 (Discord・CLI・スマホ等)」の構成にするための、次期 I/F の設計。client から本体へは REST、本体から client へは SSE (Server-Sent Events) で渡す。\n\n## 位置付け\n\nこの定義は `next` ブランチの I/F の定義である。実装は `packages/server/` で進めている。この定義の operation が全部実装済みとは限らない。main の実装と、main の `docs/api/` (0.1.0) は、この定義に対応しない。`info.version` は 0.2.0 で、`next` が main に入るまで release とタグを切らない。\n\n## 決定事項\n\nissue #278 の「決めること」と、そこから派生した論点の結論を次に示す。\n\n| #   | 論点                 | 決定                                                                                                                                                                                                                                                                                            |\n| --- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |\n| 1   | 出力の届け先         | スレッドの購読者全員に配る。中核がイベントを発行し、Discord も SSE の client も購読者になる。                                                                                                                                                                                                   |\n| 2   | スレッド ID          | client が決める不透明な文字列とする。`PUT /threads/{threadId}` で登録してから使う。親は持たない。未登録のスレッドへの要求は 404 を返す。Discord の client はチャンネル ID をそのまま使い、応答するチャンネルとスレッドを最初の依頼の前に登録する。単一ギルドの検査は Discord の client が持つ。 |\n| 3   | 承認待ちの台帳       | 中核へ移す。保留中の承認と質問を、SSE と `GET /approvals`・`GET /questions` で全 client に配るため。                                                                                                                                                                                            |\n| 4   | パス空間             | 内部 API と client 向け API を同じパス空間に置く。OpenAPI は 1 本とする。                                                                                                                                                                                                                       |\n| 5   | Discord への直接投稿 | 整理の対象外とする。Discord 専用の機能として扱う (下記「範囲外」)。                                                                                                                                                                                                                             |\n| 6   | 版の表し方           | パスに版を入れない。`info.version` が正本である (#277 の方針を引き継ぐ)。SSE は追加のみで進化させ、client は未知のイベント種別とフィールドを無視する。                                                                                                                                          |\n| 7   | 認証                 | 含めない。承認・質問に答える operation と一緒に、後で足す。                                                                                                                                                                                                                                     |\n| 8   | 状態の取り直し       | 含める。SSE は切断中のイベントを再送しない。代わりに、実行中と待機中のターン (`GET /threads/{threadId}/turns`) と保留中の承認・質問を `GET` で取り直す。                                                                                                                                        |\n| 9   | 設定の持ち場         | 設定は I/F に含めない。`model` と `effort` はターンを作る時に渡し、省いたら本体の既定値を使う。スレッドごとの設定は、`showThinking`・`active` (`activeChannelIds` を含む) と同じく client が持つ。                                                                                              |\n\n## 接続\n\n- ホスト: `127.0.0.1`。ポートは `config.json` の `claude.apiPort` で、既定値は `3000`。\n- 認証: 無い。当面は認証を実装せず、定義にも含めない。\n\n本体と同じプロセスの client (Discord) は中核を直接呼び、`POST /threads/{threadId}/turns` を通らない。この operation は本体の外から依頼を渡すためのものである。\n\n承認・質問に答える operation (承認への回答、質問への回答、常時許可 (`permissions.allow`) の書き換え) は置かない。認証なしで置くと、ワークスペースの Claude が `curl` で叩いて、自分のツール実行を自分で承認できてしまうためである。現行の API は承認に答える operation を持たず、127.0.0.1 は認証なしで足りたので、この穴は今回の設計で初めて生じる。\n\n- 承認と質問に答えられるのは、本体と同じプロセスの client (Discord) だけである。解決の結果は SSE の `approval.resolved`・`question.resolved` で流れる。Discord 以外の client は承認・質問の要求を SSE で受けるが、答える手段が無い。Discord で答えが無ければ時間切れになる。\n- `GET /approvals`・`GET /questions` は読むだけなので置く。\n- `POST /threads/{threadId}/turns` の依頼には全部「認可ユーザー本人の発話ではない旨の注記」とレート制限を掛ける。認証が無い間は本人の依頼と他の依頼を見分けられないので、この operation の依頼は全部本人以外の依頼として扱う。本人の依頼を区別する手段は、認証と一緒に足す。レート制限の目的は暴走 (ループ・連鎖) を止めることで、攻撃を防ぐことではない。\n\n## スレッド\n\nスレッドは続いていく会話の単位で、Claude のセッションとターンのキューを持つ。Discord の client では、チャンネル 1 つ、または Discord のスレッド 1 つが、この API のスレッド 1 つに当たる。\n\n## 資源の ID\n\n保存先を持たない資源は自然キーを ID にする。スレッドは client が決める文字列、定期実行タスクはファイル名を ID にする。これらに数値の連番は振らない。保存先が無いと、再読み込みのたびに連番が変わりうるためである。\n\nターン・承認・質問の ID は本体が採番する。どれもスレッドをまたいで一意である。形式は定めず、client は不透明な文字列として扱う。\n\n## エラー応答\n\nエラー時は HTTP ステータスコードと `application/json` の `{ \"error\": string }` を返す。RFC 9457 Problem Details 形式ではない。`GET /health` の 503 だけは例外で、`{ \"status\": \"unavailable\" }` を返す。\n\n## SSE の規約\n\n`GET /events` が 1 本の接続で全イベントを配る。query の `threadId` で絞れる。スレッドごとのパスにしない理由は、承認と定期実行タスクのイベントを 1 接続で受けられるからである。\n\n- イベントは追加のみで進化させる。既存のフィールドの意味や型は変えない。\n- client は未知の `event` と未知のフィールドを無視する。\n- 切断中のイベントは再送しない。そのため `id` と `retry` は定義しない。\n- 再接続したら、`GET /approvals`・`GET /questions`・`GET /threads/{threadId}/turns` で状態を取り直す。\n- `threadId` で絞った購読には、`threadId` を持たないイベントは流れない。\n- `thinking` イベントは、本体が常に流す。見せるかどうかは client が決める。\n- 各イベントは `event` と、JSON 文字列の `data` からなる。\n\nイベントの一覧は `GET /events` の `itemSchema` (`ResponseGetEvents`) に定義している。\n\n## schema の additionalProperties 方針\n\n`components/schemas/*.yaml` の `additionalProperties: false` は、リクエストボディの schema と、それが `$ref` で参照する schema にのみ付ける。レスポンス専用の schema には、将来のフィールド追加を許容するために付けない。\n\n## 範囲外\n\n- 画像の添付。\n- webhook・位置通知・heartbeat。\n- 音声。\n- Discord アダプタの別プロセス化。\n- Discord への直接投稿の経路。Discord 専用の機能であり、この I/F では整理しない。\n\n## 未決事項\n\nこの定義では決めていない。\n\n- 認証と、承認・質問に答える operation・常時許可の書き換え・本人の依頼の区別 (一緒に足す)。\n- ワークスペースの Claude が定期実行タスクの再読み込みと実行を呼べるため、command 種別のタスク経由でツール承認を通らずにコマンドを実行できる点 (認証を足す時に検討する)。\n- 現行実装の cron の擬似スレッド (`cron:<ジョブ名>`) に当たるものを、定期実行タスクでどう扱い、誰が登録するか。\n- `GET /health` の判定が Discord の gateway に結び付いていること (#278 の 1 章)。\n- 回答 800 文字・thinking 1500 文字の区切りを SSE でも保つか (#278 の 4.7)。\n- client が設定 (`model`・`effort`・`showThinking`・`active`) をどこに保存するか。\n- 全体の設定 (既定の `model`・`effort`、常時許可) を読み書きする operation。\n- 所有する client 以外が始めたターン (定期実行タスク等) に、スレッドごとの `model`・`effort` をどう効かせるか。\n- 壊す変更の手順 (#276)。\n"
+    "description": "# loms-claw API\n\nloms-claw を「常駐する本体と、その周辺 (Discord・CLI・スマホ等)」の構成にするための、次期 I/F の設計。client から本体へは REST、本体から client へは SSE (Server-Sent Events) で渡す。\n\n## 位置付け\n\nこの定義は `next` ブランチの I/F の定義である。実装は `packages/server/` で進めている。この定義の operation が全部実装済みとは限らない。main の実装と、main の `docs/api/` (0.1.0) は、この定義に対応しない。`info.version` は 0.2.0 で、`next` が main に入るまで release とタグを切らない。それまでは、壊す変更を入れても版を上げない。\n\n## 決定事項\n\nissue #278 の「決めること」と、そこから派生した論点の結論を次に示す。\n\n| #   | 論点                 | 決定                                                                                                                                                                                                                                                                                            |\n| --- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |\n| 1   | 出力の届け先         | スレッドの購読者全員に配る。中核がイベントを発行し、Discord も SSE の client も購読者になる。                                                                                                                                                                                                   |\n| 2   | スレッド ID          | client が決める不透明な文字列とする。`PUT /threads/{threadId}` で登録してから使う。親は持たない。未登録のスレッドへの要求は 404 を返す。Discord の client はチャンネル ID をそのまま使い、応答するチャンネルとスレッドを最初の依頼の前に登録する。単一ギルドの検査は Discord の client が持つ。 |\n| 3   | 承認待ちの台帳       | 中核へ移す。保留中の承認と質問を、SSE と `GET /approvals`・`GET /questions` で全 client に配るため。                                                                                                                                                                                            |\n| 4   | パス空間             | 内部 API と client 向け API を同じパス空間に置く。OpenAPI は 1 本とする。                                                                                                                                                                                                                       |\n| 5   | Discord への直接投稿 | 整理の対象外とする。Discord 専用の機能として扱う (下記「範囲外」)。                                                                                                                                                                                                                             |\n| 6   | 版の表し方           | パスに版を入れない。`info.version` が正本である (#277 の方針を引き継ぐ)。SSE は追加のみで進化させ、client は未知のイベント種別とフィールドを無視する。                                                                                                                                          |\n| 7   | 認証                 | 含めない。承認・質問に答える operation と一緒に、後で足す。                                                                                                                                                                                                                                     |\n| 8   | 状態の取り直し       | 含める。SSE は切断中のイベントを再送しない。代わりに、実行中と待機中のターン (`GET /threads/{threadId}/turns`) と保留中の承認・質問を `GET` で取り直す。                                                                                                                                        |\n| 9   | 設定の持ち場         | 設定は I/F に含めない。`model` と `effort` はターンを作る時に渡し、省いたら本体の既定値を使う。スレッドごとの設定は、`showThinking`・`active` (`activeChannelIds` を含む) と同じく client が持つ。                                                                                              |\n\n## 接続\n\n- ホスト: `127.0.0.1`。ポートは `config.json` の `claude.apiPort` で、既定値は `3000`。\n- 認証: 無い。当面は認証を実装せず、定義にも含めない。\n\n本体と同じプロセスの client (Discord) は中核を直接呼び、`POST /threads/{threadId}/turns` を通らない。この operation は本体の外から依頼を渡すためのものである。\n\n承認・質問に答える operation (承認への回答、質問への回答、常時許可 (`permissions.allow`) の書き換え) は置かない。認証なしで置くと、ワークスペースの Claude が `curl` で叩いて、自分のツール実行を自分で承認できてしまうためである。現行の API は承認に答える operation を持たず、127.0.0.1 は認証なしで足りたので、この穴は今回の設計で初めて生じる。\n\n- 承認と質問に答えられるのは、本体と同じプロセスの client (Discord) だけである。解決の結果は SSE の `approval.resolved`・`question.resolved` で流れる。Discord 以外の client は承認・質問の要求を SSE で受けるが、答える手段が無い。Discord で答えが無ければ時間切れになる。\n- `GET /approvals`・`GET /questions` は読むだけなので置く。\n- `POST /threads/{threadId}/turns` の依頼には全部「認可ユーザー本人の発話ではない旨の注記」とレート制限を掛ける。認証が無い間は本人の依頼と他の依頼を見分けられないので、この operation の依頼は全部本人以外の依頼として扱う。本人の依頼を区別する手段は、認証と一緒に足す。レート制限の目的は暴走 (ループ・連鎖) を止めることで、攻撃を防ぐことではない。\n\n## スレッド\n\nスレッドは続いていく会話の単位で、Claude のセッションとターンのキューを持つ。Discord の client では、チャンネル 1 つ、または Discord のスレッド 1 つが、この API のスレッド 1 つに当たる。\n\n## 資源の ID\n\n保存先を持たない資源は自然キーを ID にする。スレッドは client が決める文字列、定期実行タスクはファイル名を ID にする。これらに数値の連番は振らない。保存先が無いと、再読み込みのたびに連番が変わりうるためである。\n\nターン・承認・質問の ID は本体が採番する。どれもスレッドをまたいで一意である。形式は定めず、client は不透明な文字列として扱う。\n\n## エラー応答\n\nエラー時は HTTP ステータスコードと `application/json` の `{ \"error\": string }` を返す。RFC 9457 Problem Details 形式ではない。\n\n## SSE の規約\n\n`GET /events` が 1 本の接続で全イベントを配る。query の `threadId` で絞れる。スレッドごとのパスにしない理由は、承認と定期実行タスクのイベントを 1 接続で受けられるからである。\n\n- イベントは追加のみで進化させる。既存のフィールドの意味や型は変えない。\n- client は未知の `event`・未知のフィールド・列挙の未知の値を受け取っても落ちない。未知の `event` とフィールドは無視する。\n- 切断中のイベントは再送しない。そのため `id` と `retry` は定義しない。\n- 再接続したら、`GET /approvals`・`GET /questions`・`GET /threads/{threadId}/turns` で状態を取り直す。\n- `threadId` で絞った購読には、`threadId` を持たないイベントは流れない。\n- `thinking` イベントは、本体が常に流す。見せるかどうかは client が決める。\n- 各イベントは `event` と、JSON 文字列の `data` からなる。\n\nイベントの一覧は `GET /events` の `itemSchema` (`ResponseGetEvents`) に定義している。\n\n## schema の additionalProperties 方針\n\n`components/schemas/*.yaml` の `additionalProperties: false` は、リクエストボディの schema と、それが `$ref` で参照する schema にのみ付ける。レスポンス専用の schema には、将来のフィールド追加を許容するために付けない。\n\n## 範囲外\n\n- 画像の添付。\n- webhook・位置通知・heartbeat。\n- 音声。\n- Discord アダプタの別プロセス化。\n- Discord への直接投稿の経路。Discord 専用の機能であり、この I/F では整理しない。\n\n## 未決事項\n\nこの定義では決めていない。\n\n- 認証と、承認・質問に答える operation・常時許可の書き換え・本人の依頼の区別 (一緒に足す)。\n- ワークスペースの Claude が定期実行タスクの再読み込みと実行を呼べるため、command 種別のタスク経由でツール承認を通らずにコマンドを実行できる点 (認証を足す時に検討する)。\n- 現行実装の cron の擬似スレッド (`cron:<ジョブ名>`) に当たるものを、定期実行タスクでどう扱い、誰が登録するか。\n- 稼働の確認を I/F に含めるか (#278 の 1 章)。server は compose の healthcheck 用に `GET /health` を持つが、この定義には載せていない。\n- ターンを止める操作。\n- 回答 800 文字・thinking 1500 文字の区切りを SSE でも保つか (#278 の 4.7)。\n- client が設定 (`model`・`effort`・`showThinking`・`active`) をどこに保存するか。\n- 全体の設定 (既定の `model`・`effort`、常時許可) を読み書きする operation。\n- 所有する client 以外が始めたターン (定期実行タスク等) に、スレッドごとの `model`・`effort` をどう効かせるか。\n- 壊す変更の手順 (#276)。\n"
   },
   "servers": [
     {
@@ -26,10 +26,6 @@
       "description": "SSE によるイベントの購読。"
     },
     {
-      "name": "health",
-      "description": "healthcheck。"
-    },
-    {
       "name": "logs",
       "description": "メモリ上のリングバッファからのログ取得。"
     },
@@ -43,7 +39,7 @@
     },
     {
       "name": "turns",
-      "description": "ターンの作成・一覧の取得・中止。"
+      "description": "ターンの作成・一覧の取得。"
     }
   ],
   "paths": {
@@ -172,52 +168,6 @@
                   "notFound": {
                     "value": {
                       "error": "Thread not found: 1234567890123456789"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/health": {
-      "get": {
-        "operationId": "getHealth",
-        "summary": "healthcheck。",
-        "tags": [
-          "health"
-        ],
-        "description": "HTTP サーバの応答性と Discord Gateway の接続状態を反映した healthcheck 用の operation。\n",
-        "responses": {
-          "200": {
-            "description": "healthy な場合。",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ResponseGetHealth"
-                },
-                "examples": {
-                  "ok": {
-                    "value": {
-                      "status": "ok"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "unhealthy な場合 (Discord Gateway が未接続等)。エラー応答の形は例外で、error ではなく status を返す。",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ResponseGetHealth"
-                },
-                "examples": {
-                  "unavailable": {
-                    "value": {
-                      "status": "unavailable"
                     }
                   }
                 }
@@ -717,7 +667,7 @@
         "tags": [
           "threads"
         ],
-        "description": "スレッドのセッションを捨てる。次のターンは新しいセッションを作る。待機中や実行中のターンは止めない (止めるには `DELETE /turns/{turnId}` を使う)。セッションが無いスレッドでは何もせず、捨てた場合と同じく 204 を返す。登録されていないスレッドには 404 を返す。\n",
+        "description": "スレッドのセッションを捨てる。次のターンは新しいセッションを作る。待機中や実行中のターンは止めない。捨てた時点で実行中だったターンは、終わってもセッションを書き戻さない。捨てた後に始まるターン (その時点で待機中だったものを含む) が、新しいセッションを作る。セッションが無いスレッドでは何もせず、捨てた場合と同じく 204 を返す。登録されていないスレッドには 404 を返す。\n",
         "responses": {
           "204": {
             "description": "セッションを捨てた場合、または捨てるセッションが無かった場合。"
@@ -914,64 +864,6 @@
           },
           "404": {
             "description": "スレッドが登録されていない場合。",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ResponseError"
-                },
-                "examples": {
-                  "notFound": {
-                    "value": {
-                      "error": "Thread not found: 1234567890123456789"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/turns/{turnId}": {
-      "parameters": [
-        {
-          "in": "path",
-          "name": "turnId",
-          "required": true,
-          "description": "ターン ID。スレッドをまたいで一意。ID はパーセントエンコードして渡す。",
-          "schema": {
-            "type": "string",
-            "minLength": 1
-          }
-        }
-      ],
-      "delete": {
-        "operationId": "deleteTurnsTurnId",
-        "summary": "ターンの中止。",
-        "tags": [
-          "turns"
-        ],
-        "description": "ターンを 1 件止める。ターン ID は本体が採番し、スレッドをまたいで一意なので、スレッドを指定せずに止められる。実行中のターンは中断し、待機中のターンはキューから外す。中止を受け付けた時点で 202 を返し、完了は `turn.ended` (`result` は `cancelled`) で知る。該当するターンが無い場合 (既に終わったものを含む) は 404 を返す。\n",
-        "responses": {
-          "202": {
-            "description": "中止を受け付けた場合。",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ResponseDeleteTurnsTurnId"
-                },
-                "examples": {
-                  "accepted": {
-                    "value": {
-                      "ok": true
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "該当するターンが無い場合 (既に終わったターンを含む)。",
             "content": {
               "application/json": {
                 "schema": {
@@ -1518,11 +1410,10 @@
       },
       "EnumTurnResult": {
         "type": "string",
-        "description": "ターンの終わり方。completed は最後まで実行した、failed は失敗した、cancelled は中止した (待機中のまま止められたターンを含む)。",
+        "description": "ターンの終わり方。completed は最後まで実行した、failed は失敗した。値は後から追加されうる。client は未知の値を受け取っても落ちないこと。",
         "enum": [
           "completed",
-          "failed",
-          "cancelled"
+          "failed"
         ]
       },
       "EnumTurnStatus": {
@@ -1562,20 +1453,6 @@
           },
           "effort": {
             "$ref": "#/components/schemas/EnumEffort"
-          }
-        }
-      },
-      "ResponseDeleteTurnsTurnId": {
-        "type": "object",
-        "description": "ターンの中止の受付結果。",
-        "required": [
-          "ok"
-        ],
-        "properties": {
-          "ok": {
-            "type": "boolean",
-            "description": "中止を受け付けたか。常に true を返す。完了は turn.ended で知る。",
-            "example": true
           }
         }
       },
@@ -1911,23 +1788,6 @@
             }
           }
         ]
-      },
-      "ResponseGetHealth": {
-        "type": "object",
-        "description": "healthcheck の結果。",
-        "required": [
-          "status"
-        ],
-        "properties": {
-          "status": {
-            "type": "string",
-            "description": "healthy なら ok、そうでなければ unavailable。",
-            "enum": [
-              "ok",
-              "unavailable"
-            ]
-          }
-        }
       },
       "ResponseGetLogs": {
         "type": "array",
