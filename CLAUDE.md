@@ -70,6 +70,7 @@ npm run fix        # lint 自動修正 + format（oxlint --fix + oxfmt）
 - テストコード以外で `oxlint-disable-next-line` や `any` を使わない。型の絞り込みは type guard で行う。
 - Node の型除去で落ちる構文（parameter property、`enum`、`namespace`、角括弧アサーション `<T>expr`）を使わない。`tsc` の `erasableSyntaxOnly` が検出する。
 - 相対 import には `.ts` 拡張子を付ける（Node は拡張子無しの相対 import を解決しない）。
+- 定義に載る route には `secured(registry, operationId)` を付け、定義の `security` を本体に検査させる。定義に載せない運用用の route (`GET /health`) には付けない。
 - `packages/server/api/openapi.gen.*` は生成物で、手で編集しない。`docs/api` の定義を変えたら `npm run generate` を回して差分をコミットする。
 
 ## テスト方針

@@ -17,6 +17,26 @@ delete:
   responses:
     204:
       description: セッションを捨てた場合、または捨てるセッションが無かった場合。
+    400:
+      description: "`Authorization` ヘッダの形式が不正な場合。"
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            badRequest:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+    401:
+      description: token が無い、または無効な場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            unauthorized:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
     404:
       description: スレッドが登録されていない場合。
       content:

@@ -4,6 +4,7 @@ required:
   - id
   - threadId
   - status
+  - source
 properties:
   id:
     type: string
@@ -15,4 +16,4 @@ properties:
     $ref: ./EnumTurnStatus.yaml
   source:
     type: string
-    description: 依頼元の識別子。依頼の `source` をそのまま返す。省略された依頼では省かれる。
+    description: 本体が token から引いた依頼の出所。`user` の token の依頼は `client:<token の名前>`、`agent` のうちターンが起点の依頼は `turn:<turnId>`、定期実行タスクが起点の依頼は `scheduled-task:<taskId>`。

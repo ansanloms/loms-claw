@@ -16,7 +16,7 @@ post:
     $ref: ./descriptions/postThreadsThreadIdTurns.md
   requestBody:
     required: true
-    description: 依頼の本文と、任意の依頼元・モデル・effort。
+    description: 依頼の本文と、任意のモデル・effort。
     content:
       application/json:
         schema:
@@ -37,13 +37,23 @@ post:
               value:
                 $ref: ../examples/Turn/default.yaml
     400:
-      description: JSON が不正、またはスキーマに適合しない場合。
+      description: JSON が不正、またはスキーマに適合しない場合。`Authorization` ヘッダの形式が不正な場合も含む。
       content:
         application/json:
           schema:
             $ref: ../components/schemas/ResponseError.yaml
           examples:
             badRequest:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+    401:
+      description: token が無い、または無効な場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            unauthorized:
               value:
                 $ref: ../examples/ResponseError/default.yaml
     404:
@@ -57,7 +67,7 @@ post:
               value:
                 $ref: ../examples/ResponseError/default.yaml
     429:
-      description: 依頼のレート制限を超過した場合 (bot 全体で直近 10 分に 6 回まで。自己メンションとは別枠)。
+      description: "`agent` の依頼がレート制限を超過した場合 (bot 全体で直近 10 分に 6 回まで。自己メンションとは別枠)。`user` の依頼には掛からない。"
       content:
         application/json:
           schema:
@@ -94,6 +104,26 @@ get:
             succeeded:
               value:
                 $ref: ../examples/ResponseGetThreadsThreadIdTurns/default.yaml
+    400:
+      description: "`Authorization` ヘッダの形式が不正な場合。"
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            badRequest:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+    401:
+      description: token が無い、または無効な場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            unauthorized:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
     404:
       description: スレッドが登録されていない場合。
       content:

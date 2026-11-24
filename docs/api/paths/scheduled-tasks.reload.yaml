@@ -5,6 +5,8 @@ post:
     - scheduled-tasks
   description:
     $ref: ./descriptions/postScheduledTasksReload.md
+  security:
+    - bearerAuth: [user]
   responses:
     200:
       description: 処理成功時。
@@ -16,6 +18,36 @@ post:
             succeeded:
               value:
                 $ref: ../examples/ResponsePostScheduledTasksReload/default.yaml
+    400:
+      description: "`Authorization` ヘッダの形式が不正な場合。"
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            badRequest:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+    401:
+      description: token が無い、または無効な場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            unauthorized:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+    403:
+      description: "`agent` の token で呼んだ場合。"
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            forbidden:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
     503:
       description: 定期実行の再読み込み機能が無効な場合。
       content:
