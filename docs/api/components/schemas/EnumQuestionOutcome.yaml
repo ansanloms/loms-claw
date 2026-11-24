@@ -1,6 +1,7 @@
 type: string
-description: 質問の結果。answered は回答あり、denied は回答の拒否、expired は時間切れ。
+description: 質問の結果。answered は回答あり、denied は回答の拒否、expired は時間切れ、cancelled は待っていたターンが中止された。値は後から追加されうる。client は未知の値を受け取っても落ちないこと。
 enum:
   - answered
   - denied
   - expired
+  - cancelled

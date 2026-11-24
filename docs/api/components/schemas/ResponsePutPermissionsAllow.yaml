@@ -1,0 +1,10 @@
+type: object
+required:
+  - allow
+properties:
+  allow:
+    type: array
+    description: "置き換えた後の `permissions.allow` の項目 (文字列) の一覧。"
+    items:
+      type: string
+description: 置き換えた後の常時許可の一覧。

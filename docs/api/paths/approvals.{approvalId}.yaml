@@ -70,7 +70,7 @@ post:
               value:
                 $ref: ../examples/ResponseError/default.yaml
     409:
-      description: 承認が既に解決済み (時間切れを含む) の場合。
+      description: 承認が既に解決済み (時間切れ・ターンの中止を含む) の場合。
       content:
         application/json:
           schema:

@@ -87,6 +87,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/permissions/allow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 常時許可の取得。
+         * @description ワークスペースの常時許可 (`permissions.allow`) にある項目 (文字列) の一覧を、ファイルにあるままそのまま返す。
+         */
+        get: operations["getPermissionsAllow"];
+        /**
+         * 常時許可の置き換え。
+         * @description 常時許可 (`permissions.allow`) の一覧を丸ごと置き換え、置き換えた後の一覧を返す。取り消しは、外したい項目を除いた一覧で置き換える。`user` の token だけが呼べ、`agent` の token で呼ぶと 403 を返す。`agent` がこの operation で、自分のツール実行を自分で常時許可にするのを防ぐためである。`AskUserQuestion` を含む一覧には 400 を返す。常時許可に入ると、質問が利用者に届かず、空の回答で解決されるためである。`GET /permissions/allow` はファイルにある項目をそのまま返すので、ファイルに既に `AskUserQuestion` がある場合、client はそれを除いてから送る。版の検査はしない。`GET` で読んでから `PUT` するまでの間に、承認の `allowAlways` で足された項目は、`PUT` で消える。追加だけなら `POST /approvals/{approvalId}` の `decision: allowAlways` でもできる。
+         */
+        put: operations["putPermissionsAllow"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/questions": {
         parameters: {
             query?: never;
@@ -241,7 +265,7 @@ export interface paths {
         post?: never;
         /**
          * セッションの破棄。
-         * @description スレッドのセッションを捨てる。次のターンは新しいセッションを作る。待機中や実行中のターンは止めない。捨てた時点で実行中だったターンは、終わってもセッションを書き戻さない。捨てた後に始まるターン (その時点で待機中だったものを含む) が、新しいセッションを作る。セッションが無いスレッドでは何もせず、捨てた場合と同じく 204 を返す。登録されていないスレッドには 404 を返す。
+         * @description スレッドのセッションを捨てる。次のターンは新しいセッションを作る。待機中や実行中のターンは止めない (止めるには `DELETE /turns/{turnId}` を使う)。捨てた時点で実行中だったターンは、終わってもセッションを書き戻さない。捨てた後に始まるターン (その時点で待機中だったものを含む) が、新しいセッションを作る。セッションが無いスレッドでは何もせず、捨てた場合と同じく 204 を返す。登録されていないスレッドには 404 を返す。
          */
         delete: operations["deleteThreadsThreadIdSession"];
         options?: never;
@@ -274,6 +298,29 @@ export interface paths {
          */
         post: operations["postThreadsThreadIdTurns"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/turns/{turnId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ターン ID。スレッドをまたいで一意。ID はパーセントエンコードして渡す。 */
+                turnId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * ターンの中止。
+         * @description ターンを 1 件止める。ターン ID は本体が採番し、スレッドをまたいで一意なので、スレッドを指定せずに止められる。実行中のターンは中断し、待機中のターンはキューから外す。中止を受け付けた時点で 202 を返し、完了は `turn.ended` (`result` は `cancelled`) で知る。202 を返した後、止まる前にターンが終わった場合、`result` は `completed` か `failed` になる。client は結果を `turn.ended` の `result` で読む。中止したターンが待っていた承認と質問は、解決済みになる。`approval.resolved` の `decision` と `question.resolved` の `result` が `cancelled` として流れ、`GET /approvals`・`GET /questions` から外れる。該当するターンが無い場合 (既に終わったものを含む) は 404 を返す。`user` の token だけが呼べ、`agent` の token で呼ぶと 403 を返す。
+         */
+        delete: operations["deleteTurnsTurnId"];
         options?: never;
         head?: never;
         patch?: never;
@@ -501,25 +548,25 @@ export interface components {
          */
         EnumApprovalDecision: "allow" | "allowAlways" | "deny";
         /**
-         * @description 承認の結果。allow は今回だけ許可、allowAlways は常時許可に加えて許可、deny は拒否、expired は時間切れ。
+         * @description 承認の結果。allow は今回だけ許可、allowAlways は常時許可に加えて許可、deny は拒否、expired は時間切れ、cancelled は待っていたターンが中止された。値は後から追加されうる。client は未知の値を受け取っても落ちないこと。
          * @enum {string}
          */
-        EnumApprovalOutcome: "allow" | "allowAlways" | "deny" | "expired";
+        EnumApprovalOutcome: "allow" | "allowAlways" | "deny" | "expired" | "cancelled";
         /**
          * @description effort レベル。
          * @enum {string}
          */
         EnumEffort: "low" | "medium" | "high" | "xhigh" | "max";
         /**
-         * @description 質問の結果。answered は回答あり、denied は回答の拒否、expired は時間切れ。
+         * @description 質問の結果。answered は回答あり、denied は回答の拒否、expired は時間切れ、cancelled は待っていたターンが中止された。値は後から追加されうる。client は未知の値を受け取っても落ちないこと。
          * @enum {string}
          */
-        EnumQuestionOutcome: "answered" | "denied" | "expired";
+        EnumQuestionOutcome: "answered" | "denied" | "expired" | "cancelled";
         /**
-         * @description ターンの終わり方。completed は最後まで実行した、failed は失敗した。値は後から追加されうる。client は未知の値を受け取っても落ちないこと。
+         * @description ターンの終わり方。completed は最後まで実行した、failed は失敗した、cancelled は中止した (待機中のまま止められたターンを含む)。値は後から追加されうる。client は未知の値を受け取っても落ちないこと。
          * @enum {string}
          */
-        EnumTurnResult: "completed" | "failed";
+        EnumTurnResult: "completed" | "failed" | "cancelled";
         /**
          * @description ターンの状態。queued は同じスレッドで実行中のターンの後ろで待機中、running は実行中。
          * @enum {string}
@@ -561,6 +608,19 @@ export interface components {
              */
             model?: string;
             effort?: components["schemas"]["EnumEffort"];
+        };
+        /** @description 常時許可の置き換え。 */
+        RequestPutPermissionsAllow: {
+            /** @description `permissions.allow` の項目 (文字列) の一覧。これで丸ごと置き換える。`AskUserQuestion` は入れられない。 */
+            allow: string[];
+        };
+        /** @description ターンの中止の受付結果。 */
+        ResponseDeleteTurnsTurnId: {
+            /**
+             * @description 中止を受け付けたか。常に true を返す。完了は turn.ended で知る。
+             * @example true
+             */
+            ok: boolean;
         };
         /** @description エラー応答。 */
         ResponseError: {
@@ -680,6 +740,11 @@ export interface components {
         };
         /** @description ログエントリ一覧。時系列順。 */
         ResponseGetLogs: components["schemas"]["LogEntry"][];
+        /** @description 常時許可の一覧。 */
+        ResponseGetPermissionsAllow: {
+            /** @description `permissions.allow` の項目 (文字列) の一覧。 */
+            allow: string[];
+        };
         /** @description 保留中の質問の一覧。 */
         ResponseGetQuestions: {
             /** @description 質問。要求した順。 */
@@ -711,6 +776,11 @@ export interface components {
              * @enum {string}
              */
             result: "succeeded" | "failed" | "skipped";
+        };
+        /** @description 置き換えた後の常時許可の一覧。 */
+        ResponsePutPermissionsAllow: {
+            /** @description 置き換えた後の `permissions.allow` の項目 (文字列) の一覧。 */
+            allow: string[];
         };
     };
     responses: never;
@@ -819,7 +889,7 @@ export interface operations {
                     "application/json": components["schemas"]["ResponseError"];
                 };
             };
-            /** @description 承認が既に解決済み (時間切れを含む) の場合。 */
+            /** @description 承認が既に解決済み (時間切れ・ターンの中止を含む) の場合。 */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -927,6 +997,96 @@ export interface operations {
             };
         };
     };
+    getPermissionsAllow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 処理成功時。 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseGetPermissionsAllow"];
+                };
+            };
+            /** @description `Authorization` ヘッダの形式が不正な場合。 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+            /** @description token が無い、または無効な場合。 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+        };
+    };
+    putPermissionsAllow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 置き換え後の常時許可の一覧。 */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestPutPermissionsAllow"];
+            };
+        };
+        responses: {
+            /** @description 処理成功時。置き換えた後の一覧を返す。 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponsePutPermissionsAllow"];
+                };
+            };
+            /** @description JSON が不正、またはスキーマに適合しない場合。`Authorization` ヘッダの形式が不正な場合も含む。 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+            /** @description token が無い、または無効な場合。 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+            /** @description `agent` の token で呼んだ場合。 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+        };
+    };
     getQuestions: {
         parameters: {
             query?: never;
@@ -1025,7 +1185,7 @@ export interface operations {
                     "application/json": components["schemas"]["ResponseError"];
                 };
             };
-            /** @description 質問が既に解決済み (時間切れを含む) の場合。 */
+            /** @description 質問が既に解決済み (時間切れ・ターンの中止を含む) の場合。 */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -1484,6 +1644,65 @@ export interface operations {
             };
             /** @description 依頼の機能が無効な場合、または bot が終了処理中の場合。 */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+        };
+    };
+    deleteTurnsTurnId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ターン ID。スレッドをまたいで一意。ID はパーセントエンコードして渡す。 */
+                turnId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 中止を受け付けた場合。 */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseDeleteTurnsTurnId"];
+                };
+            };
+            /** @description `Authorization` ヘッダの形式が不正な場合。 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+            /** @description token が無い、または無効な場合。 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+            /** @description `agent` の token で呼んだ場合。 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+            /** @description 該当するターンが無い場合 (既に終わったターンを含む)。 */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

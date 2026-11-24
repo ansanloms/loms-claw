@@ -1,7 +1,8 @@
 type: string
-description: 承認の結果。allow は今回だけ許可、allowAlways は常時許可に加えて許可、deny は拒否、expired は時間切れ。
+description: 承認の結果。allow は今回だけ許可、allowAlways は常時許可に加えて許可、deny は拒否、expired は時間切れ、cancelled は待っていたターンが中止された。値は後から追加されうる。client は未知の値を受け取っても落ちないこと。
 enum:
   - allow
   - allowAlways
   - deny
   - expired
+  - cancelled

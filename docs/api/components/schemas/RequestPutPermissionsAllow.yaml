@@ -1,0 +1,14 @@
+type: object
+description: 常時許可の置き換え。
+additionalProperties: false
+required:
+  - allow
+properties:
+  allow:
+    type: array
+    description: "`permissions.allow` の項目 (文字列) の一覧。これで丸ごと置き換える。`AskUserQuestion` は入れられない。"
+    items:
+      type: string
+      minLength: 1
+      not:
+        const: AskUserQuestion

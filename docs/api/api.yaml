@@ -16,12 +16,14 @@ tags:
     description: SSE によるイベントの購読。
   - name: logs
     description: メモリ上のリングバッファからのログ取得。
+  - name: permissions
+    description: 常時許可の取得・置き換え。
   - name: questions
     description: 保留中の質問 (AskUserQuestion) の一覧取得と回答。
   - name: threads
     description: スレッドの登録・取得とセッションの破棄。
   - name: turns
-    description: ターンの作成・一覧の取得。
+    description: ターンの作成・一覧の取得・中止。
 security:
   - bearerAuth:
       - user
@@ -36,6 +38,8 @@ paths:
     $ref: ./paths/events.yaml
   /logs:
     $ref: ./paths/logs.yaml
+  /permissions/allow:
+    $ref: ./paths/permissions.allow.yaml
   /questions:
     $ref: ./paths/questions.yaml
   /questions/{questionId}:
@@ -52,6 +56,8 @@ paths:
     $ref: ./paths/threads.{threadId}.session.yaml
   /threads/{threadId}/turns:
     $ref: ./paths/threads.{threadId}.turns.yaml
+  /turns/{turnId}:
+    $ref: ./paths/turns.{turnId}.yaml
 components:
   schemas:
     Approval:
@@ -110,6 +116,10 @@ components:
       $ref: ./components/schemas/RequestPostQuestionsQuestionId.yaml
     RequestPostThreadsThreadIdTurns:
       $ref: ./components/schemas/RequestPostThreadsThreadIdTurns.yaml
+    RequestPutPermissionsAllow:
+      $ref: ./components/schemas/RequestPutPermissionsAllow.yaml
+    ResponseDeleteTurnsTurnId:
+      $ref: ./components/schemas/ResponseDeleteTurnsTurnId.yaml
     ResponseError:
       $ref: ./components/schemas/ResponseError.yaml
     ResponseGetApprovals:
@@ -118,6 +128,8 @@ components:
       $ref: ./components/schemas/ResponseGetEvents.yaml
     ResponseGetLogs:
       $ref: ./components/schemas/ResponseGetLogs.yaml
+    ResponseGetPermissionsAllow:
+      $ref: ./components/schemas/ResponseGetPermissionsAllow.yaml
     ResponseGetQuestions:
       $ref: ./components/schemas/ResponseGetQuestions.yaml
     ResponseGetScheduledTasks:
@@ -128,8 +140,10 @@ components:
       $ref: ./components/schemas/ResponsePostScheduledTasksReload.yaml
     ResponsePostScheduledTasksTaskIdRun:
       $ref: ./components/schemas/ResponsePostScheduledTasksTaskIdRun.yaml
+    ResponsePutPermissionsAllow:
+      $ref: ./components/schemas/ResponsePutPermissionsAllow.yaml
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
-      description: Bearer token。ロールは `user` と `agent` の 2 つで、token から本体が引く。`user` は利用者 (が使う client) の token で、全 operation を呼べる。`agent` はワークスペースの Claude に渡す token で、承認・質問への回答と定期実行タスクの再読み込みを呼べない (403)。ロール名は定義に宣言する場所が無いので、意味は README が定義する。
+      description: Bearer token。ロールは `user` と `agent` の 2 つで、token から本体が引く。`user` は利用者 (が使う client) の token で、全 operation を呼べる。`agent` はワークスペースの Claude に渡す token で、承認・質問への回答、定期実行タスクの再読み込み、常時許可の置き換え、ターンの中止を呼べない (403)。ロール名は定義に宣言する場所が無いので、意味は README が定義する。

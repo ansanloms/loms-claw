@@ -1,0 +1,9 @@
+type: object
+description: ターンの中止の受付結果。
+required:
+  - ok
+properties:
+  ok:
+    type: boolean
+    description: 中止を受け付けたか。常に true を返す。完了は turn.ended で知る。
+    example: true
