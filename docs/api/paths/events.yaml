@@ -34,12 +34,12 @@ get:
             reply:
               serializedValue: |+
                 event: reply
-                data: {"threadId":"1234567890123456789","turnId":"t-0001","text":"宿まであと 40 km だ。"}
+                data: {"threadId":"1234567890123456789","turnId":"t-0001","blockId":"b-0001","text":"宿まであと 40 km だ。"}
 
             thinking:
               serializedValue: |+
                 event: thinking
-                data: {"threadId":"1234567890123456789","turnId":"t-0001","text":"残りの距離を確かめる。"}
+                data: {"threadId":"1234567890123456789","turnId":"t-0001","blockId":"b-0002","text":"残りの距離を確かめる。"}
 
             progress:
               serializedValue: |+

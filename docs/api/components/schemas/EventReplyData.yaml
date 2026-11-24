@@ -1,8 +1,9 @@
 type: object
-description: Claude の回答テキスト。分割や宛先の前置は client が行う。
+description: Claude の回答テキストの断片。連結・分割・宛先の前置は client が行う。
 required:
   - threadId
   - turnId
+  - blockId
   - text
 properties:
   threadId:
@@ -11,6 +12,9 @@ properties:
   turnId:
     type: string
     description: ターン ID。
+  blockId:
+    type: string
+    description: 断片が属するまとまりの ID。同じ blockId の断片を届いた順に連結すると、1 つのまとまりの全文になる。値が変わったら、別のまとまりが始まったことを示す。`reply` と `thinking` をまたいで、ターンの中で一意な不透明な文字列として扱う。1 つのターンの中で、まとまりは同時に 1 つだけ進む。別の blockId のイベントが届くか、そのターンの `turn.ended` が届いたら、それまでのまとまりは終わりである。
   text:
     type: string
-    description: 回答テキスト。
+    description: 回答テキストの断片。本体は文字数で区切らず、1 イベントに入る長さを保証しない。断片の切れ目に意味は無く、文や語の途中で切れうる。
