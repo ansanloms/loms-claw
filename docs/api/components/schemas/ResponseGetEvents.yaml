@@ -113,7 +113,7 @@ oneOf:
         contentSchema:
           $ref: ./EventTurnEndedData.yaml
   - type: object
-    description: 定期実行タスクの結果または標準出力。
+    description: command 型の定期実行タスクの標準出力。
     required:
       - event
       - data
@@ -129,7 +129,7 @@ oneOf:
         contentSchema:
           $ref: ./EventScheduledTaskOutputData.yaml
   - type: object
-    description: 定期実行タスクの失敗。
+    description: command 型の定期実行タスクの失敗。
     required:
       - event
       - data

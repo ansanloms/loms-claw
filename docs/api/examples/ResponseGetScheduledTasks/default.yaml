@@ -3,12 +3,17 @@ tasks:
     kind: prompt
     schedule: 0 9 * * *
     threadId: "1234567890123456789"
+    enabled: true
     once: false
   - id: reminder.md
     kind: prompt
     schedule: 30 18 * * 5
+    threadId: "scheduled-task:reminder.md"
+    enabled: true
     once: true
   - id: check.yaml
     kind: command
     schedule: "*/30 * * * *"
+    threadId: "scheduled-task:check.yaml"
+    enabled: true
     once: false
