@@ -14,8 +14,6 @@ tags:
     description: 定期実行タスクの一覧取得・手動実行・再読み込み。
   - name: events
     description: SSE によるイベントの購読。
-  - name: health
-    description: healthcheck。
   - name: logs
     description: メモリ上のリングバッファからのログ取得。
   - name: questions
@@ -23,15 +21,13 @@ tags:
   - name: threads
     description: スレッドの登録・取得とセッションの破棄。
   - name: turns
-    description: ターンの作成・一覧の取得・中止。
+    description: ターンの作成・一覧の取得。
 security: []
 paths:
   /approvals:
     $ref: ./paths/approvals.yaml
   /events:
     $ref: ./paths/events.yaml
-  /health:
-    $ref: ./paths/health.yaml
   /logs:
     $ref: ./paths/logs.yaml
   /questions:
@@ -48,8 +44,6 @@ paths:
     $ref: ./paths/threads.{threadId}.session.yaml
   /threads/{threadId}/turns:
     $ref: ./paths/threads.{threadId}.turns.yaml
-  /turns/{turnId}:
-    $ref: ./paths/turns.{turnId}.yaml
 components:
   schemas:
     Approval:
@@ -102,16 +96,12 @@ components:
       $ref: ./components/schemas/EnumTurnStatus.yaml
     RequestPostThreadsThreadIdTurns:
       $ref: ./components/schemas/RequestPostThreadsThreadIdTurns.yaml
-    ResponseDeleteTurnsTurnId:
-      $ref: ./components/schemas/ResponseDeleteTurnsTurnId.yaml
     ResponseError:
       $ref: ./components/schemas/ResponseError.yaml
     ResponseGetApprovals:
       $ref: ./components/schemas/ResponseGetApprovals.yaml
     ResponseGetEvents:
       $ref: ./components/schemas/ResponseGetEvents.yaml
-    ResponseGetHealth:
-      $ref: ./components/schemas/ResponseGetHealth.yaml
     ResponseGetLogs:
       $ref: ./components/schemas/ResponseGetLogs.yaml
     ResponseGetQuestions:
