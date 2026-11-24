@@ -4,6 +4,8 @@ required:
   - id
   - schedule
   - kind
+  - threadId
+  - enabled
 properties:
   id:
     type: string
@@ -16,11 +18,21 @@ properties:
     description: タスクの種別。prompt は本文を Claude に渡す `.md`、command は `sh -c` で実行する `.yaml`。
   schedule:
     type: string
-    description: cron 式。5 フィールド、TZ 環境変数に依存する。
+    description: cron 式。5 フィールド、TZ 環境変数に依存する。式が指す実行時刻のうち、隣り合う 2 つの間隔が 15 分より短いものがあるタスクは、読み込み時に弾く。
     example: 0 9 * * *
   threadId:
     type: string
-    description: 結果の送信先のスレッド ID。未指定のタスクでは省略される。
+    description: "このタスクが起こすスレッドの ID。command 型では標準出力の届け先になる。定義ファイルで省いたタスクには、本体が `scheduled-task:<タスクの ID>` のスレッドを用意して登録する。"
+  model:
+    type: string
+    minLength: 1
+    description: prompt 型のターンで使うモデルの alias またはフルネーム。省くと本体の既定値を使う。
+    example: claude-sonnet-4-6
+  effort:
+    $ref: ./EnumEffort.yaml
+  enabled:
+    type: boolean
+    description: "このタスクが有効か。読み込んだ内容のハッシュが、`user` の再読み込み (`POST /scheduled-tasks/reload`) で記録したハッシュと一致する場合に true になる。型を問わない。false のタスクは、スケジュールでも手動でも実行しない。"
   once:
     type: boolean
     description: 1 回実行後にタスクのファイルを自動削除するか。
