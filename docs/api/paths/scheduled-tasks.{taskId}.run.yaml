@@ -14,14 +14,14 @@ post:
   description:
     $ref: ./descriptions/postScheduledTasksTaskIdRun.md
   responses:
-    200:
-      description: タスクの実行が終わった場合。成否は result で判断する。
+    202:
+      description: タスクの実行を受け付けた場合。完了は待たない。prompt 型では作ったターンを返す。
       content:
         application/json:
           schema:
             $ref: ../components/schemas/ResponsePostScheduledTasksTaskIdRun.yaml
           examples:
-            succeeded:
+            accepted:
               value:
                 $ref: ../examples/ResponsePostScheduledTasksTaskIdRun/default.yaml
     400:
@@ -52,6 +52,26 @@ post:
             $ref: ../components/schemas/ResponseError.yaml
           examples:
             notFound:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+    409:
+      description: "`enabled` が false のタスクを指定した場合、または command 型のタスクが実行中の場合。"
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            conflict:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+    429:
+      description: "`agent` の手動実行がレート制限を超過した場合 (ターンの作成と同じ枠で、bot 全体で直近 10 分に 6 回まで)。`user` の手動実行には掛からない。"
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            rateLimited:
               value:
                 $ref: ../examples/ResponseError/default.yaml
     500:

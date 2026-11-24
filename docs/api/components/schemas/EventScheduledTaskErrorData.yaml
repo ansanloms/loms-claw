@@ -1,12 +1,13 @@
 type: object
-description: 定期実行タスクの失敗。
+description: command 型の定期実行タスクの失敗。prompt 型の失敗は、普通のターンのイベントとして流れる。
 required:
+  - threadId
   - taskId
   - message
 properties:
   threadId:
     type: string
-    description: client が決めるスレッド ID。不透明な文字列として扱う。送信先のスレッドを持たないタスクでは省略される。
+    description: client が決めるスレッド ID。不透明な文字列として扱う。
   taskId:
     type: string
     description: タスクの ID。

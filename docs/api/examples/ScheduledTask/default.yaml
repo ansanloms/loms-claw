@@ -2,4 +2,5 @@ id: news.md
 kind: prompt
 schedule: 0 9 * * *
 threadId: "1234567890123456789"
+enabled: true
 once: false

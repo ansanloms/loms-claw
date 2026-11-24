@@ -33,7 +33,7 @@ oneOf:
         contentSchema:
           $ref: ./EventTurnStartedData.yaml
   - type: object
-    description: Claude の回答テキスト。分割や宛先の前置は client が行う。
+    description: Claude の回答テキストの断片。連結・分割・宛先の前置は client が行う。
     required:
       - event
       - data
@@ -49,7 +49,7 @@ oneOf:
         contentSchema:
           $ref: ./EventReplyData.yaml
   - type: object
-    description: Claude の推論 (thinking) のテキスト。
+    description: Claude の推論 (thinking) のテキストの断片。
     required:
       - event
       - data
@@ -113,7 +113,7 @@ oneOf:
         contentSchema:
           $ref: ./EventTurnEndedData.yaml
   - type: object
-    description: 定期実行タスクの結果または標準出力。
+    description: command 型の定期実行タスクの標準出力。
     required:
       - event
       - data
@@ -129,7 +129,7 @@ oneOf:
         contentSchema:
           $ref: ./EventScheduledTaskOutputData.yaml
   - type: object
-    description: 定期実行タスクの失敗。
+    description: command 型の定期実行タスクの失敗。
     required:
       - event
       - data

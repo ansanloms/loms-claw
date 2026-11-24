@@ -6,3 +6,19 @@ properties:
   ok:
     type: boolean
     description: 再読み込みを受け付けたか。
+  rejected:
+    type: array
+    description: "読み込み時に弾いたタスク (例: スケジュールの間隔が 15 分より短い)。弾いたタスクが無ければ省略される。"
+    items:
+      type: object
+      description: 弾いたタスク。
+      required:
+        - id
+        - reason
+      properties:
+        id:
+          type: string
+          description: 弾いたタスクの ID。
+        reason:
+          type: string
+          description: 弾いた理由。

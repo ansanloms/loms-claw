@@ -56,7 +56,7 @@ export interface paths {
         };
         /**
          * イベントの購読。
-         * @description ターンの経過、定期実行タスクの出力、承認と質問の要求と解決を Server-Sent Events で配信する。threadId で絞らなければ、全スレッドのイベントと定期実行タスクのイベントを 1 接続で受ける。切断中のイベントは再送しない。再接続したら `GET /approvals`、`GET /questions`、`GET /threads/{threadId}/turns` で状態を取り直す。イベントは追加のみで進化させる。client は未知の event と未知のフィールドを無視する。thinking は本体が常に流し、見せるかどうかは client が決める。threadId に未登録のスレッドを指定すると 404 を返す。threadId を省いた要求では 404 は起きない。threadId で絞った購読には、threadId を持たないイベントは流れない。
+         * @description ターンの経過、定期実行タスクの出力、承認と質問の要求と解決を Server-Sent Events で配信する。threadId で絞らなければ、全スレッドのイベントと定期実行タスクのイベントを 1 接続で受ける。切断中のイベントは再送しない。再接続したら `GET /approvals`、`GET /questions`、`GET /threads/{threadId}/turns` で状態を取り直す。イベントは追加のみで進化させる。client は未知の event と未知のフィールドを無視する。thinking は本体が常に流し、見せるかどうかは client が決める。threadId に未登録のスレッドを指定すると 404 を返す。threadId を省いた要求では 404 は起きない。threadId で絞った購読には、threadId を持たないイベントは流れない。reply と thinking の text は断片である。同じ blockId の断片を届いた順に連結すると、1 つのまとまりの全文になる。別の blockId のイベントか turn.ended が届いたら、それまでのまとまりは終わりである。
          */
         get: operations["getEvents"];
         put?: never;
@@ -163,7 +163,7 @@ export interface paths {
         };
         /**
          * 定期実行タスク一覧の取得。
-         * @description 登録済みの定期実行タスクの一覧を取得する。
+         * @description 登録済みの定期実行タスクの一覧を取得する。各タスクが起こすスレッドと、有効かどうか (`enabled`) を含む。
          */
         get: operations["getScheduledTasks"];
         put?: never;
@@ -185,7 +185,7 @@ export interface paths {
         put?: never;
         /**
          * 定期実行タスクの定義の再読み込み。
-         * @description 定期実行タスクの定義ファイルを再読み込みする。定義の変更を反映する際に使う。`user` の token だけが呼べ、`agent` の token で呼ぶと 403 を返す。`agent` が command 型のタスクを書いてこの operation で有効にすると、ツール承認を通らずにコマンドを実行できるためである。
+         * @description 定期実行タスクの定義ファイルを再読み込みする。定義の変更を反映する際に使う。`user` の token だけが呼べ、`agent` の token で呼ぶと 403 を返す。`agent` が command 型のタスクを書いてこの operation で有効にすると、ツール承認を通らずにコマンドを実行できるためである。本体は、タスクの定義ファイルを起動時とこの再読み込みの時にだけ読み、読み込んだ時の内容を実行する。`user` の再読み込みで読んだファイルの内容のハッシュを、型を問わず本体が記録する。本体の起動時は、記録と一致するファイルのタスクだけを有効にし、一致しないファイルのタスクは `enabled` が false になり、`user` が再読み込みするまで実行しない。`agent` が書いた、または書き換えたタスクが、利用者の確認なしに有効にならないようにするためである。読み込み時に弾いたタスクは応答の `rejected` に載る。
          */
         post: operations["postScheduledTasksReload"];
         delete?: never;
@@ -208,7 +208,7 @@ export interface paths {
         put?: never;
         /**
          * 定期実行タスクの手動実行。
-         * @description path の ID で登録済みのタスクを即座に実行する。
+         * @description path の ID で登録済みのタスクを即座に実行する。完了は待たずに 202 を返す。prompt 型ではスレッドにターンを作り、作ったターンを返す。スレッドが止まっていればすぐ始まり、会話中なら実行中のターンの後ろに並ぶ。command 型の結果は SSE (`scheduled-task.output`・`scheduled-task.error`) で流れる。`enabled` が false のタスクには 409 を返す。command 型のタスクが実行中の場合も 409 を返し、二重には実行しない。`agent` の token で呼ぶと、ターンの作成と同じ枠 (bot 全体で直近 10 分に 6 回) で数え、超えたら 429 を返す。`user` の token には掛けない。
          */
         post: operations["postScheduledTasksTaskIdRun"];
         delete?: never;
@@ -391,40 +391,46 @@ export interface components {
             questionId: string;
             result: components["schemas"]["EnumQuestionOutcome"];
         };
-        /** @description Claude の回答テキスト。分割や宛先の前置は client が行う。 */
+        /** @description Claude の回答テキストの断片。連結・分割・宛先の前置は client が行う。 */
         EventReplyData: {
             /** @description client が決めるスレッド ID。不透明な文字列として扱う。 */
             threadId: string;
             /** @description ターン ID。 */
             turnId: string;
-            /** @description 回答テキスト。 */
+            /** @description 断片が属するまとまりの ID。同じ blockId の断片を届いた順に連結すると、1 つのまとまりの全文になる。値が変わったら、別のまとまりが始まったことを示す。`reply` と `thinking` をまたいで、ターンの中で一意な不透明な文字列として扱う。1 つのターンの中で、まとまりは同時に 1 つだけ進む。別の blockId のイベントが届くか、そのターンの `turn.ended` が届いたら、それまでのまとまりは終わりである。 */
+            blockId: string;
+            /** @description 回答テキストの断片。本体は文字数で区切らず、1 イベントに入る長さを保証しない。断片の切れ目に意味は無く、文や語の途中で切れうる。 */
             text: string;
         };
-        /** @description 定期実行タスクの失敗。 */
+        /** @description command 型の定期実行タスクの失敗。prompt 型の失敗は、普通のターンのイベントとして流れる。 */
         EventScheduledTaskErrorData: {
-            /** @description client が決めるスレッド ID。不透明な文字列として扱う。送信先のスレッドを持たないタスクでは省略される。 */
-            threadId?: string;
+            /** @description client が決めるスレッド ID。不透明な文字列として扱う。 */
+            threadId: string;
             /** @description タスクの ID。 */
             taskId: string;
             /** @description 失敗の要約。 */
             message: string;
         };
-        /** @description 定期実行タスクの結果または標準出力。 */
+        /** @description command 型の定期実行タスクの標準出力。prompt 型の出力は、普通のターンのイベントとして流れる。実行が終わった後に、1 回の実行の標準出力を 1 イベントで流す。 */
         EventScheduledTaskOutputData: {
-            /** @description client が決めるスレッド ID。不透明な文字列として扱う。送信先のスレッドを持たないタスクでは省略される。 */
-            threadId?: string;
+            /** @description client が決めるスレッド ID。不透明な文字列として扱う。 */
+            threadId: string;
             /** @description タスクの ID。 */
             taskId: string;
-            /** @description 出力のテキスト。 */
+            /** @description 出力のテキスト。本体は表示の都合では区切らない。1 回の実行の出力の全量が 64 KiB (UTF-8) を超えたら、超えた分を文字の境界で切り詰める。 */
             text: string;
+            /** @description 出力を切り詰めた場合に true。切り詰めていなければ省略される。 */
+            truncated?: boolean;
         };
-        /** @description Claude の推論 (thinking) のテキスト。本体は常に流し、見せるかどうかは client が決める。 */
+        /** @description Claude の推論 (thinking) のテキストの断片。本体は常に流し、見せるかどうかは client が決める。 */
         EventThinkingData: {
             /** @description client が決めるスレッド ID。不透明な文字列として扱う。 */
             threadId: string;
             /** @description ターン ID。 */
             turnId: string;
-            /** @description 推論のテキスト。 */
+            /** @description 断片が属するまとまりの ID。同じ blockId の断片を届いた順に連結すると、1 つのまとまりの全文になる。値が変わったら、別のまとまりが始まったことを示す。`reply` と `thinking` をまたいで、ターンの中で一意な不透明な文字列として扱う。1 つのターンの中で、まとまりは同時に 1 つだけ進む。別の blockId のイベントが届くか、そのターンの `turn.ended` が届いたら、それまでのまとまりは終わりである。 */
+            blockId: string;
+            /** @description 推論のテキストの断片。本体は文字数で区切らず、1 イベントに入る長さを保証しない。断片の切れ目に意味は無く、文や語の途中で切れうる。 */
             text: string;
         };
         /** @description ターンが終わった。成否に関わらず最後に 1 回届く。 */
@@ -516,12 +522,20 @@ export interface components {
              */
             kind: "prompt" | "command";
             /**
-             * @description cron 式。5 フィールド、TZ 環境変数に依存する。
+             * @description cron 式。5 フィールド、TZ 環境変数に依存する。式が指す実行時刻のうち、隣り合う 2 つの間隔が 15 分より短いものがあるタスクは、読み込み時に弾く。
              * @example 0 9 * * *
              */
             schedule: string;
-            /** @description 結果の送信先のスレッド ID。未指定のタスクでは省略される。 */
-            threadId?: string;
+            /** @description このタスクが起こすスレッドの ID。command 型では標準出力の届け先になる。定義ファイルで省いたタスクには、本体が `scheduled-task:<タスクの ID>` のスレッドを用意して登録する。 */
+            threadId: string;
+            /**
+             * @description prompt 型のターンで使うモデルの alias またはフルネーム。省くと本体の既定値を使う。
+             * @example claude-sonnet-4-6
+             */
+            model?: string;
+            effort?: components["schemas"]["EnumEffort"];
+            /** @description このタスクが有効か。読み込んだ内容のハッシュが、`user` の再読み込み (`POST /scheduled-tasks/reload`) で記録したハッシュと一致する場合に true になる。型を問わない。false のタスクは、スケジュールでも手動でも実行しない。 */
+            enabled: boolean;
             /** @description 1 回実行後にタスクのファイルを自動削除するか。 */
             once?: boolean;
         };
@@ -764,18 +778,18 @@ export interface components {
         ResponsePostScheduledTasksReload: {
             /** @description 再読み込みを受け付けたか。 */
             ok: boolean;
+            /** @description 読み込み時に弾いたタスク (例: スケジュールの間隔が 15 分より短い)。弾いたタスクが無ければ省略される。 */
+            rejected?: {
+                /** @description 弾いたタスクの ID。 */
+                id: string;
+                /** @description 弾いた理由。 */
+                reason: string;
+            }[];
         };
-        /** @description 定期実行タスクの手動実行結果。 */
+        /** @description 定期実行タスクの手動実行の受け付け結果。 */
         ResponsePostScheduledTasksTaskIdRun: {
-            /** @description リクエストを受け付けて処理したか (常に true。タスクの成否は result で返す)。 */
-            ok: boolean;
-            /** @description 実行したタスクの ID。 */
-            id: string;
-            /**
-             * @description タスクの実行結果。succeeded はタスクが最後まで実行された、failed は実行中に例外が起きた、skipped は同じタスクが実行中、または終了処理中のため実行しなかった。
-             * @enum {string}
-             */
-            result: "succeeded" | "failed" | "skipped";
+            /** @description prompt 型で作ったターン。command 型では省略される。 */
+            turn?: components["schemas"]["Turn"];
         };
         /** @description 置き換えた後の常時許可の一覧。 */
         ResponsePutPermissionsAllow: {
@@ -1311,8 +1325,8 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description タスクの実行が終わった場合。成否は result で判断する。 */
-            200: {
+            /** @description タスクの実行を受け付けた場合。完了は待たない。prompt 型では作ったターンを返す。 */
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1340,6 +1354,24 @@ export interface operations {
             };
             /** @description 指定したタスクが存在しない場合。 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+            /** @description `enabled` が false のタスクを指定した場合、または command 型のタスクが実行中の場合。 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+            /** @description `agent` の手動実行がレート制限を超過した場合 (ターンの作成と同じ枠で、bot 全体で直近 10 分に 6 回まで)。`user` の手動実行には掛からない。 */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
