@@ -13,11 +13,34 @@ export interface paths {
         };
         /**
          * 保留中の承認の一覧。
-         * @description 保留中のツール承認を返す。SSE の再接続後に状態を取り直すために使う。承認に答える operation は置かない (README の「接続」)。解決は `approval.resolved` で配られる。
+         * @description 保留中のツール承認を返す。SSE の再接続後に状態を取り直すために使う。答えるには `POST /approvals/{approvalId}` を使う。解決は `approval.resolved` で配られる。
          */
         get: operations["getApprovals"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/approvals/{approvalId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 承認 ID。本体が採番する不透明な文字列。ID はパーセントエンコードして渡す。 */
+                approvalId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 承認への回答。
+         * @description 保留中のツール承認に答える。allowAlways は今回を許可したうえで、そのツールを常時許可に加える。成功すると 204 を返す。解決の結果は `approval.resolved` で配られる。`user` の token だけが呼べ、`agent` の token で呼ぶと 403 を返す。
+         */
+        post: operations["postApprovalsApprovalId"];
         delete?: never;
         options?: never;
         head?: never;
@@ -73,11 +96,34 @@ export interface paths {
         };
         /**
          * 保留中の質問の一覧。
-         * @description 保留中の質問 (AskUserQuestion) を返す。SSE の再接続後に状態を取り直すために使う。質問に答える operation は置かない。解決は `question.resolved` で配られる。
+         * @description 保留中の質問 (AskUserQuestion) を返す。SSE の再接続後に状態を取り直すために使う。答えるには `POST /questions/{questionId}` を使う。解決は `question.resolved` で配られる。
          */
         get: operations["getQuestions"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/questions/{questionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 質問 ID。本体が採番する不透明な文字列。ID はパーセントエンコードして渡す。 */
+                questionId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 質問への回答。
+         * @description 保留中の質問に答える。kind が answered なら answers を、denied なら reason を渡す。answers のキーが保留中の質問の質問文と一致しない、または回答の無い質問があるときは 400 を返す。成功すると 204 を返す。解決の結果は `question.resolved` で配られる。`user` の token だけが呼べ、`agent` の token で呼ぶと 403 を返す。
+         */
+        post: operations["postQuestionsQuestionId"];
         delete?: never;
         options?: never;
         head?: never;
@@ -115,7 +161,7 @@ export interface paths {
         put?: never;
         /**
          * 定期実行タスクの定義の再読み込み。
-         * @description 定期実行タスクの定義ファイルを再読み込みする。定義の変更を反映する際に使う。
+         * @description 定期実行タスクの定義ファイルを再読み込みする。定義の変更を反映する際に使う。`user` の token だけが呼べ、`agent` の token で呼ぶと 403 を返す。`agent` が command 型のタスクを書いてこの operation で有効にすると、ツール承認を通らずにコマンドを実行できるためである。
          */
         post: operations["postScheduledTasksReload"];
         delete?: never;
@@ -224,7 +270,7 @@ export interface paths {
         put?: never;
         /**
          * ターンの作成。
-         * @description 対象スレッドへ依頼を渡してターンを作る。依頼は対象スレッドのキューに積まれ、会話中のターンがあれば、その後ろで同じセッションを再開して処理する。`model` と `effort` はこのターンだけに効く。省いたら本体の既定値を使う。処理の完了を待たずに 202 と作った `Turn` を返す。経過と結果は `GET /events` の SSE で受け取り、`Turn` の `id` と各イベントの `turnId` を突き合わせる。全ての依頼に、プロンプト先頭に認可ユーザー本人の発話ではない旨の注記が付き、依頼のレート制限 (bot 全体で直近 10 分に 6 回) を超えると 429 を返す。登録されていないスレッドには 404 を返す。
+         * @description 対象スレッドへ依頼を渡してターンを作る。依頼は対象スレッドのキューに積まれ、会話中のターンがあれば、その後ろで同じセッションを再開して処理する。`model` と `effort` はこのターンだけに効く。省いたら本体の既定値を使う。処理の完了を待たずに 202 と作った `Turn` を返す。経過と結果は `GET /events` の SSE で受け取り、`Turn` の `id` と各イベントの `turnId` を突き合わせる。依頼の出所は本体が token から引き、`Turn` の `source` に入れる。`agent` の依頼にだけ、プロンプト先頭に認可ユーザー本人の発話ではない旨の注記が付き (出所は本体が書く)、依頼のレート制限 (bot 全体で直近 10 分に 6 回) を超えると 429 を返す。`user` の依頼には注記もこの制限も付かない。登録されていないスレッドには 404 を返す。
          */
         post: operations["postThreadsThreadIdTurns"];
         delete?: never;
@@ -446,9 +492,14 @@ export interface components {
             /** @description client が決めるスレッド ID。不透明な文字列として扱う。 */
             threadId: string;
             status: components["schemas"]["EnumTurnStatus"];
-            /** @description 依頼元の識別子。依頼の `source` をそのまま返す。省略された依頼では省かれる。 */
-            source?: string;
+            /** @description 本体が token から引いた依頼の出所。`user` の token の依頼は `client:<token の名前>`、`agent` のうちターンが起点の依頼は `turn:<turnId>`、定期実行タスクが起点の依頼は `scheduled-task:<taskId>`。 */
+            source: string;
         };
+        /**
+         * @description 承認への答え。allow は今回だけ許可、allowAlways は常時許可に加えて許可、deny は拒否。
+         * @enum {string}
+         */
+        EnumApprovalDecision: "allow" | "allowAlways" | "deny";
         /**
          * @description 承認の結果。allow は今回だけ許可、allowAlways は常時許可に加えて許可、deny は拒否、expired は時間切れ。
          * @enum {string}
@@ -474,12 +525,36 @@ export interface components {
          * @enum {string}
          */
         EnumTurnStatus: "queued" | "running";
+        /** @description 承認への答え。 */
+        RequestPostApprovalsApprovalId: {
+            decision: components["schemas"]["EnumApprovalDecision"];
+            /** @description 理由。拒否したときに Claude へ伝える。 */
+            reason?: string;
+        };
+        /** @description 質問への答え。kind で形が変わる。 */
+        RequestPostQuestionsQuestionId: {
+            /**
+             * @description 回答であることを表す。
+             * @constant
+             */
+            kind: "answered";
+            /** @description 質問文から回答文字列への対応。保留中の全質問に 1 件ずつ答える。multiSelect の質問は選んだ値を `, ` で連結する。キーが保留中の質問の質問文と一致しない、または回答の無い質問があるときは 400 を返す。 */
+            answers: {
+                [key: string]: string;
+            };
+        } | {
+            /**
+             * @description 拒否であることを表す。
+             * @constant
+             */
+            kind: "denied";
+            /** @description 理由。Claude へ伝える。 */
+            reason?: string;
+        };
         /** @description ターンの作成リクエスト。 */
         RequestPostThreadsThreadIdTurns: {
             /** @description 対象のスレッドへ渡す依頼の本文。空白以外を 1 文字以上含むこと。 */
             prompt: string;
-            /** @description 依頼元の識別子 (例 scheduled-task:news.md)。指定すると、プロンプト先頭の注記に依頼元として入る。日本語や空白も使えるが、改行・タブなどの制御文字は使えない (改行による注記の偽装を防ぐため)。 */
-            source?: string;
             /**
              * @description このターンで使うモデルの alias またはフルネーム。省くと本体の既定値を使う。
              * @example claude-sonnet-4-6
@@ -664,6 +739,95 @@ export interface operations {
                     "application/json": components["schemas"]["ResponseGetApprovals"];
                 };
             };
+            /** @description `Authorization` ヘッダの形式が不正な場合。 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+            /** @description token が無い、または無効な場合。 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+        };
+    };
+    postApprovalsApprovalId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 承認 ID。本体が採番する不透明な文字列。ID はパーセントエンコードして渡す。 */
+                approvalId: string;
+            };
+            cookie?: never;
+        };
+        /** @description 承認への答え。 */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestPostApprovalsApprovalId"];
+            };
+        };
+        responses: {
+            /** @description 答えを受け付けた場合。 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description JSON が不正、またはスキーマに適合しない場合。`Authorization` ヘッダの形式が不正な場合も含む。 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+            /** @description token が無い、または無効な場合。 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+            /** @description `agent` の token で呼んだ場合。 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+            /** @description 承認が存在しない場合。 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+            /** @description 承認が既に解決済み (時間切れを含む) の場合。 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
         };
     };
     getEvents: {
@@ -685,6 +849,24 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": unknown;
+                };
+            };
+            /** @description `Authorization` ヘッダの形式が不正な場合。 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+            /** @description token が無い、または無効な場合。 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
                 };
             };
             /** @description threadId に指定したスレッドが登録されていない場合。 */
@@ -725,8 +907,17 @@ export interface operations {
                     "application/json": components["schemas"]["ResponseGetLogs"];
                 };
             };
-            /** @description level、since、limit のいずれかが不正な場合。 */
+            /** @description level、since、limit のいずれかが不正な場合。`Authorization` ヘッダの形式が不正な場合も含む。 */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+            /** @description token が無い、または無効な場合。 */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -754,6 +945,95 @@ export interface operations {
                     "application/json": components["schemas"]["ResponseGetQuestions"];
                 };
             };
+            /** @description `Authorization` ヘッダの形式が不正な場合。 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+            /** @description token が無い、または無効な場合。 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+        };
+    };
+    postQuestionsQuestionId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 質問 ID。本体が採番する不透明な文字列。ID はパーセントエンコードして渡す。 */
+                questionId: string;
+            };
+            cookie?: never;
+        };
+        /** @description 質問への答え。 */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestPostQuestionsQuestionId"];
+            };
+        };
+        responses: {
+            /** @description 答えを受け付けた場合。 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description JSON が不正、またはスキーマに適合しない場合。`Authorization` ヘッダの形式が不正な場合も含む。 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+            /** @description token が無い、または無効な場合。 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+            /** @description `agent` の token で呼んだ場合。 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+            /** @description 質問が存在しない場合。 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+            /** @description 質問が既に解決済み (時間切れを含む) の場合。 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
         };
     };
     getScheduledTasks: {
@@ -772,6 +1052,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResponseGetScheduledTasks"];
+                };
+            };
+            /** @description `Authorization` ヘッダの形式が不正な場合。 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+            /** @description token が無い、または無効な場合。 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
                 };
             };
             /** @description 定期実行機能が無効な場合。 */
@@ -801,6 +1099,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResponsePostScheduledTasksReload"];
+                };
+            };
+            /** @description `Authorization` ヘッダの形式が不正な場合。 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+            /** @description token が無い、または無効な場合。 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+            /** @description `agent` の token で呼んだ場合。 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
                 };
             };
             /** @description 定期実行の再読み込み機能が無効な場合。 */
@@ -833,6 +1158,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResponsePostScheduledTasksTaskIdRun"];
+                };
+            };
+            /** @description `Authorization` ヘッダの形式が不正な場合。 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+            /** @description token が無い、または無効な場合。 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
                 };
             };
             /** @description 指定したタスクが存在しない場合。 */
@@ -888,6 +1231,24 @@ export interface operations {
                     "application/json": components["schemas"]["Thread"];
                 };
             };
+            /** @description `Authorization` ヘッダの形式が不正な場合。 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+            /** @description token が無い、または無効な場合。 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
             /** @description スレッドが登録されていない場合。 */
             404: {
                 headers: {
@@ -932,6 +1293,24 @@ export interface operations {
                     "application/json": components["schemas"]["Thread"];
                 };
             };
+            /** @description `Authorization` ヘッダの形式が不正な場合。 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+            /** @description token が無い、または無効な場合。 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
         };
     };
     deleteThreadsThreadIdSession: {
@@ -955,6 +1334,24 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description `Authorization` ヘッダの形式が不正な場合。 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+            /** @description token が無い、または無効な場合。 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
             };
             /** @description スレッドが登録されていない場合。 */
             404: {
@@ -991,6 +1388,24 @@ export interface operations {
                     "application/json": components["schemas"]["ResponseGetThreadsThreadIdTurns"];
                 };
             };
+            /** @description `Authorization` ヘッダの形式が不正な場合。 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+            /** @description token が無い、または無効な場合。 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
             /** @description スレッドが登録されていない場合。 */
             404: {
                 headers: {
@@ -1015,7 +1430,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        /** @description 依頼の本文と、任意の依頼元・モデル・effort。 */
+        /** @description 依頼の本文と、任意のモデル・effort。 */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RequestPostThreadsThreadIdTurns"];
@@ -1031,8 +1446,17 @@ export interface operations {
                     "application/json": components["schemas"]["Turn"];
                 };
             };
-            /** @description JSON が不正、またはスキーマに適合しない場合。 */
+            /** @description JSON が不正、またはスキーマに適合しない場合。`Authorization` ヘッダの形式が不正な場合も含む。 */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseError"];
+                };
+            };
+            /** @description token が無い、または無効な場合。 */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1049,7 +1473,7 @@ export interface operations {
                     "application/json": components["schemas"]["ResponseError"];
                 };
             };
-            /** @description 依頼のレート制限を超過した場合 (bot 全体で直近 10 分に 6 回まで。自己メンションとは別枠)。 */
+            /** @description `agent` の依頼がレート制限を超過した場合 (bot 全体で直近 10 分に 6 回まで。自己メンションとは別枠)。`user` の依頼には掛からない。 */
             429: {
                 headers: {
                     [name: string]: unknown;

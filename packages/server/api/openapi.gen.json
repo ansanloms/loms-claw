@@ -3,7 +3,7 @@
   "info": {
     "version": "0.2.0",
     "title": "loms-claw API",
-    "description": "# loms-claw API\n\nloms-claw を「常駐する本体と、その周辺 (Discord・CLI・スマホ等)」の構成にするための、次期 I/F の設計。client から本体へは REST、本体から client へは SSE (Server-Sent Events) で渡す。\n\n## 位置付け\n\nこの定義は `next` ブランチの I/F の定義である。実装は `packages/server/` で進めている。この定義の operation が全部実装済みとは限らない。main の実装と、main の `docs/api/` (0.1.0) は、この定義に対応しない。`info.version` は 0.2.0 で、`next` が main に入るまで release とタグを切らない。それまでは、壊す変更を入れても版を上げない。\n\n## 決定事項\n\nissue #278 の「決めること」と、そこから派生した論点の結論を次に示す。\n\n| #   | 論点                 | 決定                                                                                                                                                                                                                                                                                            |\n| --- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |\n| 1   | 出力の届け先         | スレッドの購読者全員に配る。中核がイベントを発行し、Discord も SSE の client も購読者になる。                                                                                                                                                                                                   |\n| 2   | スレッド ID          | client が決める不透明な文字列とする。`PUT /threads/{threadId}` で登録してから使う。親は持たない。未登録のスレッドへの要求は 404 を返す。Discord の client はチャンネル ID をそのまま使い、応答するチャンネルとスレッドを最初の依頼の前に登録する。単一ギルドの検査は Discord の client が持つ。 |\n| 3   | 承認待ちの台帳       | 中核へ移す。保留中の承認と質問を、SSE と `GET /approvals`・`GET /questions` で全 client に配るため。                                                                                                                                                                                            |\n| 4   | パス空間             | 内部 API と client 向け API を同じパス空間に置く。OpenAPI は 1 本とする。                                                                                                                                                                                                                       |\n| 5   | Discord への直接投稿 | 整理の対象外とする。Discord 専用の機能として扱う (下記「範囲外」)。                                                                                                                                                                                                                             |\n| 6   | 版の表し方           | パスに版を入れない。`info.version` が正本である (#277 の方針を引き継ぐ)。SSE は追加のみで進化させ、client は未知のイベント種別とフィールドを無視する。                                                                                                                                          |\n| 7   | 認証                 | 含めない。承認・質問に答える operation と一緒に、後で足す。                                                                                                                                                                                                                                     |\n| 8   | 状態の取り直し       | 含める。SSE は切断中のイベントを再送しない。代わりに、実行中と待機中のターン (`GET /threads/{threadId}/turns`) と保留中の承認・質問を `GET` で取り直す。                                                                                                                                        |\n| 9   | 設定の持ち場         | 設定は I/F に含めない。`model` と `effort` はターンを作る時に渡し、省いたら本体の既定値を使う。スレッドごとの設定は、`showThinking`・`active` (`activeChannelIds` を含む) と同じく client が持つ。                                                                                              |\n\n## 接続\n\n- ホスト: `127.0.0.1`。ポートは `config.json` の `claude.apiPort` で、既定値は `3000`。\n- 認証: 無い。当面は認証を実装せず、定義にも含めない。\n\n本体と同じプロセスの client (Discord) は中核を直接呼び、`POST /threads/{threadId}/turns` を通らない。この operation は本体の外から依頼を渡すためのものである。\n\n承認・質問に答える operation (承認への回答、質問への回答、常時許可 (`permissions.allow`) の書き換え) は置かない。認証なしで置くと、ワークスペースの Claude が `curl` で叩いて、自分のツール実行を自分で承認できてしまうためである。現行の API は承認に答える operation を持たず、127.0.0.1 は認証なしで足りたので、この穴は今回の設計で初めて生じる。\n\n- 承認と質問に答えられるのは、本体と同じプロセスの client (Discord) だけである。解決の結果は SSE の `approval.resolved`・`question.resolved` で流れる。Discord 以外の client は承認・質問の要求を SSE で受けるが、答える手段が無い。Discord で答えが無ければ時間切れになる。\n- `GET /approvals`・`GET /questions` は読むだけなので置く。\n- `POST /threads/{threadId}/turns` の依頼には全部「認可ユーザー本人の発話ではない旨の注記」とレート制限を掛ける。認証が無い間は本人の依頼と他の依頼を見分けられないので、この operation の依頼は全部本人以外の依頼として扱う。本人の依頼を区別する手段は、認証と一緒に足す。レート制限の目的は暴走 (ループ・連鎖) を止めることで、攻撃を防ぐことではない。\n\n## スレッド\n\nスレッドは続いていく会話の単位で、Claude のセッションとターンのキューを持つ。Discord の client では、チャンネル 1 つ、または Discord のスレッド 1 つが、この API のスレッド 1 つに当たる。\n\n## 資源の ID\n\n保存先を持たない資源は自然キーを ID にする。スレッドは client が決める文字列、定期実行タスクはファイル名を ID にする。これらに数値の連番は振らない。保存先が無いと、再読み込みのたびに連番が変わりうるためである。\n\nターン・承認・質問の ID は本体が採番する。どれもスレッドをまたいで一意である。形式は定めず、client は不透明な文字列として扱う。\n\n## エラー応答\n\nエラー時は HTTP ステータスコードと `application/json` の `{ \"error\": string }` を返す。RFC 9457 Problem Details 形式ではない。\n\n## SSE の規約\n\n`GET /events` が 1 本の接続で全イベントを配る。query の `threadId` で絞れる。スレッドごとのパスにしない理由は、承認と定期実行タスクのイベントを 1 接続で受けられるからである。\n\n- イベントは追加のみで進化させる。既存のフィールドの意味や型は変えない。\n- client は未知の `event`・未知のフィールド・列挙の未知の値を受け取っても落ちない。未知の `event` とフィールドは無視する。\n- 切断中のイベントは再送しない。そのため `id` と `retry` は定義しない。\n- 再接続したら、`GET /approvals`・`GET /questions`・`GET /threads/{threadId}/turns` で状態を取り直す。\n- `threadId` で絞った購読には、`threadId` を持たないイベントは流れない。\n- `thinking` イベントは、本体が常に流す。見せるかどうかは client が決める。\n- 各イベントは `event` と、JSON 文字列の `data` からなる。\n\nイベントの一覧は `GET /events` の `itemSchema` (`ResponseGetEvents`) に定義している。\n\n## schema の additionalProperties 方針\n\n`components/schemas/*.yaml` の `additionalProperties: false` は、リクエストボディの schema と、それが `$ref` で参照する schema にのみ付ける。レスポンス専用の schema には、将来のフィールド追加を許容するために付けない。\n\n## 範囲外\n\n- 画像の添付。\n- webhook・位置通知・heartbeat。\n- 音声。\n- Discord アダプタの別プロセス化。\n- Discord への直接投稿の経路。Discord 専用の機能であり、この I/F では整理しない。\n\n## 未決事項\n\nこの定義では決めていない。\n\n- 認証と、承認・質問に答える operation・常時許可の書き換え・本人の依頼の区別 (一緒に足す)。\n- ワークスペースの Claude が定期実行タスクの再読み込みと実行を呼べるため、command 種別のタスク経由でツール承認を通らずにコマンドを実行できる点 (認証を足す時に検討する)。\n- 現行実装の cron の擬似スレッド (`cron:<ジョブ名>`) に当たるものを、定期実行タスクでどう扱い、誰が登録するか。\n- 稼働の確認を I/F に含めるか (#278 の 1 章)。server は compose の healthcheck 用に `GET /health` を持つが、この定義には載せていない。\n- ターンを止める操作。\n- 回答 800 文字・thinking 1500 文字の区切りを SSE でも保つか (#278 の 4.7)。\n- client が設定 (`model`・`effort`・`showThinking`・`active`) をどこに保存するか。\n- 全体の設定 (既定の `model`・`effort`、常時許可) を読み書きする operation。\n- 所有する client 以外が始めたターン (定期実行タスク等) に、スレッドごとの `model`・`effort` をどう効かせるか。\n- 壊す変更の手順 (#276)。\n"
+    "description": "# loms-claw API\n\nloms-claw を「常駐する本体と、その周辺 (Discord・CLI・スマホ等)」の構成にするための、次期 I/F の設計。client から本体へは REST、本体から client へは SSE (Server-Sent Events) で渡す。\n\n## 位置付け\n\nこの定義は `next` ブランチの I/F の定義である。実装は `packages/server/` で進めている。この定義の operation が全部実装済みとは限らない。main の実装と、main の `docs/api/` (0.1.0) は、この定義に対応しない。`info.version` は 0.2.0 で、`next` が main に入るまで release とタグを切らない。それまでは、壊す変更を入れても版を上げない。\n\n## 決定事項\n\nissue #278 の「決めること」と、そこから派生した論点の結論を次に示す。\n\n| #   | 論点                 | 決定                                                                                                                                                                                                                                                                                            |\n| --- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |\n| 1   | 出力の届け先         | スレッドの購読者全員に配る。中核がイベントを発行し、Discord も SSE の client も購読者になる。                                                                                                                                                                                                   |\n| 2   | スレッド ID          | client が決める不透明な文字列とする。`PUT /threads/{threadId}` で登録してから使う。親は持たない。未登録のスレッドへの要求は 404 を返す。Discord の client はチャンネル ID をそのまま使い、応答するチャンネルとスレッドを最初の依頼の前に登録する。単一ギルドの検査は Discord の client が持つ。 |\n| 3   | 承認待ちの台帳       | 中核へ移す。保留中の承認と質問を、SSE と `GET /approvals`・`GET /questions` で全 client に配るため。                                                                                                                                                                                            |\n| 4   | パス空間             | 内部 API と client 向け API を同じパス空間に置く。OpenAPI は 1 本とする。                                                                                                                                                                                                                       |\n| 5   | Discord への直接投稿 | 整理の対象外とする。Discord 専用の機能として扱う (下記「範囲外」)。                                                                                                                                                                                                                             |\n| 6   | 版の表し方           | パスに版を入れない。`info.version` が正本である (#277 の方針を引き継ぐ)。SSE は追加のみで進化させ、client は未知のイベント種別とフィールドを無視する。                                                                                                                                          |\n| 7   | 認証                 | Bearer token。ロールは `user` と `agent`。                                                                                                                                                                                                                                                      |\n| 8   | 状態の取り直し       | 含める。SSE は切断中のイベントを再送しない。代わりに、実行中と待機中のターン (`GET /threads/{threadId}/turns`) と保留中の承認・質問を `GET` で取り直す。                                                                                                                                        |\n| 9   | 設定の持ち場         | 設定は I/F に含めない。`model` と `effort` はターンを作る時に渡し、省いたら本体の既定値を使う。スレッドごとの設定は、`showThinking`・`active` (`activeChannelIds` を含む) と同じく client が持つ。                                                                                              |\n\n## 接続\n\n- ホスト: `127.0.0.1`。ポートは `config.json` の `claude.apiPort` で、既定値は `3000`。\n- 認証: Bearer token (`Authorization: Bearer <token>`)。この定義の operation は全部、認証を要求する。\n\n### ロール\n\nロールは `user` と `agent` の 2 つで、本体が token から引く。ロールはリクエストに乗らない。OAS の `security` はロール名を `bearerAuth: [user]` の形で書けるが、ロール名を宣言する場所は仕様に無い。そのため、ロール名の意味はこの README が定義する。\n\n| token の種類   | ロール  | 誰が持つか                                                                     | 作り方と寿命                                                                                           |\n| -------------- | ------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |\n| 利用者の token | `user`  | 利用者が使う client (CLI・Discord・スマホ等)。client ごとに別の token にする。 | 利用者が作る。本体はハッシュだけを持つ。                                                               |\n| 一時 token     | `agent` | ワークスペースの Claude。ターンごと、定期実行タスクの実行ごとに渡される。      | 本体が乱数で作る。ターンの開始時に発行し、終了時 (完了・失敗・中止) に失効させる。メモリ上だけに持つ。 |\n\nロールで変わることを次に示す。\n\n| 操作                                                                                | `user`                   | `agent`                                                              |\n| ----------------------------------------------------------------------------------- | ------------------------ | -------------------------------------------------------------------- |\n| 承認・質問に答える (`POST /approvals/{approvalId}`・`POST /questions/{questionId}`) | できる                   | できない (403)                                                       |\n| 定期実行タスクの再読み込み (`POST /scheduled-tasks/reload`)                         | できる                   | できない (403)                                                       |\n| ターンを作る (`POST /threads/{threadId}/turns`)                                     | 注記なし、レート制限なし | 「本人の発話ではない」旨の注記 (出所は本体が書く) とレート制限が付く |\n| それ以外                                                                            | できる                   | できる                                                               |\n\n定期実行タスクの定義ファイルは `agent` が書けるので、定期実行タスクが作るターンも `agent` として扱う。\n\n### 利用者の token\n\n- 利用者が長い乱数で token を作る。平文は client 側だけに置く。例: `openssl rand -hex 32`。\n- 本体は token の SHA-256 (hex 64 桁) だけを持つ。\n  - 環境変数 `LOMS_CLAW_USER_TOKENS` に、`名前=ハッシュ` をカンマで区切って渡す。例: `cli=<hex>,discord=<hex>`。\n  - 名前は `Turn` の `source` (`client:<名前>`) に入る。\n  - 名前の重複・ハッシュの重複・空の名前・桁数の違うハッシュは書式不正で、本体は起動時にエラーで止まる。未設定と空も同じである。\n- ハッシュは `agent` が書き換えられない経路 (compose の環境変数等) で渡す。`data/config.json` のように `agent` が書ける場所に置かない。理由: 置くと、`agent` がそれを自分の token のハッシュに書き換えることができる。\n- client ごとに別の token にする。理由: token ごとに失効できる。\n\n### エラー\n\n- 401: token が無い、または無効。token が無い場合は `WWW-Authenticate: Bearer realm=\"loms-claw\"`、無効な場合は `WWW-Authenticate: Bearer error=\"invalid_token\"` を返す。\n- 400: `Authorization` ヘッダの形式が不正。`WWW-Authenticate: Bearer error=\"invalid_request\"` を返す。\n- 403: ロールが足りない。`WWW-Authenticate: Bearer error=\"insufficient_scope\"` を返す。\n\n`WWW-Authenticate` は各 operation の応答定義には書かない。同じ定義が各 operation に並ぶためである。エラーの body はどれも `{ \"error\": string }` である。\n\n### 承認・質問と依頼の出所\n\n承認・質問に答える operation を置けるのは、認証があるからである。認証が無いと、ワークスペースの Claude が `curl` で叩いて、自分のツール実行を自分で承認できてしまう。\n\n- 解決の結果は SSE の `approval.resolved`・`question.resolved` で流れる。`agent` は承認・質問の要求を SSE と `GET` で読めるが、答えられない。読むのは許し、答えるのだけを禁じる。\n- `POST /threads/{threadId}/turns` の依頼の出所は、本体が token から引く。依頼の本文では名乗れない。\n  - 注記とレート制限は `agent` の依頼にだけ掛ける。\n  - レート制限の目的は暴走 (ループ・連鎖) を止めることで、攻撃を防ぐことではない。\n- 常時許可 (`permissions.allow`) の読み書きの operation は置かない。置き場は決めていない (未決事項)。\n\n### 既知の限界\n\n`agent` と本体が同じ OS ユーザで動くことから来る限界が 3 つある。この設計では防げない。3 つとも一般的な理解から挙げたもので、この環境で試してはいない。\n\n- 通信の盗み見: `agent` が本体のコンテナの中で通信を傍受できれば、届いた利用者の token を読める。対策は `agent` の子プロセスを別の OS ユーザで動かすこと。\n- 本体の改変: `agent` が本体のコードや起動設定を書き換えられれば、検査を外せる。対策は実行ファイルを `agent` から書けない場所に置くこと。\n- client 側の token: client のコンテナが本体と分かれていることが前提になる。同じコンテナに置くと、`agent` が client の token を読める。\n\n## スレッド\n\nスレッドは続いていく会話の単位で、Claude のセッションとターンのキューを持つ。Discord の client では、チャンネル 1 つ、または Discord のスレッド 1 つが、この API のスレッド 1 つに当たる。\n\n## 資源の ID\n\n保存先を持たない資源は自然キーを ID にする。スレッドは client が決める文字列、定期実行タスクはファイル名を ID にする。これらに数値の連番は振らない。保存先が無いと、再読み込みのたびに連番が変わりうるためである。\n\nターン・承認・質問の ID は本体が採番する。どれもスレッドをまたいで一意である。形式は定めず、client は不透明な文字列として扱う。\n\n## エラー応答\n\nエラー時は HTTP ステータスコードと `application/json` の `{ \"error\": string }` を返す。RFC 9457 Problem Details 形式ではない。\n\n## SSE の規約\n\n`GET /events` が 1 本の接続で全イベントを配る。query の `threadId` で絞れる。スレッドごとのパスにしない理由は、承認と定期実行タスクのイベントを 1 接続で受けられるからである。\n\n- イベントは追加のみで進化させる。既存のフィールドの意味や型は変えない。\n- client は未知の `event`・未知のフィールド・列挙の未知の値を受け取っても落ちない。未知の `event` とフィールドは無視する。\n- 切断中のイベントは再送しない。そのため `id` と `retry` は定義しない。\n- 再接続したら、`GET /approvals`・`GET /questions`・`GET /threads/{threadId}/turns` で状態を取り直す。\n- `threadId` で絞った購読には、`threadId` を持たないイベントは流れない。\n- `thinking` イベントは、本体が常に流す。見せるかどうかは client が決める。\n- 各イベントは `event` と、JSON 文字列の `data` からなる。\n\nイベントの一覧は `GET /events` の `itemSchema` (`ResponseGetEvents`) に定義している。\n\n## schema の additionalProperties 方針\n\n`components/schemas/*.yaml` の `additionalProperties: false` は、リクエストボディの schema と、それが `$ref` で参照する schema にのみ付ける。レスポンス専用の schema には、将来のフィールド追加を許容するために付けない。\n\n## 範囲外\n\n- 画像の添付。\n- webhook・位置通知・heartbeat。\n- 音声。\n- Discord アダプタの別プロセス化。\n- Discord への直接投稿の経路。Discord 専用の機能であり、この I/F では整理しない。\n\n## 未決事項\n\nこの定義では決めていない。\n\n- 常時許可 (`permissions.allow`) を読み書きする operation の置き場。\n- 本体の起動時に読み込む定期実行タスクの扱い。再読み込みは `user` 限定にしたが、起動時の読み込みは残るので、`agent` が書いた command 型のタスクは、本体の再起動で有効になる。\n- ターンの終了後に、`agent` が起こしたバックグラウンドのプロセスが API を叩いた場合の扱い。案は 401 (一時 token は失効済みのため)。\n- `Authorization` ヘッダを付けられない client から `GET /events` を購読する方法。\n- 定期実行タスクの実行 (`POST /scheduled-tasks/{taskId}/run`・スケジュールどおりの実行) へのレート制限 (#292)。`agent` も手動実行を呼べる。\n- 現行実装の cron の擬似スレッド (`cron:<ジョブ名>`) に当たるものを、定期実行タスクでどう扱い、誰が登録するか。\n- 稼働の確認を I/F に含めるか (#278 の 1 章)。server は compose の healthcheck 用に `GET /health` を持つが、この定義には載せていない。\n- ターンを止める操作。\n- 回答 800 文字・thinking 1500 文字の区切りを SSE でも保つか (#278 の 4.7)。\n- client が設定 (`model`・`effort`・`showThinking`・`active`) をどこに保存するか。\n- 全体の設定 (既定の `model`・`effort`、常時許可) を読み書きする operation。\n- 所有する client 以外が始めたターン (定期実行タスク等) に、スレッドごとの `model`・`effort` をどう効かせるか。\n- 壊す変更の手順 (#276)。\n"
   },
   "servers": [
     {
@@ -11,11 +11,22 @@
       "description": "ローカルの API サーバ (apiPort 既定値 3000)。"
     }
   ],
-  "security": [],
+  "security": [
+    {
+      "bearerAuth": [
+        "user"
+      ]
+    },
+    {
+      "bearerAuth": [
+        "agent"
+      ]
+    }
+  ],
   "tags": [
     {
       "name": "approvals",
-      "description": "保留中のツール承認の一覧取得。"
+      "description": "保留中のツール承認の一覧取得と回答。"
     },
     {
       "name": "scheduled-tasks",
@@ -31,7 +42,7 @@
     },
     {
       "name": "questions",
-      "description": "保留中の質問 (AskUserQuestion) の一覧取得。"
+      "description": "保留中の質問 (AskUserQuestion) の一覧取得と回答。"
     },
     {
       "name": "threads",
@@ -50,7 +61,7 @@
         "tags": [
           "approvals"
         ],
-        "description": "保留中のツール承認を返す。SSE の再接続後に状態を取り直すために使う。承認に答える operation は置かない (README の「接続」)。解決は `approval.resolved` で配られる。\n",
+        "description": "保留中のツール承認を返す。SSE の再接続後に状態を取り直すために使う。答えるには `POST /approvals/{approvalId}` を使う。解決は `approval.resolved` で配られる。\n",
         "responses": {
           "200": {
             "description": "処理成功時。",
@@ -76,6 +87,177 @@
                           "expiresAt": "2026-11-21T09:05:00Z"
                         }
                       ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`Authorization` ヘッダの形式が不正な場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "badRequest": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "token が無い、または無効な場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/approvals/{approvalId}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "approvalId",
+          "required": true,
+          "description": "承認 ID。本体が採番する不透明な文字列。ID はパーセントエンコードして渡す。",
+          "schema": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ],
+      "post": {
+        "operationId": "postApprovalsApprovalId",
+        "summary": "承認への回答。",
+        "tags": [
+          "approvals"
+        ],
+        "description": "保留中のツール承認に答える。allowAlways は今回を許可したうえで、そのツールを常時許可に加える。成功すると 204 を返す。解決の結果は `approval.resolved` で配られる。`user` の token だけが呼べ、`agent` の token で呼ぶと 403 を返す。\n",
+        "security": [
+          {
+            "bearerAuth": [
+              "user"
+            ]
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "承認への答え。",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestPostApprovalsApprovalId"
+              },
+              "examples": {
+                "normal": {
+                  "value": {
+                    "decision": "allow"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "答えを受け付けた場合。"
+          },
+          "400": {
+            "description": "JSON が不正、またはスキーマに適合しない場合。`Authorization` ヘッダの形式が不正な場合も含む。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "badRequest": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "token が無い、または無効な場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`agent` の token で呼んだ場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "forbidden": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "承認が存在しない場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "notFound": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "承認が既に解決済み (時間切れを含む) の場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "conflict": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
                     }
                   }
                 }
@@ -152,6 +334,40 @@
                   },
                   "questionResolved": {
                     "serializedValue": "event: question.resolved\ndata: {\"questionId\":\"q-0001\",\"threadId\":\"1234567890123456789\",\"result\":\"answered\"}\n\n"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`Authorization` ヘッダの形式が不正な場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "badRequest": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "token が無い、または無効な場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
+                    }
                   }
                 }
               }
@@ -263,7 +479,7 @@
             }
           },
           "400": {
-            "description": "level、since、limit のいずれかが不正な場合。",
+            "description": "level、since、limit のいずれかが不正な場合。`Authorization` ヘッダの形式が不正な場合も含む。",
             "content": {
               "application/json": {
                 "schema": {
@@ -271,6 +487,23 @@
                 },
                 "examples": {
                   "badRequest": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "token が無い、または無効な場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "unauthorized": {
                     "value": {
                       "error": "Thread not found: 1234567890123456789"
                     }
@@ -289,7 +522,7 @@
         "tags": [
           "questions"
         ],
-        "description": "保留中の質問 (AskUserQuestion) を返す。SSE の再接続後に状態を取り直すために使う。質問に答える operation は置かない。解決は `question.resolved` で配られる。\n",
+        "description": "保留中の質問 (AskUserQuestion) を返す。SSE の再接続後に状態を取り直すために使う。答えるには `POST /questions/{questionId}` を使う。解決は `question.resolved` で配られる。\n",
         "responses": {
           "200": {
             "description": "処理成功時。",
@@ -326,6 +559,186 @@
                           "expiresAt": "2026-11-21T09:05:00Z"
                         }
                       ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`Authorization` ヘッダの形式が不正な場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "badRequest": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "token が無い、または無効な場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/questions/{questionId}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "questionId",
+          "required": true,
+          "description": "質問 ID。本体が採番する不透明な文字列。ID はパーセントエンコードして渡す。",
+          "schema": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ],
+      "post": {
+        "operationId": "postQuestionsQuestionId",
+        "summary": "質問への回答。",
+        "tags": [
+          "questions"
+        ],
+        "description": "保留中の質問に答える。kind が answered なら answers を、denied なら reason を渡す。answers のキーが保留中の質問の質問文と一致しない、または回答の無い質問があるときは 400 を返す。成功すると 204 を返す。解決の結果は `question.resolved` で配られる。`user` の token だけが呼べ、`agent` の token で呼ぶと 403 を返す。\n",
+        "security": [
+          {
+            "bearerAuth": [
+              "user"
+            ]
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "質問への答え。",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestPostQuestionsQuestionId"
+              },
+              "examples": {
+                "answered": {
+                  "value": {
+                    "kind": "answered",
+                    "answers": {
+                      "どちらの宿にしますか。": "駅前"
+                    }
+                  }
+                },
+                "denied": {
+                  "value": {
+                    "kind": "denied",
+                    "reason": "今は決められない。"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "答えを受け付けた場合。"
+          },
+          "400": {
+            "description": "JSON が不正、またはスキーマに適合しない場合。`Authorization` ヘッダの形式が不正な場合も含む。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "badRequest": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "token が無い、または無効な場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`agent` の token で呼んだ場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "forbidden": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "質問が存在しない場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "notFound": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "質問が既に解決済み (時間切れを含む) の場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "conflict": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
                     }
                   }
                 }
@@ -381,6 +794,40 @@
               }
             }
           },
+          "400": {
+            "description": "`Authorization` ヘッダの形式が不正な場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "badRequest": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "token が無い、または無効な場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "503": {
             "description": "定期実行機能が無効な場合。",
             "content": {
@@ -408,7 +855,14 @@
         "tags": [
           "scheduled-tasks"
         ],
-        "description": "定期実行タスクの定義ファイルを再読み込みする。定義の変更を反映する際に使う。\n",
+        "description": "定期実行タスクの定義ファイルを再読み込みする。定義の変更を反映する際に使う。`user` の token だけが呼べ、`agent` の token で呼ぶと 403 を返す。`agent` が command 型のタスクを書いてこの operation で有効にすると、ツール承認を通らずにコマンドを実行できるためである。\n",
+        "security": [
+          {
+            "bearerAuth": [
+              "user"
+            ]
+          }
+        ],
         "responses": {
           "200": {
             "description": "処理成功時。",
@@ -421,6 +875,57 @@
                   "succeeded": {
                     "value": {
                       "ok": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`Authorization` ヘッダの形式が不正な場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "badRequest": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "token が無い、または無効な場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`agent` の token で呼んだ場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "forbidden": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
                     }
                   }
                 }
@@ -481,6 +986,40 @@
                       "ok": true,
                       "id": "news.md",
                       "result": "succeeded"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`Authorization` ヘッダの形式が不正な場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "badRequest": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "token が無い、または無効な場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
                     }
                   }
                 }
@@ -598,6 +1137,40 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "`Authorization` ヘッダの形式が不正な場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "badRequest": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "token が無い、または無効な場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -621,6 +1194,40 @@
                     "value": {
                       "id": "1234567890123456789",
                       "sessionId": "550e8400-e29b-41d4-a716-446655440000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`Authorization` ヘッダの形式が不正な場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "badRequest": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "token が無い、または無効な場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
                     }
                   }
                 }
@@ -672,6 +1279,40 @@
           "204": {
             "description": "セッションを捨てた場合、または捨てるセッションが無かった場合。"
           },
+          "400": {
+            "description": "`Authorization` ヘッダの形式が不正な場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "badRequest": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "token が無い、または無効な場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "スレッドが登録されていない場合。",
             "content": {
@@ -712,10 +1353,10 @@
         "tags": [
           "turns"
         ],
-        "description": "対象スレッドへ依頼を渡してターンを作る。依頼は対象スレッドのキューに積まれ、会話中のターンがあれば、その後ろで同じセッションを再開して処理する。`model` と `effort` はこのターンだけに効く。省いたら本体の既定値を使う。処理の完了を待たずに 202 と作った `Turn` を返す。経過と結果は `GET /events` の SSE で受け取り、`Turn` の `id` と各イベントの `turnId` を突き合わせる。全ての依頼に、プロンプト先頭に認可ユーザー本人の発話ではない旨の注記が付き、依頼のレート制限 (bot 全体で直近 10 分に 6 回) を超えると 429 を返す。登録されていないスレッドには 404 を返す。\n",
+        "description": "対象スレッドへ依頼を渡してターンを作る。依頼は対象スレッドのキューに積まれ、会話中のターンがあれば、その後ろで同じセッションを再開して処理する。`model` と `effort` はこのターンだけに効く。省いたら本体の既定値を使う。処理の完了を待たずに 202 と作った `Turn` を返す。経過と結果は `GET /events` の SSE で受け取り、`Turn` の `id` と各イベントの `turnId` を突き合わせる。依頼の出所は本体が token から引き、`Turn` の `source` に入れる。`agent` の依頼にだけ、プロンプト先頭に認可ユーザー本人の発話ではない旨の注記が付き (出所は本体が書く)、依頼のレート制限 (bot 全体で直近 10 分に 6 回) を超えると 429 を返す。`user` の依頼には注記もこの制限も付かない。登録されていないスレッドには 404 を返す。\n",
         "requestBody": {
           "required": true,
-          "description": "依頼の本文と、任意の依頼元・モデル・effort。",
+          "description": "依頼の本文と、任意のモデル・effort。",
           "content": {
             "application/json": {
               "schema": {
@@ -725,7 +1366,6 @@
                 "normal": {
                   "value": {
                     "prompt": "旅行スレッドで、今日の宿までの残りの道のりを一言添えて声をかけて。",
-                    "source": "scheduled-task:touring-check",
                     "model": "claude-sonnet-4-6",
                     "effort": "high"
                   }
@@ -756,7 +1396,7 @@
             }
           },
           "400": {
-            "description": "JSON が不正、またはスキーマに適合しない場合。",
+            "description": "JSON が不正、またはスキーマに適合しない場合。`Authorization` ヘッダの形式が不正な場合も含む。",
             "content": {
               "application/json": {
                 "schema": {
@@ -764,6 +1404,23 @@
                 },
                 "examples": {
                   "badRequest": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "token が無い、または無効な場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "unauthorized": {
                     "value": {
                       "error": "Thread not found: 1234567890123456789"
                     }
@@ -790,7 +1447,7 @@
             }
           },
           "429": {
-            "description": "依頼のレート制限を超過した場合 (bot 全体で直近 10 分に 6 回まで。自己メンションとは別枠)。",
+            "description": "`agent` の依頼がレート制限を超過した場合 (bot 全体で直近 10 分に 6 回まで。自己メンションとは別枠)。`user` の依頼には掛からない。",
             "content": {
               "application/json": {
                 "schema": {
@@ -856,6 +1513,40 @@
                           "status": "queued"
                         }
                       ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`Authorization` ヘッダの形式が不正な場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "badRequest": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "token が無い、または無効な場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseError"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "value": {
+                      "error": "Thread not found: 1234567890123456789"
                     }
                   }
                 }
@@ -1358,7 +2049,8 @@
         "required": [
           "id",
           "threadId",
-          "status"
+          "status",
+          "source"
         ],
         "properties": {
           "id": {
@@ -1374,9 +2066,18 @@
           },
           "source": {
             "type": "string",
-            "description": "依頼元の識別子。依頼の `source` をそのまま返す。省略された依頼では省かれる。"
+            "description": "本体が token から引いた依頼の出所。`user` の token の依頼は `client:<token の名前>`、`agent` のうちターンが起点の依頼は `turn:<turnId>`、定期実行タスクが起点の依頼は `scheduled-task:<taskId>`。"
           }
         }
+      },
+      "EnumApprovalDecision": {
+        "type": "string",
+        "description": "承認への答え。allow は今回だけ許可、allowAlways は常時許可に加えて許可、deny は拒否。",
+        "enum": [
+          "allow",
+          "allowAlways",
+          "deny"
+        ]
       },
       "EnumApprovalOutcome": {
         "type": "string",
@@ -1424,6 +2125,71 @@
           "running"
         ]
       },
+      "RequestPostApprovalsApprovalId": {
+        "type": "object",
+        "description": "承認への答え。",
+        "additionalProperties": false,
+        "required": [
+          "decision"
+        ],
+        "properties": {
+          "decision": {
+            "$ref": "#/components/schemas/EnumApprovalDecision"
+          },
+          "reason": {
+            "type": "string",
+            "description": "理由。拒否したときに Claude へ伝える。"
+          }
+        }
+      },
+      "RequestPostQuestionsQuestionId": {
+        "description": "質問への答え。kind で形が変わる。",
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "回答する。",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "answers"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "answered",
+                "description": "回答であることを表す。"
+              },
+              "answers": {
+                "type": "object",
+                "description": "質問文から回答文字列への対応。保留中の全質問に 1 件ずつ答える。multiSelect の質問は選んだ値を `, ` で連結する。キーが保留中の質問の質問文と一致しない、または回答の無い質問があるときは 400 を返す。",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "minProperties": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "回答を拒否する。",
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "denied",
+                "description": "拒否であることを表す。"
+              },
+              "reason": {
+                "type": "string",
+                "description": "理由。Claude へ伝える。"
+              }
+            }
+          }
+        ]
+      },
       "RequestPostThreadsThreadIdTurns": {
         "type": "object",
         "description": "ターンの作成リクエスト。",
@@ -1437,13 +2203,6 @@
             "minLength": 1,
             "pattern": "\\S",
             "description": "対象のスレッドへ渡す依頼の本文。空白以外を 1 文字以上含むこと。"
-          },
-          "source": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 100,
-            "pattern": "^[^\\x00-\\x1F\\x7F]+$",
-            "description": "依頼元の識別子 (例 scheduled-task:news.md)。指定すると、プロンプト先頭の注記に依頼元として入る。日本語や空白も使えるが、改行・タブなどの制御文字は使えない (改行による注記の偽装を防ぐため)。"
           },
           "model": {
             "type": "string",
@@ -1884,6 +2643,13 @@
             ]
           }
         }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Bearer token。ロールは `user` と `agent` の 2 つで、token から本体が引く。`user` は利用者 (が使う client) の token で、全 operation を呼べる。`agent` はワークスペースの Claude に渡す token で、承認・質問への回答と定期実行タスクの再読み込みを呼べない (403)。ロール名は定義に宣言する場所が無いので、意味は README が定義する。"
       }
     }
   }

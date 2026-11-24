@@ -9,7 +9,7 @@ servers:
     description: ローカルの API サーバ (apiPort 既定値 3000)。
 tags:
   - name: approvals
-    description: 保留中のツール承認の一覧取得。
+    description: 保留中のツール承認の一覧取得と回答。
   - name: scheduled-tasks
     description: 定期実行タスクの一覧取得・手動実行・再読み込み。
   - name: events
@@ -17,21 +17,29 @@ tags:
   - name: logs
     description: メモリ上のリングバッファからのログ取得。
   - name: questions
-    description: 保留中の質問 (AskUserQuestion) の一覧取得。
+    description: 保留中の質問 (AskUserQuestion) の一覧取得と回答。
   - name: threads
     description: スレッドの登録・取得とセッションの破棄。
   - name: turns
     description: ターンの作成・一覧の取得。
-security: []
+security:
+  - bearerAuth:
+      - user
+  - bearerAuth:
+      - agent
 paths:
   /approvals:
     $ref: ./paths/approvals.yaml
+  /approvals/{approvalId}:
+    $ref: ./paths/approvals.{approvalId}.yaml
   /events:
     $ref: ./paths/events.yaml
   /logs:
     $ref: ./paths/logs.yaml
   /questions:
     $ref: ./paths/questions.yaml
+  /questions/{questionId}:
+    $ref: ./paths/questions.{questionId}.yaml
   /scheduled-tasks:
     $ref: ./paths/scheduled-tasks.yaml
   /scheduled-tasks/reload:
@@ -84,6 +92,8 @@ components:
       $ref: ./components/schemas/Thread.yaml
     Turn:
       $ref: ./components/schemas/Turn.yaml
+    EnumApprovalDecision:
+      $ref: ./components/schemas/EnumApprovalDecision.yaml
     EnumApprovalOutcome:
       $ref: ./components/schemas/EnumApprovalOutcome.yaml
     EnumEffort:
@@ -94,6 +104,10 @@ components:
       $ref: ./components/schemas/EnumTurnResult.yaml
     EnumTurnStatus:
       $ref: ./components/schemas/EnumTurnStatus.yaml
+    RequestPostApprovalsApprovalId:
+      $ref: ./components/schemas/RequestPostApprovalsApprovalId.yaml
+    RequestPostQuestionsQuestionId:
+      $ref: ./components/schemas/RequestPostQuestionsQuestionId.yaml
     RequestPostThreadsThreadIdTurns:
       $ref: ./components/schemas/RequestPostThreadsThreadIdTurns.yaml
     ResponseError:
@@ -114,3 +128,8 @@ components:
       $ref: ./components/schemas/ResponsePostScheduledTasksReload.yaml
     ResponsePostScheduledTasksTaskIdRun:
       $ref: ./components/schemas/ResponsePostScheduledTasksTaskIdRun.yaml
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Bearer token。ロールは `user` と `agent` の 2 つで、token から本体が引く。`user` は利用者 (が使う client) の token で、全 operation を呼べる。`agent` はワークスペースの Claude に渡す token で、承認・質問への回答と定期実行タスクの再読み込みを呼べない (403)。ロール名は定義に宣言する場所が無いので、意味は README が定義する。

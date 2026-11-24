@@ -1,0 +1,6 @@
+type: string
+description: 承認への答え。allow は今回だけ許可、allowAlways は常時許可に加えて許可、deny は拒否。
+enum:
+  - allow
+  - allowAlways
+  - deny

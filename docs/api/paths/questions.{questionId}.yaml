@@ -1,0 +1,84 @@
+parameters:
+  - in: path
+    name: questionId
+    required: true
+    description: 質問 ID。本体が採番する不透明な文字列。ID はパーセントエンコードして渡す。
+    schema:
+      type: string
+      minLength: 1
+post:
+  operationId: postQuestionsQuestionId
+  summary: 質問への回答。
+  tags:
+    - questions
+  description:
+    $ref: ./descriptions/postQuestionsQuestionId.md
+  security:
+    - bearerAuth: [user]
+  requestBody:
+    required: true
+    description: 質問への答え。
+    content:
+      application/json:
+        schema:
+          $ref: ../components/schemas/RequestPostQuestionsQuestionId.yaml
+        examples:
+          answered:
+            value:
+              $ref: ../examples/RequestPostQuestionsQuestionId/answered.yaml
+          denied:
+            value:
+              $ref: ../examples/RequestPostQuestionsQuestionId/denied.yaml
+  responses:
+    204:
+      description: 答えを受け付けた場合。
+    400:
+      description: JSON が不正、またはスキーマに適合しない場合。`Authorization` ヘッダの形式が不正な場合も含む。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            badRequest:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+    401:
+      description: token が無い、または無効な場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            unauthorized:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+    403:
+      description: "`agent` の token で呼んだ場合。"
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            forbidden:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+    404:
+      description: 質問が存在しない場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            notFound:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
+    409:
+      description: 質問が既に解決済み (時間切れを含む) の場合。
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ResponseError.yaml
+          examples:
+            conflict:
+              value:
+                $ref: ../examples/ResponseError/default.yaml
