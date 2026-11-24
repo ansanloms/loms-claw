@@ -56,7 +56,7 @@ export interface paths {
         };
         /**
          * イベントの購読。
-         * @description ターンの経過、定期実行タスクの出力、承認と質問の要求と解決を Server-Sent Events で配信する。threadId で絞らなければ、全スレッドのイベントと定期実行タスクのイベントを 1 接続で受ける。切断中のイベントは再送しない。再接続したら `GET /approvals`、`GET /questions`、`GET /threads/{threadId}/turns` で状態を取り直す。イベントは追加のみで進化させる。client は未知の event と未知のフィールドを無視する。thinking は本体が常に流し、見せるかどうかは client が決める。threadId に未登録のスレッドを指定すると 404 を返す。threadId を省いた要求では 404 は起きない。threadId で絞った購読には、threadId を持たないイベントは流れない。
+         * @description ターンの経過、定期実行タスクの出力、承認と質問の要求と解決を Server-Sent Events で配信する。threadId で絞らなければ、全スレッドのイベントと定期実行タスクのイベントを 1 接続で受ける。切断中のイベントは再送しない。再接続したら `GET /approvals`、`GET /questions`、`GET /threads/{threadId}/turns` で状態を取り直す。イベントは追加のみで進化させる。client は未知の event と未知のフィールドを無視する。thinking は本体が常に流し、見せるかどうかは client が決める。threadId に未登録のスレッドを指定すると 404 を返す。threadId を省いた要求では 404 は起きない。threadId で絞った購読には、threadId を持たないイベントは流れない。reply と thinking の text は断片である。同じ blockId の断片を届いた順に連結すると、1 つのまとまりの全文になる。別の blockId のイベントか turn.ended が届いたら、それまでのまとまりは終わりである。
          */
         get: operations["getEvents"];
         put?: never;
@@ -344,13 +344,15 @@ export interface components {
             questionId: string;
             result: components["schemas"]["EnumQuestionOutcome"];
         };
-        /** @description Claude の回答テキスト。分割や宛先の前置は client が行う。 */
+        /** @description Claude の回答テキストの断片。連結・分割・宛先の前置は client が行う。 */
         EventReplyData: {
             /** @description client が決めるスレッド ID。不透明な文字列として扱う。 */
             threadId: string;
             /** @description ターン ID。 */
             turnId: string;
-            /** @description 回答テキスト。 */
+            /** @description 断片が属するまとまりの ID。同じ blockId の断片を届いた順に連結すると、1 つのまとまりの全文になる。値が変わったら、別のまとまりが始まったことを示す。`reply` と `thinking` をまたいで、ターンの中で一意な不透明な文字列として扱う。1 つのターンの中で、まとまりは同時に 1 つだけ進む。別の blockId のイベントが届くか、そのターンの `turn.ended` が届いたら、それまでのまとまりは終わりである。 */
+            blockId: string;
+            /** @description 回答テキストの断片。本体は文字数で区切らず、1 イベントに入る長さを保証しない。断片の切れ目に意味は無く、文や語の途中で切れうる。 */
             text: string;
         };
         /** @description command 型の定期実行タスクの失敗。prompt 型の失敗は、普通のターンのイベントとして流れる。 */
@@ -373,13 +375,15 @@ export interface components {
             /** @description 出力を切り詰めた場合に true。切り詰めていなければ省略される。 */
             truncated?: boolean;
         };
-        /** @description Claude の推論 (thinking) のテキスト。本体は常に流し、見せるかどうかは client が決める。 */
+        /** @description Claude の推論 (thinking) のテキストの断片。本体は常に流し、見せるかどうかは client が決める。 */
         EventThinkingData: {
             /** @description client が決めるスレッド ID。不透明な文字列として扱う。 */
             threadId: string;
             /** @description ターン ID。 */
             turnId: string;
-            /** @description 推論のテキスト。 */
+            /** @description 断片が属するまとまりの ID。同じ blockId の断片を届いた順に連結すると、1 つのまとまりの全文になる。値が変わったら、別のまとまりが始まったことを示す。`reply` と `thinking` をまたいで、ターンの中で一意な不透明な文字列として扱う。1 つのターンの中で、まとまりは同時に 1 つだけ進む。別の blockId のイベントが届くか、そのターンの `turn.ended` が届いたら、それまでのまとまりは終わりである。 */
+            blockId: string;
+            /** @description 推論のテキストの断片。本体は文字数で区切らず、1 イベントに入る長さを保証しない。断片の切れ目に意味は無く、文や語の途中で切れうる。 */
             text: string;
         };
         /** @description ターンが終わった。成否に関わらず最後に 1 回届く。 */
